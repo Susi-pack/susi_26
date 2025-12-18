@@ -3,3 +3,7 @@ venv/
 __pycache__/
 .DS_Store
 outputs/
+
+
+.python-version
+requirements_inaki.txt
