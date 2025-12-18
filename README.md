@@ -1,10 +1,13 @@
-September 15, 2025
- 
+# Overview
 Peatland simulator SUSI version used in Saari et al. (nimi) 2025 and Niemi et al. (2025) (nimi)
 
 SUSI version was built in Python using Spyder programming tool. All packages and versions for running 
 Spyder and this SUSI version can be found from requirements.txt
 
+# Installation
+`pip install -e .`
+
+# Project structure
 SUSI project contains four folders:
 
 inputs-folder 
