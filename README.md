@@ -7,6 +7,9 @@ Spyder and this SUSI version can be found from requirements.txt
 # Installation
 `pip install -e .`
 
+# Run
+`python src/scripts/susi_calls.py`
+
 # Project structure
 SUSI project contains four folders:
 
