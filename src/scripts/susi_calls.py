@@ -14,13 +14,12 @@ from susi.core.susi_utils import read_FMI_weather
 from inputs.susi_para import get_susi_para
 from susi.core.susi_main import Susi
 from susi.io.app_settings import AppSettings
+from inputs.parameters import golden_test
 
 # ***************** local call for SUSI*****************************************************
 app_settings = AppSettings()
-folderName = app_settings.output_folder
 
-wpath = app_settings.input_folder  # Folder where the weather files are located
-wdata = "CFw.csv"  # Weather file name
+wdata = golden_test.PARAMETERS.weather_parameters.weather_filepath
 
 mottifile = {
     "path": app_settings.input_folder,  # Input file folder
@@ -32,11 +31,11 @@ mottifile = {
 }  # understorey layer Mottifile, 0 if not in use
 
 
-start_date = datetime.datetime(2004, 1, 1)  # Start date for simulation
-end_date = datetime.datetime(2007, 12, 31)  # End day for simulation
+start_date = golden_test.PARAMETERS.simulation_config.start_date
+end_date = golden_test.PARAMETERS.simulation_config.end_date
 start_yr = start_date.year
 end_yr = end_date.year
-yrs = (end_date - start_date).days / 365.25
+
 
 sarkaSim = 40.0  # Strip width, ie distance between ditches, m
 n = int(sarkaSim / 2)  # Number of computation nodes in the strip, 2-m width of node
@@ -55,14 +54,12 @@ sfc = np.ones(n, dtype=int) * site_fertility_class  # site fertility class
 
 site = "develop_scens"  # name of the parameter set in get_susi_para
 
-forc = read_FMI_weather(
-    0, start_date, end_date, sourcefile=wpath / wdata
-)  # read weather input
+forc = read_FMI_weather(0, start_date, end_date, sourcefile=wdata)  # read weather input
 
 wpara, cpara, org_para, spara, outpara, photopara = get_susi_para(
     wlocation="undefined",
     peat=site,
-    folderName=folderName,
+    folderName=app_settings.output_folder,
     hdomSim=None,
     ageSim=ageSim,
     sarkaSim=sarkaSim,
@@ -128,44 +125,8 @@ susi.run_susi(
     mottifile=mottifile,
     peat="other",
     photosite="All data",
-    folderName=folderName,
+    folderName=app_settings.output_folder,
     ageSim=ageSim,
     sarkaSim=sarkaSim,
     sfc=sfc,
 )  # Run susi
-
-# %%
-
-import numpy as np
-import pandas as pd
-import matplotlib.pylab as plt
-import matplotlib.gridspec as gridspec
-
-from scipy import stats
-from netCDF4 import Dataset
-
-
-outname = "susi.nc"
-
-ff = folderName / outname
-
-ncf = Dataset(ff, mode="r")  # no shallowing
-
-out1 = ncf["stand"]["harvested_volume"][0, 1:, 1:-1]
-out2 = ncf["stand"]["harvested_log_volume"][0, 1:, 1:-1]
-out3 = ncf["stand"]["harvested_pulp_volume"][0, :, 1:-1]
-out4 = ncf["stand"]["harvested_biomass"][0, :, 1:-1]
-out5 = ncf["stand"]["harvested_stems"][0, :, 1:-1]
-
-print("harvested volume")
-print(out1)
-print("harvested log volume")
-print(out2)
-print("harvested pulp volume")
-print(out3)
-print("harvested biomass")
-print(out4)
-print("harvested stems")
-print(out5)
-
-ncf.close()
