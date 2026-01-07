@@ -47,7 +47,6 @@ class Susi:
         hdomSim=None,
         volSim=None,
         ageSim=None,
-        sarkaSim=None,
         sfc=None,
         susiPath=None,
         simLAI=None,
