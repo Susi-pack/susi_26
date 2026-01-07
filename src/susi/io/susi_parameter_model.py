@@ -43,12 +43,29 @@ class SimulationConfig(StrictFrozenModel):
     end_date: datetime.datetime = Field(description="Simulation end date.")
 
 
-class WeatherParameters(StrictFrozenModel):
+class WeatherParams(StrictFrozenModel):
     """
     Weather parameters
     """
 
     weather_filepath: FilePath = Field(description="Path to weather files.")
+
+
+class MottiFileParams(StrictFrozenModel):
+    """
+    Motti files to read
+    """
+
+    path: DirectoryPath = Field(description="Motti files input file folder")
+    dominant: dict[int, str] = Field(
+        description="int: 0 if not in use. str: Motti file for the dominant layer."
+    )
+    subdominant: dict[int, str] = Field(
+        description="int: 0 if not in use. str: Motti file for the subdominant layer."
+    )
+    under: dict[int, str] = Field(
+        description="int: 0 if not in use. str: Motti file for the understorey layer."
+    )
 
 
 class SusiParams(StrictFrozenModel):
@@ -57,5 +74,6 @@ class SusiParams(StrictFrozenModel):
     """
 
     params_schema_version: int = 1
-    weather_parameters: WeatherParameters
+    weather_parameters: WeatherParams
+    motti_file_parameters: MottiFileParams
     simulation_config: SimulationConfig

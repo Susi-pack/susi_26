@@ -70,8 +70,8 @@ class Stand:
             ndominants,
             sfc,
             agearr["dominant"],
-            mottifile["path"],
-            mottifile["dominant"],
+            mottifile.path,
+            mottifile.dominant,
             ixdominants,
             photopara,
             self.nut_stat,
@@ -84,8 +84,8 @@ class Stand:
             nsubdominants,
             sfc,
             agearr["subdominant"],
-            mottifile["path"],
-            mottifile["subdominant"],
+            mottifile.path,
+            mottifile.subdominant,
             ixsubdominants,
             photopara,
             self.nut_stat,
@@ -98,8 +98,8 @@ class Stand:
             nunder,
             sfc,
             agearr["under"],
-            mottifile["path"],
-            mottifile["under"],
+            mottifile.path,
+            mottifile.under,
             ixunder,
             photopara,
             self.nut_stat,
@@ -708,4 +708,3 @@ class Stand:
             cl.harvested_pulp_volume = cl.harvested_pulp_volume * 0.0
             cl.harvested_volume = cl.harvested_volume * 0.0
             cl.harvested_stems = cl.harvested_stems * 0.0
-

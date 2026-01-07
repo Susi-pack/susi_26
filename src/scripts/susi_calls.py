@@ -21,14 +21,7 @@ app_settings = AppSettings()
 
 wdata = golden_test.PARAMETERS.weather_parameters.weather_filepath
 
-mottifile = {
-    "path": app_settings.input_folder,  # Input file folder
-    "dominant": {1: "CF_41.xlsx"},  # Motti-file for the dominant layer
-    "subdominant": {
-        0: "susi_motti_input_lyr_1.xlsx"
-    },  # subdominant layer Mottifle, 0 if not in use
-    "under": {0: "susi_motti_input_lyr_2.xlsx"},
-}  # understorey layer Mottifile, 0 if not in use
+mottifile = golden_test.PARAMETERS.motti_file_parameters
 
 
 start_date = golden_test.PARAMETERS.simulation_config.start_date
