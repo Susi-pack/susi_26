@@ -16,6 +16,10 @@ PARAMETERS = SusiParams(
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2007, 12, 31),
+        L=40.0,
+        initial_dominant_stand_age_years=100.0,
+        initial_subdominant_stand_age_years=0.0,
+        initial_understorey_age_years=0.0,
     ),
     motti_file_parameters=MottiFileParams(
         path=_app_settings.input_folder,

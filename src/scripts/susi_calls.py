@@ -30,17 +30,9 @@ start_yr = start_date.year
 end_yr = end_date.year
 
 
-sarkaSim = 40.0  # Strip width, ie distance between ditches, m
-n = int(sarkaSim / 2)  # Number of computation nodes in the strip, 2-m width of node
+sarkaSim = golden_test.PARAMETERS.simulation_config.L
+n = golden_test.PARAMETERS.simulation_config.n
 
-ageSim = {
-    "dominant": 100.0
-    * np.ones(
-        n
-    ),  # age of the stand in the beginning of the simulation, yrs, given for all nodes along the strip
-    "subdominant": 0 * np.ones(n),  # same for subdominant layer
-    "under": 0 * np.ones(n),
-}  # same for understorey layer
 
 site_fertility_class = 4
 sfc = np.ones(n, dtype=int) * site_fertility_class  # site fertility class
@@ -54,7 +46,7 @@ wpara, cpara, org_para, spara, outpara, photopara = get_susi_para(
     peat=site,
     folderName=app_settings.output_folder,
     hdomSim=None,
-    ageSim=ageSim,
+    ageSim=golden_test.PARAMETERS.simulation_config.age,
     sarkaSim=sarkaSim,
     sfc=sfc,
     n=n,
@@ -119,7 +111,6 @@ susi.run_susi(
     peat="other",
     photosite="All data",
     folderName=app_settings.output_folder,
-    ageSim=ageSim,
-    sarkaSim=sarkaSim,
+    ageSim=golden_test.PARAMETERS.simulation_config.age,
     sfc=sfc,
 )  # Run susi
