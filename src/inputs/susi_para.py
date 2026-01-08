@@ -369,18 +369,18 @@ def get_susi_para(
         },
     }
     # ------------  Output parameters -------------------------------------------------
-    outpara = {
-        "outfolder": folderName,
-        "netcdf": "susi.nc",
-        #'netcdf': 'susi_ba18.nc',
-        #'netcdf': 'susi_strip.nc',
-        #'netcdf': 'susi_cc.nc',
-        "startday": 1,
-        "startmonth": 7,  # Päivä, josta keskiarvojen laskenta alkaa
-        "endday": 31,
-        "endmonth": 8,  # Päivä, johon keskiarvojen laskenta loppuu
-        #'figs': True, 'to_file':True, 'static stand':False, 'hydfig':True, 'DOCfig':False,
-    }
+    # outpara = {
+    #     "outfolder": folderName,
+    #     "netcdf": "susi.nc",
+    #     #'netcdf': 'susi_ba18.nc',
+    #     #'netcdf': 'susi_strip.nc',
+    #     #'netcdf': 'susi_cc.nc',
+    #     "startday": 1,
+    #     "startmonth": 7,  # Päivä, josta keskiarvojen laskenta alkaa
+    #     "endday": 31,
+    #     "endmonth": 8,  # Päivä, johon keskiarvojen laskenta loppuu
+    #     #'figs': True, 'to_file':True, 'static stand':False, 'hydfig':True, 'DOCfig':False,
+    # }
     photopara = {
         "All data": {
             "beta": 0.513,
@@ -448,4 +448,4 @@ def get_susi_para(
 
     o_s = spara[peat] if peat is not None else spara
     o_p = photopara[photosite] if photosite is not None else photopara
-    return o_s, outpara, o_p
+    return o_s, o_p

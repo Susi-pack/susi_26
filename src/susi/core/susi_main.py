@@ -75,7 +75,7 @@ class Susi:
         n = spara["n"]  # number of columns along the strip
 
         outname = (
-            outpara["outfolder"] / outpara["netcdf"]
+            outpara.outfolder / outpara.netcdf
         )  # name and path for the netcdf4 file for output
 
         out = Outputs(

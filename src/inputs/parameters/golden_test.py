@@ -1,4 +1,5 @@
 import datetime
+from pathlib import Path
 
 from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
@@ -33,5 +34,8 @@ PARAMETERS = SusiParams(
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
-    output_parameters=OutputParams(),
+    output_parameters=OutputParams(
+        outfolder=_app_settings.project_root_path / Path("outputs/"),
+        netcdf=Path("susi.nc"),
+    ),
 )

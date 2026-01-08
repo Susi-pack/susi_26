@@ -44,7 +44,9 @@ cpara = golden_test.PARAMETERS.canopy_parameters
 
 org_para = golden_test.PARAMETERS.organic_layer_parameters
 
-spara, outpara, photopara = get_susi_para(
+outpara = golden_test.PARAMETERS.output_parameters
+
+spara, photopara = get_susi_para(
     wlocation="undefined",
     peat=site,
     folderName=app_settings.output_folder,
