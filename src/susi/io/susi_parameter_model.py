@@ -207,10 +207,10 @@ class CanopyParams(BaseModel):
         """
 
         # canopy conductance
-        amax: float = Field(
+        amax_init: float = Field(
             frozen=False,
             default=10.0,
-            description="maximum photosynthetic rate (umolm-2(leaf)s-1)",
+            description="Initial maximum photosynthetic rate (umolm-2(leaf)s-1)",
         )
         g1_conif: float = Field(default=2.1, description="stomatal parameter, conifers")
         g1_decid: float = Field(

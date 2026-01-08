@@ -45,7 +45,7 @@ class CanopyGrid:
         epsi = 0.01
 
         # physiology: transpi + floor evap
-        self.amax = copy.deepcopy(cpara.physpara.amax)
+        self.amax = copy.deepcopy(cpara.physpara.amax_init)
 
         # canopy parameters and state
         self.hc = state.hc + epsi
