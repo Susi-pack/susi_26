@@ -249,7 +249,7 @@ class CanopyParams(BaseModel):
     state: CanopyStateParams = CanopyStateParams()
 
 
-class OrganicLayerParameters(StrictFrozenModel):
+class OrganicLayerParams(StrictFrozenModel):
     """
     Parameters for the organic layer
     """
@@ -274,12 +274,12 @@ class OrganicLayerParameters(StrictFrozenModel):
     pond_storage: NonNegativeFloat = Field(default=0.0, description="pond storage")
 
 
-class OrganicLayerParametersArray:
+class OrganicLayerParamsArray:
     """
-    Same class as OrganicLayerParameters, but with all fields a numpy array for each soil column.
+    Same class as OrganicLayerParams, but with all fields a numpy array for each soil column.
     """
 
-    org_depth: np.ndarray  # m3 m-3
+    org_depth: np.ndarray
     org_poros: np.ndarray
     org_fc: np.ndarray
     org_rw: np.ndarray
@@ -287,11 +287,22 @@ class OrganicLayerParametersArray:
     org_sat: np.ndarray
     pond_storage: np.ndarray
 
-    def __init__(
-        self, organic_layer_parameters: OrganicLayerParameters, array_length: int
-    ):
+    def __init__(self, organic_layer_parameters: OrganicLayerParams, array_length: int):
         for name, value in organic_layer_parameters.model_dump().items():
             setattr(self, name, value * np.ones(array_length))
+
+
+class OutputParams(StrictFrozenModel):
+    """
+    Output file IO parameters
+    """
+
+    outfolder: DirectoryPath = get_project_root() / Path("outputs/")
+    netcdf: Path = Path("susi.nc")
+    startday: int = 1
+    startmonth: int = 7  # Päivä josta keskiarvojen laskenta alkaa
+    endday: int = 31
+    endmonth: int = 8  # Päivä johon keskiarvojen laskenta loppuu
 
 
 class SusiParams(StrictFrozenModel):
@@ -304,4 +315,5 @@ class SusiParams(StrictFrozenModel):
     motti_file_parameters: MottiFileParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
-    organic_layer_parameters: OrganicLayerParameters
+    organic_layer_parameters: OrganicLayerParams
+    output_parameters: OutputParams

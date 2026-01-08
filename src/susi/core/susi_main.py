@@ -11,7 +11,7 @@ import datetime
 
 from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
-    OrganicLayerParametersArray,
+    OrganicLayerParamsArray,
 )
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
@@ -174,7 +174,7 @@ class Susi:
         cpy.update_amax(stand.nut_stat)
         out.initialize_cpy()
 
-        org_para_array = OrganicLayerParametersArray(
+        org_para_array = OrganicLayerParamsArray(
             organic_layer_parameters=org_para, array_length=spara["n"]
         )
         moss = MossLayer(org_para_array=org_para_array, outputs=True)

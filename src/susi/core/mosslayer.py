@@ -7,7 +7,7 @@ Created on Thu Jan 17 08:59:36 2019
 
 import numpy as np
 
-from susi.io.susi_parameter_model import OrganicLayerParametersArray
+from susi.io.susi_parameter_model import OrganicLayerParamsArray
 
 eps = np.finfo(float).eps
 
@@ -17,7 +17,7 @@ class MossLayer(object):
     Moss/organic layer on top of soil.
     """
 
-    def __init__(self, org_para_array: OrganicLayerParametersArray, outputs=False):
+    def __init__(self, org_para_array: OrganicLayerParamsArray, outputs=False):
         """
         Initializes MossLayer:
         Args:
