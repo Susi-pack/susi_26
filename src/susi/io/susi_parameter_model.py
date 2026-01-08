@@ -118,6 +118,137 @@ class MottiFileParams(StrictFrozenModel):
     )
 
 
+class CanopyStateParams(StrictFrozenModel):
+    """
+    Canopy state parameters
+    """
+
+    lai_conif: float = Field(default=3.0, description="conifer 1-sided LAI (m2 m-2)")
+    lai_decid_max: float = Field(
+        default=0.01, description="maximum annual deciduous 1-sided LAI (m2 m-2):"
+    )
+    hc: float = Field(default=16.0, description="canopy height (m)")
+    cf: float = Field(default=0.7, description="canopy closure fraction (-)")
+
+    w: float = Field(default=0.0, description="Initial state of canopy storage (mm)")
+    swe: float = Field(
+        default=0.0, description="Initial state of snow water equivalent (mm)"
+    )
+
+
+class CanopyStateParamsArray:
+    """
+    Canopy and moss for each soil column (0, and n-1 are ditches)
+    Same as CanopyStateParameters, but with all array elements.
+    """
+
+    lai_conif: np.ndarray
+    lai_decid_max: np.ndarray
+    hc: np.ndarray
+    cf: np.ndarray
+    # initial state of canopy storage [mm] and snow water equivalent [mm]
+    w: np.ndarray
+    swe: np.ndarray
+
+    def __init__(self, canopy_state_parameters: CanopyStateParams, array_length: int):
+        for name, value in canopy_state_parameters.model_dump().items():
+            setattr(self, name, value * np.ones(array_length))
+
+
+class CanopyParams(BaseModel):
+    """
+    Canopy parameters
+    """
+
+    dt: PositiveFloat = Field(default=86400.0, description="Canopy model timestep (s).")
+
+    class Flow(StrictFrozenModel):
+        """
+        Flow field parameters
+        """
+
+        # Flow field
+        zmeas: float = 2.0
+        zground: float = Field(
+            default=0.5, description="Reference height above ground (m)."
+        )
+        zo_ground: float = Field(
+            default=0.01, description="ground roughness length (m)."
+        )
+
+    class Interception(StrictFrozenModel):
+        """
+        Interception parameters
+        """
+
+        # interception
+        wmax: float = 0.5
+        wmaxsnow: float = 4.0
+
+    class Snow(StrictFrozenModel):
+        """
+        Snow parameters
+        """
+
+        # degree-day snow model
+        kmelt: float = Field(
+            default=2.8934e-05, description="melt coefficient in open (mm/s)"
+        )
+        kfreeze: float = Field(
+            default=5.79e-6, description="freezing coefficient (mm/s)"
+        )
+        r: float = Field(
+            default=0.05, description="maximum fraction of liquid water in snow (-)"
+        )
+
+    class Physpara(StrictFrozenModel):
+        """
+        Physpara parameters: canopy conductance and soil evaporation.
+        """
+
+        # canopy conductance
+        amax: float = Field(
+            frozen=False,
+            default=10.0,
+            description="maximum photosynthetic rate (umolm-2(leaf)s-1)",
+        )
+        g1_conif: float = Field(default=2.1, description="stomatal parameter, conifers")
+        g1_decid: float = Field(
+            default=3.5, description="stomatal parameter, deciduous"
+        )
+        q50: float = Field(default=50.0, description="light response parameter (Wm-2)")
+        kp: float = Field(default=0.6, description="light attenuation parameter (-)")
+        rw: float = Field(default=0.20, description="critical value for REW (-),")
+        rwmin: float = Field(
+            default=0.02, description="minimum relative conductance (-)"
+        )
+        # soil evaporation
+        gsoil: float = Field(
+            default=1e-2,
+            description="Soil surface conductance if soil is fully wet (m/s)",
+        )
+
+    class Phenology(StrictFrozenModel):
+        """
+        Phenology parameters. Seasonal cycle of physiology.
+        """
+
+        # seasonal cycle of physiology: smax [degC], tau[d], xo[degC],fmin[-](residual photocapasity)
+        smax: float = Field(default=18.5, description="degC")
+        tau: float = Field(default=13.0, description="days")
+        xo: float = Field(default=-4.0, description="degC")
+        fmin: float = Field(
+            default=0.05, description="minimum photosynthetic capacity in winter (-)"
+        )
+
+    flow: Flow = Flow()
+    interception: Interception = Interception()
+    snow: Snow = Snow()
+    physpara: Physpara = Physpara()
+    phenology: Phenology = Phenology()
+    state: CanopyStateParams = CanopyStateParams()
+
+
 class SusiParams(StrictFrozenModel):
     """
     Parameter class to be stantiated.
@@ -127,3 +258,4 @@ class SusiParams(StrictFrozenModel):
     weather_parameters: WeatherParams
     motti_file_parameters: MottiFileParams
     simulation_config: SimulationConfig
+    canopy_parameters: CanopyParams

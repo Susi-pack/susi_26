@@ -10,6 +10,8 @@ import numpy as np
 import datetime
 from pathlib import Path
 
+from scipy.optimize import golden
+
 from susi.core.susi_utils import read_FMI_weather
 from inputs.susi_para import get_susi_para
 from susi.core.susi_main import Susi
@@ -38,7 +40,9 @@ site = "develop_scens"  # name of the parameter set in get_susi_para
 
 forc = read_FMI_weather(0, start_date, end_date, sourcefile=wdata)  # read weather input
 
-cpara, org_para, spara, outpara, photopara = get_susi_para(
+cpara = golden_test.PARAMETERS.canopy_parameters
+
+org_para, spara, outpara, photopara = get_susi_para(
     wlocation="undefined",
     peat=site,
     folderName=app_settings.output_folder,

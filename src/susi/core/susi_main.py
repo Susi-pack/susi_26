@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime
 
+from susi.io.susi_parameter_model import CanopyStateParamsArray
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
 from susi.core.strip import StripHydrology, drain_depth_development
@@ -60,7 +61,7 @@ class Susi:
 
         switches = {"Ojanen2010_2019": True}
 
-        dtc = cpara["dt"]  # canopy model timestep
+        dtc = cpara.dt
 
         start_date = datetime.datetime(start_yr, 1, 1)  # simulation start date
         end_date = datetime.datetime(end_yr, 12, 31)  # simulation end date
@@ -160,16 +161,14 @@ class Susi:
         if switches["Ojanen2010_2019"]:
             out.initialize_ojanen()
         # ********* Above ground hydrology initialization ***************
-        cmask = np.ones(
-            spara["n"]
-        )  # compute canopy and moss for each soil column (0, and n-1 are ditches)
-        cstate = cpara["state"].copy()
-        for key in cstate.keys():
-            cstate[key] *= cmask
+        cmask = np.ones(spara["n"])
+        canopy_state_parameters_array = CanopyStateParamsArray(
+            canopy_state_parameters=cpara.state, array_length=spara["n"]
+        )
         cpy = CanopyGrid(
-            cpara, cstate, outputs=False
+            cpara=cpara, state=canopy_state_parameters_array, outputs=False
         )  # initialize above ground vegetation hydrology model
-        cpy.update_amax(cpara["physpara"], stand.nut_stat)
+        cpy.update_amax(stand.nut_stat)
         out.initialize_cpy()
 
         for key in org_para.keys():
@@ -286,7 +285,7 @@ class Susi:
                 ).days + 1
 
                 # CHECK THIS AND TEST
-                cpy.update_amax(cpara["physpara"], stand.nut_stat)
+                cpy.update_amax(stand.nut_stat)
 
                 # **********  Daily loop ************************************************************
                 for dd in range(days):  # day loop
@@ -303,6 +302,7 @@ class Susi:
 
                     potinf, trfall, interc, evap, ET, transpi, efloor, MBE, SWE = (
                         cpy.run_timestep(
+                            cpara,
                             doy,
                             dtc,
                             ta,

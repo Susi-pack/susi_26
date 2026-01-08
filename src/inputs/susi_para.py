@@ -32,52 +32,52 @@ def get_susi_para(
     if susiPath is None:
         susiPath = ""
 
-    cpara = {
-        "dt": 86400.0,
-        "flow": {  # flow field
-            "zmeas": 2.0,
-            "zground": 0.5,
-            "zo_ground": 0.01,
-        },
-        "interc": {  # interception
-            "wmax": 0.5,  # storage capacity for rain (mm/LAI)
-            "wmaxsnow": 4.0,  # storage capacity for snow (mm/LAI),
-        },
-        "snow": {
-            # degree-day snow model
-            "kmelt": 2.8934e-05,  # melt coefficient in open (mm/s)
-            "kfreeze": 5.79e-6,  # freezing coefficient (mm/s)
-            "r": 0.05,  # maximum fraction of liquid in snow (-)
-        },
-        "physpara": {
-            # canopy conductance
-            "amax": 10.0,  # maximum photosynthetic rate (umolm-2(leaf)s-1)
-            "g1_conif": 2.1,  # stomatal parameter, conifers
-            "g1_decid": 3.5,  # stomatal parameter, deciduous
-            "q50": 50.0,  # light response parameter (Wm-2)
-            "kp": 0.6,  # light attenuation parameter (-)
-            "rw": 0.20,  # critical value for REW (-),
-            "rwmin": 0.02,  # minimum relative conductance (-)
-            # soil evaporation
-            "gsoil": 1e-2,  # soil surface conductance if soil is fully wet (m/s)
-        },
-        "phenopara": {
-            # seasonal cycle of physiology: smax [degC], tau[d], xo[degC],fmin[-](residual photocapasity)
-            "smax": 18.5,  # degC
-            "tau": 13.0,  # days
-            "xo": -4.0,  # degC
-            "fmin": 0.05,  # minimum photosynthetic capacity in winter (-)
-        },
-        "state": {
-            "lai_conif": 3.0,  # conifer 1-sided LAI (m2 m-2)
-            "lai_decid_max": 0.01,  # maximum annual deciduous 1-sided LAI (m2 m-2):
-            "hc": 16.0,  # canopy height (m)
-            "cf": 0.7,  # canopy closure fraction (-)
-            # initial state of canopy storage [mm] and snow water equivalent [mm]
-            "w": 0.0,  # canopy storage mm
-            "swe": 0.0,  # snow water equivalent mm
-        },
-    }
+    # cpara = {
+    #     "dt": 86400.0,
+    #     "flow": {  # flow field
+    #         "zmeas": 2.0,
+    #         "zground": 0.5,
+    #         "zo_ground": 0.01,
+    #     },
+    #     "interc": {  # interception
+    #         "wmax": 0.5,  # storage capacity for rain (mm/LAI)
+    #         "wmaxsnow": 4.0,  # storage capacity for snow (mm/LAI),
+    #     },
+    #     "snow": {
+    #         # degree-day snow model
+    #         "kmelt": 2.8934e-05,  # melt coefficient in open (mm/s)
+    #         "kfreeze": 5.79e-6,  # freezing coefficient (mm/s)
+    #         "r": 0.05,  # maximum fraction of liquid in snow (-)
+    #     },
+    #     "physpara": {
+    #         # canopy conductance
+    #         "amax": 10.0,  # maximum photosynthetic rate (umolm-2(leaf)s-1)
+    #         "g1_conif": 2.1,  # stomatal parameter, conifers
+    #         "g1_decid": 3.5,  # stomatal parameter, deciduous
+    #         "q50": 50.0,  # light response parameter (Wm-2)
+    #         "kp": 0.6,  # light attenuation parameter (-)
+    #         "rw": 0.20,  # critical value for REW (-),
+    #         "rwmin": 0.02,  # minimum relative conductance (-)
+    #         # soil evaporation
+    #         "gsoil": 1e-2,  # soil surface conductance if soil is fully wet (m/s)
+    #     },
+    #     "phenopara": {
+    #         # seasonal cycle of physiology: smax [degC], tau[d], xo[degC],fmin[-](residual photocapasity)
+    #         "smax": 18.5,  # degC
+    #         "tau": 13.0,  # days
+    #         "xo": -4.0,  # degC
+    #         "fmin": 0.05,  # minimum photosynthetic capacity in winter (-)
+    #     },
+    #     "state": {
+    #         "lai_conif": 3.0,  # conifer 1-sided LAI (m2 m-2)
+    #         "lai_decid_max": 0.01,  # maximum annual deciduous 1-sided LAI (m2 m-2):
+    #         "hc": 16.0,  # canopy height (m)
+    #         "cf": 0.7,  # canopy closure fraction (-)
+    #         # initial state of canopy storage [mm] and snow water equivalent [mm]
+    #         "w": 0.0,  # canopy storage mm
+    #         "swe": 0.0,  # snow water equivalent mm
+    #     },
+    # }
     org_para = {
         "org_depth": 0.04,  # depth of organic top layer (m)
         "org_poros": 0.9,  # porosity (-)
@@ -448,4 +448,4 @@ def get_susi_para(
 
     o_s = spara[peat] if peat is not None else spara
     o_p = photopara[photosite] if photosite is not None else photopara
-    return cpara, org_para, o_s, outpara, o_p
+    return org_para, o_s, outpara, o_p

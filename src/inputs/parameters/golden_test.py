@@ -6,6 +6,7 @@ from susi.io.susi_parameter_model import (
     SimulationConfig,
     SusiParams,
     MottiFileParams,
+    CanopyParams,
 )
 
 _app_settings = AppSettings()
@@ -28,4 +29,5 @@ PARAMETERS = SusiParams(
         subdominant={0: "susi_motti_input_lyr_1.xlsx"},
         under={0: "susi_motti_input_lyr_2.xlsx"},
     ),
+    canopy_parameters=CanopyParams(),
 )
