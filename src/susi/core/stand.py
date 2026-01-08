@@ -32,7 +32,6 @@ class Stand:
         self.ncols = ncols  # number of columns along the strip
         self.nscens = nscens  # number of ditch depth scenarios in the simulation
         self.yrs = yrs  # number of years in the simulation
-        self.photopara = photopara  # photosynthesis parameters for the assimilation function (Mäkelä et al. 2008)
         self.nut_stat = np.ones(
             ncols
         )  # *0.5                                   # nutrient status, make this an argument
@@ -485,7 +484,7 @@ class Stand:
             + self.under.Dg * self.under.stems
         ) / (self.dominant.stems + self.subdominant.stems + self.under.stems)
 
-    def assimilate(self, forc, wt, afp):
+    def assimilate(self, photopara, forc, wt, afp):
         """
         Runs the photosyntheis function for all canopy layers
         Calls canopy layer instances
@@ -539,13 +538,31 @@ class Stand:
             lai_above[layer + 1, :] = laiabove[order, col]
 
         self.dominant.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[0, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[0, :],
         )  # npp, leaf dynamics and updating the canopylayers
         self.subdominant.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[1, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[1, :],
         )  # npp, leaf dynamics and updating the canopylayers
         self.under.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[2, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[2, :],
         )  # npp, leaf dynamics and updating the canopylayers
 
         # updating call from the main program

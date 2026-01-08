@@ -305,6 +305,104 @@ class OutputParams(StrictFrozenModel):
     endmonth: int = 8  # Päivä johon keskiarvojen laskenta loppuu
 
 
+class PhotoParameters(StrictFrozenModel):
+    """
+    Photosynthesis parameters for assimilation model (Mäkelä et al. 2008)
+    """
+
+    beta: float
+    gamma: float
+    kappa: float
+    tau: float
+    X0: float
+    Smax: float
+    alfa: float
+    nu: float
+
+
+class LocationsForPhotoParams(str, Enum):
+    """
+    Gives all options for the location of the photosynthesis parameters
+    """
+
+    all_data = "All_data"
+    sodankyla = "Sodankyla"
+    hyytiala = "Hyytiala"
+    norunda = "Norunda"
+    tharandt = "Tharandt"
+    bray = "Bray"
+
+
+PRESET_PHOTO_PARAMETERS: dict[str, PhotoParameters] = {
+    "All_data": PhotoParameters(
+        beta=0.513,
+        gamma=0.0196,
+        kappa=-0.389,
+        tau=7.2,
+        X0=-4.0,
+        Smax=17.3,
+        alfa=1.0,
+        nu=5.0,
+    ),
+    "Sodankyla": PhotoParameters(
+        beta=0.831,
+        gamma=0.065,
+        kappa=-0.150,
+        tau=10.2,
+        X0=-0.9,
+        Smax=16.4,
+        alfa=1.0,
+        nu=5.0,
+    ),
+    "Hyytiala": PhotoParameters(
+        beta=0.504,
+        gamma=0.0303,
+        kappa=-0.235,
+        tau=11.1,
+        X0=-3.1,
+        Smax=17.3,
+        alfa=1.0,
+        nu=5.0,
+    ),
+    "Norunda": PhotoParameters(
+        beta=0.500,
+        gamma=0.0220,
+        kappa=-0.391,
+        tau=5.7,
+        X0=-4.0,
+        Smax=17.6,
+        alfa=1.062,
+        nu=11.27,
+    ),
+    "Tharandt": PhotoParameters(
+        beta=0.742,
+        gamma=0.0267,
+        kappa=-0.512,
+        tau=1.8,
+        X0=-5.2,
+        Smax=18.5,
+        alfa=1.002,
+        nu=442.0,
+    ),
+    "Bray": PhotoParameters(
+        beta=0.459,
+        gamma=-0.000669,
+        kappa=-0.560,
+        tau=2.6,
+        X0=-17.6,
+        Smax=45.0,
+        alfa=0.843,
+        nu=2.756,
+    ),
+}
+
+
+def get_photo_parameters_by_location(
+    location: LocationsForPhotoParams,
+) -> PhotoParameters:
+    return PRESET_PHOTO_PARAMETERS[location.value]
+
+
 class SusiParams(StrictFrozenModel):
     """
     Parameter class to be stantiated.
@@ -317,3 +415,4 @@ class SusiParams(StrictFrozenModel):
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams
     output_parameters: OutputParams
+    photo_parameters: PhotoParameters

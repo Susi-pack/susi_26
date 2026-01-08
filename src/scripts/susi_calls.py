@@ -46,7 +46,9 @@ org_para = golden_test.PARAMETERS.organic_layer_parameters
 
 outpara = golden_test.PARAMETERS.output_parameters
 
-spara, photopara = get_susi_para(
+photopara = golden_test.PARAMETERS.photo_parameters
+
+spara = get_susi_para(
     wlocation="undefined",
     peat=site,
     folderName=app_settings.output_folder,

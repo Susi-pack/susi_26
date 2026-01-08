@@ -1533,7 +1533,7 @@ def rew_drylimit(dwt):
     return frew(dwt)
 
 
-def assimilation(ppara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
+def assimilation(photopara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
     """
     Computes photosynthesis and respiration of the stand in daily time step
     Mäkelä et al. 2008. Empirical model of stand GPP LUE approach. Global Change Biology 14: 92-108
@@ -1557,20 +1557,20 @@ def assimilation(ppara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
     )  # Unit conversion to mol/m2/day, 0.5 is the share of par from rg
 
     """ Eq 2 """
-    fL = 1.0 / (ppara["gamma"] * par + 1.0)  #
+    fL = 1.0 / (photopara.gamma * par + 1.0)  #
 
     """Eq. 3a and 3b"""
-    Xk = Xk + (Ta - Xk) / ppara["tau"]
-    Sk = np.maximum(Xk - ppara["X0"], 0.0)
+    Xk = Xk + (Ta - Xk) / photopara.tau
+    Sk = np.maximum(Xk - photopara.X0, 0.0)
 
     """Eq 4"""
-    fs = np.minimum(Sk / ppara["Smax"], 1.0)  # Final temperature adustment
+    fs = np.minimum(Sk / photopara.Smax, 1.0)  # Final temperature adustment
 
     """Eq 5"""  # Vapor pressure deficit function: limits photos when stomata are closed
-    fd = np.exp(ppara["kappa"] * vpd)  # Eq 5
+    fd = np.exp(photopara.kappa * vpd)  # Eq 5
 
     """Eq 6"""  # Soil water content modifyer
-    fREW = 1.0 / (1.0 + ((1.0 - rew) / ppara["alfa"]) ** ppara["nu"])
+    fREW = 1.0 / (1.0 + ((1.0 - rew) / photopara.alfa) ** photopara.nu)
 
     """ Beer-Lambert function: LAI function"""  # Fabrika 2013
     kext = 0.2
@@ -1578,7 +1578,7 @@ def assimilation(ppara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
     """Eq 1"""
     # LAI = LAI*11./6.4     #to all sided LAI Mäkelä et al. 2001 (LAI 11)
     Pk = (
-        ppara["beta"] * (1.0 - np.exp(-kext * LAI)) * par * fL * fs * fd * fREW
+        photopara.beta * (1.0 - np.exp(-kext * LAI)) * par * fL * fs * fd * fREW
     )  # canopy GPP gC m-2 day-1
     """Respi"""
     # Conversion micro mol/m2/s ->g/m2/day
@@ -1602,7 +1602,7 @@ def assimilation(ppara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
     return NPP * 10.0  # kg/ha organic matter
 
 
-def assimilation_yr(ppara, dfforc, wt, afp, LAI, LAI_above):
+def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
     """
     Computes photosynthesis and respiration of the stand in daily time step
     Mäkelä et al. 2008. Empirical model of stand GPP LUE approach. Global Change Biology 14: 92-108
@@ -1637,25 +1637,25 @@ def assimilation_yr(ppara, dfforc, wt, afp, LAI, LAI_above):
     """ Eq 2 """
     fL = np.zeros((ncols, 366))
     for m in range(ncols):
-        fL[m:days] = 1.0 / (ppara["gamma"] * par[m] + 1.0)  # Light modifier
+        fL[m:days] = 1.0 / (photopara.gamma * par[m] + 1.0)  # Light modifier
 
     """Eq. 3a and 3b"""
     sim_len = len(Ta)
     Xk = np.zeros(sim_len)  # Acclimatiosation: Temerature adjustment with delay tau
     Xk[0] = Ta.iloc[0]
     for n, T in enumerate(Ta[0:-1]):
-        Xk[n + 1] = Xk[n] + (T - Xk[n]) / ppara["tau"]
-    Sk = np.maximum(Xk - ppara["X0"], np.zeros(sim_len))
+        Xk[n + 1] = Xk[n] + (T - Xk[n]) / photopara.tau
+    Sk = np.maximum(Xk - photopara.X0, np.zeros(sim_len))
 
     """Eq 4"""
     fs = np.zeros(366)
-    fs[: len(Sk)] = np.minimum(Sk / ppara["Smax"], 1.0)  # Final temperature adustment
+    fs[: len(Sk)] = np.minimum(Sk / photopara.Smax, 1.0)  # Final temperature adustment
 
     """Eq 5"""
     fd = np.ones(
         366
     )  # Vapor pressure deficit function: limits photos when stomata are closed
-    fd[: len(vpd)] = np.exp(ppara["kappa"] * vpd)  # Eq 5
+    fd[: len(vpd)] = np.exp(photopara.kappa * vpd)  # Eq 5
 
     # ************* From here on: different in different columns********************************
     """Eq 6"""  # Soil water content modifyer
@@ -1678,7 +1678,7 @@ def assimilation_yr(ppara, dfforc, wt, afp, LAI, LAI_above):
     npp_arr_pot = np.zeros(ncols)
 
     for column in range(ncols):
-        fREW = (1.0 + ((1.0 - rewarr[:, column]) / ppara["alfa"]) ** ppara["nu"]) ** (
+        fREW = (1.0 + ((1.0 - rewarr[:, column]) / photopara.alfa) ** photopara.nu) ** (
             -1.0
         )
         fAFP = fafparr[:, column]
@@ -1687,7 +1687,7 @@ def assimilation_yr(ppara, dfforc, wt, afp, LAI, LAI_above):
 
         """Eq 1"""
         Pk = (
-            ppara["beta"]
+            photopara.beta
             * (1.0 - np.exp(-kext * LAI[column]))
             * par[column]
             * fL[column]
@@ -1698,7 +1698,7 @@ def assimilation_yr(ppara, dfforc, wt, afp, LAI, LAI_above):
         )  # canopy GPP gC m-2 day-1
         # Pk=ppara['beta'] *(1.- np.exp(-kext*LAI[column])) * par * fL * fs * fd * fREW    #canopy GPP gC m-2 day-1
         Pk_pot = (
-            ppara["beta"]
+            photopara.beta
             * (1.0 - np.exp(-kext * LAI[column]))
             * par[column]
             * fL[column]
@@ -2496,4 +2496,3 @@ def get_temp_sum(forc):
     yrs = np.shape(forc)[0] / 365.25
     ts = dds / yrs
     return ts
-

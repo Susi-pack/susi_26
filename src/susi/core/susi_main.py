@@ -416,7 +416,7 @@ class Susi:
                 )
 
                 stand.assimilate(
-                    forc.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)]
+                    photopara, forc.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)]
                 )
                 stand.update()
 

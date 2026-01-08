@@ -10,6 +10,8 @@ from susi.io.susi_parameter_model import (
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
+    get_photo_parameters_by_location,
+    LocationsForPhotoParams,
 )
 
 _app_settings = AppSettings()
@@ -37,5 +39,8 @@ PARAMETERS = SusiParams(
     output_parameters=OutputParams(
         outfolder=_app_settings.project_root_path / Path("outputs/"),
         netcdf=Path("susi.nc"),
+    ),
+    photo_parameters=get_photo_parameters_by_location(
+        location=LocationsForPhotoParams("All_data")
     ),
 )
