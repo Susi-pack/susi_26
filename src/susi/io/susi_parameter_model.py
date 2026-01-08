@@ -88,7 +88,17 @@ class WeatherParams(StrictFrozenModel):
     Weather parameters
     """
 
-    weather_filepath: FilePath = Field(description="Path to weather files.")
+    # FMI weather
+    FMI_weather_filepath: FilePath = Field(description="Path to weather files.")
+
+    # Rest of weather. Unused?
+    # infolder: DirectoryPath = Field(description="Directory where weather files are")
+    # infile_d: FilePath = Path("Tammela_weather_1.csv")
+    # start_yr: int = 1980
+    # end_yr: int = 1984
+    # description: str = "Undefined, Finland"
+    # lat: float = 65.00
+    # lon: float = 25.00
 
 
 class MottiFileParams(StrictFrozenModel):

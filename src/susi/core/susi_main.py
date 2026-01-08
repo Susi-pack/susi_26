@@ -31,7 +31,6 @@ class Susi:
     def run_susi(
         self,
         forc,
-        wpara,
         cpara,
         org_para,
         spara,
@@ -87,7 +86,6 @@ class Susi:
         ]  # location of weather file, determines the simulation location
         print(
             "      - Weather input:",
-            wpara["description"],
             ", start:",
             start_yr,
             ", end:",

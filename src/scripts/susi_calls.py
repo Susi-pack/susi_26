@@ -19,7 +19,7 @@ from inputs.parameters import golden_test
 # ***************** local call for SUSI*****************************************************
 app_settings = AppSettings()
 
-wdata = golden_test.PARAMETERS.weather_parameters.weather_filepath
+wdata = golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath
 
 mottifile = golden_test.PARAMETERS.motti_file_parameters
 
@@ -38,7 +38,7 @@ site = "develop_scens"  # name of the parameter set in get_susi_para
 
 forc = read_FMI_weather(0, start_date, end_date, sourcefile=wdata)  # read weather input
 
-wpara, cpara, org_para, spara, outpara, photopara = get_susi_para(
+cpara, org_para, spara, outpara, photopara = get_susi_para(
     wlocation="undefined",
     peat=site,
     folderName=app_settings.output_folder,
@@ -95,7 +95,6 @@ susi = Susi()  # Initaiate susi class
 
 susi.run_susi(
     forc,
-    wpara,
     cpara,
     org_para,
     spara,

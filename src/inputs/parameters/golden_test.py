@@ -11,7 +11,7 @@ from susi.io.susi_parameter_model import (
 _app_settings = AppSettings()
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        weather_filepath=_app_settings.input_folder.joinpath("weather/CFw.csv")
+        FMI_weather_filepath=_app_settings.input_folder.joinpath("weather/CFw.csv"),
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
