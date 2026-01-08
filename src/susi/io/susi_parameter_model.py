@@ -20,6 +20,7 @@ from susi.io.extra_pydantic_types import (
     PositiveFloat,
     NonNegativeFloat,
     NonPositiveFloat,
+    PositiveInt,
 )
 from susi.io.utils import get_project_root
 
@@ -57,6 +58,10 @@ class SimulationConfig(StrictFrozenModel):
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
+    site_fertility_class: PositiveInt = Field(
+        description="Site fertility class. This is set to all nodes in the strip."
+    )
+
     @computed_field
     @property
     def n(self) -> int:
@@ -71,6 +76,11 @@ class SimulationConfig(StrictFrozenModel):
             "subdominant": self.initial_subdominant_stand_age_years * np.ones(self.n),
             "under": self.initial_understorey_age_years * np.ones(self.n),
         }
+
+    @property
+    def sfc(self) -> SkipValidation[np.ndarray]:
+        """site fertility class for all nodes in the strip"""
+        return np.ones(self.n, dtype=int) * self.site_fertility_class
 
 
 class WeatherParams(StrictFrozenModel):

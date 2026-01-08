@@ -34,9 +34,6 @@ sarkaSim = golden_test.PARAMETERS.simulation_config.L
 n = golden_test.PARAMETERS.simulation_config.n
 
 
-site_fertility_class = 4
-sfc = np.ones(n, dtype=int) * site_fertility_class  # site fertility class
-
 site = "develop_scens"  # name of the parameter set in get_susi_para
 
 forc = read_FMI_weather(0, start_date, end_date, sourcefile=wdata)  # read weather input
@@ -48,7 +45,7 @@ wpara, cpara, org_para, spara, outpara, photopara = get_susi_para(
     hdomSim=None,
     ageSim=golden_test.PARAMETERS.simulation_config.age,
     sarkaSim=sarkaSim,
-    sfc=sfc,
+    sfc=golden_test.PARAMETERS.simulation_config.sfc,
     n=n,
 )
 
@@ -60,7 +57,7 @@ mass_mor = (
     1.616 * np.log(spara["drain_age"]) - 1.409
 )  # Pitkänen et al. 2012 Forest Ecology and Management 284 (2012) 100–106
 
-if np.median(sfc) > 4:
+if np.median(golden_test.PARAMETERS.simulation_config.sfc) > 4:
     spara["peat type"] = [
         "S",
         "S",
@@ -112,5 +109,5 @@ susi.run_susi(
     photosite="All data",
     folderName=app_settings.output_folder,
     ageSim=golden_test.PARAMETERS.simulation_config.age,
-    sfc=sfc,
+    sfc=golden_test.PARAMETERS.simulation_config.sfc,
 )  # Run susi

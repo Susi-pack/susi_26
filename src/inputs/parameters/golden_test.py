@@ -20,6 +20,7 @@ PARAMETERS = SusiParams(
         initial_dominant_stand_age_years=100.0,
         initial_subdominant_stand_age_years=0.0,
         initial_understorey_age_years=0.0,
+        site_fertility_class=4,
     ),
     motti_file_parameters=MottiFileParams(
         path=_app_settings.input_folder,
