@@ -9,7 +9,10 @@ import numpy as np
 import pandas as pd
 import datetime
 
-from susi.io.susi_parameter_model import CanopyStateParamsArray
+from susi.io.susi_parameter_model import (
+    CanopyStateParamsArray,
+    OrganicLayerParametersArray,
+)
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
 from susi.core.strip import StripHydrology, drain_depth_development
@@ -171,9 +174,10 @@ class Susi:
         cpy.update_amax(stand.nut_stat)
         out.initialize_cpy()
 
-        for key in org_para.keys():
-            org_para[key] *= cmask
-        moss = MossLayer(org_para, outputs=True)
+        org_para_array = OrganicLayerParametersArray(
+            organic_layer_parameters=org_para, array_length=spara["n"]
+        )
+        moss = MossLayer(org_para_array=org_para_array, outputs=True)
         print("Canopy and moss layer hydrology initialized")
 
         # ******** Soil and strip parameterization *************************

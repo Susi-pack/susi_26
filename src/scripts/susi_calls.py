@@ -42,7 +42,9 @@ forc = read_FMI_weather(0, start_date, end_date, sourcefile=wdata)  # read weath
 
 cpara = golden_test.PARAMETERS.canopy_parameters
 
-org_para, spara, outpara, photopara = get_susi_para(
+org_para = golden_test.PARAMETERS.organic_layer_parameters
+
+spara, outpara, photopara = get_susi_para(
     wlocation="undefined",
     peat=site,
     folderName=app_settings.output_folder,

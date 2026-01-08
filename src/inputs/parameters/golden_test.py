@@ -7,6 +7,7 @@ from susi.io.susi_parameter_model import (
     SusiParams,
     MottiFileParams,
     CanopyParams,
+    OrganicLayerParameters,
 )
 
 _app_settings = AppSettings()
@@ -30,4 +31,5 @@ PARAMETERS = SusiParams(
         under={0: "susi_motti_input_lyr_2.xlsx"},
     ),
     canopy_parameters=CanopyParams(),
+    organic_layer_parameters=OrganicLayerParameters(),
 )

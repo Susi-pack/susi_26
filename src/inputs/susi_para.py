@@ -78,16 +78,16 @@ def get_susi_para(
     #         "swe": 0.0,  # snow water equivalent mm
     #     },
     # }
-    org_para = {
-        "org_depth": 0.04,  # depth of organic top layer (m)
-        "org_poros": 0.9,  # porosity (-)
-        "org_fc": 0.3,  # field capacity (-)
-        "org_rw": 0.24,  # critical vol. moisture content (-) for decreasing phase in Ef
-        "pond_storage_max": 0.01,  # max ponding allowed (m)
-        # initial states
-        "org_sat": 1.0,  # organic top layer saturation ratio (-)
-        "pond_storage": 0.0,  # pond storage
-    }
+    # org_para = {
+    #     "org_depth": 0.04,  # depth of organic top layer (m)
+    #     "org_poros": 0.9,  # porosity (-)
+    #     "org_fc": 0.3,  # field capacity (-)
+    #     "org_rw": 0.24,  # critical vol. moisture content (-) for decreasing phase in Ef
+    #     "pond_storage_max": 0.01,  # max ponding allowed (m)
+    #     # initial states
+    #     "org_sat": 1.0,  # organic top layer saturation ratio (-)
+    #     "pond_storage": 0.0,  # pond storage
+    # }
 
     # Hannun parametrit
     # ------------ Soil and stand parameters ----------------------------------
@@ -448,4 +448,4 @@ def get_susi_para(
 
     o_s = spara[peat] if peat is not None else spara
     o_p = photopara[photosite] if photosite is not None else photopara
-    return org_para, o_s, outpara, o_p
+    return o_s, outpara, o_p

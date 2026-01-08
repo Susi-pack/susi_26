@@ -249,6 +249,51 @@ class CanopyParams(BaseModel):
     state: CanopyStateParams = CanopyStateParams()
 
 
+class OrganicLayerParameters(StrictFrozenModel):
+    """
+    Parameters for the organic layer
+    """
+
+    org_depth: PositiveFloat = Field(
+        default=0.04, description="depth of organic top layer (m)"
+    )
+    org_poros: PositiveFloat = Field(default=0.9, description="porosity (-)")
+    org_fc: PositiveFloat = Field(default=0.3, description="field capacity (-)")
+    org_rw: PositiveFloat = Field(
+        default=0.24,
+        description="critical vol. moisture content (-) for decreasing phase in Ef.",
+    )
+    pond_storage_max: PositiveFloat = Field(
+        default=0.01, description="max ponding allowed (m)"
+    )
+
+    # initial values
+    org_sat: PositiveFloat = Field(
+        default=1.0, description="organic top layer saturation ratio (-)"
+    )
+    pond_storage: NonNegativeFloat = Field(default=0.0, description="pond storage")
+
+
+class OrganicLayerParametersArray:
+    """
+    Same class as OrganicLayerParameters, but with all fields a numpy array for each soil column.
+    """
+
+    org_depth: np.ndarray  # m3 m-3
+    org_poros: np.ndarray
+    org_fc: np.ndarray
+    org_rw: np.ndarray
+    pond_storage_max: np.ndarray
+    org_sat: np.ndarray
+    pond_storage: np.ndarray
+
+    def __init__(
+        self, organic_layer_parameters: OrganicLayerParameters, array_length: int
+    ):
+        for name, value in organic_layer_parameters.model_dump().items():
+            setattr(self, name, value * np.ones(array_length))
+
+
 class SusiParams(StrictFrozenModel):
     """
     Parameter class to be stantiated.
@@ -259,3 +304,4 @@ class SusiParams(StrictFrozenModel):
     motti_file_parameters: MottiFileParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
+    organic_layer_parameters: OrganicLayerParameters
