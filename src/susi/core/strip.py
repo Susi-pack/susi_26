@@ -11,36 +11,33 @@ from susi.core.susi_utils import peat_hydrol_properties, CWTr
 
 class StripHydrology:
     def __init__(self, spara):
-        self.nLyrs = spara["nLyrs"]  # number of soil layers
-        dz = np.ones(self.nLyrs) * spara["dzLyr"]  # thickness of layers, m
+        self.nLyrs = spara.nLyrs  # number of soil layers
+        dz = np.ones(self.nLyrs) * spara.dzLyr  # thickness of layers, m
         z = np.cumsum(dz) - dz / 2.0  # depth of the layer center point, m
-        self.spara = spara
-        if spara["vonP"]:
-            lenvp = len(spara["vonP top"])
-            vonP = np.ones(self.nLyrs) * spara["vonP bottom"]
-            vonP[0:lenvp] = spara[
-                "vonP top"
-            ]  # degree of  decomposition, von Post scale
-            ptype = spara["peat type bottom"] * spara["nLyrs"]
-            lenpt = len(spara["peat type"])
-            ptype[0:lenpt] = spara["peat type"]
+        if spara.vonP:
+            lenvp = len(spara.vonP_top)
+            vonP = np.ones(self.nLyrs) * spara.vonP_bottom
+            vonP[0:lenvp] = spara.vonP_top
+            ptype = spara.peat_type_bottom * spara.nLyrs
+            lenpt = len(spara.peat_type)
+            ptype[0:lenpt] = spara.peat_type
             self.pF, self.Ksat = peat_hydrol_properties(
                 vonP, var="H", ptype=ptype
             )  # peat hydraulic properties after Päivänen 1973
         else:
-            lenbd = len(spara["bd top"])  # Bulk density in unit of g/cm3
-            bd = np.ones(self.nLyrs) * spara["bd bottom"]
-            bd[0:lenbd] = spara["bd top"]  # degree of  decomposition, von Post scale
-            ptype = spara["peat type bottom"] * spara["nLyrs"]
-            lenpt = len(spara["peat type"])
-            ptype[0:lenpt] = spara["peat type"]
+            lenbd = len(spara.bd_top)
+            bd = np.ones(self.nLyrs) * spara.bd_bottom
+            bd[0:lenbd] = spara.bd_top  # degree of  decomposition, von Post scale
+            ptype = spara.peat_type_bottom * spara.nLyrs
+            lenpt = len(spara.peat_type)
+            ptype[0:lenpt] = spara.peat_type
             self.pF, self.Ksat = peat_hydrol_properties(
                 bd, var="bd", ptype=ptype
             )  # peat hydraulic properties after Päivänen 1973
 
         for n in range(self.nLyrs):
             if z[n] < 0.41:
-                self.Ksat[n] = self.Ksat[n] * spara["anisotropy"]
+                self.Ksat[n] = self.Ksat[n] * spara.anisotropy
             else:
                 self.Ksat[n] = self.Ksat[n] * 1.0
 
@@ -55,10 +52,10 @@ class StripHydrology:
             self.nLyrs, z, dz, self.pF, self.Ksat, direction="negative"
         )  # interpolated storage, transmissivity, diff water capacity, and ratio between aifilled porosoty in rooting zone to total airf porosity  functions
 
-        self.L = spara["L"]  # compartemnt width, m
-        self.n = spara["n"]  # number of computation nodes
+        self.L = spara.L  # compartemnt width, m
+        self.n = spara.n  # number of computation nodes
         self.dy = float(self.L / self.n)  # node width m
-        sl = spara["slope"]  # slope %
+        sl = spara.slope  # slope %
         lev = 1.0  # basic level of soil surface
 
         self.ele = (
@@ -67,7 +64,7 @@ class StripHydrology:
         self.dt = 1  # time step, days
         self.implic = 1.0  # 0.5                                                  # 0-forward Euler, 1-backward Euler, 0.5-Crank-Nicolson
         self.DrIrr = False
-        self.dwt = spara["initial h"]  # h in the compartment
+        self.dwt = spara.initial_h  # h in the compartment
         self.H = (
             self.ele + self.dwt
         )  # np.empty(self.n)                      # depth to water table, negative down m
@@ -79,9 +76,9 @@ class StripHydrology:
 
         print("Peat strip initialized")
 
-    def reset_domain(self):
+    def reset_domain(self, initial_h):
         self.A = np.zeros((self.n, self.n))  # computation matrix
-        self.dwt = np.ones(self.n) * self.spara["initial h"]  # right hand side vector
+        self.dwt = np.ones(self.n) * initial_h  # right hand side vector
         self.H = self.ele + self.dwt  # head with respect to absolute reference level, m
         # self.sruno = 0.
         self.roff = 0.0
@@ -367,4 +364,3 @@ def drain_depth_development(length, hdr, hdr20y):
         (-100 * hdr20y + 100.0 * hdr) / np.log(20.0) * np.log(timeyrs + 1.0) - 100 * hdr
     ) / -100.0  # Ditch model Hökkä
     return h0ts
-

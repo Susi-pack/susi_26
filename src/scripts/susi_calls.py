@@ -17,6 +17,7 @@ from inputs.susi_para import get_susi_para
 from susi.core.susi_main import Susi
 from susi.io.app_settings import AppSettings
 from inputs.parameters import golden_test
+from susi.io.susi_parameter_model import PeatTypes
 
 # ***************** local call for SUSI*****************************************************
 app_settings = AppSettings()
@@ -32,8 +33,8 @@ start_yr = start_date.year
 end_yr = end_date.year
 
 
-sarkaSim = golden_test.PARAMETERS.simulation_config.L
-n = golden_test.PARAMETERS.simulation_config.n
+sarkaSim = golden_test.PARAMETERS.site_parameters.L
+n = golden_test.PARAMETERS.site_parameters.n
 
 
 site = "develop_scens"  # name of the parameter set in get_susi_para
@@ -48,58 +49,7 @@ outpara = golden_test.PARAMETERS.output_parameters
 
 photopara = golden_test.PARAMETERS.photo_parameters
 
-spara = get_susi_para(
-    wlocation="undefined",
-    peat=site,
-    folderName=app_settings.output_folder,
-    hdomSim=None,
-    ageSim=golden_test.PARAMETERS.simulation_config.age,
-    sarkaSim=sarkaSim,
-    sfc=golden_test.PARAMETERS.simulation_config.sfc,
-    n=n,
-)
-
-spara["cutting_yr"] = (
-    2004  # cutting year, not used if year is outside the simulation period
-)
-spara["drain_age"] = 100.0  # time since drainage, yrs
-mass_mor = (
-    1.616 * np.log(spara["drain_age"]) - 1.409
-)  # Pitkänen et al. 2012 Forest Ecology and Management 284 (2012) 100–106
-
-if np.median(golden_test.PARAMETERS.simulation_config.sfc) > 4:
-    spara["peat type"] = [
-        "S",
-        "S",
-        "S",
-        "S",
-        "S",
-        "S",
-        "S",
-        "S",
-    ]  # Peat type 'S' if Sphagnum, 'A' if woody or Carex-peat
-    spara["peat type bottom"] = ["A"]
-    spara["vonP top"] = [2, 5, 5, 5, 6, 6, 7, 7]  # Degree of decomposition
-    spara["anisotropy"] = 10  # Anisotropy of peat hydraulic conductivity
-    spara["rho_mor"] = 80.0  # bulk density of mor layer kg m-3
-else:
-    spara["vonP top"] = [2, 5, 5, 5, 6, 6, 7, 7]
-    spara["anisotropy"] = 10
-    spara["rho_mor"] = 90.0
-
-spara["h_mor"] = mass_mor / spara["rho_mor"]
-
-spara["ditch depth west"] = [
-    -0.5
-]  # ditch depth at the beginning of simulation m, if given several values SUSI calculates scenarios for each ditch depth
-spara["ditch depth east"] = [-0.5]
-spara["ditch depth 20y west"] = [-0.5]  # Ditch depth after 20 yrs, m, negative down
-spara["ditch depth 20y east"] = [-0.5]  # Ditch depth after 20 yrs, m, negative down
-spara["scenario name"] = [
-    "D60"
-]  # Scanario names, equal nmber of names than ditch depth scenarios
-# spara['enable_peatmiddle'] = False,
-# spara['enable_peatbottom'] = False
+spara = golden_test.PARAMETERS.site_parameters
 
 susi = Susi()  # Initaiate susi class
 
@@ -117,6 +67,6 @@ susi.run_susi(
     peat="other",
     photosite="All data",
     folderName=app_settings.output_folder,
-    ageSim=golden_test.PARAMETERS.simulation_config.age,
-    sfc=golden_test.PARAMETERS.simulation_config.sfc,
+    ageSim=golden_test.PARAMETERS.site_parameters.age,
+    sfc=golden_test.PARAMETERS.site_parameters.sfc,
 )  # Run susi

@@ -539,9 +539,9 @@ def diff_nutrient_release(
         - scen scenario name
     """
     gr_response = []
-    sfc = spara["sfc"]
-    sfc_specification = spara["sfc_specification"]
-    sp = spara["species"]
+    sfc = spara.sfc
+    sfc_specification = spara.sfc_specification
+    sp = spara.species
     N = {
         2: {1: 1.9, 2: 1.9},
         3: {1: 1.6, 2: 1.6},
@@ -628,7 +628,7 @@ def diff_nutrient_release(
 
         tg = vol[-1] - vol[0]
         ag = bmToVol(bm[0] + sum(npps[c, :])) - bmToVol(bm[0])
-        print("  +Control vs", spara["scenario name"][c])
+        print("  +Control vs", spara.scenario_name[c])
         print(
             "    -Nutrient release:",
             "N",
@@ -689,7 +689,7 @@ def diff_nutrient_release(
         po = False
         if po:
             fig = plt.figure(
-                num="Control vs" + spara["scenario name"][c],
+                num="Control vs" + spara.scenario_name[c],
                 facecolor=(232 / 255.0, 243 / 255.0, 245.0 / 255),
                 edgecolor="k",
                 figsize=(18.0, 12.0),
@@ -1028,7 +1028,7 @@ def motti_development(spara, ifile):
     """
     species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
     df, sp = get_motti(ifile, return_spe=True)
-    spe = spara["species"]
+    spe = spara.species
     a_arr = np.arange(0, max(df["age"].values), 1.0)
 
     if sp < 3:
@@ -1268,7 +1268,7 @@ def motti_development_old(spara, ifile):
     """
     species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
     df, sp = get_motti(ifile, return_spe=True)
-    spe = spara["species"]
+    spe = spara.species
     a_arr = np.arange(0, max(df["age"].values), 1.0)
 
     if sp < 3:
@@ -1722,7 +1722,7 @@ def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
     Output:
         mean time series kg CO2 ha-1 day-1 and annual sum for each computation  node
     """
-    sfc = np.median(spara["sfc"])
+    sfc = np.median(spara.sfc)
     # peat bulk density: change from g/cm3 to kg m-3 -> multiply by 1000
     bd_d = {
         2: 0.14,
@@ -1731,10 +1731,10 @@ def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
         5: 0.08,
     }  # Mese study: bulk densities in different fertility classes                                                                 # peat layer thickness, cm
 
-    if spara["bd top"] is None:
+    if spara.bd_top is None:
         bd = bd_d[sfc] * 1000.0
     else:
-        bd = np.mean(spara["bd top"]) * 1000.0  # Unit conversion from g/cm3 -> kg/m3
+        bd = np.mean(spara.bd_top) * 1000.0  # Unit conversion from g/cm3 -> kg/m3
 
     wt = (
         dfwt[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0
@@ -1768,7 +1768,7 @@ def ojanen_2019(spara, yr, dfwt):
     wts = (
         dfwt[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0
     )  # .values[:-1])
-    sfc = np.median(spara["sfc"])
+    sfc = np.median(spara.sfc)
     if sfc < 3:
         soil_co2_balance = (
             (-115 + 12 * wts) * 10 * -1
@@ -1783,7 +1783,7 @@ def heterotrophic_respiration_yr_bck(t5, yr, dfwt, dfair_r, v, spara):
     Output:
         mean time series kg CO2 ha-1 day-1 and annual sum for each computation  node
     """
-    sfc = spara["sfc"]
+    sfc = spara.sfc
     # peat bulk density: change from g/cm3 to kg m-3 -> multiply by 1000
     bd_d = {
         2: 0.14,
@@ -1792,10 +1792,10 @@ def heterotrophic_respiration_yr_bck(t5, yr, dfwt, dfair_r, v, spara):
         5: 0.08,
     }  # Mese study: bulk densities in different fertility classes                                                                 # peat layer thickness, cm
 
-    if spara["bd top"] is None:
+    if spara.bd_top is None:
         bd = bd_d[sfc] * 1000.0
     else:
-        bd = np.mean(spara["bd top"]) * 1000.0  # Unit conversion from g/cm3 -> kg/m3
+        bd = np.mean(spara.bd_top) * 1000.0  # Unit conversion from g/cm3 -> kg/m3
 
     air_ratio = dfair_r.loc[str(yr)]
     wt = (
@@ -1832,7 +1832,7 @@ def heterotrophic_respiration_yr_bck2(forc, yr, dfwt, dfair_r, v, spara):
     Output:
         mean time series kg CO2 ha-1 day-1 and annual sum for each computation  node
     """
-    sfc = spara["sfc"]
+    sfc = spara.sfc
     bd_d = {
         2: 0.14,
         3: 0.11,
@@ -1840,10 +1840,10 @@ def heterotrophic_respiration_yr_bck2(forc, yr, dfwt, dfair_r, v, spara):
         5: 0.08,
     }  # Mese study: bulk densities in different fertility classes                                                                 # peat layer thickness, cm
 
-    if spara["bd top"] is None:
+    if spara.bd_top is None:
         bd = bd_d[sfc]
     else:
-        bd = np.mean(spara["bd top"])
+        bd = np.mean(spara.bd_top)
     air_ratio = dfair_r.loc[str(yr)]
     wt = (
         dfwt.loc[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0

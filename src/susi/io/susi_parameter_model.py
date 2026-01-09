@@ -11,7 +11,6 @@ from pydantic import (
     Field,
     FilePath,
     SkipValidation,
-    StrictBool,
     computed_field,
     field_validator,
 )
@@ -22,7 +21,6 @@ from susi.io.extra_pydantic_types import (
     NonPositiveFloat,
     PositiveInt,
 )
-from susi.io.utils import get_project_root
 
 
 class StrictFrozenModel(BaseModel):
@@ -43,44 +41,6 @@ class SimulationConfig(StrictFrozenModel):
     # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
-
-    # Forest
-    # Age of different forest layers at the beginning of the simulation
-    initial_dominant_stand_age_years: NonNegativeFloat = Field(
-        description="Age of the dominant stand at the beginning of the simulation. This is set to all nodes in the strip."
-    )
-    initial_subdominant_stand_age_years: NonNegativeFloat = Field(
-        description="Age of the subdominant layer at the beginning of the simulation. This is set to all nodes in the strip."
-    )
-    initial_understorey_age_years: NonNegativeFloat = Field(
-        description="Age of the understorey at the beginning of the simulation. This is set to all nodes in the strip."
-    )
-
-    L: float = Field(description="Strip width, i.e., distance between ditches, m")
-
-    site_fertility_class: PositiveInt = Field(
-        description="Site fertility class. This is set to all nodes in the strip."
-    )
-
-    @computed_field
-    @property
-    def n(self) -> int:
-        """Number of computation nodes in the strip, 2-m width of node"""
-        return int(self.L / 2)
-
-    @property
-    def age(self) -> SkipValidation[dict[str, np.ndarray]]:
-        """Age of stand for all nodes along the strip"""
-        return {
-            "dominant": self.initial_dominant_stand_age_years * np.ones(self.n),
-            "subdominant": self.initial_subdominant_stand_age_years * np.ones(self.n),
-            "under": self.initial_understorey_age_years * np.ones(self.n),
-        }
-
-    @property
-    def sfc(self) -> SkipValidation[np.ndarray]:
-        """site fertility class for all nodes in the strip"""
-        return np.ones(self.n, dtype=int) * self.site_fertility_class
 
 
 class WeatherParams(StrictFrozenModel):
@@ -403,6 +363,174 @@ def get_photo_parameters_by_location(
     return PRESET_PHOTO_PARAMETERS[location.value]
 
 
+class TreeSpecies(str, Enum):
+    """
+    Possible tree species options
+    """
+
+    pine = "Pine"
+    spruce = "Spruce"
+    birch = "Birch"
+
+
+class PeatTypes(str, Enum):
+    """
+    Possible choices for peat types
+    """
+
+    generic = "A"
+    sphagnum = "S"
+
+
+class NutrientFertilizationParameters(StrictFrozenModel):
+    """
+    Nutrient fertilization parameters
+    """
+
+    dose: NonNegativeFloat = Field(
+        description="Dose of compound in fertilizer, kg ha-1"
+    )
+    decay_k: NonNegativeFloat = Field(description="Decay rate, yr-1")
+    eff: NonNegativeFloat = Field(description="Nutrient use efficiency")
+
+
+class FertilizationParameters(StrictFrozenModel):
+    """
+    Canopy parameters
+    """
+
+    application_year: int = 2201
+    N: NutrientFertilizationParameters
+    P: NutrientFertilizationParameters
+    K: NutrientFertilizationParameters
+    pH_increment: NonNegativeFloat = 1.0
+
+
+class SiteParams(StrictFrozenModel):
+    """
+    Soil and stand parameters
+    """
+
+    # Forest
+    # Age of different forest layers at the beginning of the simulation
+    initial_dominant_stand_age_years: NonNegativeFloat = Field(
+        description="Age of the dominant stand at the beginning of the simulation. This is set to all nodes in the strip."
+    )
+    initial_subdominant_stand_age_years: NonNegativeFloat = Field(
+        description="Age of the subdominant layer at the beginning of the simulation. This is set to all nodes in the strip."
+    )
+    initial_understorey_age_years: NonNegativeFloat = Field(
+        description="Age of the understorey at the beginning of the simulation. This is set to all nodes in the strip."
+    )
+
+    L: float = Field(description="Strip width, i.e., distance between ditches, m")
+
+    site_fertility_class: PositiveInt = Field(
+        description="Site fertility class. This is set to all nodes in the strip."
+    )
+
+    sitename: str
+    species: TreeSpecies
+    sfc_specification: float
+    hdom: float | None
+    vol: float | None
+    smc: str
+    nLyrs: int
+    dzLyr: float
+    L: float = Field(description="Strip width, i.e., distance between ditches, m")
+    ditch_depth_west: list[NonPositiveFloat] = Field(
+        description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
+    )
+    ditch_depth_east: list[NonPositiveFloat] = Field(
+        description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
+    )
+    ditch_depth_20y_west: list[NonPositiveFloat] = Field(
+        description="Ditch depth after 20 yrs, m, negative down"
+    )
+    ditch_depth_20y_east: list[NonPositiveFloat] = Field(
+        description="Ditch depth after 20 yrs, m, negative down"
+    )
+    scenario_name: list[str] = Field(
+        description="Scenario names, equal nmber of names than ditch depth scenarios."
+    )
+
+    drain_age: PositiveFloat = Field(description="Time since drainage (yrs).")
+    initial_h: float
+    slope: float
+    peat_type: list[PeatTypes] = Field(
+        description="'S' if Sphagnum, 'A' if woody or carex peat"
+    )
+    peat_type_bottom: list[PeatTypes]
+    anisotropy: float = Field(description="Anisotropy of peat hydraulic conductivity")
+    vonP: bool = Field(description="degree of decomposition, vonPost scale, int")
+    vonP_top: list[int]
+    vonP_bottom: int
+    bd_top: float | None = Field(description="Bulk density (g/cm3).")
+    bd_bottom: float
+    peatN: float | None
+    peatP: float | None
+    peatK: float | None
+    enable_peattop: bool
+    enable_peatmiddle: bool
+    enable_peatbottom: bool
+    rho_mor: float = Field(description="bulk density of mor layer, kg m-3")
+    h_mor: NonNegativeFloat | Callable[..., float] = Field(
+        description="depth of mor layer, m"
+    )
+    cutting_yr: int = Field(
+        description="Year for cutting. Not used if year is outside the simulation period."
+    )
+    cutting_to_ba: float = Field(description="basal area after cutting, m2/ha")
+    depoN: float
+    depoP: float
+    depoK: float
+    fertilization: FertilizationParameters
+
+    @computed_field
+    @property
+    def n(self) -> int:
+        """Number of computation nodes in the strip, 2-m width of node"""
+        return int(self.L / 2)
+
+    @property
+    def age(self) -> SkipValidation[dict[str, np.ndarray]]:
+        """Age of stand for all nodes along the strip"""
+        return {
+            "dominant": self.initial_dominant_stand_age_years * np.ones(self.n),
+            "subdominant": self.initial_subdominant_stand_age_years * np.ones(self.n),
+            "under": self.initial_understorey_age_years * np.ones(self.n),
+        }
+
+    @property
+    def sfc(self) -> SkipValidation[np.ndarray]:
+        """site fertility class for all nodes in the strip"""
+        return np.ones(self.n, dtype=int) * self.site_fertility_class
+
+    @property
+    def canopylayers(self) -> dict[str, np.ndarray]:
+        return {
+            "dominant": np.ones(self.n, dtype=int),
+            "subdominant": np.zeros(self.n, dtype=int),
+            "under": np.zeros(self.n, dtype=int),
+        }
+
+    @field_validator("h_mor", mode="before")
+    @classmethod
+    def compute_if_callable(cls, hmor, info):
+        if callable(hmor):
+            drain_age = info.data.get("drain_age")
+            rho_mor = info.data.get("rho_mor")
+            if drain_age is None:
+                raise ValueError("`drain_age` must be provided to compute hmor")
+            if rho_mor is None:
+                raise ValueError("`rho_mor` must be provided to compute hmor")
+            try:
+                return hmor(drain_age, rho_mor)
+            except Exception as e:
+                raise ValueError(f"Failed to compute h_mor: {e}")
+        return hmor
+
+
 class SusiParams(StrictFrozenModel):
     """
     Parameter class to be stantiated.
@@ -416,3 +544,4 @@ class SusiParams(StrictFrozenModel):
     organic_layer_parameters: OrganicLayerParams
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
+    site_parameters: SiteParams

@@ -634,13 +634,6 @@ class Stand:
             self.nut_stat, 0.7, 1.3
         )  # Too high nutstat increases transpiration too much
 
-    def update_spara(self, spara):
-        spara["vol"] = (
-            self.volume
-        )  # initial stand volume along the cross section m3/ha in each node
-        spara["hdom"] = self.hdom  # these are for printing purposes only
-        return spara
-
     def update_logging(self):
         for cl in self.clyrs:
             self.nonwoody_lresid = (
