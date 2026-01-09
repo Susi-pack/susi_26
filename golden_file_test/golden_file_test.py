@@ -18,6 +18,9 @@ import numpy as np
 from susi.io import netcdf_utils
 from susi.io.app_settings import AppSettings
 from susi.io.utils import get_project_root
+from susi.core.susi_utils import read_FMI_weather
+from susi.core.susi_main import Susi
+from inputs.parameters import golden_test
 
 
 def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
@@ -62,6 +65,25 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
     return True
 
 
+# %% Run SUSI
+forc = read_FMI_weather(
+    ID=0,
+    start_date=golden_test.PARAMETERS.simulation_config.start_date,
+    end_date=golden_test.PARAMETERS.simulation_config.end_date,
+    sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
+)
+
+# Initiate susi class
+susi = Susi()
+
+# Run susi
+susi.run_susi(
+    forc=forc,
+    parameters=golden_test.PARAMETERS,
+)
+
+# %% Check test
+
 project_root_path = get_project_root()
 
 settings = AppSettings()
@@ -69,12 +91,6 @@ settings = AppSettings()
 CURRENT_SUSI_CALLS_PATH = project_root_path / Path("src/scripts/susi_calls.py")
 GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
 NEW_SUSI_NETCDF_FILE_PATH = settings.output_folder / Path("susi.nc")
-
-print("Executing susi_calls.py...")
-subprocess.run(
-    ["python", str(CURRENT_SUSI_CALLS_PATH)],
-    check=True,
-)
 
 test_passes = match_netcdf_files(
     new_netcdf_filepath=NEW_SUSI_NETCDF_FILE_PATH,

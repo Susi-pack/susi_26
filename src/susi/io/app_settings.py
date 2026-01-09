@@ -12,6 +12,3 @@ class AppSettings(BaseModel):
         default=(project_root_path / Path("outputs/")),
         description="Root folder where all outputs go.",
     )
-
-    metadata_store_filename: str = "metadata.json"
-    parameter_store_filename: str = "params.json"

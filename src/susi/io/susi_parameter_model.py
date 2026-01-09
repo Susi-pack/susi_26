@@ -545,3 +545,7 @@ class SusiParams(StrictFrozenModel):
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+
+    def dump_json_to_file(self, filepath: Path) -> None:
+        with open(filepath, "w") as f:
+            f.write(self.model_dump_json())

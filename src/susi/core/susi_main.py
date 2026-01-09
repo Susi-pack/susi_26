@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime
 
+from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
@@ -30,10 +31,39 @@ from susi.io.outputs import Outputs
 
 
 class Susi:
-    def __init(self):
-        pass
+    def __init__(self, metadata: SimulationMetaData, parameters: SusiParams):
+        self.metadata = metadata
+        self.parameters = parameters
+        self._did_model_run = False  # Needed to know whether to save or not
 
-    def run_susi(
+    def __enter__(self):
+        """
+        Context manager stuff.
+        Output folder is created.
+        """
+        self.metadata.create_output_folder()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        """
+        What to run when exiting the Susi context manager.
+        It saves the metadata and parameter JSON files.
+        """
+        if exc_type is None:
+            if not self._did_model_run:
+                raise RuntimeError(
+                    "Simulation context manager exited without being run"
+                )
+            self.metadata.dump_json_to_file()
+            self.parameters.dump_json_to_file(
+                filepath=self.metadata.parameter_output_filepath
+            )
+
+    def run(self, forc):
+        self._did_model_run = True
+        self._run_susi(forc=forc, parameters=self.parameters)
+
+    def _run_susi(
         self,
         forc,
         parameters: SusiParams,
