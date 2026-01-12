@@ -22,5 +22,17 @@ forc = read_FMI_weather(
 )
 
 # Initiate susi class
-with Susi(metadata=SimulationMetaData(), parameters=golden_test.PARAMETERS) as susi:
-    susi.run(forc=forc)
+susi = Susi(
+    metadata=SimulationMetaData(),
+    parameters=golden_test.PARAMETERS,
+    weather_forcing=forc,
+)
+
+# Create output folder where results go
+susi.create_output_folder()
+
+# Run simulation
+susi.run()
+
+# Save stuff
+susi.write_params_and_metadata()

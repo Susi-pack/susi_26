@@ -52,10 +52,7 @@ PARAMETERS = SusiParams(
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
-    output_parameters=OutputParams(
-        outfolder=_app_settings.project_root_path / Path("outputs/"),
-        netcdf=Path("susi.nc"),
-    ),
+    output_parameters=OutputParams(),
     photo_parameters=get_photo_parameters_by_location(
         location=LocationsForPhotoParams("All_data")
     ),

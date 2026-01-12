@@ -65,9 +65,14 @@ class SimulationMetaData(BaseModel):
         description="Info about who ran the simulations.",
     )
 
-    experiment_id: str = Field(
-        default="",
-        description="Uniquely identifies each simulation experiment.",
+    experiment_id: str | None = Field(
+        default=None,
+        description="A string that uniquely identifies each simulation experiment. If None, it is computed as a combination of the starting timestamp and a random number to avoid naame collisions.",
+    )
+
+    experiment_folder_path: Path | None = Field(
+        default=None,
+        description="Directory Path for all simulation results: metadata, parameters, and netcdf file. If None (default), the folder is derived from the randomly generated experiment_id.",
     )
 
     @field_validator("metadata_output_filename", "parameter_output_filename")
@@ -83,41 +88,40 @@ class SimulationMetaData(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def set_experiment_id(self) -> "SimulationMetaData":
-        """Generate experiment_id from timestamp_start if not already set."""
-        if not self.experiment_id:
+    def set_experiment_id_and_folder(self) -> "SimulationMetaData":
+        """Generate experiment_id from timestamp_start if not already set.
+        Also, set the experiment folder path if not given."""
+        # Compute experiment_id if missing
+        if self.experiment_id is None:
             self.experiment_id = io_utils.generate_experiment_ID(
                 datetime_stamp=self.timestamp_start
             )
+
+        # Compute experiment_folder_path if missing
+        if self.experiment_folder_path is None:
+            self.experiment_folder_path = (
+                _app_settings.output_folder / self.experiment_id
+            )
+
         return self
 
     @computed_field
     @property
-    def experiment_folder_path(self) -> Path:
-        """
-        Directory Path for all simulation results: metadata, parameters, netcdf file.
-        The name of the folder is the experiment_id.
-        """
-        return _app_settings.output_folder.joinpath(self.experiment_id)
-
-    @computed_field
-    @property
     def metadata_output_filepath(self) -> Path:
+        assert self.experiment_folder_path is not None
         return self.experiment_folder_path.joinpath(self.metadata_output_filename)
 
     @computed_field
     @property
     def parameter_output_filepath(self) -> Path:
+        assert self.experiment_folder_path is not None
         return self.experiment_folder_path.joinpath(self.parameter_output_filename)
 
     @computed_field
     @property
     def netcdf_output_filepath(self) -> Path:
+        assert self.experiment_folder_path is not None
         return self.experiment_folder_path.joinpath(self.netcdf_output_filename)
-
-    def create_output_folder(self) -> None:
-        io_utils.create_folder(path=self.experiment_folder_path)
-        return None
 
     def record_end_timestamp(self) -> None:
         self.timestamp_end = io_utils.generate_current_datetime_stamp()

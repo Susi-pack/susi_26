@@ -257,8 +257,6 @@ class OutputParams(StrictFrozenModel):
     Output file IO parameters
     """
 
-    outfolder: DirectoryPath
-    netcdf: Path
     startday: int = 1
     startmonth: int = 7  # Päivä josta keskiarvojen laskenta alkaa
     endday: int = 31
