@@ -15,3 +15,12 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 include = ["susi*"]
 namespaces = false
+
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = [
+    "src/susi/core",
+    "src/susi/io/susi_io.py",
+    "src/scripts/susi_calls_scenarios.py",
+    "src/inputs/susi_para.py",
+]
