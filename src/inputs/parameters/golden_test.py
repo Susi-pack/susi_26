@@ -16,6 +16,7 @@ from susi.io.susi_parameter_model import (
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
+    PeatTemperatureParams,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
 )
@@ -110,5 +111,6 @@ PARAMETERS = SusiParams(
             K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
             pH_increment=1.0,
         ),
+        peat_temperature=PeatTemperatureParams(),
     ),
 )

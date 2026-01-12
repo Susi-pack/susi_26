@@ -9,32 +9,35 @@ import numpy as np
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 
+from susi.io.susi_parameter_model import SiteParams
+
 
 class PeatTemperature:
-    def __init__(self, spara, mean_Ta):
+    def __init__(self, spara: SiteParams, mean_Ta):
         """
         input:
             spara, contains dimensions of soil (peat) object
             mean_Ta is mean air temperature over the whole time, set as lower boundary condition
         """
+        self.spara = spara
         # print (spara['nLyrs'], spara['dzLyr'] )
         self.nLyrs_hydro = spara.nLyrs
         self.nLyrs = self.nLyrs_hydro + 30
-        self.dz = spara.dzLyr
+        self.dz = self.spara.dzLyr
         self.z = (
             np.cumsum(np.ones(self.nLyrs) * self.dz) - self.dz / 2.0
         )  # depth of the layer center point, m
         self.mean_Ta = mean_Ta
         self.heat_capacity = 3860000.0 * self.dz  # J m-3
-        self.heat_of_vaporization = 2467700  # J/kg
 
-        T = 86400  # timestep in seconds, s
-        self.Nt = 24  # number of subtimesteps in the time step (here every 2 hrs)
-        t = np.linspace(0, T, self.Nt + 1)  # mesh points in time
+        t = np.linspace(
+            0,
+            self.spara.peat_temperature.timestep,
+            self.spara.peat_temperature.n_subtimesteps + 1,
+        )  # mesh points in time
         dt = t[1] - t[0]
 
-        D = 1e-7  # Thermal diffusivity of peat, m2 s-1, de Vries 1975
-        F = D * dt / self.dz**2
+        F = self.spara.peat_temperature.D * dt / self.dz**2
 
         main = np.zeros(self.nLyrs + 1)
         lower = np.zeros(self.nLyrs)
@@ -85,7 +88,12 @@ class PeatTemperature:
 
         """
         # Cooling by evaporation
-        e_consumed = efloor * 1000 * self.heat_of_vaporization / self.Nt
+        e_consumed = (
+            efloor
+            * 1000
+            * self.spara.peat_temperature.heat_of_vaporization
+            / self.spara.peat_temperature.n_subtimesteps
+        )
         T_cool = -e_consumed / self.heat_capacity
         if SWE > 0.01:
             Ta = max(-5.0, Ta)
@@ -93,7 +101,7 @@ class PeatTemperature:
             Ta = Ta + T_cool
 
         u = np.zeros(self.nLyrs + 1)
-        for n in range(0, self.Nt):
+        for n in range(0, self.spara.peat_temperature.n_subtimesteps):
             b = self.Tsoil.copy()
             b[0] = Ta  # temp[n] #0.0  # boundary conditions
             b[-1] = self.lower_boundary
