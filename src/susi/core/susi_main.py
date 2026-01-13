@@ -668,6 +668,7 @@ class Susi:
         return None
 
     def write_params_and_metadata(self) -> None:
+        self.metadata.record_end_timestamp()
         self.metadata.dump_json_to_file()
         self.parameters.dump_json_to_file(
             filepath=self.metadata.parameter_output_filepath
