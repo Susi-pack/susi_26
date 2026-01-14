@@ -5,8 +5,6 @@ from typing import Callable
 
 import numpy as np
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     DirectoryPath,
     Field,
     FilePath,
@@ -16,6 +14,7 @@ from pydantic import (
 )
 
 from susi.io.extra_pydantic_types import (
+    StrictFrozenModel,
     PositiveFloat,
     NonNegativeFloat,
     NonPositiveFloat,
@@ -23,18 +22,17 @@ from susi.io.extra_pydantic_types import (
 )
 
 
-class StrictFrozenModel(BaseModel):
+def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
     """
-    Defines a stricter Pydantic class
+    Pitkänen et al. 2012 Forest Ecology and Management 284 (2012) 100–106
     """
+    return 1.616 * np.log(drain_age) - 1.409
 
-    model_config = ConfigDict(
-        validate_assignment=True,  # Validate on assignment
-        frozen=True,  # Force immutability
-        extra="forbid",  # Forbid extra fields
-        validate_default=True,  # Validate default values
-        json_encoders={np.ndarray: lambda v: v.tolist()},
-    )
+
+def h_mor_from_drainage_and_mass_mor_Pitkanen(
+    drain_age: float, rho_mor: float
+) -> float:
+    return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
 class SimulationConfig(StrictFrozenModel):

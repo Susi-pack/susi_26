@@ -14,6 +14,7 @@ from pathlib import Path
 import netCDF4
 import numpy as np
 
+from susi.io.execution_config import SimulationParams
 from susi.io import netcdf_utils
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
@@ -75,12 +76,15 @@ project_root_path = _app_settings.project_root_path
 GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
 NEW_SUSI_NETCDF_FOLDER_PATH = project_root_path / Path("golden_file_test")
 
-# Initiate susi class
-metadata = SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH)
+# Initiate susi parameters
+simulation_parameters = SimulationParams(
+    metadata=SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH),
+    susi_params=golden_test.PARAMETERS,
+)
+
 
 susi = Susi(
-    parameters=golden_test.PARAMETERS,
-    metadata=metadata,
+    simulation_parameters=simulation_parameters,
     weather_forcing=forc,
 )
 
@@ -91,7 +95,7 @@ susi.run()
 
 
 test_passes = match_netcdf_files(
-    new_netcdf_filepath=metadata.netcdf_output_filepath,
+    new_netcdf_filepath=simulation_parameters.metadata.netcdf_output_filepath,
     golden_netcdf_filepath=GOLDEN_NETCDF_FILE_PATH,
 )
 

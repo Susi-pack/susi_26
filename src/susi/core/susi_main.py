@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime
 
+from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
@@ -32,11 +33,9 @@ import susi.io.utils as io_utils
 
 
 class Susi:
-    def __init__(
-        self, metadata: SimulationMetaData, parameters: SusiParams, weather_forcing
-    ):
-        self.metadata = metadata
-        self.parameters = parameters
+    def __init__(self, simulation_parameters: SimulationParams, weather_forcing):
+        self.metadata = simulation_parameters.metadata
+        self.parameters = simulation_parameters.susi_params
         self.weather_forcing = weather_forcing
 
     def run(
