@@ -21,3 +21,22 @@ def test_duplicate_models():
             n_parallel_processes=1,
             simulation_parameter_list=duplicate_simus,
         )
+
+
+def test_different_number_of_models():
+    simus = [
+        SimulationParams(
+            susi_params=golden_test.PARAMETERS, metadata=SimulationMetaData()
+        ),
+        SimulationParams(
+            susi_params=golden_test.PARAMETERS,
+            metadata=SimulationMetaData(parameter_output_filename="lalala.json"),
+        ),
+    ]
+
+    with pytest.raises(ValueError):
+        ExecutionConfig(
+            n_runs=1,
+            n_parallel_processes=1,
+            simulation_parameter_list=simus,
+        )
