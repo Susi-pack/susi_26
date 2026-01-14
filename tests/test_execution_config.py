@@ -1,6 +1,6 @@
 import pytest
 
-from susi.io.execution_config import ExecutionConfig, SimulationParams
+from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from inputs.parameters import golden_test
 
@@ -16,7 +16,7 @@ def test_duplicate_models():
     ]
 
     with pytest.raises(ValueError):
-        ExecutionConfig(
+        MultipleSusis(
             n_runs=N_RUNS,
             n_parallel_processes=1,
             simulation_parameter_list=duplicate_simus,
@@ -35,7 +35,7 @@ def test_different_number_of_models():
     ]
 
     with pytest.raises(ValueError):
-        ExecutionConfig(
+        MultipleSusis(
             n_runs=1,
             n_parallel_processes=1,
             simulation_parameter_list=simus,

@@ -6,7 +6,7 @@ Created on Wed Sep 30 14:10:42 2020
 """
 
 # THIS files
-from susi.io.execution_config import SimulationParams, ExecutionConfig
+from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
@@ -22,17 +22,12 @@ forc = read_FMI_weather(
     sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
 )
 # Specifies all parameters needed for a single run
-simulation_parameters = [
-    SimulationParams(metadata=SimulationMetaData(), susi_params=golden_test.PARAMETERS)
-]
-
-
-execution_config = ExecutionConfig(
-    n_runs=1, simulation_parameter_list=simulation_parameters
+simulation_parameters = SimulationParams(
+    metadata=SimulationMetaData(), susi_params=golden_test.PARAMETERS
 )
 
-for n_run, simu_params in enumerate(execution_config.simulation_parameter_list):
-    print(f"Starting SUSI run number {n_run}")
+
+def call_susi(simu_params: SimulationParams, forc):
     # Initiate susi class
     susi = Susi(
         simulation_parameters=simu_params,
@@ -47,5 +42,22 @@ for n_run, simu_params in enumerate(execution_config.simulation_parameter_list):
 
     # Save stuff
     susi.write_params_and_metadata()
+
+
+# %% Using normal single call
+
+call_susi(simu_params=simulation_parameters, forc=forc)
+
+# %% Using MultipleSusis
+# We can also use MultipleSusis also to run a single susi instance.
+# This will be more useful when running several, of course!
+execution_config = MultipleSusis(
+    n_runs=1, simulation_parameter_list=[simulation_parameters]
+)
+
+for n_run, simu_params in enumerate(execution_config.simulation_parameter_list):
+    print(f"Starting SUSI run number {n_run}")
+
+    call_susi(simu_params=simulation_parameters, forc=forc)
 
     print(f"Ended SUSI run number {n_run}")

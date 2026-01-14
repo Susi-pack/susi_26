@@ -19,7 +19,7 @@ class SimulationParams(BaseModel):
     metadata: SimulationMetaData
 
 
-class ExecutionConfig(BaseModel):
+class MultipleSusis(BaseModel):
     """
     Highest abstraction layer for the input parameters.
 
@@ -70,7 +70,7 @@ class ExecutionConfig(BaseModel):
             )
 
     @model_validator(mode="after")
-    def validate_configuration(self) -> "ExecutionConfig":
+    def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
         self._check_number_of_runs()
         self._check_for_duplicated_params()
