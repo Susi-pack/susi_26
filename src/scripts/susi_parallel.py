@@ -42,9 +42,13 @@ def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParam
 long_strip = create_strip_scenarios(base_params=golden_test.PARAMETERS, L_value=60.0)
 short_strip = create_strip_scenarios(base_params=golden_test.PARAMETERS, L_value=20.0)
 
+
 # Finally, create the list of parameters that will go into the susi simulation
 all_parameters = [
-    SimulationParams(metadata=SimulationMetaData(), susi_params=short_strip),
+    SimulationParams(
+        metadata=SimulationMetaData(),
+        susi_params=short_strip,
+    ),
     SimulationParams(metadata=SimulationMetaData(), susi_params=long_strip),
 ]
 
@@ -53,21 +57,10 @@ execution_config = MultipleSusis(
     n_parallel_processes=cli_args.n_parallel_processes,
 )
 
-# read weather input (as usual)
-forc = read_FMI_weather(
-    ID=0,
-    start_date=golden_test.PARAMETERS.simulation_config.start_date,
-    end_date=golden_test.PARAMETERS.simulation_config.end_date,
-    sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
-)
-
 
 def run_susi(simulation_parameters: SimulationParams) -> None:
     # Initiate susi class
-    susi = Susi(
-        simulation_parameters=simulation_parameters,
-        weather_forcing=forc,
-    )
+    susi = Susi(simulation_parameters)
 
     # Create output folder where results go
     susi.create_output_folder()

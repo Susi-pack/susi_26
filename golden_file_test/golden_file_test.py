@@ -85,7 +85,6 @@ simulation_parameters = SimulationParams(
 
 susi = Susi(
     simulation_parameters=simulation_parameters,
-    weather_forcing=forc,
 )
 
 # Run susi

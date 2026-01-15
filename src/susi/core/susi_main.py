@@ -30,13 +30,20 @@ from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, oja
 from susi.io.susi_io import print_site_description
 from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
+from susi.core.susi_utils import read_FMI_weather
 
 
 class Susi:
-    def __init__(self, simulation_parameters: SimulationParams, weather_forcing):
+    def __init__(self, simulation_parameters: SimulationParams):
         self.metadata = simulation_parameters.metadata
         self.parameters = simulation_parameters.susi_params
-        self.weather_forcing = weather_forcing
+
+        self.weather_forcing = read_FMI_weather(
+            ID=0,
+            start_date=simulation_parameters.susi_params.simulation_config.start_date,
+            end_date=simulation_parameters.susi_params.simulation_config.end_date,
+            sourcefile=simulation_parameters.susi_params.weather_parameters.FMI_weather_filepath,
+        )
 
     def run(
         self,

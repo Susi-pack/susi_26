@@ -1,7 +1,7 @@
-from typing import Optional
 from typing_extensions import Self
 from pydantic import BaseModel, Field, computed_field, model_validator
 import json
+import pandas as pd
 
 
 from susi.io.extra_pydantic_types import PositiveInt, StrictFrozenModel
