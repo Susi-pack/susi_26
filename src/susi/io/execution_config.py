@@ -1,6 +1,6 @@
 from typing import Optional
 from typing_extensions import Self
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 import json
 
 
@@ -26,20 +26,20 @@ class MultipleSusis(BaseModel):
     Enables the creation of multiple SUSI simulations.
     """
 
-    n_runs: PositiveInt = Field(frozen=True, description="Number of total SUSI runs.")
     n_parallel_processes: PositiveInt = Field(
+        ge=1,
+        le=40,
         frozen=True,
-        default=1,
-        description="Number of parallel processes to spawn. Cannot be greater than n_runs.",
+        description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 40 at most (40 is the maximum number of cores in a single node, at least in CSC).",
     )
     simulation_parameter_list: list[SimulationParams] = Field(
         frozen=True,
-        description="A list of parameters fully specifying each run. It must have 'n_runs' number of elements. E.g., if only runing 1 simulation, 'n_runs'=1, and the length of the 'runs' list must be 1.",
+        description="A list of parameters fully specifying each run. The length of the list determines the number of simulations than will be run, regardless of how many parallel processes are specified in `n_parallel_processes`. E.g., a `simulation_parameter_list` of length 2 will execute 2 full susi runs no matter the number of parallel processes specified (which in such case can only be either 1 or 2).",
     )
 
     @model_validator(mode="after")
     def check_not_more_processes_than_runs(self) -> Self:
-        if self.n_parallel_processes > self.n_runs:
+        if self.n_parallel_processes > len(self.simulation_parameter_list):
             raise ValueError(
                 "'n_parallel_processes' cannot be greater than 'n_runs'. There must be at most one process per run."
             )
@@ -63,15 +63,8 @@ class MultipleSusis(BaseModel):
             seen.add(serialized)
         return None
 
-    def _check_number_of_runs(self) -> None:
-        if self.n_runs != len(self.simulation_parameter_list):
-            raise ValueError(
-                "The number of runs in the list 'runs' must be exactly 'n_runs'."
-            )
-
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
-        self._check_number_of_runs()
         self._check_for_duplicated_params()
         return self

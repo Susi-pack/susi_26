@@ -5,14 +5,12 @@ Created on Wed Sep 30 14:10:42 2020
 @author: alauren
 """
 
-# THIS files
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData
 
-# ***************** local call for SUSI*****************************************************
 
 # read weather input
 forc = read_FMI_weather(
@@ -27,37 +25,17 @@ simulation_parameters = SimulationParams(
 )
 
 
-def call_susi(simu_params: SimulationParams, forc):
-    # Initiate susi class
-    susi = Susi(
-        simulation_parameters=simu_params,
-        weather_forcing=forc,
-    )
-
-    # Create output folder where results go
-    susi.create_output_folder()
-
-    # Run simulation
-    susi.run()
-
-    # Save stuff
-    susi.write_params_and_metadata()
-
-
-# %% Using normal single call
-
-call_susi(simu_params=simulation_parameters, forc=forc)
-
-# %% Using MultipleSusis
-# We can also use MultipleSusis also to run a single susi instance.
-# This will be more useful when running several, of course!
-execution_config = MultipleSusis(
-    n_runs=1, simulation_parameter_list=[simulation_parameters]
+# Initiate susi class
+susi = Susi(
+    simulation_parameters=simulation_parameters,
+    weather_forcing=forc,
 )
 
-for n_run, simu_params in enumerate(execution_config.simulation_parameter_list):
-    print(f"Starting SUSI run number {n_run}")
+# Create output folder where results go
+susi.create_output_folder()
 
-    call_susi(simu_params=simulation_parameters, forc=forc)
+# Run simulation
+susi.run()
 
-    print(f"Ended SUSI run number {n_run}")
+# Save stuff
+susi.write_params_and_metadata()
