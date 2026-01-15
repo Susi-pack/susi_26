@@ -72,7 +72,7 @@ def run_susi(simulation_parameters: SimulationParams) -> None:
     susi.write_params_and_metadata()
 
 
-# %% Parallel processing using MultipleSusis
+# %% Execute parallel processing
 
 pool = Pool(processes=execution_config.n_parallel_processes)
 pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
