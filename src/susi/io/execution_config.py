@@ -33,17 +33,18 @@ class MultipleSusis(BaseModel):
         description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 40 at most (40 is the maximum number of cores in a single node, at least in CSC).",
     )
     simulation_parameter_list: list[SimulationParams] = Field(
-        frozen=True,
         description="A list of parameters fully specifying each run. The length of the list determines the number of simulations than will be run, regardless of how many parallel processes are specified in `n_parallel_processes`. E.g., a `simulation_parameter_list` of length 2 will execute 2 full susi runs no matter the number of parallel processes specified (which in such case can only be either 1 or 2).",
     )
 
-    @model_validator(mode="after")
-    def check_not_more_processes_than_runs(self) -> Self:
+    def _check_not_more_processes_than_runs(self) -> None:
+        """
+        'n_parallel_processes' cannot be greater than 'n_runs'. There must be at most one process per run.
+        """
         if self.n_parallel_processes > len(self.simulation_parameter_list):
             raise ValueError(
                 "'n_parallel_processes' cannot be greater than 'n_runs'. There must be at most one process per run."
             )
-        return self
+        return None
 
     def _check_for_duplicated_params(self) -> None:
         """
@@ -66,5 +67,7 @@ class MultipleSusis(BaseModel):
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
+        self._check_not_more_processes_than_runs()
         self._check_for_duplicated_params()
+
         return self

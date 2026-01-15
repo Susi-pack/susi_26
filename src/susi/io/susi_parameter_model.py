@@ -553,4 +553,4 @@ class SusiParams(StrictFrozenModel):
 
     def dump_json_to_file(self, filepath: Path) -> None:
         with open(filepath, "w") as f:
-            f.write(self.model_dump_json())
+            f.write(self.model_dump_json(indent=4))

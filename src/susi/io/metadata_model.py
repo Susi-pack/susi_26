@@ -135,4 +135,4 @@ class SimulationMetaData(BaseModel):
 
     def dump_json_to_file(self) -> None:
         with open(self.metadata_output_filepath, "w") as f:
-            f.write(self.model_dump_json())
+            f.write(self.model_dump_json(indent=4))
