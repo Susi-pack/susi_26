@@ -8,12 +8,10 @@ Created on Wed Sep 30 14:10:42 2020
 # THIS files
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
-from susi.io.app_settings import AppSettings
 from inputs.parameters import golden_test
+from susi.io.metadata_model import SimulationMetaData
 
 # ***************** local call for SUSI*****************************************************
-app_settings = AppSettings()
-
 
 # read weather input
 forc = read_FMI_weather(
@@ -23,10 +21,18 @@ forc = read_FMI_weather(
     sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
 )
 
-
-susi = Susi()  # Initaiate susi class
-
-susi.run_susi(
-    forc=forc,
+# Initiate susi class
+susi = Susi(
+    metadata=SimulationMetaData(),
     parameters=golden_test.PARAMETERS,
-)  # Run susi
+    weather_forcing=forc,
+)
+
+# Create output folder where results go
+susi.create_output_folder()
+
+# Run simulation
+susi.run()
+
+# Save stuff
+susi.write_params_and_metadata()

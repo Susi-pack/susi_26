@@ -9,15 +9,16 @@
 # The hashes of the 2 files should be identical.
 
 
-import subprocess
 from pathlib import Path
 
 import netCDF4
 import numpy as np
 
 from susi.io import netcdf_utils
-from susi.io.app_settings import AppSettings
-from susi.io.utils import get_project_root
+from susi.core.susi_utils import read_FMI_weather
+from susi.core.susi_main import Susi
+from inputs.parameters import golden_test
+from susi.io.metadata_model import SimulationMetaData, _app_settings
 
 
 def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
@@ -62,22 +63,35 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
     return True
 
 
-project_root_path = get_project_root()
-
-settings = AppSettings()
-
-CURRENT_SUSI_CALLS_PATH = project_root_path / Path("src/scripts/susi_calls.py")
-GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
-NEW_SUSI_NETCDF_FILE_PATH = settings.output_folder / Path("susi.nc")
-
-print("Executing susi_calls.py...")
-subprocess.run(
-    ["python", str(CURRENT_SUSI_CALLS_PATH)],
-    check=True,
+# %% Run SUSI
+forc = read_FMI_weather(
+    ID=0,
+    start_date=golden_test.PARAMETERS.simulation_config.start_date,
+    end_date=golden_test.PARAMETERS.simulation_config.end_date,
+    sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
 )
 
+project_root_path = _app_settings.project_root_path
+GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
+NEW_SUSI_NETCDF_FOLDER_PATH = project_root_path / Path("golden_file_test")
+
+# Initiate susi class
+metadata = SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH)
+
+susi = Susi(
+    parameters=golden_test.PARAMETERS,
+    metadata=metadata,
+    weather_forcing=forc,
+)
+
+# Run susi
+susi.run()
+
+# %% Check test
+
+
 test_passes = match_netcdf_files(
-    new_netcdf_filepath=NEW_SUSI_NETCDF_FILE_PATH,
+    new_netcdf_filepath=metadata.netcdf_output_filepath,
     golden_netcdf_filepath=GOLDEN_NETCDF_FILE_PATH,
 )
 
