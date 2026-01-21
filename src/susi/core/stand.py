@@ -32,7 +32,6 @@ class Stand:
         self.ncols = ncols  # number of columns along the strip
         self.nscens = nscens  # number of ditch depth scenarios in the simulation
         self.yrs = yrs  # number of years in the simulation
-        self.photopara = photopara  # photosynthesis parameters for the assimilation function (Mäkelä et al. 2008)
         self.nut_stat = np.ones(
             ncols
         )  # *0.5                                   # nutrient status, make this an argument
@@ -70,8 +69,8 @@ class Stand:
             ndominants,
             sfc,
             agearr["dominant"],
-            mottifile["path"],
-            mottifile["dominant"],
+            mottifile.path,
+            mottifile.dominant,
             ixdominants,
             photopara,
             self.nut_stat,
@@ -84,8 +83,8 @@ class Stand:
             nsubdominants,
             sfc,
             agearr["subdominant"],
-            mottifile["path"],
-            mottifile["subdominant"],
+            mottifile.path,
+            mottifile.subdominant,
             ixsubdominants,
             photopara,
             self.nut_stat,
@@ -98,8 +97,8 @@ class Stand:
             nunder,
             sfc,
             agearr["under"],
-            mottifile["path"],
-            mottifile["under"],
+            mottifile.path,
+            mottifile.under,
             ixunder,
             photopara,
             self.nut_stat,
@@ -485,7 +484,7 @@ class Stand:
             + self.under.Dg * self.under.stems
         ) / (self.dominant.stems + self.subdominant.stems + self.under.stems)
 
-    def assimilate(self, forc, wt, afp):
+    def assimilate(self, photopara, forc, wt, afp):
         """
         Runs the photosyntheis function for all canopy layers
         Calls canopy layer instances
@@ -539,13 +538,31 @@ class Stand:
             lai_above[layer + 1, :] = laiabove[order, col]
 
         self.dominant.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[0, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[0, :],
         )  # npp, leaf dynamics and updating the canopylayers
         self.subdominant.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[1, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[1, :],
         )  # npp, leaf dynamics and updating the canopylayers
         self.under.assimilate(
-            forc, wt, afp, self.previous_nut_stat, self.nut_stat, lai_above[2, :]
+            photopara,
+            forc,
+            wt,
+            afp,
+            self.previous_nut_stat,
+            self.nut_stat,
+            lai_above[2, :],
         )  # npp, leaf dynamics and updating the canopylayers
 
         # updating call from the main program
@@ -616,13 +633,6 @@ class Stand:
         self.nut_stat = np.clip(
             self.nut_stat, 0.7, 1.3
         )  # Too high nutstat increases transpiration too much
-
-    def update_spara(self, spara):
-        spara["vol"] = (
-            self.volume
-        )  # initial stand volume along the cross section m3/ha in each node
-        spara["hdom"] = self.hdom  # these are for printing purposes only
-        return spara
 
     def update_logging(self):
         for cl in self.clyrs:
@@ -708,4 +718,3 @@ class Stand:
             cl.harvested_pulp_volume = cl.harvested_pulp_volume * 0.0
             cl.harvested_volume = cl.harvested_volume * 0.0
             cl.harvested_stems = cl.harvested_stems * 0.0
-

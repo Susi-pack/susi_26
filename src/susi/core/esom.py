@@ -86,7 +86,8 @@ class Esom:
         keys_in_spara = {"N": "peatN", "P": "peatP", "K": "peatK"}
         if self.substance != "Mass":
             sfcs = np.unique(sfc)
-            if spara[keys_in_spara[self.substance]] is not None:
+            spara_attribute = getattr(spara, keys_in_spara[self.substance])
+            if spara_attribute is not None:
                 for s in sfcs:
                     self.contpara[self.substance][s][1] = spara[
                         keys_in_spara[self.substance]
@@ -94,9 +95,9 @@ class Esom:
                     self.contpara[self.substance][s][2] = spara[
                         keys_in_spara[self.substance]
                     ]
-        self.enable_peattop = spara["enable_peattop"]
-        self.enable_peatmiddle = spara["enable_peatmiddle"]
-        self.enable_peatbottom = spara["enable_peatbottom"]
+        self.enable_peattop = spara.enable_peattop
+        self.enable_peatmiddle = spara.enable_peatmiddle
+        self.enable_peatbottom = spara.enable_peatbottom
 
         self.contpara_mor = {
             "Mass": 100.0,
@@ -116,33 +117,33 @@ class Esom:
 
         # ------------These from spara dictionary
         x = 1
-        y = spara["n"]  # shape of the domain
+        y = spara.n  # shape of the domain
         shape_area = (x, y)  # input shape
 
-        self.nLyrs = spara["nLyrs"]  # number of soil layers
-        self.dz = np.ones(self.nLyrs) * spara["dzLyr"]  # thickness of layers, m
+        self.nLyrs = spara.nLyrs  # number of soil layers
+        self.dz = np.ones(self.nLyrs) * spara.dzLyr  # thickness of layers, m
         self.z = (
             np.cumsum(self.dz) - self.dz / 2.0
         )  # depth of the layer center point, m
-        if spara["vonP"]:
-            vpost = spara["vonP bottom"] * np.ones(self.nLyrs)
-            vpost[: len(spara["vonP top"])] = spara["vonP top"]
+        if spara.vonP:
+            vpost = spara.vonP_bottom * np.ones(self.nLyrs)
+            vpost[: len(spara.vonP_top)] = spara.vonP_top
             self.bd = (
                 0.035 + 0.0159 * vpost
             )  # Päivänen 1973 page 36 Figure 9 unit g cm-3
 
         else:
-            self.bd = spara["bd bottom"] * np.ones(
+            self.bd = spara.bd_bottom * np.ones(
                 self.nLyrs
             )  # Bulk density here in g/cm3
-            self.bd[: len(spara["bd top"])] = spara["bd top"]
+            self.bd[: len(spara.bd_top)] = spara.bd_top
 
         # ---------this to array------------
         self.sfc_specification = (
             2  # np.ones(shape_area, dtype=int)             # MTkg1, MTkg2
         )
-        self.h_mor = spara["h_mor"]  # mor layer thickness, m
-        self.rho_mor = spara["rho_mor"]  # mor layer bulk density kg m-3
+        self.h_mor = spara.h_mor  # mor layer thickness, m
+        self.rho_mor = spara.rho_mor  # mor layer bulk density kg m-3
         self.bound1 = 0.15  # 0.2                                               # boundary between top and middle layer, m
         self.bound2 = 0.4  # 0.5                                              # boundary between middle and bottom layers, m
         self.i = 0  # day counter
@@ -760,4 +761,3 @@ class Esom:
             / stp.n
             * np.mean(self.lmwtoditch[0, np.ravel(stp.ixeast)])
         )
-

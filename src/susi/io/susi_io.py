@@ -299,10 +299,10 @@ def write_excel(
     outSummary.write(rows, 0, rows)
     outSummary.write(rows, 1, h0_west)
     outSummary.write(rows, 2, h0_east)
-    outSummary.write(rows, 3, spara["L"])
-    outSummary.write(rows, 4, spara["slope"])
+    outSummary.write(rows, 3, spara.L)
+    outSummary.write(rows, 4, spara.slope)
     outSummary.write(rows, 5, wlocation)
-    outSummary.write(rows, 6, spara["peat type"])
+    outSummary.write(rows, 6, spara.peat_type)
     g = LAI if LAI != "iterable" else max(LAI)
     outSummary.write(rows, 7, max(LAI))
     h = hdom if hdom != "iterable" else max(hdom)
@@ -322,7 +322,7 @@ def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr
     from xlutils import copy
     import xlrd
 
-    title = "Control vs " + spara["scenario name"][c]
+    title = "Control vs " + spara.scenario_name[c]
     fout = outpara["outfolder"] + outpara["gr_file"]
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
     cols = rb.sheet_by_name("Summary").ncols
@@ -338,21 +338,21 @@ def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr
     # print sarakkeita
     outSummary.write(rows, 0, rows)
     outSummary.write(rows, 1, title)
-    outSummary.write(rows, 2, spara["ditch depth"][0])
-    outSummary.write(rows, 3, spara["ditch depth"][c])
-    outSummary.write(rows, 4, spara["ditch depth 20y"][0])
-    outSummary.write(rows, 5, spara["ditch depth 20y"][c])
-    outSummary.write(rows, 6, spara["L"])
-    outSummary.write(rows, 7, spara["slope"])
+    outSummary.write(rows, 2, spara.ditch_depth[0])
+    outSummary.write(rows, 3, spara.ditch_depth[c])
+    outSummary.write(rows, 4, spara.ditch_depth_20y[0])
+    outSummary.write(rows, 5, spara.ditch_depth_20y[c])
+    outSummary.write(rows, 6, spara.L)
+    outSummary.write(rows, 7, spara.slope)
     outSummary.write(rows, 8, wlocation)
-    outSummary.write(rows, 9, spara["peat type"])
-    outSummary.write(rows, 10, str(spara["vonP top"]))
-    outSummary.write(rows, 11, spara["peat type bottom"])
-    outSummary.write(rows, 12, spara["vonP bottom"])
-    outSummary.write(rows, 13, spara["vol"])
-    outSummary.write(rows, 14, spara["hdom"])
-    outSummary.write(rows, 15, spara["species"])
-    outSummary.write(rows, 16, spara["sfc"])
+    outSummary.write(rows, 9, spara.peat_type)
+    outSummary.write(rows, 10, str(spara.vonP_top))
+    outSummary.write(rows, 11, spara.peat_type_bottom)
+    outSummary.write(rows, 12, spara.vonP_bottom)
+    outSummary.write(rows, 13, spara.vol)
+    outSummary.write(rows, 14, spara.hdom)
+    outSummary.write(rows, 15, spara.species)
+    outSummary.write(rows, 16, spara.sfc)
     outSummary.write(rows, 17, str(wpara["start_yr"]) + " " + str(wpara["end_yr"]))
     outSummary.write(rows, 18, float(gN))
     outSummary.write(rows, 19, float(gP))
@@ -400,39 +400,37 @@ def outfig(
 
 def print_site_description(spara):
     print("  + Site:")
-    print("   + Number of columns:", spara["n"])
+    print("   + Number of columns:", spara.n)
     print("    - Site fertility class:")
-    print("    ", spara["sfc"])
+    print("    ", spara.sfc)
     print("  + Stand:")
     # print ('    - vol:', np.round(spara['vol'],0),'m3/ha' )
     print("    - age:")
-    print("        dominant:", spara["age"]["dominant"], "yrs")
-    print("        subdominat:", spara["age"]["subdominant"], "yrs")
-    print("        under:", spara["age"]["under"], "yrs")
+    print("        dominant:", spara.age["dominant"], "yrs")
+    print("        subdominat:", spara.age["subdominant"], "yrs")
+    print("        under:", spara.age["under"], "yrs")
 
     print("  + Soil: ")
-    if spara["vonP"]:
-        print(
-            "    - peat top:", spara["peat type"][0], ", von P:", spara["vonP top"][0]
-        )
+    if spara.vonP:
+        print("    - peat top:", spara.peat_type[0], ", von P:", spara.vonP_top[0])
     else:
         print(
             "    - peat top:",
-            spara["peat type"][0],
+            spara.peat_type[0],
             ", bulk density:",
-            spara["bd top"][0],
+            spara.bd_top[0],
         )
     print(
         "    - peat bottom:",
-        spara["peat type bottom"][0],
+        spara.peat_type_bottom[0],
         ", von P:",
-        spara["vonP bottom"],
+        spara.vonP_bottom,
     )
     print("  + Drainage:")
-    print("    - Strip widht:", spara["L"], "m")
-    print("    - Ditch depth west:", spara["ditch depth west"])
-    print("    - Ditch depth east:", spara["ditch depth east"])
-    print("    - Scenarios:", spara["scenario name"])
+    print("    - Strip widht:", spara.L, "m")
+    print("    - Ditch depth west:", spara.ditch_depth_west)
+    print("    - Ditch depth east:", spara.ditch_depth_east)
+    print("    - Scenarios:", spara.scenario_name)
 
 
 def fig_stand_growth(
@@ -602,8 +600,8 @@ def fig_hydro(
     from matplotlib.lines import Line2D
 
     het = np.ravel(het)
-    n = spara["n"]
-    L = spara["L"]
+    n = spara.n
+    L = spara.L
     sim_yrs = len(het) / 365.0
     aa, bb = np.shape(hts)
     x = np.linspace(0, L, n)
@@ -659,9 +657,9 @@ def fig_hydro(
 
     t1 = "Ditch depth " + str(h0_west) + str(h0_east) + " m"
     ax.text(0.5, high * 0.95, str(t1), fontsize=16, color="0.25")
-    t2 = "Slope " + str(spara["slope"]) + " %"
+    t2 = "Slope " + str(spara.slope) + " %"
     ax.text(0.5, high * 0.9, str(t2), fontsize=16, color="0.25")
-    t3 = "Peat type: " + spara["peat type"][0]
+    t3 = "Peat type: " + spara.peat_type[0]
     ax.text(0.5, high * 0.85, t3, fontsize=16, color="0.25")
     if type(lai) is float:
         lai = [lai]

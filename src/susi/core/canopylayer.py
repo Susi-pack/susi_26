@@ -43,7 +43,6 @@ class Canopylayer:
         self.ixs = ixs  # indices for the location of the different canopy layers along the strip
         self.ncols = ncols  # number of columns in the strip
         self.agearr = agearr.copy()  # age of the canopy layer, yrs
-        self.photopara = photopara  # photosynthesis parameters for assimilation model (Mäkelä et al. 2008)
         self.nscens = nscens  # number of scenarion in the simulation
         self.yrs = yrs  # number od years in the simulation
         self.remaining_share = np.ones(
@@ -453,7 +452,9 @@ class Canopylayer:
                 # print ('n stems')
                 # print (self.stems)
 
-    def assimilate(self, forc, wt, afp, previous_nut_stat, nut_stat, lai_above):
+    def assimilate(
+        self, photopara, forc, wt, afp, previous_nut_stat, nut_stat, lai_above
+    ):
         """
         Calls photosynthesis model (Mäkelä et al. 2008, standwise model) and leaf dynamics model that
         accounts for leaf mass, longevity and nutrient contents. This is a canopy model instance
@@ -483,7 +484,7 @@ class Canopylayer:
         """ assimilation_yr function operates in /ha basis,"""
         lai_above = lai_above * 2  # lai_above is updated in stand object
         self.NPP, self.NPP_pot = assimilation_yr(
-            self.photopara, forc, wt, afp, self.leafarea * 2 * self.stems, lai_above
+            photopara, forc, wt, afp, self.leafarea * 2 * self.stems, lai_above
         )  # double sided LAI required
 
         self.NPP = (

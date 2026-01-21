@@ -2490,8 +2490,8 @@ class Outputs:
         self.ncf["temperature"]["T"][scen, start : start + days, :] = T
 
     def write_strip(self, scen, start, days, yr, year, dfwt, stpout, outpara, stp):
-        startdate = "-" + str(outpara["startmonth"]) + "-" + str(outpara["startday"])
-        enddate = "-" + str(outpara["endmonth"]) + "-" + str(outpara["endday"])
+        startdate = "-" + str(outpara.startmonth) + "-" + str(outpara.startday)
+        enddate = "-" + str(outpara.endmonth) + "-" + str(outpara.endday)
         self.ncf["strip"]["dwt"][scen, start : start + days, :] = stpout["dwts"][
             scen, start : start + days, :
         ]

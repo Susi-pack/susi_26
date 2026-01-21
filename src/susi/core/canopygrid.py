@@ -19,6 +19,7 @@ last edit: Oct 2018 / Samuli
 
 import numpy as np
 import configparser
+import copy
 
 eps = np.finfo(float).eps
 
@@ -44,41 +45,24 @@ class CanopyGrid:
         epsi = 0.01
 
         # physiology: transpi + floor evap
-        self.physpara = cpara["physpara"]
-
-        # phenology
-        self.phenopara = cpara["phenopara"]
+        self.amax = copy.deepcopy(cpara.physpara.amax_init)
 
         # canopy parameters and state
-        self.hc = state["hc"] + epsi
-        self.cf = state["cf"] + epsi
+        self.hc = state.hc + epsi
+        self.cf = state.cf + epsi
         # self.cf = 0.1939 * ba / (0.1939 * ba + 1.69) + epsi
         # canopy closure [-] as function of basal area ba m2ha-1;
         # fitted to Korhonen et al. 2007 Silva Fennica Fig.2
 
-        self._LAIconif = state["lai_conif"] + epsi  # m2m-2
-        self._LAIdecid = state["lai_decid_max"]
+        self._LAIconif = state.lai_conif + epsi  # m2m-2
+        self._LAIdecid = state.lai_decid_max
         self.LAI = self._LAIconif + self._LAIdecid
 
-        self._LAIdecid_max = state["lai_decid_max"] + epsi  # m2m-2
-
-        # self.cpara = cpara  # added new parameters self.cpara['kmt'],
-        # self.cpara['kmr'] here for testing radiation-based snow melt model
-        self.wmax = cpara["interc"]["wmax"]
-        self.wmaxsnow = cpara["interc"]["wmaxsnow"]
-        self.Kmelt = cpara["snow"]["kmelt"]
-        self.Kfreeze = cpara["snow"]["kfreeze"]
-        self.R = cpara["snow"]["r"]  # max fraction of liquid water in snow
-
-        # --- for computing aerodynamic resistances
-        self.zmeas = cpara["flow"]["zmeas"]
-        self.zground = cpara["flow"]["zground"]  # reference height above ground [m]
-        self.zo_ground = cpara["flow"]["zo_ground"]  # ground roughness length [m]
-        self.gsoil = self.physpara["gsoil"]
+        self._LAIdecid_max = state.lai_decid_max + epsi  # m2m-2
 
         # --- state variables
-        self.W = np.minimum(state["w"], self.wmax * self.LAI)
-        self.SWE = state["swe"]
+        self.W = np.minimum(state.w, cpara.interception.wmax * self.LAI)
+        self.SWE = state.swe
         self.SWEi = self.SWE
         self.SWEl = np.zeros(np.shape(self.SWE))
 
@@ -104,11 +88,12 @@ class CanopyGrid:
                 "fact": [],
             }
 
-    def update_amax(self, cpara, nutstat):
-        self.physpara["amax"] = cpara["amax"] * 1.0 + (nutstat - 1)  # 1.035
+    def update_amax(self, nutstat):
+        self.amax = self.amax * 1.0 + (nutstat - 1)  # 1.035
 
     def run_timestep(
         self,
+        cpara,
         doy,
         dt,
         Ta,
@@ -156,7 +141,7 @@ class CanopyGrid:
         )  # Launiainen et al. 2016 GCB, fit to Fig 2a
 
         """ --- update phenology: self.ddsum & self.X ---"""
-        fPheno = self._photoacclim(Ta)
+        fPheno = self._photoacclim(Ta, phenopara=cpara.phenology)
 
         """ --- aerodynamic conductances --- """
         Ra, Rb, Ras, ustar, Uh, Ug = aerodynamics(
@@ -164,19 +149,29 @@ class CanopyGrid:
             self.hc,
             U,
             w=0.01,
-            zm=self.zmeas,
-            zg=self.zground,
-            zos=self.zo_ground,
+            zm=cpara.flow.zmeas,
+            zg=cpara.flow.zground,
+            zos=cpara.flow.zo_ground,
         )
 
         """ --- interception, evaporation and snowpack --- """
         PotInf, Trfall, Evap, Interc, MBE, erate, unload, fact = self.canopy_water_snow(
-            dt, Ta, Prec, Rn, VPD, Ra=Ra
+            cpara, dt, Ta, Prec, Rn, VPD, Ra=Ra
         )
 
         """--- dry-canopy evapotranspiration [mm s-1] --- """
         Transpi, Efloor, Gc = self.dry_canopy_et(
-            VPD, Par, Rn, Ta, Ra=Ra, Ras=Ras, CO2=CO2, Rew=Rew, beta=beta, fPheno=fPheno
+            cpara=cpara,
+            D=VPD,
+            Qp=Par,
+            AE=Rn,
+            Ta=Ta,
+            Ra=Ra,
+            Ras=Ras,
+            CO2=CO2,
+            Rew=Rew,
+            beta=beta,
+            fPheno=fPheno,
         )
 
         Transpi = Transpi * dt
@@ -225,22 +220,21 @@ class CanopyGrid:
         else:
             self.DDsum += np.maximum(0.0, T - To)
 
-    def _photoacclim(self, T):
+    def _photoacclim(self, T, phenopara):
         """
         computes new stage of temperature acclimation and phenology modifier.
         Peltoniemi et al. 2015 Bor.Env.Res.
-        IN: object, T = daily mean air temperature
+        IN: object, T = daily mean air temperature,
+            phenopara parameters
         OUT: fPheno - phenology modifier [0...1], updates object state
         """
 
-        self.X = self.X + 1.0 / self.phenopara["tau"] * (T - self.X)  # degC
-        S = np.maximum(self.X - self.phenopara["xo"], 0.0)
-        fPheno = np.maximum(
-            self.phenopara["fmin"], np.minimum(S / self.phenopara["smax"], 1.0)
-        )
+        self.X = self.X + 1.0 / phenopara.tau * (T - self.X)  # degC
+        S = np.maximum(self.X - phenopara.xo, 0.0)
+        fPheno = np.maximum(phenopara.fmin, np.minimum(S / phenopara.smax, 1.0))
         return fPheno
 
-    def _lai_dynamics(self, doy):
+    def _lai_dynamics(self, doy, phenopara):
         """
         Seasonal cycle of deciduous leaf area
 
@@ -252,11 +246,11 @@ class CanopyGrid:
             none, updates state variables self.LAIdecid, self._growth_stage,
             self._senec_stage
         """
-        lai_min = self.phenopara["lai_decid_min"]
-        ddo = self.phenopara["ddo"]
-        ddur = self.phenopara["ddur"]
-        sso = self.phenopara["sso"]
-        sdur = self.phenopara["sdur"]
+        lai_min = phenopara.lai_decid_min
+        ddo = phenopara.ddo
+        ddur = phenopara.ddur
+        sso = phenopara.sso
+        sdur = phenopara.sdur
 
         # growth phase
         if self.DDsum <= ddo:
@@ -280,6 +274,7 @@ class CanopyGrid:
 
     def dry_canopy_et(
         self,
+        cpara,
         D,
         Qp,
         AE,
@@ -296,6 +291,7 @@ class CanopyGrid:
         i.e. in dry-canopy conditions
         IN:
            self - object
+           cpara - canopy parameters
            D - vpd in kPa
            Qp - PAR in Wm-2
            AE - available energy in Wm-2
@@ -329,27 +325,22 @@ class CanopyGrid:
         rhoa = 101300.0 / (8.31 * (Ta + 273.15))  # mol m-3
 
         Amax = (
-            1.0
-            / self.LAI
-            * (
-                self._LAIconif * self.physpara["amax"]
-                + self._LAIdecid * self.physpara["amax"]
-            )
+            1.0 / self.LAI * (self._LAIconif * self.amax + self._LAIdecid * self.amax)
         )  # umolm-2s-1
 
         g1 = (
             1.0
             / self.LAI
             * (
-                self._LAIconif * self.physpara["g1_conif"]
-                + self._LAIdecid * self.physpara["g1_decid"]
+                self._LAIconif * cpara.physpara.g1_conif
+                + self._LAIdecid * cpara.physpara.g1_decid
             )
         )
 
-        kp = self.physpara["kp"]  # (-) attenuation coefficient for PAR
-        q50 = self.physpara["q50"]  # Wm-2, half-sat. of leaf light response
-        rw = self.physpara["rw"]  # rew parameter
-        rwmin = self.physpara["rwmin"]  # rew parameter
+        kp = cpara.physpara.kp  # (-) attenuation coefficient for PAR
+        q50 = cpara.physpara.q50  # Wm-2, half-sat. of leaf light response
+        # rw = self.physpara.rw  # rew parameter
+        # rwmin = self.physpara.rwmin  # rew parameter
 
         tau = np.exp(-kp * self.LAI)  # fraction of Qp at ground relative to canopy top
 
@@ -389,7 +380,7 @@ class CanopyGrid:
         # soil conductance is function of relative water availability
         # gcs = 1. / self.soilrp * beta**2.0
         # beta = Wliq / FC; Best et al., 2011 Geosci. Model. Dev. JULES
-        Gcs = self.gsoil
+        Gcs = cpara.physpara.gsoil
 
         Efloor = beta * penman_monteith(
             tau * AE, 1e3 * D, Ta, Gcs, 1.0 / Ras, units="mm"
@@ -400,11 +391,12 @@ class CanopyGrid:
 
         return Tr, Efloor, Gc
 
-    def canopy_water_snow(self, dt, T, Prec, AE, D, Ra=25.0, U=2.0):
+    def canopy_water_snow(self, cpara, dt, T, Prec, AE, D, Ra=25.0, U=2.0):
         """
         Calculates canopy water interception and SWE during timestep dt
         Args:
             self - object
+            cpara - canopy parameters
             dt - timestep [s]
             T - air temperature (degC)
             Prec - precipitation rate during (mm d-1)
@@ -426,14 +418,14 @@ class CanopyGrid:
         Tmelt = 0.0  # 'C, T when melting starts
 
         # storage capacities mm
-        Wmax = self.wmax * self.LAI
-        Wmaxsnow = self.wmaxsnow * self.LAI
+        Wmax = cpara.interception.wmax * self.LAI
+        Wmaxsnow = cpara.interception.wmaxsnow * self.LAI
 
         # melting/freezing coefficients mm/s
-        Kmelt = self.Kmelt - 1.64 * self.cf / dt  # Kuusisto E, 'Lumi Suomessa'
-        Kfreeze = self.Kfreeze
+        Kmelt = cpara.snow.kmelt - 1.64 * self.cf / dt  # Kuusisto E, 'Lumi Suomessa'
+        Kfreeze = cpara.snow.kfreeze
 
-        kp = self.physpara["kp"]
+        kp = cpara.physpara.kp
         tau = np.exp(-kp * self.LAI)  # fraction of Rn at ground
 
         # inputs to arrays, needed for indexing later in the code
@@ -561,7 +553,7 @@ class CanopyGrid:
         Sice = np.maximum(0.0, self.SWEi + fS * Trfall + Freeze - Melt)
         Sliq = np.maximum(0.0, self.SWEl + fW * Trfall - Freeze + Melt)
 
-        PotInf = np.maximum(0.0, Sliq - Sice * self.R)  # mm
+        PotInf = np.maximum(0.0, Sliq - Sice * cpara.snow.r)  # mm
         Sliq = np.maximum(0.0, Sliq - PotInf)  # mm, liquid water in snow
 
         # update Snowpack state variables
