@@ -347,7 +347,7 @@ def potential_peat_heterotrophic_respiration(T, sfc, V):
     return HetCO2 * 86400.0 * 10000.0
 
 
-def read_FMI_weather(ID, start_date, end_date, sourcefile=None):
+def read_FMI_weather(ID, start_date, end_date, sourcefile=None) -> pd.DataFrame:
     """
     reads FMI interpolated daily weather data from file
     IN:

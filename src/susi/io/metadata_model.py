@@ -30,19 +30,23 @@ class SimulationMetaData(BaseModel):
     metadata_schema_version: int = 1
 
     metadata_output_filename: str = Field(
+        frozen=True,
         default="metadata.json",
         description="Name of the output metadata file. Needs to be JSON. It will be stored inside the `experiment_folder_path`.",
     )
     parameter_output_filename: str = Field(
+        frozen=True,
         default="params.json",
         description="Name of the output parameters file. Needs to be JSON. It will be stored inside the `experiment_folder_path`.",
     )
     netcdf_output_filename: str = Field(
+        frozen=True,
         default="susi.nc",
         description="Name of the output netcdf file. Needs to have extension '.nc'. It will be stored inside the `experiment_folder_path`.",
     )
 
     timestamp_start: str = Field(
+        frozen=True,
         default_factory=io_utils.generate_current_datetime_stamp,
         description="Initial timestamp. (Technically, it takes the timestamp at the time the current class is created).",
     )
@@ -54,12 +58,14 @@ class SimulationMetaData(BaseModel):
     )
 
     git_commit_hash: str = Field(
+        frozen=True,
         init=False,
         default_factory=io_utils.get_git_revision_short_hash,
         description="Git commit identifier.",
     )
 
     host_info: str = Field(
+        frozen=True,
         init=False,
         default=str(platform.uname()),
         description="Info about who ran the simulations.",
@@ -129,4 +135,4 @@ class SimulationMetaData(BaseModel):
 
     def dump_json_to_file(self) -> None:
         with open(self.metadata_output_filepath, "w") as f:
-            f.write(self.model_dump_json())
+            f.write(self.model_dump_json(indent=4))

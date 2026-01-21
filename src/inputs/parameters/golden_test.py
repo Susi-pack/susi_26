@@ -1,6 +1,4 @@
-import numpy as np
 import datetime
-from pathlib import Path
 
 from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
@@ -19,22 +17,10 @@ from susi.io.susi_parameter_model import (
     PeatTemperatureParams,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 
 _app_settings = AppSettings()
-
-
-def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
-    """
-    Pitkänen et al. 2012 Forest Ecology and Management 284 (2012) 100–106
-    """
-    return 1.616 * np.log(drain_age) - 1.409
-
-
-def h_mor_from_drainage_and_mass_mor_Pitkanen(
-    drain_age: float, rho_mor: float
-) -> float:
-    return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
 PARAMETERS = SusiParams(

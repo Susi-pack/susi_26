@@ -24,3 +24,6 @@ exclude = [
     "src/scripts/susi_calls_scenarios.py",
     "src/inputs/susi_para.py",
 ]
+
+[tool.pytest]
+testpaths = ["tests"] # only look under the tests/ folder for tests
