@@ -105,6 +105,8 @@ out2 = ncf['stand']['harvested_log_volume'][0,1:, 1:-1]
 out3 = ncf['stand']['harvested_pulp_volume'][0,:, 1:-1]
 out4 = ncf['stand']['harvested_biomass'][0,:, 1:-1]
 out5 = ncf['stand']['harvested_stems'][0,:, 1:-1]
+out6 = ncf['stand']['mean_diameter'][0,1:, 1:-1]
+
 
 print ('harvested volume')
 print (out1)
@@ -116,6 +118,8 @@ print ('harvested biomass')
 print (out4)
 print ('harvested stems')
 print (out5)
+print ('mean diameter')
+print (out6)
 
 ncf.close()
 
