@@ -8,3 +8,4 @@ outputs/
 requirements_inaki.txt
 
 golden_file_test/susi.nc
+analysis/.ipynb_checkpoints
