@@ -17,9 +17,23 @@ include = ["susi*"]
 namespaces = false
 
 [tool.ty.src]
-include = ["src", "tests"]
+include = ["src", "tests", "src/susi/core/main.py"]
 exclude = [
-    "src/susi/core",
+    "src/susi/core/allometric_road_map.py",
+    "src/susi/core/allometry.py",
+    "src/susi/core/canopygrid.py",
+    "src/susi/core/canopylayer.py",
+    "src/susi/core/esom.py",
+    "src/susi/core/fertilization.py",
+    "src/susi/core/gvegetation.py",
+    "src/susi/core/methane.py",
+    "src/susi/core/mosslayer.py",
+    "src/susi/core/stand.py",
+    "src/susi/core/stem_curve.py",
+    "src/susi/core/strip.py",
+    "src/susi/core/susi_utils.py",
+    "src/susi/core/temperature.py",
+    "src/susi/core/weibull_recovery.py",
     "src/susi/io/susi_io.py",
     "src/scripts/susi_calls_scenarios.py",
     "src/inputs/susi_para.py",

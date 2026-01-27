@@ -11,7 +11,15 @@ import numpy as np
 
 
 class Outputs:
-    def __init__(self, nscens, ncols, ndays, nyrs, nLyrs, fname):
+    def __init__(self, n_scenarios, n_cols, n_days, n_years, n_layers, fname):
+        """
+        n_scenarios: int. Number of management scenarios
+        n_cols: int. Number of columns along the strip
+        n_layers: int. Number of layers in the vertical soil column
+        n_days: int. Number of simulated days
+        n_years: int. Number of simulated years
+        fname: netcdf file name.
+        """
         print("**** creating Susi netCDF4 file: " + str(fname) + " ****")
 
         # create dataset & dimensions
@@ -21,16 +29,13 @@ class Outputs:
         self.ncf.history = "created " + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.ncf.source = "Susi v.2024,"
 
-        self.ncf.createDimension("nscens", nscens)  # number of management scenarios
-        self.ncf.createDimension("ncols", ncols)  # number of columns along the strip
-        self.nyrs = nyrs + 1  # allow saving of the initial status
-        self.ncf.createDimension("nyrs", self.nyrs)  # number of years in the simulation
-        self.ncf.createDimension("ndays", ndays)  # number of days in the simulation
-        self.ncf.createDimension(
-            "nLyrs", nLyrs
-        )  # numbre of peat layers in the vertical column
-        # self.ncf.createDimension('scalar', 12)
-        self.ncols = ncols
+        self.ncf.createDimension("nscens", n_scenarios)
+        self.ncf.createDimension("ncols", n_cols)
+        self.nyrs = n_years + 1  # allow saving of the initial status
+        self.ncf.createDimension("nyrs", self.nyrs)
+        self.ncf.createDimension("ndays", n_days)
+        self.ncf.createDimension("nLyrs", n_layers)
+        self.ncols = n_cols
 
         # call as createVariable(varname,type,(dimensions))
         time = self.ncf.createVariable("time", "f8", ("ndays",))

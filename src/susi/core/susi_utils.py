@@ -2489,6 +2489,9 @@ def understory_uptake(
 
 
 def get_temp_sum(forc):
+    """
+    Cumulative temperature sum degree days
+    """
     base = 5.0
     dd = forc["T"] - base
     dd[dd < base] = 0.0

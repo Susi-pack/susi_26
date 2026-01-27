@@ -494,7 +494,7 @@ class SiteParams(StrictFrozenModel):
     @computed_field
     @property
     def n(self) -> int:
-        """Number of computation nodes in the strip, 2-m width of node"""
+        """Number of computation nodes (which correspond to soil columns) in the strip, 2-m width of node"""
         return int(self.L / 2)
 
     @property
