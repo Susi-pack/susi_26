@@ -11,7 +11,15 @@ from susi.core.canopylayer import Canopylayer
 
 class Stand:
     def __init__(
-        self, nscens, yrs, canopylayers, ncols, sfc, agearr, mottifile, photopara
+        self,
+        n_scenarios,
+        n_yrs,
+        canopylayers,
+        n_cols,
+        sfc,
+        agearr,
+        mottifile,
+        photopara,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -29,11 +37,13 @@ class Stand:
             mottifile, dict of dicts, telling the growth and yield (Motti files) in each canopy layer with key pointing to integer in the canopylayer dict
             photopara - photosynthesis parameters used in the assimilation model
         """
-        self.ncols = ncols  # number of columns along the strip
-        self.nscens = nscens  # number of ditch depth scenarios in the simulation
-        self.yrs = yrs  # number of years in the simulation
+        self.n_cols = n_cols  # number of columns along the strip
+        self.n_scenarios = (
+            n_scenarios  # number of ditch depth scenarios in the simulation
+        )
+        self.n_yrs = n_yrs  # number of years in the simulation
         self.nut_stat = np.ones(
-            ncols
+            n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
         ndominants = np.unique(
@@ -63,9 +73,9 @@ class Stand:
 
         self.dominant = Canopylayer(
             "dominant",
-            nscens,
-            yrs,
-            ncols,
+            n_scenarios,
+            n_yrs,
+            n_cols,
             ndominants,
             sfc,
             agearr["dominant"],
@@ -77,9 +87,9 @@ class Stand:
         )
         self.subdominant = Canopylayer(
             "subdominant",
-            nscens,
-            yrs,
-            ncols,
+            n_scenarios,
+            n_yrs,
+            n_cols,
             nsubdominants,
             sfc,
             agearr["subdominant"],
@@ -91,9 +101,9 @@ class Stand:
         )
         self.under = Canopylayer(
             "under",
-            nscens,
-            yrs,
-            ncols,
+            n_scenarios,
+            n_yrs,
+            n_cols,
             nunder,
             sfc,
             agearr["under"],
@@ -110,143 +120,145 @@ class Stand:
         ]  # list of canopy layers, used later in loops
 
         # ---------- create stand variables------------------------------------
-        self.basalarea = np.zeros(ncols, dtype=float)  # stand basal area m2/ha
-        self.biomass = np.zeros(ncols, dtype=float)  # stand dry biomass kg/ha
+        self.basalarea = np.zeros(n_cols, dtype=float)  # stand basal area m2/ha
+        self.biomass = np.zeros(n_cols, dtype=float)  # stand dry biomass kg/ha
         self.n_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # stand N demand excluding leaves kg/ha/yr
         self.p_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # stand N demand excluding leaves kg/ha/yr
         self.k_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # stand N demand excluding leaves kg/ha/yr
-        self.hdom = np.zeros(ncols, dtype=float)  # dominant height m
-        self.leafarea = np.zeros(ncols, dtype=float)  # one sided leaf area m2 m-2
-        self.leafmass = np.zeros(ncols, dtype=float)  # leaf dry biomass kg/ha
-        self.logvolume = np.zeros(ncols, dtype=float)  # saw log volume m3/ha
-        self.mean_diameter = np.zeros(ncols, dtype=float)  # stand mean diameter cm
+        self.hdom = np.zeros(n_cols, dtype=float)  # dominant height m
+        self.leafarea = np.zeros(n_cols, dtype=float)  # one sided leaf area m2 m-2
+        self.leafmass = np.zeros(n_cols, dtype=float)  # leaf dry biomass kg/ha
+        self.logvolume = np.zeros(n_cols, dtype=float)  # saw log volume m3/ha
+        self.mean_diameter = np.zeros(n_cols, dtype=float)  # stand mean diameter cm
 
-        self.harvested_volume = np.zeros(ncols, dtype=float)  # harvested volume m3/ha
+        self.harvested_volume = np.zeros(n_cols, dtype=float)  # harvested volume m3/ha
         self.harvested_log_volume = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # harvested saw log volume m3/ha
         self.harvested_pulp_volume = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # harvsted pulp volume m3/ha
-        self.harvested_biomass = np.zeros(ncols, dtype=float)  # saw biomass kg/ha
+        self.harvested_biomass = np.zeros(n_cols, dtype=float)  # saw biomass kg/ha
         self.harvested_stems = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # number of harvested stems/ha
 
-        self.finerootlitter = np.zeros(ncols, dtype=float)  # fine root litter kg/ha/yr
+        self.finerootlitter = np.zeros(n_cols, dtype=float)  # fine root litter kg/ha/yr
         self.n_finerootlitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in fine root litter kg/ha/yr
         self.p_finerootlitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in fine root litter kg/ha/yr
         self.k_finerootlitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in fine root litter kg/ha/yr
-        self.nonwoodylitter = np.zeros(ncols, dtype=float)  # non woody litter kg/ha/yr
+        self.nonwoodylitter = np.zeros(n_cols, dtype=float)  # non woody litter kg/ha/yr
         self.n_nonwoodylitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in nonwoody litter kg/ha/yr
         self.p_nonwoodylitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in nonwoody litter kg/ha/yr
         self.k_nonwoodylitter = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in nonwoody litter kg/ha/yr
-        self.pulpvolume = np.zeros(ncols, dtype=float)  # pulpwood volume m3/ha
-        self.stems = np.zeros(ncols, dtype=float)  # stocking, number of stems pcs/ha
+        self.pulpvolume = np.zeros(n_cols, dtype=float)  # pulpwood volume m3/ha
+        self.stems = np.zeros(n_cols, dtype=float)  # stocking, number of stems pcs/ha
         self.volume = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # total volume of the growing stock m3/ha
         self.volumegrowth = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # total volume growth of the growing stock m3/ha/yr
         self.biomassgrowth = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # total biomass growth of stand kg/ha/yr
-        self.woodylitter = np.zeros(ncols, dtype=float)  # woody litter kg/ha/yr
-        self.n_woodylitter = np.zeros(ncols, dtype=float)  # N in woody litter kg/ha/yr
-        self.p_woodylitter = np.zeros(ncols, dtype=float)  # P in woody litter kg/ha/yr
-        self.k_woodylitter = np.zeros(ncols, dtype=float)  # K in woody litter kg/ha/yr
-        self.yi = np.zeros(ncols, dtype=float)  # yield. here same as volume
+        self.woodylitter = np.zeros(n_cols, dtype=float)  # woody litter kg/ha/yr
+        self.n_woodylitter = np.zeros(n_cols, dtype=float)  # N in woody litter kg/ha/yr
+        self.p_woodylitter = np.zeros(n_cols, dtype=float)  # P in woody litter kg/ha/yr
+        self.k_woodylitter = np.zeros(n_cols, dtype=float)  # K in woody litter kg/ha/yr
+        self.yi = np.zeros(n_cols, dtype=float)  # yield. here same as volume
 
         self.nonwoody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # nonwoody logging residues kg/ha
         self.n_nonwoody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in nonwoody logging residues kg/ha
         self.p_nonwoody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in nonwoody logging residues kg/ha
         self.k_nonwoody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in nonwoody logging residues kg/ha
 
-        self.woody_lresid = np.zeros(ncols, dtype=float)  # woody logging residues kg/ha
+        self.woody_lresid = np.zeros(
+            n_cols, dtype=float
+        )  # woody logging residues kg/ha
         self.n_woody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in woody logging residues kg/ha
         self.p_woody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in woody logging residues kg/ha
         self.k_woody_lresid = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in woody logging residues kg/ha
 
         self.woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # woody litter from mortality kg/ha
         self.n_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in woody litter from mortality kg/ha
         self.p_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in woody litter from mortality kg/ha
         self.k_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in woody litter from mortality kg/ha
 
         self.non_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # non-woody litter from mortality kg/ha
         self.n_non_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # N in non-woody litter from mortality kg/ha
         self.p_non_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # P in non-woody litter from mortality kg/ha
         self.k_non_woody_litter_mort = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # K in non-woody litter from mortality kg/ha
 
         self.basNdemand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # basic N demand kg/tree, in table growth conditions, used in nutrient status calculation
         self.basPdemand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # basic P demand kg/tree, in table growth conditions, used in nutrient status calculation
         self.basKdemand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # basic K demand kg/tree, in table growth conditions, used in nutrient status calculation
 
         self.n_leaf_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # current leaf demand for N kg/ha
         self.p_leaf_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # current leaf demand for P kg/ha
         self.k_leaf_demand = np.zeros(
-            ncols, dtype=float
+            n_cols, dtype=float
         )  # current leaf demand for K kg/ha
 
-        self.previous_nut_stat = np.ones(ncols)  # nutrient status in previous year
+        self.previous_nut_stat = np.ones(n_cols)  # nutrient status in previous year
 
         """ ATTN cl in tree basis, convert to ha basis"""
         for cl in self.clyrs:  # sum standwise initial values from the canopy layers
@@ -276,8 +288,8 @@ class Stand:
 
         """
         # reset the stand and reinitialize with initial age for a new scenario
-        self.previous_nut_stat = np.ones(self.ncols)
-        self.nut_stat = np.ones(self.ncols)  # *0.5
+        self.previous_nut_stat = np.ones(self.n_cols)
+        self.nut_stat = np.ones(self.n_cols)  # *0.5
 
         self.dominant.initialize_domain(agearr["dominant"], self.nut_stat)
         self.subdominant.initialize_domain(agearr["subdominant"], self.nut_stat)
@@ -520,21 +532,21 @@ class Stand:
             ]
         )  # array of leaf areas converterd to m2/m2
 
-        laiout = np.zeros((3, self.ncols))  # initialize temporary lai array
+        laiout = np.zeros((3, self.n_cols))  # initialize temporary lai array
         lai_above = np.zeros(
-            (4, self.ncols)
+            (4, self.n_cols)
         )  # initialize the ablove-lai array (used later in assimilation)
 
         for layer in range(3):  # loop through canopy layers
             order = h_order[
                 layer
             ]  # inddices in heght array (descending order, 0 for the tallest)
-            col = np.arange(0, self.ncols, 1)  # indices along the strip
+            col = np.arange(0, self.n_cols, 1)  # indices along the strip
             laiout[layer, :] = laiarray[order, col]  # locate lai on the height order
         laiabove = np.cumsum(laiout, axis=0)  # cumulative lai sum above
         for layer in range(3):
             order = h_order[layer]
-            col = np.arange(0, self.ncols, 1)
+            col = np.arange(0, self.n_cols, 1)
             lai_above[layer + 1, :] = laiabove[order, col]
 
         self.dominant.assimilate(
@@ -590,7 +602,7 @@ class Stand:
         """
         self.previous_nut_stat = self.nut_stat.copy()
 
-        nstat = np.ones((3, self.ncols))
+        nstat = np.ones((3, self.n_cols))
         # nstat[0,:] = N_supply / (self.n_demand + groundvegetation.nup)
         # nstat[1,:] = P_supply / (self.p_demand + groundvegetation.pup)
         # nstat[2,:] = K_supply / (self.k_demand + groundvegetation.kup)
@@ -628,7 +640,7 @@ class Stand:
         minnstat = np.min(nstat, axis=0)
 
         tau = 3.0
-        for c in range(self.ncols):
+        for c in range(self.n_cols):
             self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / tau
         self.nut_stat = np.clip(
             self.nut_stat, 0.7, 1.3

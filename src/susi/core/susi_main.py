@@ -27,7 +27,7 @@ from susi.core.methane import Methane
 from susi.core.fertilization import Fertilization
 from susi.core.susi_utils import rew_drylimit
 from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, ojanen_2019
-from susi.io.susi_io import print_site_description
+import susi.io.susi_io as susi_io
 from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
@@ -69,20 +69,22 @@ class Susi:
         temperature_sun_days_degree = get_temp_sum(self.weather_forcing)
 
         out = Outputs(
-            len(self.parameters.site_parameters.ditch_depth_east),
-            self.parameters.site_parameters.n,
-            n_simulation_days,
-            n_simulation_years,
-            self.parameters.site_parameters.nLyrs,
-            self.metadata.netcdf_output_filepath,
-        )  # create output class variable
+            n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
+            n_cols=self.parameters.site_parameters.n,
+            n_days=n_simulation_days,
+            n_years=n_simulation_years,
+            n_layers=self.parameters.site_parameters.nLyrs,
+            fname=self.metadata.netcdf_output_filepath,
+        )
+
         out.initialize_scens()  # write number scenario attributes: ditch depth,
         out.initialize_paras()  # write tree species, sfc
 
-        lat = self.weather_forcing["lat"].iloc[0]
-        lon = self.weather_forcing["lon"].iloc[
-            0
-        ]  # location of weather file, determines the simulation location
+        # The location of the weather file determines the simulation location
+        lat, lon = (
+            self.weather_forcing["lat"].iloc[0],
+            self.weather_forcing["lon"].iloc[0],
+        )
         print(
             "      - Weather input:",
             ", start:",
@@ -93,10 +95,10 @@ class Susi:
         print("      - Latitude:", lat, ", Longitude:", lon)
 
         stand = Stand(
-            len(self.parameters.site_parameters.ditch_depth_east),
-            n_simulation_years,
-            self.parameters.site_parameters.canopylayers,
-            self.parameters.site_parameters.n,
+            n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
+            n_yrs=n_simulation_years,
+            canopylayers=self.parameters.site_parameters.canopylayers,
+            n_cols=self.parameters.site_parameters.n,
             sfc=self.parameters.site_parameters.sfc,
             agearr=self.parameters.site_parameters.age,
             mottifile=self.parameters.motti_file_parameters,
@@ -110,20 +112,19 @@ class Susi:
         out.initialize_canopy_layer("under")
 
         out.write_paras(
-            self.parameters.site_parameters.sfc,
-            stand.dominant.tree_species,
-            stand.subdominant.tree_species,
-            stand.under.tree_species,
+            sfc=self.parameters.site_parameters.sfc,
+            dominant_sp=stand.dominant.tree_species,
+            subdominant_sp=stand.subdominant.tree_species,
+            under_sp=stand.under.tree_species,
         )
 
-        print_site_description(
-            self.parameters.site_parameters
-        )  # Describe site parameters for user
+        # describe site parameters for user
+        susi_io.print_site_description(self.parameters.site_parameters)
 
         groundvegetation = Gvegetation(
-            self.parameters.site_parameters.n,
-            lat,
-            lon,
+            n=self.parameters.site_parameters.n,
+            lat=lat,
+            lon=lon,
             sfc=self.parameters.site_parameters.sfc,
             species=stand.dominant.species,
         )  # creates ground vegetation class
