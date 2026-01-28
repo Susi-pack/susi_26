@@ -5,6 +5,8 @@ __pycache__/
 outputs/
 .spyproject/
 .python-version
+.spyproject/config/workspace.ini
+
 requirements_inaki.txt
 
 golden_file_test/susi.nc
