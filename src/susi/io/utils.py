@@ -17,7 +17,8 @@ def get_project_root() -> Path:
 
 
 def datetime_format() -> str:
-    return "%Y-%m-%d_%H:%M:%S"
+    #return "%Y-%m-%d_%H:%M:%S"
+    return "%Y-%m-%d_%H.%M.%S"
 
 
 def generate_current_datetime_stamp() -> str:
