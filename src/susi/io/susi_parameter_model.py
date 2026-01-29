@@ -25,6 +25,7 @@ from susi.io.extra_pydantic_types import (
 def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
     """
     Pitkänen et al. 2012 Forest Ecology and Management 284 (2012) 100–106
+    mass of humus layer in kg m-2
     """
     return 1.616 * np.log(drain_age) - 1.409
 
@@ -32,6 +33,9 @@ def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
 def h_mor_from_drainage_and_mass_mor_Pitkanen(
     drain_age: float, rho_mor: float
 ) -> float:
+    """
+    Depth of humus layer (in meters) from the hmuslayer mass (in kg m-2)
+    """
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
