@@ -65,42 +65,38 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
 
 
 # %% Run SUSI
-forc = read_FMI_weather(
-    ID=0,
-    start_date=golden_test.PARAMETERS.simulation_config.start_date,
-    end_date=golden_test.PARAMETERS.simulation_config.end_date,
-    sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
-)
-
-project_root_path = _app_settings.project_root_path
-GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
-NEW_SUSI_NETCDF_FOLDER_PATH = project_root_path / Path("golden_file_test")
-
-# Initiate susi parameters
-simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH),
-    susi_params=golden_test.PARAMETERS,
-)
 
 
-susi = Susi(
-    simulation_parameters=simulation_parameters,
-)
+def test_golden_susi():
+    forc = read_FMI_weather(
+        ID=0,
+        start_date=golden_test.PARAMETERS.simulation_config.start_date,
+        end_date=golden_test.PARAMETERS.simulation_config.end_date,
+        sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
+    )
 
-# Run susi
-susi.run()
+    project_root_path = _app_settings.project_root_path
+    GOLDEN_NETCDF_FILE_PATH = project_root_path / Path(
+        "tests/golden_file_test/golden_susi.nc"
+    )
+    NEW_SUSI_NETCDF_FOLDER_PATH = project_root_path / Path("tests/golden_file_test")
 
-# %% Check test
+    # Initiate susi parameters
+    simulation_parameters = SimulationParams(
+        metadata=SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH),
+        susi_params=golden_test.PARAMETERS,
+    )
 
+    susi = Susi(
+        simulation_parameters=simulation_parameters,
+    )
 
-test_passes = match_netcdf_files(
-    new_netcdf_filepath=simulation_parameters.metadata.netcdf_output_filepath,
-    golden_netcdf_filepath=GOLDEN_NETCDF_FILE_PATH,
-)
+    # Run susi
+    susi.run()
 
-if not test_passes:
-    raise ValueError("ERROR in the golden test!")
-else:
-    print("---------------------")
-    print("Golden test passed!")
-    print("---------------------")
+    test_passes = match_netcdf_files(
+        new_netcdf_filepath=simulation_parameters.metadata.netcdf_output_filepath,
+        golden_netcdf_filepath=GOLDEN_NETCDF_FILE_PATH,
+    )
+
+    assert test_passes
