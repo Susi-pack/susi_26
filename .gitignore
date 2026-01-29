@@ -6,6 +6,10 @@ venv/
 *.pyc
 __pycache__/
 .DS_Store
+outputs/
+.spyproject/*
+.python-version
+.spyproject/config/workspace.ini
 *.egg
 *.egg-info/
 
