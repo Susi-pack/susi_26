@@ -1,6 +1,8 @@
+from pyexpat import model
 import platform
 from pathlib import Path
 
+from functools import cached_property
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -8,6 +10,7 @@ from pydantic import (
     computed_field,
     field_validator,
     model_validator,
+    NewPath,
 )
 
 import susi.io.utils as io_utils
@@ -71,14 +74,14 @@ class SimulationMetaData(BaseModel):
         description="Info about who ran the simulations.",
     )
 
-    experiment_id: str | None = Field(
-        default=None,
-        description="A string that uniquely identifies each simulation experiment. If None, it is computed as a combination of the starting timestamp and a random number to avoid naame collisions.",
+    experiment_name: str = Field(
+        default="",
+        description="A name for the experiment. It defaults to the empty string. This field will be used to create the folder where Susi outputs are stored. Susi automatically attaches the starting date/time and a random string to each folder name to avoid name collisions.",
     )
 
     experiment_folder_path: Path | None = Field(
         default=None,
-        description="Directory Path for all simulation results: metadata, parameters, and netcdf file. If None (default), the folder is derived from the randomly generated experiment_id.",
+        description="Directory Path for all simulation results: metadata, parameters, and netcdf file. If None (default), the folder name is the same as experiment_id.",
     )
 
     @field_validator("metadata_output_filename", "parameter_output_filename")
@@ -93,22 +96,22 @@ class SimulationMetaData(BaseModel):
         does_filename_have_extension(filename=value, extension=".nc")
         return value
 
+    @computed_field
+    @cached_property  # computes experiment_id only once. Otherwise, we get different random strings in each call!
+    def experiment_id(self) -> str:
+        """
+        A string that uniquely identifies each simulation experiment. If None, it is computed as a combination of the starting timestamp and a random number to avoid naame collisions.
+        """
+        return io_utils.generate_experiment_ID(
+            experiment_name=self.experiment_name, datetime_stamp=self.timestamp_start
+        )
+
     @model_validator(mode="after")
-    def set_experiment_id_and_folder(self) -> "SimulationMetaData":
-        """Generate experiment_id from timestamp_start if not already set.
-        Also, set the experiment folder path if not given."""
-        # Compute experiment_id if missing
-        if self.experiment_id is None:
-            self.experiment_id = io_utils.generate_experiment_ID(
-                datetime_stamp=self.timestamp_start
-            )
-
-        # Compute experiment_folder_path if missing
+    def set_experiment_folder_path(self):
         if self.experiment_folder_path is None:
-            self.experiment_folder_path = (
-                _app_settings.output_folder / self.experiment_id
+            self.experiment_folder_path = _app_settings.output_folder.joinpath(
+                self.experiment_id
             )
-
         return self
 
     @computed_field
