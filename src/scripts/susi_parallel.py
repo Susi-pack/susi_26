@@ -34,7 +34,7 @@ def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParam
     # 2. Modify the Python dictionary. Here we choose to change the L parameter
     data["site_parameters"]["L"] = L_value
 
-    # 3. Validate the model so that you did not make a mistake
+    # 3. Validate the model to check that you did not make a mistake
     return SusiParams.model_validate(data)
 
 
