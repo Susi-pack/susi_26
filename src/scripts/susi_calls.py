@@ -10,10 +10,9 @@ from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData
 
-
 # read weather input
 simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(),
+    metadata=SimulationMetaData(experiment_name="scenario1"),
     susi_params=golden_test.PARAMETERS,
 )
 
