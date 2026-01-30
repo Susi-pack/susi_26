@@ -1,16 +1,26 @@
+# susi folders
+outputs/
+
+#python stuff
 venv/
 *.pyc
 __pycache__/
 .DS_Store
-outputs/
+*.egg
+*.egg-info/
+
+# Spyder stuff
 .spyproject/
-.python-version
 .spyproject/config/workspace.ini
+
+# uv stuff (not usefult since some are using pip)
+uv.lock
+.python-version
 
 requirements_inaki.txt
 
 golden_file_test/susi.nc
 analysis/.ipynb_checkpoints
 pyrightconfig.json
-src/susi_26.egg-info
 src/inputs/paroninkorpi/Stand_allometry/.~lock.susi_input_10.xlsx#
+mikko/to_run
