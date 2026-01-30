@@ -14,6 +14,8 @@ from pathlib import Path
 from os import listdir
 from os.path import isfile, join
 from susi.core.susi_main import Susi
+from susi.core.susi_utils import read_FMI_weather
+from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.core.thinning_models import (
     calculate_thinning_recommendation,
     ThinningRecommendation,
