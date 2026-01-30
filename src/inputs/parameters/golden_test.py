@@ -1,3 +1,8 @@
+# The parameters contained in this file are the
+# parameters to replicate the default Susi simulation
+# from the original code.
+# The site parameters correspond to the "develop_scens" scenario
+
 import datetime
 
 from susi.io.app_settings import AppSettings
