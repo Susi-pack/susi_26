@@ -1,8 +1,0 @@
-LICENSE
-README.md
-pyproject.toml
-src/susi/__init__.py
-src/susi_26.egg-info/PKG-INFO
-src/susi_26.egg-info/SOURCES.txt
-src/susi_26.egg-info/dependency_links.txt
-src/susi_26.egg-info/top_level.txt
