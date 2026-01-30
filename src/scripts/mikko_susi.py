@@ -8,7 +8,11 @@ from netCDF4 import Dataset
 from susi.core.susi_main import Susi
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.allometric_road_map import Growth_and_Yield_Table
+<<<<<<< HEAD
 from susi.core.thinning_models import calculate_thinning_recommendation
+=======
+from susi.thinning_models import calculate_thinning_recommendation
+>>>>>>> 435698c (rebased agains main)
 from scipy.optimize import root_scalar
 from shapely.geometry import Polygon, mapping
 from rasterio.mask import mask
