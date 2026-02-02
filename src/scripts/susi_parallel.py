@@ -19,7 +19,8 @@ cli_args = parser.parse_args()
 # %% Create the scenarios
 
 
-# This is the best way I found to create multiple parameter models based on one:
+# This is the best way I found to create multiple parameter models based on one.
+# There are some more here: https://github.com/pydantic/pydantic/discussions/3352
 # First, define a function to be able to do this repeatedly
 def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParams:
     """
@@ -74,5 +75,5 @@ def run_susi(simulation_parameters: SimulationParams) -> None:
 
 # %% Execute parallel processing
 
-pool = Pool(processes=execution_config.n_parallel_processes)
-pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
+with Pool(processes=execution_config.n_parallel_processes) as pool:
+    pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
