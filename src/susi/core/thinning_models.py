@@ -6,6 +6,7 @@ Created on 5th November 2025
 """
 
 import numpy as np
+from dataclasses import dataclass
 
 """ THINNING MODELS """
 # Source: https://api.metsanhoidonsuositukset.fi/v2/docs/#/Thinning%20Model/get_thinning_models_search
@@ -365,7 +366,15 @@ def extract_parameters(parameters, param_type):
             }
 
 
-def calculate_thinning_recommendation(region, soil, fertility_class, main_sp, H_dom):
+@dataclass
+class ThinningRecommendation:
+    BA_limit: float
+    BA_recommendation: float
+
+
+def calculate_thinning_recommendation(
+    region, soil, fertility_class, main_sp, H_dom
+) -> ThinningRecommendation | None:
     parameters = find_matching_parameters(region, soil, fertility_class, main_sp, H_dom)
     if len(parameters) > 0:
         thinningLimit = extract_parameters(parameters, "thinningLimit")
@@ -378,6 +387,8 @@ def calculate_thinning_recommendation(region, soil, fertility_class, main_sp, H_
         BA_recommendation = thinningRecommendation["b0"] + thinningRecommendation[
             "b1"
         ] * (1 - np.exp(-1 * np.power(0.1 * H_dom, thinningRecommendation["b2"])))
-        return round(BA_limit, 2), round(BA_recommendation, 2)
+        return ThinningRecommendation(
+            BA_limit=round(BA_limit, 2), BA_recommendation=round(BA_recommendation, 2)
+        )
     else:
-        return None, None
+        return None
