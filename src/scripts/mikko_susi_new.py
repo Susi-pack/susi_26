@@ -9,6 +9,7 @@ import rasterio
 import datetime
 import xmltodict
 
+from multiprocessing import Pool
 from netCDF4 import Dataset
 from pathlib import Path
 from os import listdir
@@ -16,7 +17,10 @@ from os.path import isfile, join
 from susi.core.susi_main import Susi
 from susi.core.susi_utils import read_FMI_weather
 from susi.core.allometric_road_map import Growth_and_Yield_Table
-from susi.core.thinning_models import calculate_thinning_recommendation
+from susi.core.thinning_models import (
+    calculate_thinning_recommendation,
+    ThinningRecommendation,
+)
 from scipy.optimize import root_scalar
 from shapely.geometry import Polygon, mapping
 from rasterio.mask import mask
@@ -213,7 +217,7 @@ def read_initial_dominant_stand_age_from_allometry_file(
 
 def should_implement_thinning(
     base_scenario_results, susi_params: SusiParams, G_1, G_2, yr
-) -> (bool, float):
+) -> float | None:
     species = "pine" if G_1 >= G_2 else "spruce"
     if susi_params.site_parameters.site_fertility_class <= 2:
         species = "spruce"
@@ -227,21 +231,23 @@ def should_implement_thinning(
         main_sp=species,
         H_dom=base_scenario_results["hdom"][yr],
     )
-    if thinning_guidelines == (None, None):
-        print(
-            f"No thinning at year {yr}, as dominant height ({base_scenario_results['hdom'][yr]:.1f} m) outside the thinning model range."
-        )
-        return (False, 0.0)
-    elif base_scenario_results["ba"][yr] < thinning_guidelines[1]:
-        print(
-            f"No thinning at year {yr}, as basal area ({base_scenario_results['ba'][yr]:.1f} m2/ha) below the thinning limit ({thinning_guidelines[1]:.1f} m2/ha)."
-        )
-        return (False, 0.0)
-    else:
-        print(
-            f"Thinning possible at year {yr}, basal area from {base_scenario_results['ba'][yr]:.1f} m2/ha to {thinning_guidelines[0]:.1f} m2/ha."
-        )
-        return (True, thinning_guidelines[0])
+    match thinning_guidelines:
+        case None:
+            print(
+                f"No thinning at year {yr}, as dominant height ({base_scenario_results['hdom'][yr]:.1f} m) outside the thinning model range."
+            )
+            return None
+        case ThinningRecommendation():
+            if base_scenario_results["ba"][yr] < thinning_guidelines.BA_recommendation:
+                print(
+                    f"No thinning at year {yr}, as basal area ({base_scenario_results['ba'][yr]:.1f} m2/ha) below the thinning limit ({thinning_guidelines.BA_recommendation:.1f} m2/ha)."
+                )
+                return None
+            else:
+                print(
+                    f"Thinning possible at year {yr}, basal area from {base_scenario_results['ba'][yr]:.1f} m2/ha to {thinning_guidelines.BA_limit:.1f} m2/ha."
+                )
+                return thinning_guidelines.BA_limit
 
 
 def prepare_susi_params(
@@ -258,7 +264,8 @@ def prepare_susi_params(
     )
 
     experiment_folder_path = (
-        AppSettings().output_folder / f"base_scenario_{stand_number}_{scenario}"
+        AppSettings().output_folder
+        / f"paroninkorpi/base_scenario_{stand_number}{scenario}"
     )
 
     start_date = datetime.datetime(2005, 1, 1)
@@ -273,6 +280,13 @@ def prepare_susi_params(
     else:
         ditch_depth_east = ditch_depth
         ditch_depth_20y_east = get_ditch_shallowing(ditch_depth, time=20)
+
+    if fertility_class > 4:
+        peat_types = [PeatTypes.sphagnum] * 8
+        rho_mor = 80.0
+    else:
+        peat_types = [PeatTypes.generic] * 8
+        rho_mor = 85.0
 
     return SimulationParams(
         metadata=SimulationMetaData(
@@ -323,7 +337,7 @@ def prepare_susi_params(
                 drain_age=30.0,
                 initial_h=-0.2,
                 slope=0.0,
-                peat_type=[PeatTypes.generic] * 8,
+                peat_type=peat_types,
                 peat_type_bottom=[PeatTypes.generic],
                 anisotropy=10.0,
                 vonP=True,
@@ -337,7 +351,7 @@ def prepare_susi_params(
                 enable_peattop=True,
                 enable_peatmiddle=True,
                 enable_peatbottom=True,
-                rho_mor=85.0,
+                rho_mor=rho_mor,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_yr=2200,  # out of the simulation period
                 cutting_to_ba=12,
@@ -370,6 +384,8 @@ def create_thinning_parameters(
     and returns a fully validated model.
     """
 
+    scenario_name = f"{scen}_thinning_at_yr_{cutting_yr}"
+
     # Get parameters of the base model into a Python dictionary
     params = base_params.model_dump(exclude_computed_fields=True)
 
@@ -377,22 +393,72 @@ def create_thinning_parameters(
     params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
     params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
 
-    params["susi_params"]["site_parameters"]["scenario_name"] = [
-        f"{scen}_thinning_at_yr_{cutting_yr}"
-    ]
+    params["susi_params"]["site_parameters"]["scenario_name"] = [scenario_name]
 
-    params["metadata"]["netcdf_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "thinning.nc"
-    )
-    params["metadata"]["metadata_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "metadata_thinning.json"
-    )
-    params["metadata"]["parameter_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "params_thinning.json"
-    )
+    params["metadata"]["netcdf_output_filename"] = f"{scenario_name}.nc"
+    params["metadata"]["metadata_output_filename"] = f"metadata_{scenario_name}.json"
+    params["metadata"]["parameter_output_filename"] = f"params_{scenario_name}.json"
 
     # Validate the model to check that you did not make a mistake
     return SimulationParams.model_validate(params)
+
+
+# %% Run function
+
+
+def run(simulation_parameters: SimulationParams) -> None:
+    """
+    Logic:
+    1. Run Susi once for each base scenario.
+    2. From the results of the simulation, evaluate if thinning is possible or not
+    3. If thinning is possible, re-run Susi with thinning
+    """
+    # Initiate susi class
+    susi = Susi(simulation_parameters)
+
+    # Create output folder where results go
+    susi.create_output_folder()
+
+    # Run simulation
+    susi.run()
+
+    # Save stuff
+    susi.write_params_and_metadata()
+
+    # Load results
+    base_scenario_results = get_ncf_outputs(
+        simulation_parameters.metadata.netcdf_output_filepath
+    )
+
+    # Study thinning alternatives:
+    # TODO: G_1 and G_2 are placeholder values right now.
+    # Change with actual values once we get the data.
+    G_1 = 4
+    G_2 = 2
+
+    for yr in range(0, 20, 5):
+        ba_to_cut = should_implement_thinning(
+            base_scenario_results=base_scenario_results,
+            susi_params=simulation_parameters.susi_params,
+            G_1=G_1,
+            G_2=G_2,
+            yr=yr,
+        )
+        if ba_to_cut is not None:
+            thinning_parameters = create_thinning_parameters(
+                base_params=simulation_parameters,
+                cutting_yr=int(
+                    simulation_parameters.susi_params.simulation_config.start_date.year
+                    + yr
+                ),
+                cutting_to_ba=ba_to_cut,
+            )
+
+            susi = Susi(thinning_parameters)
+
+            susi.run()
+
+            susi.write_params_and_metadata()
 
 
 # %% Get pre-computed allometry files from folder
@@ -406,7 +472,6 @@ def list_all_files_in_directory(dir: Path) -> list[Path | str]:
 
 
 allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH)
-
 
 # %% Create params for all base scenario Susi runs
 
@@ -447,74 +512,12 @@ for stand_number in stand_numbers:
         )
 
         all_parameters.append(susi_params)
-
+# %% Execute parallel processing
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
     n_parallel_processes=6,
 )
-
-# %% Run function
-
-
-def run(simulation_parameters: SimulationParams) -> None:
-    """
-    Logic:
-    1. Run Susi once for each base scenario.
-    2. From the results of the simulation, evaluate if thinning is possible or not
-    3. If thinning is possible, re-run Susi with thinning
-    """
-    # Initiate susi class
-    susi = Susi(simulation_parameters)
-
-    # Create output folder where results go
-    susi.create_output_folder()
-
-    # Run simulation
-    susi.run()
-
-    # Save stuff
-    susi.write_params_and_metadata()
-
-    # Load results
-    base_scenario_results = get_ncf_outputs(
-        simulation_parameters.metadata.netcdf_output_filepath
-    )
-
-    # Study thinning alternatives:
-    # TODO: G_1 and G_2 are placeholder values right now.
-    # Change with actual values once we get the data.
-    G_1 = 4
-    G_2 = 2
-
-    for yr in range(0, 20, 5):
-        is_thinning, thinning_guidelines_0 = should_implement_thinning(
-            base_scenario_results=base_scenario_results,
-            susi_params=simulation_parameters.susi_params,
-            G_1=G_1,
-            G_2=G_2,
-            yr=yr,
-        )
-        if is_thinning:
-            thinning_parameters = create_thinning_parameters(
-                base_params=simulation_parameters,
-                cutting_yr=int(
-                    simulation_parameters.susi_params.simulation_config.start_date.year
-                    + yr
-                ),
-                cutting_to_ba=thinning_guidelines_0,
-            )
-
-            susi = Susi(thinning_parameters)
-
-            susi.run()
-
-            susi.write_params_and_metadata()
-
-
-# %% Execute parallel processing
-
-from multiprocessing import Pool
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
     pool.map(func=run, iterable=execution_config.simulation_parameter_list)
