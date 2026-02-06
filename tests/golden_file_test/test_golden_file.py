@@ -13,6 +13,8 @@ from pathlib import Path
 
 import netCDF4
 import numpy as np
+import shutil
+
 
 from susi.io.execution_config import SimulationParams
 from susi.io import netcdf_utils
@@ -68,24 +70,26 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
 
 
 def test_golden_susi():
-    forc = read_FMI_weather(
-        ID=0,
-        start_date=golden_test.PARAMETERS.simulation_config.start_date,
-        end_date=golden_test.PARAMETERS.simulation_config.end_date,
-        sourcefile=golden_test.PARAMETERS.weather_parameters.FMI_weather_filepath,
-    )
-
     project_root_path = _app_settings.project_root_path
     GOLDEN_NETCDF_FILE_PATH = project_root_path / Path(
-        "golden_file_test/golden_susi.nc"
+        "tests/golden_file_test/golden_susi.nc"
     )
-    NEW_SUSI_EXPERIMENT_FOLDER_PATH = project_root_path / Path("golden_file_test")
+    NEW_SUSI_EXPERIMENT_FOLDER_PATH = project_root_path / Path("tests/golden_file_test")
+
+    new_golden_output_folder_name = "golden_file_new_experiment"
+
+    # Remove previous golden test output folder if exists
+    new_golden_output_folderpath = (
+        NEW_SUSI_EXPERIMENT_FOLDER_PATH / new_golden_output_folder_name
+    )
+    if new_golden_output_folderpath.is_dir():
+        shutil.rmtree(new_golden_output_folderpath)
 
     # Initiate susi parameters
     simulation_parameters = SimulationParams(
         metadata=SimulationMetaData(
             parent_output_folder=NEW_SUSI_EXPERIMENT_FOLDER_PATH,
-            experiment_id="golden_file_new_experiment",
+            experiment_id=new_golden_output_folder_name,
         ),
         susi_params=golden_test.PARAMETERS,
     )

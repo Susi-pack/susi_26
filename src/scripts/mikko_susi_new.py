@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import rasterio
 import datetime
-import xmltodict
 
 from multiprocessing import Pool
 from netCDF4 import Dataset
@@ -15,8 +14,6 @@ from pathlib import Path
 from os import listdir
 from os.path import isfile, join
 from susi.core.susi_main import Susi
-from susi.core.susi_utils import read_FMI_weather
-from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.core.thinning_models import (
     calculate_thinning_recommendation,
     ThinningRecommendation,
@@ -24,7 +21,6 @@ from susi.core.thinning_models import (
 from scipy.optimize import root_scalar
 from shapely.geometry import Polygon, mapping
 from rasterio.mask import mask
-from pyproj import Transformer
 
 from susi.io.app_settings import AppSettings
 
@@ -264,8 +260,7 @@ def prepare_susi_params(
     )
 
     experiment_folder_path = (
-        AppSettings().output_folder
-        / f"paroninkorpi/base_scenario_{stand_number}{scenario}"
+        AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
     )
 
     start_date = datetime.datetime(2005, 1, 1)
@@ -290,7 +285,7 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_name=scenario, experiment_folder_path=experiment_folder_path
+            experiment_id=scenario, parent_output_folder=experiment_folder_path
         ),
         susi_params=SusiParams(
             weather_parameters=WeatherParams(
@@ -332,7 +327,7 @@ def prepare_susi_params(
                 ditch_depth_west=[ditch_depth],
                 ditch_depth_east=[ditch_depth_east],
                 ditch_depth_20y_west=[get_ditch_shallowing(ditch_depth, time=20)],
-                ditch_depth_20y_east=[ditch_depth_east],
+                ditch_depth_20y_east=[ditch_depth_20y_east],
                 scenario_name=[scenario],
                 drain_age=30.0,
                 initial_h=-0.2,
@@ -384,8 +379,6 @@ def create_thinning_parameters(
     and returns a fully validated model.
     """
 
-    scenario_name = f"{scen}_thinning_at_yr_{cutting_yr}"
-
     # Get parameters of the base model into a Python dictionary
     params = base_params.model_dump(exclude_computed_fields=True)
 
@@ -393,11 +386,9 @@ def create_thinning_parameters(
     params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
     params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
 
-    params["susi_params"]["site_parameters"]["scenario_name"] = [scenario_name]
-
-    params["metadata"]["netcdf_output_filename"] = f"{scenario_name}.nc"
-    params["metadata"]["metadata_output_filename"] = f"metadata_{scenario_name}.json"
-    params["metadata"]["parameter_output_filename"] = f"params_{scenario_name}.json"
+    params["susi_params"]["site_parameters"]["scenario_name"] = [
+        f"thinning_at_yr_{cutting_yr}"
+    ]
 
     # Validate the model to check that you did not make a mistake
     return SimulationParams.model_validate(params)
