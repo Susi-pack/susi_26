@@ -1,8 +1,5 @@
 import json
-import random
-import string
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 
@@ -14,23 +11,6 @@ def get_project_root() -> Path:
         if (parent / "pyproject.toml").exists():
             return parent
     raise FileNotFoundError("Could not find project root")
-
-
-def datetime_format() -> str:
-    return "%Y-%m-%d_%H.%M.%S"
-
-
-def generate_current_datetime_stamp() -> str:
-    return datetime.now().strftime(datetime_format())
-
-
-def random_id_generator(size) -> str:
-    characters = string.ascii_uppercase + string.digits
-    return "".join(random.choice(characters) for _ in range(size))
-
-
-def generate_experiment_ID(experiment_name: str, datetime_stamp: str) -> str:
-    return datetime_stamp + "_" + random_id_generator(size=8) + "_" + experiment_name
 
 
 def create_folder(path: Path) -> None:

@@ -54,6 +54,9 @@ class Susi:
         print("           ")
         print("Initializing stand and site:")
 
+        # Create output folder for the simulation results.
+        self.create_output_folder()
+
         switches = {"Ojanen2010_2019": True}
 
         n_simulation_days = (

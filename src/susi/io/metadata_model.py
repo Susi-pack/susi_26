@@ -1,8 +1,7 @@
-from pyexpat import model
 import platform
 from pathlib import Path
-
-from functools import cached_property
+from typing_extensions import Self
+import datetime
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -11,6 +10,7 @@ from pydantic import (
     field_validator,
     model_validator,
     NewPath,
+    DirectoryPath,
 )
 
 import susi.io.utils as io_utils
@@ -28,6 +28,16 @@ def does_filename_have_extension(filename: str, extension: str) -> None:
 class SimulationMetaData(BaseModel):
     model_config = ConfigDict(
         validate_default=True,  # validate default values
+        extra="forbid",
+    )
+
+    experiment_id: str = Field(
+        description="A name that identifies the simulation experiment. This will be the name of the folder where Susi outputs are stored. The full path of `parent_output_folder` / `experiment_id` must not exist: otherwise we would be overwriting previous simulations' results.",
+    )
+
+    parent_output_folder: DirectoryPath = Field(
+        default=_app_settings.output_folder,
+        description="The directory where the output of the Susi simulation will be stored.",
     )
 
     metadata_schema_version: int = 1
@@ -48,15 +58,15 @@ class SimulationMetaData(BaseModel):
         description="Name of the output netcdf file. Needs to have extension '.nc'. It will be stored inside the `experiment_folder_path`.",
     )
 
-    timestamp_start: str = Field(
+    timestamp_start: datetime.datetime = Field(
         frozen=True,
-        default_factory=io_utils.generate_current_datetime_stamp,
+        default_factory=datetime.datetime.now,
         description="Initial timestamp. (Technically, it takes the timestamp at the time the current class is created).",
     )
 
-    timestamp_end: str = Field(
+    timestamp_end: datetime.datetime = Field(
         init=False,
-        default=str(),
+        default_factory=datetime.datetime.now,
         description="Final timestamp, recorded when the metadata dumping is done.",
     )
 
@@ -74,16 +84,6 @@ class SimulationMetaData(BaseModel):
         description="Info about who ran the simulations.",
     )
 
-    experiment_name: str = Field(
-        default="",
-        description="A name for the experiment. It defaults to the empty string. This field will be used to create the folder where Susi outputs are stored. Susi automatically attaches the starting date/time and a random string to each folder name to avoid name collisions.",
-    )
-
-    experiment_folder_path: Path | None = Field(
-        default=None,
-        description="Directory Path for all simulation results: metadata, parameters, and netcdf file. If None (default), the folder name is the same as experiment_id.",
-    )
-
     @field_validator("metadata_output_filename", "parameter_output_filename")
     @classmethod
     def check_json_extension(cls, value: str) -> str:
@@ -97,22 +97,12 @@ class SimulationMetaData(BaseModel):
         return value
 
     @computed_field
-    @cached_property  # computes experiment_id only once. Otherwise, we get different random strings in each call!
-    def experiment_id(self) -> str:
+    @property
+    def experiment_folder_path(self) -> NewPath:
         """
-        A string that uniquely identifies each simulation experiment. If None, it is computed as a combination of the starting timestamp and a random number to avoid naame collisions.
+        Directory Path for Susi simulation results: metadata, parameters, and netcdf file. It is given by `parent_output_folder`/`experiment_id`. This path must not exists.
         """
-        return io_utils.generate_experiment_ID(
-            experiment_name=self.experiment_name, datetime_stamp=self.timestamp_start
-        )
-
-    @model_validator(mode="after")
-    def set_experiment_folder_path(self):
-        if self.experiment_folder_path is None:
-            self.experiment_folder_path = _app_settings.output_folder.joinpath(
-                self.experiment_id
-            )
-        return self
+        return self.parent_output_folder.joinpath(self.experiment_id)
 
     @computed_field
     @property
@@ -132,8 +122,16 @@ class SimulationMetaData(BaseModel):
         assert self.experiment_folder_path is not None
         return self.experiment_folder_path.joinpath(self.netcdf_output_filename)
 
+    @model_validator(mode="after")
+    def check_experiment_folder_path_does_not_exist(self) -> Self:
+        if self.experiment_folder_path.exists():
+            raise ValueError(
+                "A file or a directory with the same path as the new Susi experiment folder already exists. The new path must not exist."
+            )
+        return self
+
     def record_end_timestamp(self) -> None:
-        self.timestamp_end = io_utils.generate_current_datetime_stamp()
+        self.timestamp_end = datetime.datetime.now()
         return None
 
     def dump_json_to_file(self) -> None:

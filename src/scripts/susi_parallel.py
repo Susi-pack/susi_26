@@ -3,7 +3,6 @@ import argparse
 from multiprocessing import Pool
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
-from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData
@@ -19,7 +18,8 @@ cli_args = parser.parse_args()
 # %% Create the scenarios
 
 
-# This is the best way I found to create multiple parameter models based on one:
+# This is the best way I found to create multiple parameter models based on one.
+# There are some more here: https://github.com/pydantic/pydantic/discussions/3352
 # First, define a function to be able to do this repeatedly
 def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParams:
     """
@@ -34,7 +34,7 @@ def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParam
     # 2. Modify the Python dictionary. Here we choose to change the L parameter
     data["site_parameters"]["L"] = L_value
 
-    # 3. Validate the model so that you did not make a mistake
+    # 3. Validate the model to check that you did not make a mistake
     return SusiParams.model_validate(data)
 
 
@@ -46,10 +46,12 @@ short_strip = create_strip_scenarios(base_params=golden_test.PARAMETERS, L_value
 # Finally, create the list of parameters that will go into the susi simulation
 all_parameters = [
     SimulationParams(
-        metadata=SimulationMetaData(),
+        metadata=SimulationMetaData(experiment_id="short_strip"),
         susi_params=short_strip,
     ),
-    SimulationParams(metadata=SimulationMetaData(), susi_params=long_strip),
+    SimulationParams(
+        metadata=SimulationMetaData(experiment_id="long_strip"), susi_params=long_strip
+    ),
 ]
 
 execution_config = MultipleSusis(
@@ -62,9 +64,6 @@ def run_susi(simulation_parameters: SimulationParams) -> None:
     # Initiate susi class
     susi = Susi(simulation_parameters)
 
-    # Create output folder where results go
-    susi.create_output_folder()
-
     # Run simulation
     susi.run()
 
@@ -74,5 +73,5 @@ def run_susi(simulation_parameters: SimulationParams) -> None:
 
 # %% Execute parallel processing
 
-pool = Pool(processes=execution_config.n_parallel_processes)
-pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
+with Pool(processes=execution_config.n_parallel_processes) as pool:
+    pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
