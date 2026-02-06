@@ -46,7 +46,7 @@ class MultipleSusis(BaseModel):
             )
         return None
 
-    def _check_for_duplicated_params(self) -> None:
+    def _check_for_duplicated_susi_params(self) -> None:
         """
         We don't want to run two simulations with exactly the same parameters.
         This function checks for SUSI parameter duplicates in the list of runs.
@@ -64,10 +64,31 @@ class MultipleSusis(BaseModel):
             seen.add(serialized)
         return None
 
+    def _check_for_duplicated_experiment_folder_paths(self) -> None:
+        """
+        We don't want two Susi simulations to write outputs to the same folder,
+        for this would overwrite one with the other.
+        This function checks for output folder path parameter duplicates
+        in the metadatas of the list of runs.
+        """
+        seen = set()
+
+        for simulation_run in self.simulation_parameter_list:
+            experiment_folder_path = simulation_run.metadata.experiment_folder_path
+
+            if experiment_folder_path in seen:
+                raise ValueError("Duplicate experiment folder paths detected.")
+
+            else:
+                seen.add(experiment_folder_path)
+
+        return None
+
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
         self._check_not_more_processes_than_runs()
-        self._check_for_duplicated_params()
+        self._check_for_duplicated_susi_params()
+        self._check_for_duplicated_experiment_folder_paths()
 
         return self

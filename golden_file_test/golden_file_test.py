@@ -74,14 +74,16 @@ forc = read_FMI_weather(
 
 project_root_path = _app_settings.project_root_path
 GOLDEN_NETCDF_FILE_PATH = project_root_path / Path("golden_file_test/golden_susi.nc")
-NEW_SUSI_NETCDF_FOLDER_PATH = project_root_path / Path("golden_file_test")
+NEW_SUSI_EXPERIMENT_FOLDER_PATH = project_root_path / Path("golden_file_test")
 
 # Initiate susi parameters
 simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(experiment_folder_path=NEW_SUSI_NETCDF_FOLDER_PATH),
+    metadata=SimulationMetaData(
+        parent_output_folder=NEW_SUSI_EXPERIMENT_FOLDER_PATH,
+        experiment_id="golden_file_new_experiment",
+    ),
     susi_params=golden_test.PARAMETERS,
 )
-
 
 susi = Susi(
     simulation_parameters=simulation_parameters,
