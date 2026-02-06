@@ -3,7 +3,6 @@
 # One SUSI simulation is run per allometry file
 
 # %% imports
-from IPython.terminal.shortcuts.auto_match import parenthesis
 import numpy as np
 import pandas as pd
 import rasterio
@@ -15,8 +14,6 @@ from pathlib import Path
 from os import listdir
 from os.path import isfile, join
 from susi.core.susi_main import Susi
-from susi.core.susi_utils import read_FMI_weather
-from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.core.thinning_models import (
     calculate_thinning_recommendation,
     ThinningRecommendation,
@@ -478,59 +475,6 @@ all_parameters: list[SimulationParams] = []
 # We will simulate one stand for each allometry file
 stand_numbers = range(1, len(allometry_filepaths))
 for stand_number in stand_numbers:
-# %% Get pre-computed allometry files from folder
-ALLOMETRY_FILES_DIRECTORY_PATH:Path = AppSettings().input_folder / "paroninkorpi/Stand_allometry"
-
-    # Get parameters of the base model into a Python dictionary
-    params = base_params.model_dump(exclude_computed_fields=True)
-
-    # Modify the Python dictionary
-    params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
-    params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
-
-    params["susi_params"]["site_parameters"]["scenario_name"] = [
-        f"{scen}_thinning_at_yr_{cutting_yr}"
-    ]
-
-    params["metadata"]["netcdf_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "thinning.nc"
-    )
-    params["metadata"]["metadata_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "metadata_thinning.json"
-    )
-    params["metadata"]["parameter_output_filepath"] = (
-        base_params.metadata.experiment_folder_path / "params_thinning.json"
-    )
-
-    # Validate the model to check that you did not make a mistake
-    return SimulationParams.model_validate(params)
-
-
-# %% Get pre-computed allometry files from folder
-ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().input_folder / "paroninkorpi/Stand_allometry"
-)
-
-
-def list_all_files_in_directory(dir: Path) -> list[Path | str]:
-    return [join(dir, f) for f in sorted(listdir(dir)) if isfile(join(dir, f))]
-
-
-allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH)
-
-
-# %% Create params for all base scenario Susi runs
-
-# List of parameters that completely determine each Susi simulation
-all_parameters: list[SimulationParams] = []
-
-# We will simulate one stand for each allometry file
-stand_numbers = range(1, len(allometry_filepaths))
-for stand_number in stand_numbers:
-
-    PLACEHOLDER_DITCH_DEPTH = 0.1
-    ditch_depth = PLACEHOLDER_DITCH_DEPTH
-
     # TODO: Change the placeholder with the following when I get the lidar raster file
     # Drainage attributes:
     # ditch_depth = lidar_ditch_depth(
@@ -673,117 +617,3 @@ with Pool(processes=execution_config.n_parallel_processes) as pool:
 #     df_results.to_excel(f"{base_folder}{area_name}_simulation_results.xlsx", index=False)
 #     print()
 #     print(f"Simulation results saved to {base_folder}{area_name}_simulation_results.xlsx")
-        # wpara, cpara, org_para, spara, outpara, photopara = get_susi_para(
-        #     wlocation="undefined",
-        #     peat=site,
-        #     folderName=folderName,
-        #     hdomSim=None,
-        #     ageSim=ageSim,
-        #     sarkaSim=sarkaSim,
-        #     sfc=sfc,
-        #     n=n,
-        # )
-        # spara = initialize_SUSI(spara, ditch_depth, scen)
-
-        susi_params = prepare_susi_params(spara, stand_number=stand_number, allometry_files_directory_path=ALLOMETRY_FILES_DIRECTORY_PATH, ditch_depth=ditch_depth, fertility_class=fertility_class, scen)
-
-        outpara["netcdf"] = f"{area_name}_StandNumber_{stand_numbers}{scen}.nc"
-
-
-        print(
-            f"Simulation period {start_yr}-{end_yr}. Initial ditch depth {ditch_depth} m, and after {end_yr - start_yr + 1} years {get_ditch_shallowing(ditch_depth, 20)} m."
-        )
-        print()
-
-        print("#######################")
-        print("###### CALL SUSI ######")
-        print("#######################")
-        print()
-
-
-        susi = Susi()
-
-        susi.run_susi(
-            forc,
-            wpara,
-            cpara,
-            org_para,
-            spara,
-            outpara,
-            photopara,
-            start_yr,
-            end_yr,
-            wlocation="undefined",
-            mottifile=mottifile,
-            peat="other",
-            photosite="All data",
-            folderName=folderName,
-            ageSim=ageSim,
-            sarkaSim=sarkaSim,
-            sfc=sfc,
-        )
-
-        all_parameters.append(susi_params)
-
-
-execution_config = MultipleSusis(
-    simulation_parameter_list=all_parameters,
-    n_parallel_processes=6,
-)
-
-# %% Run function
-
-
-def run(simulation_parameters: SimulationParams) -> None:
-    """
-    Logic:
-    1. Run Susi once for each base scenario.
-    2. From the results of the simulation, evaluate if thinning is possible or not
-    3. If thinning is possible, re-run Susi with thinning
-    """
-    # Initiate susi class
-    susi = Susi(simulation_parameters)
-
-    # Create output folder where results go
-    susi.create_output_folder()
-
-    # Run simulation
-    susi.run()
-
-    # Save stuff
-    susi.write_params_and_metadata()
-
-    # Load results
-    base_scenario_results = get_ncf_outputs(
-        simulation_parameters.metadata.netcdf_output_filepath
-    )
-
-    # Study thinning alternatives:
-    # TODO: G_1 and G_2 are placeholder values right now.
-    # Change with actual values once we get the data.
-    G_1 = 4
-    G_2 = 2
-
-    for yr in range(0, 20, 5):
-        is_thinning, thinning_guidelines_0 = should_implement_thinning(
-            base_scenario_results=base_scenario_results,
-            susi_params=simulation_parameters.susi_params,
-            G_1=G_1,
-            G_2=G_2,
-            yr=yr,
-        )
-        if is_thinning:
-            thinning_parameters = create_thinning_parameters(
-                base_params=simulation_parameters,
-                cutting_yr=int(
-                    simulation_parameters.susi_params.simulation_config.start_date.year
-                    + yr
-                ),
-                cutting_to_ba=thinning_guidelines_0,
-            )
-
-            susi = Susi(thinning_parameters)
-
-    df_results.to_excel(f"{base_folder}{area_name}_simulation_results.xlsx", index=False)
-    print()
-    print(f"Simulation results saved to {base_folder}{area_name}_simulation_results.xlsx")
