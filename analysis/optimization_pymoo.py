@@ -1,16 +1,15 @@
 # %%
+import numpy as np
+from pymoo.core.problem import ElementwiseProblem
 from pathlib import Path
-import datetime
 import netCDF4
-import xarray as xr
 import pandas as pd
-from typing import NewType
 
 import susi.io.utils as io_utils
-from susi.io import netcdf_utils
 from susi.io.app_settings import AppSettings
 
-# %%
+# %% Get data
+
 
 app_settings = AppSettings()
 
@@ -79,45 +78,49 @@ def load_all_metadatas_from_folder(
 # %% Load parameter metadata
 OUTPUT_FOLDER = app_settings.output_folder / "paroninkorpi"
 
+
+# TODO: thinning.nc have not been added yet. Maybe put them in a separate folder?
 df = load_all_metadatas_from_folder(folder=OUTPUT_FOLDER)
-
-# %% Read netcdf data with xarray into single array (Not complete yet)
-# Example: get all _partialblocking scenarios
-
-partialblocking_paths = [
-    p.joinpath("susi.nc")
-    for p in OUTPUT_FOLDER.glob("*")
-    if "partialblocking" in str(p)
-]
-
-xr.open_mfdataset(paths=partialblocking_paths, decode_times=False)
-
-# %% Query and filter as desired
-# Example: get all _partialblocking
-df = df[df["experiment_id"].str.contains("partialblocking")]
-
 
 # %% Read ncdf data into python dictionary with netcdf
 
-# Netcdf data is saved in a dictionary where the experimentID is the key.
+# Netcdf data is saved in a dictionary where the experiment folder path is the key.
 data = {}
 
 for _, experiment_info in df.iterrows():
     netcdf_filepath = Path(experiment_info["netcdf_output_filepath"])
-    data[experiment_info["experiment_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
+    data[experiment_info["experiment_folder_path"]] = netCDF4.Dataset(
+        netcdf_filepath, "r"
+    )
 
 
-# %% Experimental widgets
+# %% read interesting variables
+def get_last_year_values(var: float) -> np.ndarray:
+    return var[:, -1, :]
 
 
-import ipywidgets
-from IPython.display import display
-
-output = ipywidgets.Output()
-
-experiment_ID_dropdown = ipywidgets.Dropdown(
-    options=sorted(list(data.keys())), description="Experiment ID"
-)
+def get_scenario_name_from_path(path: str) -> str:
+    return path.split("_")[-1]
 
 
-display(experiment_ID_dropdown)
+N_STANDS = 21
+
+data_per_stand = [{}] * N_STANDS
+for n_stand in range(0, N_STANDS):
+    keys_for_given_stand = [p for p in data.keys() if f"scenario_{n_stand + 1}" in p]
+    breakpoint()
+    data_per_stand[n_stand] = {
+        k: v for k, v in data.items() if k in keys_for_given_stand
+    }
+
+d = data["/home/txart/projects/hiket/susi_26/outputs/paroninkorpi/base_scenario_17_DNM"]
+
+stand_group = d.groups["stand"]
+volume = stand_group.variables["volume"][:]
+total_last_year_volume = np.sum(get_last_year_values(volume))
+
+soil_c_balance_co2eq = d.groups["balance"].groups["C"].variables["soil_c_balance_co2eq"]
+total_last_yeaar_soil_c_balance = np.sum(get_last_year_values(soil_c_balance_co2eq))
+
+
+# %% pymoo (not started yet)
