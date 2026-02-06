@@ -266,10 +266,10 @@ def prepare_susi_params(
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
-    fertilization_application_year = start_date.year if scen == "_fertilized" else 2200
+    fertilization_application_year = start_date.year if scen == "fertilized" else 2200
 
     # Partial blocking
-    if scen == "_partialblocking":
+    if scen == "partialblocking":
         ditch_depth_east = -0.10
         ditch_depth_20y_east = -0.10
     else:
@@ -382,13 +382,17 @@ def create_thinning_parameters(
     # Get parameters of the base model into a Python dictionary
     params = base_params.model_dump(exclude_computed_fields=True)
 
+    base_scenario_name = params["metadata"]["experiment_id"]
+
+    thinning_scenario_name = f"{base_scenario_name}_thinning_at_yr_{cutting_yr}"
+
     # Modify the Python dictionary
     params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
     params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
 
-    params["susi_params"]["site_parameters"]["scenario_name"] = [
-        f"thinning_at_yr_{cutting_yr}"
-    ]
+    params["susi_params"]["site_parameters"]["scenario_name"] = [thinning_scenario_name]
+
+    params["metadata"]["experiment_id"] = thinning_scenario_name
 
     # Validate the model to check that you did not make a mistake
     return SimulationParams.model_validate(params)
@@ -406,9 +410,6 @@ def run(simulation_parameters: SimulationParams) -> None:
     """
     # Initiate susi class
     susi = Susi(simulation_parameters)
-
-    # Create output folder where results go
-    susi.create_output_folder()
 
     # Run simulation
     susi.run()
@@ -486,12 +487,12 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
-        base_scenarios = ["", "_fertilized", "_partialblocking", "_DNM"]
+        base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
     else:
-        base_scenarios = ["", "_fertilized", "_partialblocking"]
+        base_scenarios = ["default", "fertilized", "partialblocking"]
 
     for scen in base_scenarios:
-        if scen == "_DNM":
+        if scen == "DNM":
             ditch_depth = -0.60
 
         susi_params = prepare_susi_params(
@@ -509,6 +510,7 @@ execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
     n_parallel_processes=6,
 )
+
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
     pool.map(func=run, iterable=execution_config.simulation_parameter_list)
