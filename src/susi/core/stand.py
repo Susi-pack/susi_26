@@ -626,17 +626,17 @@ class Stand:
         # print (area_modifyer)
         # print (self.dominant.stems + self.subdominant.stems + self.under.stems)
         # area_modifyer = 1
-
+       
+        # denominator ie. demand corrected 050226 
         nstat[0, :] = (N_supply * area_modifyer) / (
-            self.n_demand + self.basNdemand + groundvegetation.nup
+            self.n_demand + self.n_leaf_demand + groundvegetation.nup
         )
         nstat[1, :] = (P_supply * area_modifyer) / (
-            self.p_demand + self.basPdemand + groundvegetation.pup
+            self.p_demand + self.p_leaf_demand + groundvegetation.pup
         )
         nstat[2, :] = (K_supply * area_modifyer) / (
-            self.k_demand + self.basKdemand + groundvegetation.kup
+            self.k_demand + self.k_leaf_demand + groundvegetation.kup
         )
-
         minnstat = np.min(nstat, axis=0)
 
         tau = 3.0

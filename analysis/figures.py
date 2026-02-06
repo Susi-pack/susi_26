@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Tue Feb 15 17:37:58 2022
 
@@ -222,7 +221,8 @@ def stand(ff, scen):
 
     facecolor = '#f2f5eb'
     fs = 15
-    fig = plt.figure(num='stand', figsize=(15,18))   #width, height
+    #fig = plt.figure(num='stand', figsize=(15,18))   #width, height
+    fig = plt.figure(figsize=(15,18))   #width, height
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
   
     wt = np.mean(ncf['strip']['dwtyr'][scen,:, :], axis = 0)
@@ -560,7 +560,7 @@ def mass(ff, scen):
     ncf=Dataset(ff, mode='r')                                        # water netCDF, open in reading mode
     facecolor = '#f2f5eb'
     fs = 15
-    fig = plt.figure(num='peat', figsize=(15,18))   #width, height
+    fig = plt.figure(figsize=(15,18))   #width, height
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
   
     wt = np.mean(ncf['strip']['dwtyr'][scen,:, :], axis = 0)
@@ -949,7 +949,7 @@ def carbon(ff, scen):
     ncf=Dataset(ff, mode='r')                                        # water netCDF, open in reading mode
     facecolor = '#f2f5eb'
     fs = 15
-    fig = plt.figure(num='carbon', figsize=(15,18))   #width, height
+    fig = plt.figure(figsize=(15,18))   #width, height
     fig.suptitle('Carbon balance components', fontsize = fs+2)
     gs = gridspec.GridSpec(ncols=12, nrows=14, figure=fig, wspace=0.5, hspace=0.5)
     mass_to_c = 0.5
@@ -1066,7 +1066,7 @@ def nutrient_balance(ff, substance, scen):
     ncf=Dataset(ff, mode='r')                                        # water netCDF, open in reading mode
     facecolor = '#f2f5eb'
     fs = 15
-    fig = plt.figure(num=substance, figsize=(15,18))   #width, height
+    fig = plt.figure(figsize=(15,18))   #width, height
     tx = substance + ' balance components'
     fig.suptitle(tx, fontsize = fs+2)
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.5, hspace=0.5)

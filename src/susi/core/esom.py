@@ -46,7 +46,7 @@ class Esom:
                 "k2": 1.05,
                 "k6": 1.05,
             },  # modifiers for nutrient release in comparison to mass release
-            #'N':{'k1':0.1, 'k2': 0.5, 'k6':0.5},
+            #'N':{'k1':0.1, 'k2': 0.5, 'k6':0.5},                               #old version from ROMUL
             "N": {"k1": 0.1, "k2": 0.1, "k6": 0.125},
             #'P':{'k1':1.1, 'k2': 1.1, 'k6':1.0},
             "P": {"k1": 1.1, "k2": 0.45, "k6": 0.3},
