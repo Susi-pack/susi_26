@@ -1,5 +1,5 @@
 # %%
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, astuple
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pathlib import Path
@@ -142,7 +142,81 @@ class TargetVariables:
     soil_c_balance: float
 
 
-vars_of_interest_by_stand = [{} for _ in range(N_STANDS)]
+@dataclass
+class Scenario:
+    name: str  # DNM, default, fertilized, etc.
+    target_variables: TargetVariables
+
+
+# Container class to preserve both arrays and names
+@dataclass
+class ScenarioArrayData:
+    arrays: list[np.ndarray]  # One array per stand
+    scenario_names: list[list[str]]  # Names for each scenario in each stand
+
+
+def transform_list_of_scenarios_to_array_data(
+    vars_of_interest_by_stand: list[list[Scenario]], n_stands: int
+) -> ScenarioArrayData:
+    target_variables: list[np.ndarray] = []
+    scenario_names: list[list[str]] = []
+
+    number_of_target_variables = len(fields(TargetVariables))
+
+    for n_stand in range(n_stands):
+        vars_of_interest_for_stand = vars_of_interest_by_stand[n_stand]
+        number_of_scenarios = len(vars_of_interest_for_stand)
+
+        # Initialize the array that holds the variables' values
+        target_var = np.ones((number_of_scenarios, number_of_target_variables)) * np.nan
+        names_for_stand = []
+
+        for row, scenario in enumerate(vars_of_interest_for_stand):
+            # Convert dataclass to tuple automatically - works for any number of fields!
+            target_var[row, :] = astuple(scenario.target_variables)
+            names_for_stand.append(scenario.name)
+
+        # Check no field without filling
+        assert not np.isnan(target_var).any()
+
+        target_variables.append(target_var)
+        scenario_names.append(names_for_stand)
+
+    return ScenarioArrayData(arrays=target_variables, scenario_names=scenario_names)
+
+
+def transform_array_data_to_list_of_scenarios(
+    array_data: ScenarioArrayData, n_stands: int
+) -> list[list[Scenario]]:
+    vars_of_interest_by_stand: list[list[Scenario]] = []
+
+    # Get the field names from the dataclass
+    target_var_fields = [f.name for f in fields(TargetVariables)]
+
+    for n_stand in range(n_stands):
+        scenarios_for_stand = []
+
+        for row_idx, target_vars_of_stand in enumerate(array_data.arrays[n_stand]):
+            # Create TargetVariables using field names dynamically
+            target_vars_dict = {
+                field_name: target_vars_of_stand[i]
+                for i, field_name in enumerate(target_var_fields)
+            }
+
+            # Create Scenario object
+            scenario = Scenario(
+                name=array_data.scenario_names[n_stand][row_idx],
+                target_variables=TargetVariables(**target_vars_dict),
+            )
+            scenarios_for_stand.append(scenario)
+
+        vars_of_interest_by_stand.append(scenarios_for_stand)
+
+    return vars_of_interest_by_stand
+
+
+# Get vars of interest
+vars_of_interest_by_stand: list[list[Scenario]] = [[] for _ in range(0, N_STANDS)]
 
 for n_stand in range(N_STANDS):
     for scenario_name, netcdf_data in all_variables_by_stand[n_stand].items():
@@ -161,10 +235,30 @@ for n_stand in range(N_STANDS):
         )
 
         # Add to list
-        vars_of_interest_by_stand[n_stand][scenario_name] = TargetVariables(
-            volume=total_last_year_volume,
-            soil_c_balance=total_last_year_soil_c_balance,
+        vars_of_interest_by_stand[n_stand].append(
+            Scenario(
+                name=scenario_name,
+                target_variables=TargetVariables(
+                    volume=total_last_year_volume,
+                    soil_c_balance=total_last_year_soil_c_balance,
+                ),
+            )
         )
+# %% Transformation between data representations: list of scenarios to list of numpys
+# Usage example:
+# Forward transformation
+array_data = transform_list_of_scenarios_to_array_data(
+    vars_of_interest_by_stand, N_STANDS
+)
+
+# Now you have both arrays and names in one object
+arrays = array_data.arrays
+names = array_data.scenario_names
+
+# Reverse transformation
+reconstructed = transform_array_data_to_list_of_scenarios(array_data, N_STANDS)
+
+assert reconstructed == vars_of_interest_by_stand
 
 # TODO: read each interesting variable from netcdf file in the same loop.
 # Do so using a context manager.
