@@ -1,6 +1,5 @@
 # %%
 from pathlib import Path
-import datetime
 import netCDF4
 import xarray as xr
 import pandas as pd
@@ -77,9 +76,12 @@ def load_all_metadatas_from_folder(
 
 
 # %% Load parameter metadata
-OUTPUT_FOLDER = app_settings.output_folder / "paroninkorpi"
+for stand_n in range(1, 22):
+    stand_foldername = f"stand_{stand_n:02d}"
 
-df = load_all_metadatas_from_folder(folder=OUTPUT_FOLDER)
+    output_folder = app_settings.output_folder / "paroninkorpi" + stand_foldername
+
+    df = load_all_metadatas_from_folder(folder=output_folder)
 
 # %% Read netcdf data with xarray into single array (Not complete yet)
 # Example: get all _partialblocking scenarios
