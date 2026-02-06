@@ -1,0 +1,17 @@
+venv/
+*.pyc
+__pycache__/
+.DS_Store
+outputs/
+.spyproject/
+.python-version
+.spyproject/config/workspace.ini
+
+requirements_inaki.txt
+
+analysis/.ipynb_checkpoints
+pyrightconfig.json
+src/susi_26.egg-info
+src/inputs/paroninkorpi/Stand_allometry/.~lock.susi_input_10.xlsx#
+golden_file_test/golden_file_new_experiment/
+analysis/eyeballing.py
