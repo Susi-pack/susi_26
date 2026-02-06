@@ -261,15 +261,17 @@ def prepare_susi_params(
 
     experiment_folder_path = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
+        AppSettings().output_folder
+        / f"paroninkorpi/base_scenario_{stand_number}{scenario}"
     )
 
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
-    fertilization_application_year = start_date.year if scen == "fertilized" else 2200
+    fertilization_application_year = start_date.year if scenario == "fertilized" else 2200
 
     # Partial blocking
-    if scen == "partialblocking":
+    if scenario == "partialblocking":
         ditch_depth_east = -0.10
         ditch_depth_20y_east = -0.10
     else:
@@ -508,9 +510,8 @@ for stand_number in stand_numbers:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=7,
+    n_parallel_processes=6,
 )
-
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
     pool.map(func=run, iterable=execution_config.simulation_parameter_list)
