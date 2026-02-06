@@ -29,11 +29,11 @@ PARAMETERS = SusiParams(
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
-        end_date=datetime.datetime(2007, 12, 31),
+        end_date=datetime.datetime(2017, 12, 31),
     ),
     motti_file_parameters=MottiFileParams(
         path=_app_settings.input_folder,
-        dominant={1: "CF_41.xlsx"},
+        dominant={1: "CF_51.xlsx"},
         subdominant={0: "susi_motti_input_lyr_1.xlsx"},
         under={0: "susi_motti_input_lyr_2.xlsx"},
     ),
@@ -45,7 +45,7 @@ PARAMETERS = SusiParams(
     ),
     site_parameters=SiteParams(
         L=40.0,
-        initial_dominant_stand_age_years=100.0,
+        initial_dominant_stand_age_years=60.0,
         initial_subdominant_stand_age_years=0.0,
         initial_understorey_age_years=0.0,
         site_fertility_class=4,
@@ -81,13 +81,13 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_yr=2004,
+        cutting_yr=2204,
         cutting_to_ba=12,
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
         fertilization=FertilizationParameters(
-            application_year=2201,
+            application_year=2204,
             N=NutrientFertilizationParameters(
                 dose=0.0,
                 decay_k=0.5,
