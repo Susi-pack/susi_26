@@ -508,7 +508,7 @@ for stand_number in stand_numbers:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=6,
+    n_parallel_processes=7,
 )
 
 
