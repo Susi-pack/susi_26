@@ -1,13 +1,17 @@
 # %%
+from typing import Callable
+from fsspec.config import conf
 from dataclasses import dataclass, fields, astuple
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
 from pathlib import Path
 import netCDF4
 import pandas as pd
+from numba import jit
 
 import susi.io.utils as io_utils
 from susi.io.app_settings import AppSettings
+
 
 # %% Get data
 
@@ -100,12 +104,21 @@ for stand_n in range(0, N_STANDS):
 
     n_total_combinations *= n_scenarios
 
+# Make it immutable
+scenarios_cardinality = tuple(scenarios_cardinality)
+
 print("Number of scenarios for each stand:")
 print(scenarios_cardinality)
 print(f"Number of total combinations: {n_total_combinations:.2e}")
 
 
 # %% Read ncdf data into python dictionary with netcdf
+
+# TODO: read each interesting variable from netcdf file in the same loop.
+# Do so using a context manager.
+# Otherwise, the netcdf files stay open and consume too much memory.
+# So: with open file:
+#       get necessary vars into list of dicts (above called vars_of_interest_by_stand)
 
 
 def read_netcdf_files_for_stand(
@@ -251,8 +264,8 @@ array_data = transform_list_of_scenarios_to_array_data(
     vars_of_interest_by_stand, N_STANDS
 )
 
-# Now you have both arrays and names in one object
-arrays = array_data.arrays
+# We have both arrays and names in one object
+arrays: list[np.ndarray] = array_data.arrays
 names = array_data.scenario_names
 
 # Reverse transformation
@@ -260,11 +273,214 @@ reconstructed = transform_array_data_to_list_of_scenarios(array_data, N_STANDS)
 
 assert reconstructed == vars_of_interest_by_stand
 
-# TODO: read each interesting variable from netcdf file in the same loop.
-# Do so using a context manager.
-# Otherwise, the netcdf files stay open and consume too much memory.
-# So: with open file:
-#       get necessary vars into list of dicts (above called vars_of_interest_by_stand)
 
+# %% target function
+RANDOM_SEED = 42
+rng = np.random.default_rng(seed=RANDOM_SEED)
+
+
+def create_random_organism(scenarios_cardinality: tuple[int]) -> np.ndarray:
+    return np.array([rng.integers(low=0, high=m) for m in scenarios_cardinality])
+
+
+def create_random_population(
+    scenarios_cardinality: tuple[int], n_organisms: int
+) -> np.ndarray:
+    return np.stack(
+        [create_random_organism(scenarios_cardinality) for _ in range(n_organisms)]
+    )
+
+
+def target_function_for_single_organism(
+    configuration: np.ndarray,
+    arrays_of_vars_of_interest: list[np.ndarray],
+    number_of_target_variables: int,
+) -> np.ndarray:
+    chosen_vars = np.stack(
+        [arr[idx] for arr, idx in zip(arrays_of_vars_of_interest, configuration)]
+    )
+    assert chosen_vars.shape == (N_STANDS, number_of_target_variables)
+
+    return chosen_vars.sum(axis=0)
+
+
+def make_target_function_numba_version(
+    arrays_of_vars_of_interest: list[np.ndarray],
+    number_of_target_variables: int,
+    n_stands: int,
+) -> Callable:
+    """
+    This function is used to create a Numba function that only takes the current configuration.
+    The idea is to leverage the fact that array_of_vars_of_interest, number_of_target_variables and n_stands do not need to be recomputed each time: they can be known and fixed at compile time.
+    """
+    arrays_tuple = tuple(arrays_of_vars_of_interest)
+
+    @jit(nopython=True)
+    def target_function_for_single_organism(configuration: np.ndarray) -> np.ndarray:
+        # Pre-allocate the result array
+        chosen_vars = np.empty((n_stands, number_of_target_variables), dtype=np.float64)
+
+        # Fill the array manually instead of using list comprehension + stack
+        for i in range(n_stands):
+            chosen_vars[i] = arrays_tuple[i][configuration[i]]
+
+        return chosen_vars.sum(axis=0)
+
+    return target_function_for_single_organism
+
+
+def target_function_for_population(
+    configurations: np.ndarray,
+    arrays_of_vars_of_interest: list[np.ndarray],
+    number_of_target_variables: int,
+) -> np.ndarray:
+    return np.array(
+        [
+            target_function_for_single_organism(
+                config, arrays_of_vars_of_interest, number_of_target_variables
+            )
+            for config in configurations
+        ]
+    )
+
+
+number_of_target_variables = len(fields(TargetVariables))
+
+random_organism = create_random_organism(scenarios_cardinality)
+random_population = create_random_population(scenarios_cardinality, n_organisms=10)
+
+random_organism_fitness = target_function_for_single_organism(
+    configuration=random_organism,
+    arrays_of_vars_of_interest=arrays,
+    number_of_target_variables=number_of_target_variables,
+)
+random_population_fitness = target_function_for_population(
+    configurations=random_population,
+    arrays_of_vars_of_interest=arrays,
+    number_of_target_variables=number_of_target_variables,
+)
+
+# %% number of total candidates that can be evaluated per second
+# This helps to choose the right optimization algorithm
+import time
+
+start = time.time()
+
+N_ITER_TO_EVALUATE = int(1e5)
+
+for i in range(N_ITER_TO_EVALUATE):
+    random_organism = create_random_organism(scenarios_cardinality)
+
+    random_organism_fitness = target_function_for_single_organism(
+        configuration=random_organism,
+        arrays_of_vars_of_interest=arrays,
+        number_of_target_variables=number_of_target_variables,
+    )
+end = time.time()
+
+print(
+    f"Total runtime to evaluate {N_ITER_TO_EVALUATE} iterations without numba: {end - start} seconds."
+)
+
+
+# Numba time.
+# Run once to JIT function
+random_organism = create_random_organism(scenarios_cardinality)
+
+target_numba_function = make_target_function_numba_version(
+    arrays_of_vars_of_interest=arrays,
+    number_of_target_variables=number_of_target_variables,
+    n_stands=N_STANDS,
+)
+
+_ = target_numba_function(configuration=random_organism)
+
+# Now start timer
+start = time.time()
+
+for i in range(N_ITER_TO_EVALUATE):
+    random_organism = create_random_organism(scenarios_cardinality)
+
+    random_organism_fitness = target_numba_function(configuration=random_organism)
+end = time.time()
+
+print(
+    f"Total runtime to evaluate {N_ITER_TO_EVALUATE} iterations without numba: {end - start} seconds."
+)
 
 # %% pymoo (not started yet)
+# NOTE: pymoo was made for floats, not ints. Putting int values is cumbersome, although there are some tutorials in the docs.
+# Perhaps use DEAP instead?
+from pymoo.optimize import minimize
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.operators.sampling.rnd import IntegerRandomSampling
+from pymoo.operators.crossover.sbx import SBX
+from pymoo.operators.mutation.pm import PM
+from pymoo.operators.repair.rounding import RoundingRepair
+
+
+class MyProblem(Problem):
+    def __init__(
+        self,
+        arrays_of_vars_of_interest: list[np.ndarray],
+        n_target_variables: int,
+        scenarios_cardinality: tuple[int],
+    ):
+        super().__init__(
+            n_var=N_STANDS,
+            n_obj=n_target_variables,
+            xl=0,
+            xu=scenarios_cardinality,
+            vtype=int,
+        )
+
+        self.arrays_of_vars_of_interest = arrays_of_vars_of_interest
+        self.n_target_variables = n_target_variables
+
+    def _evaluate(self, x, out, *args, **kwargs):
+        out["F"] = target_function_for_population(
+            configurations=x,
+            arrays_of_vars_of_interest=self.arrays_of_vars_of_interest,
+            number_of_target_variables=self.n_target_variables,
+        )
+
+
+problem = MyProblem(
+    arrays_of_vars_of_interest=arrays,
+    n_target_variables=number_of_target_variables,
+    scenarios_cardinality=[
+        c - 1 for c in scenarios_cardinality
+    ],  # In pymoo, upper limits are inclusive. We need [0,4), not [0,4] for array indices
+)
+
+# pymoo was originally made for floats, but ints can still be used by
+# rounding floats into ints. I don't like this!
+# See the docs: https://pymoo.org/customization/discrete.html
+algorithm = NSGA2(
+    pop_size=100,
+    sampling=IntegerRandomSampling(),
+    crossover=SBX(prob=1.0, eta=3.0, vtype=float, repair=RoundingRepair()),
+    mutation=PM(prob=1.0, eta=3.0, vtype=float, repair=RoundingRepair()),
+    eliminate_duplicates=True,
+)
+
+res = minimize(
+    problem=problem,
+    algorithm=algorithm,
+    termination=("n_gen", 500),
+    seed=RANDOM_SEED,
+    verbose=True,
+)
+
+# %% Visualize solutions
+import matplotlib.pyplot as plt
+
+target_variable_names = [v.name for v in fields(TargetVariables)]
+
+plt.figure(figsize=(7, 5))
+plt.scatter(res.F[:, 0], res.F[:, 1], s=30, facecolors="none", edgecolors="blue")
+plt.xlabel(target_variable_names[0])
+plt.ylabel(target_variable_names[1])
+plt.title("Objective Space")
+plt.show()
