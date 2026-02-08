@@ -1,6 +1,5 @@
 # %%
 from typing import Callable
-from fsspec.config import conf
 from dataclasses import dataclass, fields, astuple
 import numpy as np
 from pymoo.core.problem import ElementwiseProblem
@@ -153,6 +152,7 @@ def get_scenario_name_from_path(path: str) -> str:
 class TargetVariables:
     volume: float
     soil_c_balance: float
+    dwtyr: float
 
 
 @dataclass
@@ -247,6 +247,10 @@ for n_stand in range(N_STANDS):
             get_last_year_values(soil_c_balance_co2eq)
         )
 
+        # Negative sign too
+        dwtyr = netcdf_data.groups["strip"].variables["dwtyr"][:]
+        average_last_year_dwtyr = -np.mean(get_last_year_values(dwtyr))
+
         # Add to list
         vars_of_interest_by_stand[n_stand].append(
             Scenario(
@@ -254,6 +258,7 @@ for n_stand in range(N_STANDS):
                 target_variables=TargetVariables(
                     volume=total_last_year_volume,
                     soil_c_balance=total_last_year_soil_c_balance,
+                    dwtyr=average_last_year_dwtyr,
                 ),
             )
         )
@@ -366,7 +371,7 @@ import time
 
 start = time.time()
 
-N_ITER_TO_EVALUATE = int(1e5)
+N_ITER_TO_EVALUATE = int(1e4)
 
 for i in range(N_ITER_TO_EVALUATE):
     random_organism = create_random_organism(scenarios_cardinality)
@@ -411,6 +416,8 @@ print(
 # %% pymoo (not started yet)
 # NOTE: pymoo was made for floats, not ints. Putting int values is cumbersome, although there are some tutorials in the docs.
 # Perhaps use DEAP instead?
+# Or write my own algo?
+
 from pymoo.optimize import minimize
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -468,19 +475,83 @@ algorithm = NSGA2(
 res = minimize(
     problem=problem,
     algorithm=algorithm,
-    termination=("n_gen", 500),
+    termination=("n_gen", 1000),
     seed=RANDOM_SEED,
     verbose=True,
 )
 
 # %% Visualize solutions
 import matplotlib.pyplot as plt
+from pymoo.visualization.scatter import Scatter
+
+
+def compute_single_variable_minima(arrays: list[np.ndarray]) -> np.ndarray:
+    return np.stack([np.argmin(array, axis=0) for array in arrays]).transpose()
+
+
+def compute_single_variable_maxima(arrays: list[np.ndarray]) -> np.ndarray:
+    return np.stack([np.argmax(array, axis=0) for array in arrays]).transpose()
+
+
+# Minima and maxima for each dimension
+single_var_minima = np.stack(
+    [target_numba_function(m) for m in compute_single_variable_minima(arrays)]
+)
+single_var_maxima = np.stack(
+    [target_numba_function(m) for m in compute_single_variable_maxima(arrays)]
+)
+
+
+random_points = np.stack(
+    [
+        target_numba_function(config)
+        for config in create_random_population(
+            scenarios_cardinality=scenarios_cardinality, n_organisms=1000
+        )
+    ]
+)
+
 
 target_variable_names = [v.name for v in fields(TargetVariables)]
 
 plt.figure(figsize=(7, 5))
-plt.scatter(res.F[:, 0], res.F[:, 1], s=30, facecolors="none", edgecolors="blue")
+plt.scatter(res.F[:, 0], res.F[:, 1], s=30, edgecolors="blue", label="Pareto")
+plt.scatter(
+    random_points[:, 0],
+    random_points[:, 1],
+    s=30,
+    facecolors="none",
+    edgecolors="orange",
+    label="random",
+)
+plt.scatter(
+    single_var_minima[:, 0],
+    single_var_minima[:, 1],
+    s=30,
+    edgecolors="red",
+    label="single_var_minima",
+)
+plt.scatter(
+    single_var_maxima[:, 0],
+    single_var_maxima[:, 1],
+    s=30,
+    edgecolors="green",
+    label="single_var_maxima",
+)
 plt.xlabel(target_variable_names[0])
 plt.ylabel(target_variable_names[1])
+
 plt.title("Objective Space")
+
+plt.legend()
 plt.show()
+
+# Multi-dimension scatter
+plot = Scatter(
+    tight_layout=True, labels=target_variable_names, plot_3d=False, legend=True
+)
+plot.add(res.F, label="Pareto", color="orange")
+plot.add(single_var_minima, label="single_var_minima")
+plot.add(single_var_maxima, label="single_var_maxima")
+plot.add(random_points, label="random")
+plot.show()
