@@ -1,114 +1,77 @@
 # %%
-from typing import Callable
+from typing import Callable, Sequence
 from dataclasses import dataclass, fields, astuple
 import numpy as np
-from pymoo.core.problem import ElementwiseProblem
 from pathlib import Path
 import netCDF4
 import pandas as pd
 from numba import jit
+import time
+from pymoo.optimize import minimize
+from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.operators.sampling.rnd import IntegerRandomSampling
+from pymoo.operators.crossover.sbx import SBX
+from pymoo.operators.mutation.pm import PM
+from pymoo.operators.repair.rounding import RoundingRepair
+from pymoo.visualization.scatter import Scatter
+import matplotlib.pyplot as plt
 
-import susi.io.utils as io_utils
+import susi.io.netcdf_utils as nc_utils
 from susi.io.app_settings import AppSettings
 
 
-# %% Get data
-
-
-app_settings = AppSettings()
-
-
-def list_subdirectories(path: Path):
-    return (x for x in path.iterdir() if x.is_dir())
-
-
-def _load_single_experiment_metadatas(
-    experiment_folderpath: Path,
-    metadata_filename: str = "metadata.json",
-    params_filename: str = "params.json",
-) -> pd.DataFrame:
-    """
-    Reads metadata and parameter info from json files.
-    Returns dict of all json values.
-    """
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
-
-    metadata, params = map(
-        io_utils.read_json_file, [metadata_filepath, params_filepath]
-    )
-    return pd.json_normalize(metadata | params)
-
-
-def coerce_datetime_format(df: pd.DataFrame) -> pd.DataFrame:
-    datetime_cols = ["timestamp_start", "timestamp_end"]
-    for col in datetime_cols:
-        df[col] = pd.to_datetime(df[col])
-    return df
-
-
-def modify_after_load(
-    df: pd.DataFrame, set_experiment_id_as_index: bool = False
-) -> pd.DataFrame:
-    df = df.copy()
-
-    # set datetime formats
-    df = coerce_datetime_format(df)
-
-    # sort by starting date first
-    df = df.sort_values(by="timestamp_start", ignore_index=True, ascending=False)
-
-    # set experiment_id as index
-    if set_experiment_id_as_index:
-        df = df.set_index(keys="experiment_id")
-
-    return df
-
-
-def load_all_metadatas_from_folder(
-    folder: Path = app_settings.output_folder,
-) -> pd.DataFrame:
-    experiment_folderpaths = list_subdirectories(folder)
-    df = pd.concat(
-        [
-            _load_single_experiment_metadatas(exp_fpath)
-            for exp_fpath in experiment_folderpaths
-        ]
-    )
-
-    return modify_after_load(df)
-
-
 # %% Load paroninkorpi metadata
+
+
+def stand_foldername_from_number(stand_number: int) -> str:
+    return f"paroninkorpi/stand_{stand_number:02d}"
+
+
+def stand_folderpath_from_number(stand_number: int) -> Path:
+    return AppSettings().output_folder / stand_foldername_from_number(stand_number)
+
+
 N_STANDS = 21
+stand_folderpaths = [
+    stand_folderpath_from_number(stand_n) for stand_n in range(1, N_STANDS + 1)
+]
 
-metadata_by_stand = [0] * N_STANDS
-
-for stand_n in range(0, N_STANDS):
-    stand_foldername = f"paroninkorpi/stand_{stand_n + 1:02d}"
-
-    output_folder = app_settings.output_folder / stand_foldername
-
-    df = load_all_metadatas_from_folder(folder=output_folder)
-
-    metadata_by_stand[stand_n] = df
+metadata_by_stand = nc_utils.load_all_metadatas_from_folders(folders=stand_folderpaths)
 
 # %% compute total number of combinations
 
-scenarios_cardinality = []
-n_total_combinations = 1
-for stand_n in range(0, N_STANDS):
-    n_scenarios = metadata_by_stand[stand_n].shape[0]
-    scenarios_cardinality.append(n_scenarios)
 
-    n_total_combinations *= n_scenarios
+def product_of_elements_in_list(list_of_numbers: Sequence[int | float]) -> int | float:
+    product = 1
+    for element in list_of_numbers:
+        product *= element
+    return product
 
-# Make it immutable
-scenarios_cardinality = tuple(scenarios_cardinality)
 
-print("Number of scenarios for each stand:")
+scenarios_cardinality = tuple(
+    [stand_metadata_df.shape[0] for stand_metadata_df in metadata_by_stand]
+)
+n_total_combinations = product_of_elements_in_list(scenarios_cardinality)
+
+print("\nNumber of scenarios for each stand:")
 print(scenarios_cardinality)
-print(f"Number of total combinations: {n_total_combinations:.2e}")
+print(f"\nNumber of total combinations: {n_total_combinations:.2e}")
+
+
+# %% Read netcdf file structure
+
+
+# All Susi netcdf files has the same structure.
+# Pick one and get the group/variables hierarchical structure.
+# This will be useful in choosing what variables to read later.
+sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
+
+all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
+
+var_values = nc_utils.read_value_netcdf_variable(
+    netcdf_filepath=sample_netcdf_filepath, variable=all_variables[10]
+)
 
 
 # %% Read ncdf data into python dictionary with netcdf
@@ -118,6 +81,23 @@ print(f"Number of total combinations: {n_total_combinations:.2e}")
 # Otherwise, the netcdf files stay open and consume too much memory.
 # So: with open file:
 #       get necessary vars into list of dicts (above called vars_of_interest_by_stand)
+
+
+def get_netcdf_variables(netcdf_filepath: Path) -> netCDF4.Dataset:
+    with netCDF4.Dataset(netcdf_filepath, "r") as ds:
+        variables = ds.get_variables_by_attributes()
+
+    return variables
+
+
+with netCDF4.Dataset(sample_netcdf_filepath, "r") as ds:
+    variables = ds.variables
+    print(variables)
+
+
+sample_netcdf_variables = get_netcdf_variables(sample_netcdf_filepath)
+
+get_netcdf_variables(sample_netcdf)
 
 
 def read_netcdf_files_for_stand(
@@ -367,7 +347,6 @@ random_population_fitness = target_function_for_population(
 
 # %% number of total candidates that can be evaluated per second
 # This helps to choose the right optimization algorithm
-import time
 
 start = time.time()
 
@@ -418,14 +397,6 @@ print(
 # Perhaps use DEAP instead?
 # Or write my own algo?
 
-from pymoo.optimize import minimize
-from pymoo.core.problem import Problem
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
-from pymoo.operators.crossover.sbx import SBX
-from pymoo.operators.mutation.pm import PM
-from pymoo.operators.repair.rounding import RoundingRepair
-
 
 class MyProblem(Problem):
     def __init__(
@@ -475,14 +446,12 @@ algorithm = NSGA2(
 res = minimize(
     problem=problem,
     algorithm=algorithm,
-    termination=("n_gen", 1000),
+    termination=("n_gen", 10000),
     seed=RANDOM_SEED,
     verbose=True,
 )
 
 # %% Visualize solutions
-import matplotlib.pyplot as plt
-from pymoo.visualization.scatter import Scatter
 
 
 def compute_single_variable_minima(arrays: list[np.ndarray]) -> np.ndarray:
@@ -550,8 +519,8 @@ plt.show()
 plot = Scatter(
     tight_layout=True, labels=target_variable_names, plot_3d=False, legend=True
 )
-plot.add(res.F, label="Pareto", color="orange")
-plot.add(single_var_minima, label="single_var_minima")
-plot.add(single_var_maxima, label="single_var_maxima")
-plot.add(random_points, label="random")
+plot.add(res.F, label="Pareto", color="blue")
+plot.add(single_var_minima, label="single_var_minima", color="red")
+plot.add(single_var_maxima, label="single_var_maxima", color="green")
+plot.add(random_points, label="random", color="orange")
 plot.show()
