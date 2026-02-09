@@ -33,7 +33,7 @@ PARAMETERS = SusiParams(
     ),
     motti_file_parameters=MottiFileParams(
         path=_app_settings.input_folder,
-        dominant={1: "CF_51.xlsx"},
+        dominant={1: "CF_41.xlsx"},
         subdominant={0: "susi_motti_input_lyr_1.xlsx"},
         under={0: "susi_motti_input_lyr_2.xlsx"},
     ),
@@ -62,7 +62,7 @@ PARAMETERS = SusiParams(
         ditch_depth_20y_west=[-0.5],
         ditch_depth_20y_east=[-0.5],
         scenario_name=["D60"],  # kasvunlisaykset
-        drain_age=100.0,
+        drain_age=50.0,
         initial_h=-0.2,
         slope=0.0,
         peat_type=[PeatTypes.generic] * 8,
@@ -81,21 +81,21 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_yr=2204,
+        cutting_yr=3004,
         cutting_to_ba=12,
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
         fertilization=FertilizationParameters(
-            application_year=2204,
+            application_year=2004,
             N=NutrientFertilizationParameters(
                 dose=0.0,
                 decay_k=0.5,
                 eff=1.0,
             ),  # fertilization dose in kg ha-1, decay_k in yr-1
-            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
-            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            pH_increment=1.0,
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.1, eff=1.0),  #45
+            K=NutrientFertilizationParameters(dose=120.0, decay_k=0.1, eff=1.0),  #100
+            pH_increment=0.5,
         ),
         peat_temperature=PeatTemperatureParams(),
     ),

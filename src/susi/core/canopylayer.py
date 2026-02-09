@@ -496,14 +496,32 @@ class Canopylayer:
             self.NPP_pot * nut_stat / self.stems #* 1.1
         )  # returned back to tree basis units
         """
-        condition = self.stems > 0
-        self.NPP = np.divide(
-            self.NPP, self.stems, out=np.full_like(self.NPP, np.nan), where=condition
-            ) # returned back to tree basis unit
-        self.NPP_pot = np.divide(
-            self.NPP_pot, self.stems, out=np.full_like(self.NPP_pot, np.nan), where=condition
-            ) # returned back to tree basis unit
         
+        
+        # 1. Define the mask once
+        condition = self.stems > 0
+        
+        # 2. Pre-calculate the numerator
+        adjusted_npp = self.NPP * nut_stat
+        adjusted_npp_pot = self.NPP_pot * nut_stat
+        
+        # 3. Perform the safe division: returned back to tree basis units
+        self.NPP = np.divide(
+            adjusted_npp, 
+            self.stems, 
+            out=np.full_like(adjusted_npp, np.nan), 
+            where=condition
+        ) # returned back to tree basis unit
+        
+        self.NPP_pot = np.divide(
+            adjusted_npp_pot, 
+            self.stems, 
+            out=np.full_like(adjusted_npp_pot, np.nan), 
+            where=condition
+        ) # returned back to tree basis unit
+                
+         
+                
         bm_increment = self.NPP
         bm = self.biomass
 

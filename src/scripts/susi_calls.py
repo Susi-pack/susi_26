@@ -12,7 +12,7 @@ from susi.io.metadata_model import SimulationMetaData
 
 # read weather input
 simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(experiment_id="your_experiment_name_here"),
+    metadata=SimulationMetaData(experiment_id="your_experiment_name_here"),  #your_experiment_name_here
     susi_params=golden_test.PARAMETERS,
 )
 

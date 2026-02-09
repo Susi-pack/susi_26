@@ -477,6 +477,7 @@ class Stand:
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
             # self.k_demand = self.k_demand + (cl.k_demand+ cl.Kleafdemand) * cl.stems
+            
             self.n_demand = self.n_demand + cl.n_demand * cl.stems
             self.p_demand = self.p_demand + cl.p_demand * cl.stems
             self.k_demand = self.k_demand + cl.k_demand * cl.stems
@@ -643,7 +644,7 @@ class Stand:
         for c in range(self.n_cols):
             self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / tau
         self.nut_stat = np.clip(
-            self.nut_stat, 0.7, 1.3
+            self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much
 
     def update_logging(self):
