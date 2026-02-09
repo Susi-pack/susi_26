@@ -9,7 +9,7 @@ import susi.io.utils as io_utils
 
 # %% dataclasses
 @dataclass
-class NetcdfVariable:
+class NetcdfVariableInfo:
     path: str  # Example: "/balance/K/fertilization_release"
     name: str  # Example: "fertilization_release"
     dimension_names: tuple[str]
@@ -104,16 +104,16 @@ def load_all_metadatas_from_folders(folders: list[Path]) -> list[pd.DataFrame]:
     return all_metadatas
 
 
-def list_all_netcdf_variables(netcdf_filepath: Path) -> list[NetcdfVariable]:
+def list_all_netcdf_variables(netcdf_filepath: Path) -> list[NetcdfVariableInfo]:
     """
     Explore the structure of a NetCDF file and return info on all variables.
     """
 
     def _recursive_group(group, prefix=""):
-        variables: list[NetcdfVariable] = []
+        variables: list[NetcdfVariableInfo] = []
 
         for var_name, var in group.variables.items():
-            variable = NetcdfVariable(
+            variable = NetcdfVariableInfo(
                 name=var_name,
                 path=f"{prefix}/{var_name}" if prefix else f"/{var_name}",
                 dimension_names=var.dimensions,
@@ -143,7 +143,7 @@ def _get_variable_by_path(group, path_parts):
 
 
 def read_value_several_variables_from_single_file(
-    netcdf_filepath: Path, variables: list[NetcdfVariable]
+    netcdf_filepath: Path, variables: list[NetcdfVariableInfo]
 ) -> list[np.ndarray]:
     """
     Read the values of a list of NetcdfVariables from a NetCDF file.

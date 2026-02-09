@@ -69,18 +69,13 @@ sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
 
 all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
 
-var_values = nc_utils.read_value_netcdf_variable(
-    netcdf_filepath=sample_netcdf_filepath, variable=all_variables[10]
+# Example usage: read all variables from a given netcdf file
+var_values = nc_utils.read_value_several_variables_from_single_file(
+    netcdf_filepath=sample_netcdf_filepath, variables=all_variables
 )
 
 
 # %% Read ncdf data into python dictionary with netcdf
-
-# TODO: read each interesting variable from netcdf file in the same loop.
-# Do so using a context manager.
-# Otherwise, the netcdf files stay open and consume too much memory.
-# So: with open file:
-#       get necessary vars into list of dicts (above called vars_of_interest_by_stand)
 
 
 def get_netcdf_variables(netcdf_filepath: Path) -> netCDF4.Dataset:
@@ -96,8 +91,6 @@ with netCDF4.Dataset(sample_netcdf_filepath, "r") as ds:
 
 
 sample_netcdf_variables = get_netcdf_variables(sample_netcdf_filepath)
-
-get_netcdf_variables(sample_netcdf)
 
 
 def read_netcdf_files_for_stand(
