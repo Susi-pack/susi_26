@@ -133,23 +133,30 @@ def list_all_netcdf_variables(netcdf_filepath: Path) -> list[NetcdfVariable]:
         return _recursive_group(nc)
 
 
-def read_value_netcdf_variable(
-    netcdf_filepath: Path, variable: NetcdfVariable
-) -> np.ndarray:
-    """
-    Read the values of a specific NetcdfVariable from a NetCDF file.
-    """
+def _get_variable_by_path(group, path_parts):
+    """Recursively navigate groups to find the variable."""
+    if len(path_parts) == 1:
+        return group.variables[path_parts[0]]
+    else:
+        sub_group_name = path_parts[0]
+        return _get_variable_by_path(group.groups[sub_group_name], path_parts[1:])
 
-    def _get_variable_by_path(group, path_parts):
-        """Recursively navigate groups to find the variable."""
-        if len(path_parts) == 1:
-            return group.variables[path_parts[0]]
-        else:
-            sub_group_name = path_parts[0]
-            return _get_variable_by_path(group.groups[sub_group_name], path_parts[1:])
 
-    # split path and remove empty strings
-    path_parts = [p for p in variable.path.split("/") if p]
+def read_value_several_variables_from_single_file(
+    netcdf_filepath: Path, variables: list[NetcdfVariable]
+) -> list[np.ndarray]:
+    """
+    Read the values of a list of NetcdfVariables from a NetCDF file.
+    """
+    variables_values: list[np.ndarray] = []
+
     with netCDF4.Dataset(netcdf_filepath, "r") as nc:
-        var = _get_variable_by_path(nc, path_parts)
-        return var[:]
+        for variable in variables:
+            # split path and remove empty strings
+            var_path_parts = [p for p in variable.path.split("/") if p]
+
+            var = _get_variable_by_path(nc, var_path_parts)
+
+            variables_values.append(var[:])
+
+    return variables_values

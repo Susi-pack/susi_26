@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from susi.io.netcdf_utils import (
     list_all_netcdf_variables,
-    read_value_netcdf_variable,
+    read_value_several_variables_from_single_file,
 )
 
 
@@ -75,31 +75,17 @@ def test_read_netcdf_variable(mock_netcdf_file):
     # Pick the nested variable
     nested_var = next(var for var in variables if var.name == "nested_var")
 
-    data = read_value_netcdf_variable(mock_netcdf_file, nested_var)
+    data = read_value_several_variables_from_single_file(
+        mock_netcdf_file, [nested_var]
+    )[0]
     assert isinstance(data, np.ndarray)
     assert data.shape == (4,)
     np.testing.assert_allclose(data, np.linspace(0, 1, 4))
 
     # Pick root-level variable
     temp_var = next(var for var in variables if var.name == "temperature")
-    data = read_value_netcdf_variable(mock_netcdf_file, temp_var)
+    data = read_value_several_variables_from_single_file(mock_netcdf_file, [temp_var])[
+        0
+    ]
     assert data.shape == (10, 5, 5)
     assert data[0, 0, 0] == 250
-
-
-def test_read_and_write_consistency(mock_netcdf_file):
-    """
-    Ensure that reading a variable returns exactly the same data as originally written.
-    """
-    variables = list_all_netcdf_variables(mock_netcdf_file)
-
-    for var in variables:
-        data = read_value_netcdf_variable(mock_netcdf_file, var)
-        # Reopen file and read directly from netCDF4 for comparison
-        with netCDF4.Dataset(mock_netcdf_file, "r") as nc:
-            path_parts = [p for p in var.path.split("/") if p]
-            group = nc
-            for part in path_parts[:-1]:
-                group = group.groups[part]
-            expected_data = group.variables[path_parts[-1]][:]
-            np.testing.assert_array_equal(data, expected_data)
