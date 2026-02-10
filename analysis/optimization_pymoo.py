@@ -1,6 +1,7 @@
 # %%
-from typing import Callable, Sequence
+from typing import Callable, Sequence, NewType
 from dataclasses import dataclass, fields, astuple
+from enum import Enum
 import numpy as np
 from pathlib import Path
 import netCDF4
@@ -59,9 +60,7 @@ print(scenarios_cardinality)
 print(f"\nNumber of total combinations: {n_total_combinations:.2e}")
 
 
-# %% Read netcdf file structure
-
-
+# %% Read netcdf file structure and choose (filter) variables
 # All Susi netcdf files has the same structure.
 # Pick one and get the group/variables hierarchical structure.
 # This will be useful in choosing what variables to read later.
@@ -69,56 +68,44 @@ sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
 
 all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
 
-# Example usage: read all variables from a given netcdf file
-var_values = nc_utils.read_value_several_variables_from_single_file(
-    netcdf_filepath=sample_netcdf_filepath, variables=all_variables
+# Filter the interesting variables
+INTERESTING_VAR_PATHS: list[nc_utils.NetcdfVariablePath] = (
+    "/stand/volume",
+    "/balance/C/soil_c_balance_co2eq",
+)
+
+chosen_vars = nc_utils.choose_netcdf_vars_by_path(
+    paths=INTERESTING_VAR_PATHS, all_variables=all_variables
+)
+
+chosen_variables_by_stand_and_scenario = (
+    nc_utils.read_chosen_variables_from_netcdf_by_stands_and_scenarios(
+        chosen_vars=chosen_vars, metadata_by_stand=metadata_by_stand
+    )
 )
 
 
-# %% Read ncdf data into python dictionary with netcdf
-
-
-def get_netcdf_variables(netcdf_filepath: Path) -> netCDF4.Dataset:
-    with netCDF4.Dataset(netcdf_filepath, "r") as ds:
-        variables = ds.get_variables_by_attributes()
-
-    return variables
-
-
-with netCDF4.Dataset(sample_netcdf_filepath, "r") as ds:
-    variables = ds.variables
-    print(variables)
-
-
-sample_netcdf_variables = get_netcdf_variables(sample_netcdf_filepath)
-
-
-def read_netcdf_files_for_stand(
-    metadata_df: pd.DataFrame,
-) -> dict[str : netCDF4.Dataset]:
-    # Netcdf data is saved in a dictionary where the experiment folder path is the key.
-    data = {}
-    for _, experiment_info in metadata_df.iterrows():
-        data[experiment_info["experiment_id"]] = netCDF4.Dataset(
-            experiment_info["netcdf_output_filepath"], "r"
-        )
-
-    return data
-
-
-all_variables_by_stand = [0] * N_STANDS
-
-for n_stand, metadata_df in enumerate(metadata_by_stand):
-    all_variables_by_stand[n_stand] = read_netcdf_files_for_stand(metadata_df)
-
-
 # %% interesting_variables by stand
-def get_last_year_values(var: float) -> np.ndarray:
+CONTINUE HERE!
+def get_last_year_values(var: np.ndarray) -> np.ndarray:
     return var[:, -1, :]
+
+
+def sum_of_last_year_values(var: np.ndarray) -> float:
+    return np.sum(get_last_year_values)
+
+
+def average_of_all_values(var: np.ndarray) -> float:
+    return np.mean(var)
 
 
 def get_scenario_name_from_path(path: str) -> str:
     return path.split("_")[-1]
+
+
+class TimeSeriesAggregatingFunction(Enum):
+    SUM_OF_LAST_YEAR = sum_of_last_year_values
+    AVERAGE_OF_HISTORY = average_of_all_values
 
 
 @dataclass
@@ -129,9 +116,23 @@ class TargetVariables:
 
 
 @dataclass
+class TargetVariableDescription:
+    path: nc_utils.NetcdfVariablePath
+    name: str
+    func_to_aggregate_data: TimeSeriesAggregatingFunction
+    invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
+
+
+@dataclass
+class TargetVariable:
+    name: str  # volume, etc.
+    value: float
+
+
+@dataclass
 class Scenario:
     name: str  # DNM, default, fertilized, etc.
-    target_variables: TargetVariables
+    target_variables: list[TargetVariable]
 
 
 # Container class to preserve both arrays and names
@@ -147,7 +148,7 @@ def transform_list_of_scenarios_to_array_data(
     target_variables: list[np.ndarray] = []
     scenario_names: list[list[str]] = []
 
-    number_of_target_variables = len(fields(TargetVariables))
+    number_of_target_variables = len(vars_of_interest_by_stand[0][0])
 
     for n_stand in range(n_stands):
         vars_of_interest_for_stand = vars_of_interest_by_stand[n_stand]
@@ -184,15 +185,15 @@ def transform_array_data_to_list_of_scenarios(
 
         for row_idx, target_vars_of_stand in enumerate(array_data.arrays[n_stand]):
             # Create TargetVariables using field names dynamically
-            target_vars_dict = {
-                field_name: target_vars_of_stand[i]
+            target_vars = [
+                TargetVariable(name=field_name, value=target_vars_of_stand[i])
                 for i, field_name in enumerate(target_var_fields)
-            }
+            ]
 
             # Create Scenario object
             scenario = Scenario(
                 name=array_data.scenario_names[n_stand][row_idx],
-                target_variables=TargetVariables(**target_vars_dict),
+                target_variables=target_vars,
             )
             scenarios_for_stand.append(scenario)
 

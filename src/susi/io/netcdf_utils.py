@@ -1,3 +1,4 @@
+from typing import NewType
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -8,9 +9,14 @@ import susi.io.utils as io_utils
 
 
 # %% dataclasses
+
+NetcdfVariablePath = NewType("NetcdfVariablePath", str)
+ScenarioName = NewType("ScenarioName", str)
+
+
 @dataclass
 class NetcdfVariableInfo:
-    path: str  # Example: "/balance/K/fertilization_release"
+    path: NetcdfVariablePath  # Example: "/balance/K/fertilization_release"
     name: str  # Example: "fertilization_release"
     dimension_names: tuple[str]
     shape: tuple[int]
@@ -115,7 +121,9 @@ def list_all_netcdf_variables(netcdf_filepath: Path) -> list[NetcdfVariableInfo]
         for var_name, var in group.variables.items():
             variable = NetcdfVariableInfo(
                 name=var_name,
-                path=f"{prefix}/{var_name}" if prefix else f"/{var_name}",
+                path=NetcdfVariablePath(
+                    f"{prefix}/{var_name}" if prefix else f"/{var_name}"
+                ),
                 dimension_names=var.dimensions,
                 shape=var.shape,
                 units=getattr(var, "units"),
@@ -160,3 +168,60 @@ def read_value_several_variables_from_single_file(
             variables_values.append(var[:])
 
     return variables_values
+
+
+def choose_netcdf_vars_by_path(
+    paths: tuple[NetcdfVariablePath],
+    all_variables: list[NetcdfVariableInfo],
+) -> list[NetcdfVariableInfo]:
+    """
+    Filters variables by path.
+    I tried to filtering by name, but the variable names are not unique: they depend on the path
+    E.g., the name "volume" has several different variables
+    """
+    variables = []
+    for var_info in all_variables:
+        if var_info.path in paths:
+            variables.append(var_info)
+
+    # if len(variables) != len(names):
+    #     raise ValueError("Could not locate all variables by name")
+
+    return variables
+
+
+def read_netcdf_variable_values_for_stand(
+    chosen_variables: list[NetcdfVariableInfo],
+    metadata_df: pd.DataFrame,
+) -> dict[ScenarioName, np.ndarray]:
+    # Netcdf data is saved in a dictionary where the experiment folder path is the key.
+    data = {}
+    for _, experiment_info in metadata_df.iterrows():
+        data[experiment_info["experiment_id"]] = (
+            read_value_several_variables_from_single_file(
+                netcdf_filepath=experiment_info["netcdf_output_filepath"],
+                variables=chosen_variables,
+            )
+        )
+
+    return data
+
+
+def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
+    chosen_vars: list[NetcdfVariableInfo],
+    metadata_by_stand: list[pd.DataFrame],
+) -> list[dict[ScenarioName, np.ndarray]]:
+    """
+    Return nested structure:
+        list <- dimension of number of stands
+            dict <- dimension of scenarios for each stand
+    """
+    chosen_variables_by_stand_and_scenario = []
+
+    for n_stand, metadata_df in enumerate(metadata_by_stand):
+        chosen_variables_by_stand_and_scenario[n_stand] = (
+            read_netcdf_variable_values_for_stand(
+                metadata_df=metadata_df, chosen_variables=chosen_vars
+            )
+        )
+    return chosen_variables_by_stand_and_scenario
