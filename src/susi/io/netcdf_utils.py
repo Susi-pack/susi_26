@@ -3,24 +3,53 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from dataclasses import dataclass
+from collections import namedtuple
 import netCDF4
+
 
 import susi.io.utils as io_utils
 
 
 # %% dataclasses
 
-NetcdfVariablePath = NewType("NetcdfVariablePath", str)
-ScenarioName = NewType("ScenarioName", str)
+NetcdfVariablePath = NewType(
+    "NetcdfVariablePath", str
+)  # Example: "/balance/K/fertilization_release"
+ScenarioName = NewType("ScenarioName", str)  # Examples: "DNM", "default", "fertilized"
+TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
 
 
 @dataclass
 class NetcdfVariableInfo:
-    path: NetcdfVariablePath  # Example: "/balance/K/fertilization_release"
+    """
+    Contains all information of a variable from the Susi netcdf file,
+    except its values
+    """
+
+    path: NetcdfVariablePath
     name: str  # Example: "fertilization_release"
     dimension_names: tuple[str]
     shape: tuple[int]
     units: str  # Unit description
+
+
+@dataclass
+class NetcdfVariableValue:
+    """
+    Contains the id for the netcdf variable (in path),
+    and its value.
+    """
+
+    path: NetcdfVariablePath
+    value: np.ndarray
+
+
+@dataclass
+class ScenarioArrayData:
+    """Container class to preserve both arrays and names"""
+
+    arrays: list[np.ndarray]  # One array per stand
+    scenario_names: list[list[str]]  # Names for each scenario in each stand
 
 
 # %% Functions
@@ -152,11 +181,11 @@ def _get_variable_by_path(group, path_parts):
 
 def read_value_several_variables_from_single_file(
     netcdf_filepath: Path, variables: list[NetcdfVariableInfo]
-) -> list[np.ndarray]:
+) -> list[NetcdfVariableValue]:
     """
     Read the values of a list of NetcdfVariables from a NetCDF file.
     """
-    variables_values: list[np.ndarray] = []
+    variables_values: list[NetcdfVariableValue] = []
 
     with netCDF4.Dataset(netcdf_filepath, "r") as nc:
         for variable in variables:
@@ -165,7 +194,9 @@ def read_value_several_variables_from_single_file(
 
             var = _get_variable_by_path(nc, var_path_parts)
 
-            variables_values.append(var[:])
+            variables_values.append(
+                NetcdfVariableValue(path=variable.path, value=var[:])
+            )
 
     return variables_values
 
@@ -193,7 +224,7 @@ def choose_netcdf_vars_by_path(
 def read_netcdf_variable_values_for_stand(
     chosen_variables: list[NetcdfVariableInfo],
     metadata_df: pd.DataFrame,
-) -> dict[ScenarioName, np.ndarray]:
+) -> dict[ScenarioName, NetcdfVariableValue]:
     # Netcdf data is saved in a dictionary where the experiment folder path is the key.
     data = {}
     for _, experiment_info in metadata_df.iterrows():
@@ -210,7 +241,7 @@ def read_netcdf_variable_values_for_stand(
 def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
     chosen_vars: list[NetcdfVariableInfo],
     metadata_by_stand: list[pd.DataFrame],
-) -> list[dict[ScenarioName, np.ndarray]]:
+) -> list[dict[ScenarioName, NetcdfVariableValue]]:
     """
     Return nested structure:
         list <- dimension of number of stands
@@ -219,7 +250,7 @@ def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
     chosen_variables_by_stand_and_scenario = []
 
     for n_stand, metadata_df in enumerate(metadata_by_stand):
-        chosen_variables_by_stand_and_scenario[n_stand] = (
+        chosen_variables_by_stand_and_scenario.append(
             read_netcdf_variable_values_for_stand(
                 metadata_df=metadata_df, chosen_variables=chosen_vars
             )

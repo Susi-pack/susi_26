@@ -1,11 +1,9 @@
 # %%
-from typing import Callable, Sequence, NewType
-from dataclasses import dataclass, fields, astuple
+from typing import Callable, Sequence
+from dataclasses import dataclass, fields
 from enum import Enum
 import numpy as np
 from pathlib import Path
-import netCDF4
-import pandas as pd
 from numba import jit
 import time
 from pymoo.optimize import minimize
@@ -78,6 +76,8 @@ chosen_vars = nc_utils.choose_netcdf_vars_by_path(
     paths=INTERESTING_VAR_PATHS, all_variables=all_variables
 )
 
+# list (dimension n_sites) of dicts (scenarios for each site).
+# Dicts hold arrays with the value of variables
 chosen_variables_by_stand_and_scenario = (
     nc_utils.read_chosen_variables_from_netcdf_by_stands_and_scenarios(
         chosen_vars=chosen_vars, metadata_by_stand=metadata_by_stand
@@ -86,13 +86,12 @@ chosen_variables_by_stand_and_scenario = (
 
 
 # %% interesting_variables by stand
-CONTINUE HERE!
 def get_last_year_values(var: np.ndarray) -> np.ndarray:
     return var[:, -1, :]
 
 
 def sum_of_last_year_values(var: np.ndarray) -> float:
-    return np.sum(get_last_year_values)
+    return np.sum(get_last_year_values(var))
 
 
 def average_of_all_values(var: np.ndarray) -> float:
@@ -109,138 +108,138 @@ class TimeSeriesAggregatingFunction(Enum):
 
 
 @dataclass
-class TargetVariables:
-    volume: float
-    soil_c_balance: float
-    dwtyr: float
-
-
-@dataclass
-class TargetVariableDescription:
-    path: nc_utils.NetcdfVariablePath
-    name: str
+class TargetVariableProperties:
     func_to_aggregate_data: TimeSeriesAggregatingFunction
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
-@dataclass
-class TargetVariable:
-    name: str  # volume, etc.
-    value: float
+def aggregate_time_series_to_float(
+    time_series: np.ndarray, target_variable_properties: TargetVariableProperties
+) -> float:
+    inverter: int = -1 if target_variable_properties.invert_optimization else 1
+
+    return inverter * target_variable_properties.func_to_aggregate_data(time_series)
 
 
-@dataclass
-class Scenario:
-    name: str  # DNM, default, fertilized, etc.
-    target_variables: list[TargetVariable]
+def compute_target_variables_from_netcdf_values(
+    netcdf_variables: list[nc_utils.NetcdfVariableValue],
+    properties_of_target_variables: dict[
+        nc_utils.NetcdfVariablePath, TargetVariableProperties
+    ],
+):
+    return {
+        netcdf_variable.path: aggregate_time_series_to_float(
+            time_series=netcdf_variable.value,
+            target_variable_properties=PROPERTIES_OF_TARGET_VARIABLES[
+                netcdf_variable.path
+            ],
+        )
+        for netcdf_variable in netcdf_variables
+    }
 
 
-# Container class to preserve both arrays and names
-@dataclass
-class ScenarioArrayData:
-    arrays: list[np.ndarray]  # One array per stand
-    scenario_names: list[list[str]]  # Names for each scenario in each stand
+PROPERTIES_OF_TARGET_VARIABLES = {
+    "/stand/volume": TargetVariableProperties(
+        func_to_aggregate_data=TimeSeriesAggregatingFunction.SUM_OF_LAST_YEAR,
+        invert_optimization=True,
+    ),
+    "/balance/C/soil_c_balance_co2eq": TargetVariableProperties(
+        func_to_aggregate_data=TimeSeriesAggregatingFunction.SUM_OF_LAST_YEAR,
+        invert_optimization=False,
+    ),
+}
+
+# Get vars of interest
+vars_of_interest_by_stand: list[
+    dict[nc_utils.ScenarioName, nc_utils.TargetVariableDict]
+] = [{} for _ in range(0, N_STANDS)]
 
 
-def transform_list_of_scenarios_to_array_data(
-    vars_of_interest_by_stand: list[list[Scenario]], n_stands: int
-) -> ScenarioArrayData:
-    target_variables: list[np.ndarray] = []
-    scenario_names: list[list[str]] = []
+for n_stand in range(N_STANDS):
+    for scenario_name, netcdf_variables in chosen_variables_by_stand_and_scenario[
+        n_stand
+    ].items():
+        vars_of_interest_by_stand[n_stand][scenario_name] = (
+            compute_target_variables_from_netcdf_values(
+                netcdf_variables=netcdf_variables,
+                properties_of_target_variables=PROPERTIES_OF_TARGET_VARIABLES,
+            )
+        )
+# %% Transformation between data representations: list of scenarios to list of numpys
 
-    number_of_target_variables = len(vars_of_interest_by_stand[0][0])
+
+def transform_list_of_scenarios_to_optimization_array_structure(
+    vars_of_interest_by_stand: list[
+        dict[nc_utils.ScenarioName, nc_utils.TargetVariableDict]
+    ],
+    n_stands: int,
+    target_variable_paths: list[nc_utils.NetcdfVariablePath],
+) -> nc_utils.ScenarioArrayData:
+    target_variable_arrays: list[np.ndarray] = []
+
+    scenario_names: list[list[nc_utils.ScenarioName]] = []
+
+    n_target_variables = len(target_variable_paths)
 
     for n_stand in range(n_stands):
-        vars_of_interest_for_stand = vars_of_interest_by_stand[n_stand]
-        number_of_scenarios = len(vars_of_interest_for_stand)
+        vars_of_interest_single_stand = vars_of_interest_by_stand[n_stand]
+        number_of_scenarios = len(vars_of_interest_single_stand)
 
         # Initialize the array that holds the variables' values
-        target_var = np.ones((number_of_scenarios, number_of_target_variables)) * np.nan
+        target_var = np.ones((number_of_scenarios, n_target_variables)) * np.nan
         names_for_stand = []
 
-        for row, scenario in enumerate(vars_of_interest_for_stand):
-            # Convert dataclass to tuple automatically - works for any number of fields!
-            target_var[row, :] = astuple(scenario.target_variables)
-            names_for_stand.append(scenario.name)
+        for row, (scenario_name, target_variable_dict) in enumerate(
+            vars_of_interest_single_stand.items()
+        ):
+            names_for_stand.append(scenario_name)
+
+            for col, var_path in enumerate(target_variable_paths):
+                target_var[row, col] = target_variable_dict[var_path]
 
         # Check no field without filling
-        assert not np.isnan(target_var).any()
+        # assert not np.isnan(target_var).any()
 
-        target_variables.append(target_var)
+        target_variable_arrays.append(target_var)
         scenario_names.append(names_for_stand)
 
-    return ScenarioArrayData(arrays=target_variables, scenario_names=scenario_names)
+    return nc_utils.ScenarioArrayData(
+        arrays=target_variable_arrays, scenario_names=scenario_names
+    )
 
 
 def transform_array_data_to_list_of_scenarios(
-    array_data: ScenarioArrayData, n_stands: int
-) -> list[list[Scenario]]:
-    vars_of_interest_by_stand: list[list[Scenario]] = []
-
-    # Get the field names from the dataclass
-    target_var_fields = [f.name for f in fields(TargetVariables)]
+    array_data: nc_utils.ScenarioArrayData,
+    n_stands: int,
+    target_variable_paths: list[nc_utils.NetcdfVariablePath],
+) -> list[dict[nc_utils.ScenarioName, nc_utils.TargetVariableDict]]:
+    vars_of_interest_by_stand: list[
+        dict[nc_utils.ScenarioName, nc_utils.TargetVariableDict]
+    ] = []
 
     for n_stand in range(n_stands):
-        scenarios_for_stand = []
+        scenarios_for_stand = {}
 
-        for row_idx, target_vars_of_stand in enumerate(array_data.arrays[n_stand]):
-            # Create TargetVariables using field names dynamically
-            target_vars = [
-                TargetVariable(name=field_name, value=target_vars_of_stand[i])
-                for i, field_name in enumerate(target_var_fields)
-            ]
+        for row_idx, scenarios_data in enumerate(array_data.arrays[n_stand]):
+            scenario_name = array_data.scenario_names[n_stand][row_idx]
+            target_variable_values = {
+                target_var_path: scenarios_data[col_idx]
+                for (col_idx, target_var_path) in enumerate(target_variable_paths)
+            }
 
-            # Create Scenario object
-            scenario = Scenario(
-                name=array_data.scenario_names[n_stand][row_idx],
-                target_variables=target_vars,
-            )
-            scenarios_for_stand.append(scenario)
+            scenarios_for_stand[scenario_name] = target_variable_values
 
         vars_of_interest_by_stand.append(scenarios_for_stand)
 
     return vars_of_interest_by_stand
 
 
-# Get vars of interest
-vars_of_interest_by_stand: list[list[Scenario]] = [[] for _ in range(0, N_STANDS)]
-
-for n_stand in range(N_STANDS):
-    for scenario_name, netcdf_data in all_variables_by_stand[n_stand].items():
-        # Get variable values
-        volume = netcdf_data.groups["stand"].variables["volume"][:]
-
-        # Negative sign because we actually want to maximize volume,
-        # but it is a minimization problem
-        total_last_year_volume = -np.sum(get_last_year_values(volume))
-
-        soil_c_balance_co2eq = (
-            netcdf_data.groups["balance"].groups["C"].variables["soil_c_balance_co2eq"]
-        )
-        total_last_year_soil_c_balance = np.sum(
-            get_last_year_values(soil_c_balance_co2eq)
-        )
-
-        # Negative sign too
-        dwtyr = netcdf_data.groups["strip"].variables["dwtyr"][:]
-        average_last_year_dwtyr = -np.mean(get_last_year_values(dwtyr))
-
-        # Add to list
-        vars_of_interest_by_stand[n_stand].append(
-            Scenario(
-                name=scenario_name,
-                target_variables=TargetVariables(
-                    volume=total_last_year_volume,
-                    soil_c_balance=total_last_year_soil_c_balance,
-                    dwtyr=average_last_year_dwtyr,
-                ),
-            )
-        )
-# %% Transformation between data representations: list of scenarios to list of numpys
 # Usage example:
 # Forward transformation
-array_data = transform_list_of_scenarios_to_array_data(
-    vars_of_interest_by_stand, N_STANDS
+array_data = transform_list_of_scenarios_to_optimization_array_structure(
+    vars_of_interest_by_stand=vars_of_interest_by_stand,
+    n_stands=N_STANDS,
+    target_variable_paths=INTERESTING_VAR_PATHS,
 )
 
 # We have both arrays and names in one object
@@ -248,7 +247,11 @@ arrays: list[np.ndarray] = array_data.arrays
 names = array_data.scenario_names
 
 # Reverse transformation
-reconstructed = transform_array_data_to_list_of_scenarios(array_data, N_STANDS)
+reconstructed = transform_array_data_to_list_of_scenarios(
+    array_data=array_data,
+    n_stands=N_STANDS,
+    target_variable_paths=INTERESTING_VAR_PATHS,
+)
 
 assert reconstructed == vars_of_interest_by_stand
 
@@ -323,7 +326,7 @@ def target_function_for_population(
     )
 
 
-number_of_target_variables = len(fields(TargetVariables))
+number_of_target_variables = len(INTERESTING_VAR_PATHS)
 
 random_organism = create_random_organism(scenarios_cardinality)
 random_population = create_random_population(scenarios_cardinality, n_organisms=10)
@@ -440,7 +443,7 @@ algorithm = NSGA2(
 res = minimize(
     problem=problem,
     algorithm=algorithm,
-    termination=("n_gen", 10000),
+    termination=("n_gen", 1000),
     seed=RANDOM_SEED,
     verbose=True,
 )
@@ -475,8 +478,6 @@ random_points = np.stack(
 )
 
 
-target_variable_names = [v.name for v in fields(TargetVariables)]
-
 plt.figure(figsize=(7, 5))
 plt.scatter(res.F[:, 0], res.F[:, 1], s=30, edgecolors="blue", label="Pareto")
 plt.scatter(
@@ -501,8 +502,8 @@ plt.scatter(
     edgecolors="green",
     label="single_var_maxima",
 )
-plt.xlabel(target_variable_names[0])
-plt.ylabel(target_variable_names[1])
+plt.xlabel(INTERESTING_VAR_PATHS[0])
+plt.ylabel(INTERESTING_VAR_PATHS[1])
 
 plt.title("Objective Space")
 
@@ -511,7 +512,7 @@ plt.show()
 
 # Multi-dimension scatter
 plot = Scatter(
-    tight_layout=True, labels=target_variable_names, plot_3d=False, legend=True
+    tight_layout=True, labels=INTERESTING_VAR_PATHS, plot_3d=False, legend=True
 )
 plot.add(res.F, label="Pareto", color="blue")
 plot.add(single_var_minima, label="single_var_minima", color="red")
