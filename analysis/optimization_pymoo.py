@@ -90,8 +90,8 @@ def get_last_year_values(var: np.ndarray) -> np.ndarray:
     return var[:, -1, :]
 
 
-def sum_of_last_year_values(var: np.ndarray) -> float:
-    return np.sum(get_last_year_values(var))
+def average_of_last_year_values(var: np.ndarray) -> float:
+    return np.mean(get_last_year_values(var))
 
 
 def average_of_all_values(var: np.ndarray) -> float:
@@ -103,7 +103,7 @@ def get_scenario_name_from_path(path: str) -> str:
 
 
 class TimeSeriesAggregatingFunction(Enum):
-    SUM_OF_LAST_YEAR = sum_of_last_year_values
+    AVERAGE_OF_LAST_YEAR = average_of_last_year_values
     AVERAGE_OF_HISTORY = average_of_all_values
 
 
@@ -140,12 +140,12 @@ def compute_target_variables_from_netcdf_values(
 
 PROPERTIES_OF_TARGET_VARIABLES = {
     "/stand/volume": TargetVariableProperties(
-        func_to_aggregate_data=TimeSeriesAggregatingFunction.SUM_OF_LAST_YEAR,
+        func_to_aggregate_data=TimeSeriesAggregatingFunction.AVERAGE_OF_LAST_YEAR,
         invert_optimization=True,
     ),
     "/balance/C/soil_c_balance_co2eq": TargetVariableProperties(
-        func_to_aggregate_data=TimeSeriesAggregatingFunction.SUM_OF_LAST_YEAR,
-        invert_optimization=False,
+        func_to_aggregate_data=TimeSeriesAggregatingFunction.AVERAGE_OF_HISTORY,
+        invert_optimization=True,
     ),
 }
 
@@ -450,6 +450,8 @@ res = minimize(
 
 # %% Visualize solutions
 
+variable_labels = [var_path.split("/")[-1] for var_path in INTERESTING_VAR_PATHS]
+
 
 def compute_single_variable_minima(arrays: list[np.ndarray]) -> np.ndarray:
     return np.stack([np.argmin(array, axis=0) for array in arrays]).transpose()
@@ -478,42 +480,8 @@ random_points = np.stack(
 )
 
 
-plt.figure(figsize=(7, 5))
-plt.scatter(res.F[:, 0], res.F[:, 1], s=30, edgecolors="blue", label="Pareto")
-plt.scatter(
-    random_points[:, 0],
-    random_points[:, 1],
-    s=30,
-    facecolors="none",
-    edgecolors="orange",
-    label="random",
-)
-plt.scatter(
-    single_var_minima[:, 0],
-    single_var_minima[:, 1],
-    s=30,
-    edgecolors="red",
-    label="single_var_minima",
-)
-plt.scatter(
-    single_var_maxima[:, 0],
-    single_var_maxima[:, 1],
-    s=30,
-    edgecolors="green",
-    label="single_var_maxima",
-)
-plt.xlabel(INTERESTING_VAR_PATHS[0])
-plt.ylabel(INTERESTING_VAR_PATHS[1])
-
-plt.title("Objective Space")
-
-plt.legend()
-plt.show()
-
 # Multi-dimension scatter
-plot = Scatter(
-    tight_layout=True, labels=INTERESTING_VAR_PATHS, plot_3d=False, legend=True
-)
+plot = Scatter(tight_layout=True, labels=variable_labels, plot_3d=False, legend=True)
 plot.add(res.F, label="Pareto", color="blue")
 plot.add(single_var_minima, label="single_var_minima", color="red")
 plot.add(single_var_maxima, label="single_var_maxima", color="green")
