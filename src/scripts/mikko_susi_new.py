@@ -261,14 +261,14 @@ def prepare_susi_params(
 
     experiment_folder_path = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
-        AppSettings().output_folder
-        / f"paroninkorpi/base_scenario_{stand_number}{scenario}"
     )
 
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
-    fertilization_application_year = start_date.year if scenario == "fertilized" else 2200
+    fertilization_application_year = (
+        start_date.year if scenario == "fertilized" else 2200
+    )
 
     # Partial blocking
     if scenario == "partialblocking":
