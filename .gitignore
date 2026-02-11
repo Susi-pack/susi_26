@@ -12,6 +12,7 @@ outputs/
 .spyproject/config/workspace.ini
 *.egg
 *.egg-info/
+src/susi_26.egg-info
 
 # Spyder stuff
 .spyproject/
@@ -27,7 +28,6 @@ analysis/.ipynb_checkpoints
 pyrightconfig.json
 src/inputs/paroninkorpi/Stand_allometry/.~lock.susi_input_10.xlsx#
 golden_file_test/golden_file_new_experiment/
-mikko/to_run
-src/susi_26.egg-info
+mikko/
 uv.lock
-src/inputs/paroninkorpi/Stand_allometry/.~lock.susi_input_10.xlsx#
+analysis/eyeballing.py
