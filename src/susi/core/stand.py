@@ -477,6 +477,7 @@ class Stand:
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
             # self.k_demand = self.k_demand + (cl.k_demand+ cl.Kleafdemand) * cl.stems
+            
             self.n_demand = self.n_demand + cl.n_demand * cl.stems
             self.p_demand = self.p_demand + cl.p_demand * cl.stems
             self.k_demand = self.k_demand + cl.k_demand * cl.stems
@@ -626,24 +627,24 @@ class Stand:
         # print (area_modifyer)
         # print (self.dominant.stems + self.subdominant.stems + self.under.stems)
         # area_modifyer = 1
-
+       
+        # denominator ie. demand corrected 050226 
         nstat[0, :] = (N_supply * area_modifyer) / (
-            self.n_demand + self.basNdemand + groundvegetation.nup
+            self.n_demand + self.n_leaf_demand + groundvegetation.nup
         )
         nstat[1, :] = (P_supply * area_modifyer) / (
-            self.p_demand + self.basPdemand + groundvegetation.pup
+            self.p_demand + self.p_leaf_demand + groundvegetation.pup
         )
         nstat[2, :] = (K_supply * area_modifyer) / (
-            self.k_demand + self.basKdemand + groundvegetation.kup
+            self.k_demand + self.k_leaf_demand + groundvegetation.kup
         )
-
         minnstat = np.min(nstat, axis=0)
 
         tau = 3.0
         for c in range(self.n_cols):
             self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / tau
         self.nut_stat = np.clip(
-            self.nut_stat, 0.7, 1.3
+            self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much
 
     def update_logging(self):
