@@ -31,3 +31,5 @@ golden_file_test/golden_file_new_experiment/
 mikko/
 uv.lock
 analysis/eyeballing.py
+src/inputs/paroninkorpi/Forest_data
+src/inputs/paroninkorpi/Ditches
