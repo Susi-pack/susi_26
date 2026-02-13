@@ -35,6 +35,7 @@ Copyright &copy; 2026 Annamari Laurén
 nav = [
     { "Get started" = "index.md" },
     { "Parameters" = "simulation_config.md" },
+    { "Paroninkorpi optimization" = "optimization_pymoo.md" },
     { "Get started with zensical" = "zensical_index.md" },
 ]
 

@@ -18,7 +18,7 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../zensical_index/">
+        <link rel="next" href="../optimization_pymoo/">
       
       
         
@@ -1548,17 +1548,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#susi.io.metadata_model.SimulationMetaData.experiment_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        experiment_name
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#susi.io.metadata_model.SimulationMetaData.git_commit_hash" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1614,6 +1603,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#susi.io.metadata_model.SimulationMetaData.parent_output_folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parent_output_folder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#susi.io.metadata_model.SimulationMetaData.timestamp_end" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1644,6 +1644,33 @@
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../optimization_pymoo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Paroninkorpi optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -2945,17 +2972,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#susi.io.metadata_model.SimulationMetaData.experiment_name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        experiment_name
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#susi.io.metadata_model.SimulationMetaData.git_commit_hash" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3004,6 +3020,17 @@
     <span class="md-ellipsis">
       
         parameter_output_filename
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#susi.io.metadata_model.SimulationMetaData.parent_output_folder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parent_output_folder
       
     </span>
   </a>
@@ -6503,10 +6530,19 @@ mass of humus layer in kg m-2</p>
       <p>Config:</p>
       <ul>
           <li><code>validate_default</code>: <code class="highlight language-python"><span class="kc">True</span></code></li>
+          <li><code>extra</code>: <code class="highlight language-python"><span class="n">forbid</span></code></li>
       </ul>
 
         <p>Fields:</p>
         <ul>
+            <li>
+              <code><span title="susi.io.metadata_model.SimulationMetaData.experiment_id">experiment_id</span></code>
+                (<code><span title="str">str</span></code>)
+            </li>
+            <li>
+              <code><span title="susi.io.metadata_model.SimulationMetaData.parent_output_folder">parent_output_folder</span></code>
+                (<code><span title="pydantic.DirectoryPath">DirectoryPath</span></code>)
+            </li>
             <li>
               <code><span title="susi.io.metadata_model.SimulationMetaData.metadata_schema_version">metadata_schema_version</span></code>
                 (<code><span title="int">int</span></code>)
@@ -6525,11 +6561,11 @@ mass of humus layer in kg m-2</p>
             </li>
             <li>
               <code><span title="susi.io.metadata_model.SimulationMetaData.timestamp_start">timestamp_start</span></code>
-                (<code><span title="str">str</span></code>)
+                (<code><span title="datetime.datetime">datetime</span></code>)
             </li>
             <li>
               <code><span title="susi.io.metadata_model.SimulationMetaData.timestamp_end">timestamp_end</span></code>
-                (<code><span title="str">str</span></code>)
+                (<code><span title="datetime.datetime">datetime</span></code>)
             </li>
             <li>
               <code><span title="susi.io.metadata_model.SimulationMetaData.git_commit_hash">git_commit_hash</span></code>
@@ -6538,14 +6574,6 @@ mass of humus layer in kg m-2</p>
             <li>
               <code><span title="susi.io.metadata_model.SimulationMetaData.host_info">host_info</span></code>
                 (<code><span title="str">str</span></code>)
-            </li>
-            <li>
-              <code><span title="susi.io.metadata_model.SimulationMetaData.experiment_name">experiment_name</span></code>
-                (<code><span title="str">str</span></code>)
-            </li>
-            <li>
-              <code><span title="susi.io.metadata_model.SimulationMetaData.experiment_folder_path">experiment_folder_path</span></code>
-                (<code><span title="pathlib.Path">Path</span> | None</code>)
             </li>
         </ul>
 
@@ -6560,7 +6588,7 @@ mass of humus layer in kg m-2</p>
                 &rarr;
                   <code><span title="susi.io.metadata_model.SimulationMetaData.netcdf_output_filename">netcdf_output_filename</span></code>            </li>
             <li>
-              <code><span title="susi.io.metadata_model.SimulationMetaData.set_experiment_folder_path">set_experiment_folder_path</span></code>
+              <code><span title="susi.io.metadata_model.SimulationMetaData.check_experiment_folder_path_does_not_exist">check_experiment_folder_path_does_not_exist</span></code>
             </li>
         </ul>
 
@@ -6579,10 +6607,10 @@ mass of humus layer in kg m-2</p>
 
 
 <h3 id="susi.io.metadata_model.SimulationMetaData.experiment_folder_path" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">experiment_folder_path</span> <span class="o">=</span> <span class="kc">None</span></code>
+            <code class="highlight language-python"><span class="n">experiment_folder_path</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
   </span>
 
 <a href="#susi.io.metadata_model.SimulationMetaData.experiment_folder_path" class="headerlink" title="Permanent link">&para;</a></h3>
@@ -6590,7 +6618,7 @@ mass of humus layer in kg m-2</p>
 
     <div class="doc doc-contents ">
 
-        <p>Directory Path for all simulation results: metadata, parameters, and netcdf file. If None (default), the folder name is the same as experiment_id.</p>
+        <p>Directory Path for Susi simulation results: metadata, parameters, and netcdf file. It is given by <code>parent_output_folder</code>/<code>experiment_id</code>. This path must not exists.</p>
 
     </div>
 
@@ -6604,8 +6632,7 @@ mass of humus layer in kg m-2</p>
             <code class="highlight language-python"><span class="n">experiment_id</span></code>
 
   <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-cached"><code>cached</code></small>
-      <small class="doc doc-label doc-label-property"><code>property</code></small>
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
   </span>
 
 <a href="#susi.io.metadata_model.SimulationMetaData.experiment_id" class="headerlink" title="Permanent link">&para;</a></h3>
@@ -6613,29 +6640,7 @@ mass of humus layer in kg m-2</p>
 
     <div class="doc doc-contents ">
 
-        <p>A string that uniquely identifies each simulation experiment. If None, it is computed as a combination of the starting timestamp and a random number to avoid naame collisions.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h3 id="susi.io.metadata_model.SimulationMetaData.experiment_name" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">experiment_name</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
-  </span>
-
-<a href="#susi.io.metadata_model.SimulationMetaData.experiment_name" class="headerlink" title="Permanent link">&para;</a></h3>
-
-
-    <div class="doc doc-contents ">
-
-        <p>A name for the experiment. It defaults to the empty string. This field will be used to create the folder where Susi outputs are stored. Susi automatically attaches the starting date/time and a random string to each folder name to avoid name collisions.</p>
+        <p>A name that identifies the simulation experiment. This will be the name of the folder where Susi outputs are stored. The full path of <code>parent_output_folder</code> / <code>experiment_id</code> must not exist: otherwise we would be overwriting previous simulations' results.</p>
 
     </div>
 
@@ -6755,8 +6760,30 @@ mass of humus layer in kg m-2</p>
 
 
 
+<h3 id="susi.io.metadata_model.SimulationMetaData.parent_output_folder" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">parent_output_folder</span> <span class="o">=</span> <span class="n">_app_settings</span><span class="o">.</span><span class="n">output_folder</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
+  </span>
+
+<a href="#susi.io.metadata_model.SimulationMetaData.parent_output_folder" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The directory where the output of the Susi simulation will be stored.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h3 id="susi.io.metadata_model.SimulationMetaData.timestamp_end" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">timestamp_end</span> <span class="o">=</span> <span class="nb">str</span><span class="p">()</span></code>
+            <code class="highlight language-python"><span class="n">timestamp_end</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-pydantic-field"><code>pydantic-field</code></small>
@@ -6870,13 +6897,13 @@ mass of humus layer in kg m-2</p>
         
         
           
-          <a href="../zensical_index/" class="md-footer__link md-footer__link--next" aria-label="Next: Get started with zensical">
+          <a href="../optimization_pymoo/" class="md-footer__link md-footer__link--next" aria-label="Next: Paroninkorpi optimization">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Get started with zensical
+                Paroninkorpi optimization
               </div>
             </div>
             <div class="md-footer__button md-icon">
