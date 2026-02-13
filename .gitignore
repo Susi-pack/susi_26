@@ -31,5 +31,5 @@ requirements_inaki.txt
 analysis/.ipynb_checkpoints
 analysis/eyeballing.py
 pyrightconfig.json
-golden_file_test/golden_file_new_experiment/
 paroninkorpi/
+tests/golden_file_test/golden_file_new_experiment
