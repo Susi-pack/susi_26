@@ -60,8 +60,8 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
         netcdf_filepath=golden_netcdf_filepath, variables=golden_variables
     )
 
-    for new_var_values, golden_var_values in zip(new_vars_values, golden_vars_values):
-        if not masked_arrays_equal(a=new_var_values, b=golden_var_values):
+    for new_var, golden_var in zip(new_vars_values, golden_vars_values):
+        if not masked_arrays_equal(a=new_var.value, b=golden_var.value):
             raise ValueError(" There were differences in some variable.")
     return True
 
