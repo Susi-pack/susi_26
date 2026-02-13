@@ -1,4 +1,4 @@
-from typing import NewType
+from typing import NewType, Sequence
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -52,8 +52,8 @@ class ScenarioArrayData:
 
 
 # %% Functions
-def list_subdirectories(path: Path):
-    return (x for x in path.iterdir() if x.is_dir())
+def list_subdirectories(path: Path) -> list[Path]:
+    return [x for x in path.iterdir() if x.is_dir()]
 
 
 def list_variable_absolute_paths(group: netCDF4.Dataset, path: str = "/") -> list[str]:
@@ -66,14 +66,6 @@ def list_variable_absolute_paths(group: netCDF4.Dataset, path: str = "/") -> lis
         vars_with_paths.extend(list_variable_absolute_paths(subgroup, subpath))
 
     return vars_with_paths
-
-
-def get_var_by_path(group: netCDF4.Dataset, var_path: str) -> dict:
-    parts = var_path.strip("/").split("/")
-    group = group
-    for p in parts[:-1]:  # navigate to the group
-        group = group.groups[p]
-    return group.variables[parts[-1]][:]  # read the data
 
 
 def _load_single_experiment_metadatas(
@@ -169,7 +161,9 @@ def list_all_netcdf_variables(netcdf_filepath: Path) -> list[NetcdfVariableInfo]
         return _recursive_group(nc)
 
 
-def _get_variable_by_path(group, path_parts):
+def _get_variable_by_path(
+    group: netCDF4.Dataset, path_parts: list[str]
+) -> netCDF4.Variable:
     """Recursively navigate groups to find the variable."""
     if len(path_parts) == 1:
         return group.variables[path_parts[0]]
@@ -201,7 +195,7 @@ def read_value_several_variables_from_single_file(
 
 
 def choose_netcdf_vars_by_path(
-    paths: tuple[NetcdfVariablePath],
+    paths: Sequence[NetcdfVariablePath],
     all_variables: list[NetcdfVariableInfo],
 ) -> list[NetcdfVariableInfo]:
     """
