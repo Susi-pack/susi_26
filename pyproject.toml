@@ -40,4 +40,6 @@ exclude = [
 ]
 
 [tool.pytest]
-testpaths = ["tests"] # only look under the tests/ folder for tests
+testpaths = [ # Name of the folders in which to look for tests.
+    "tests",
+]

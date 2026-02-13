@@ -15,6 +15,7 @@ from scipy.special import gamma
 from scipy.optimize import root_scalar
 from typing import List, Tuple
 
+
 def scale_dg_mean(D, shape):
     """Compute scale parameter for basal area-weighted mean diameter."""
     if shape <= 0.1:
@@ -24,12 +25,14 @@ def scale_dg_mean(D, shape):
     except Exception:
         return np.nan
 
+
 def residual(shape, G, N, D):
     """Residual to be minimized: difference between observed and Weibull-derived second moment."""
     scale = scale_dg_mean(D, shape)
     if np.isnan(scale):
         return np.nan
     return 40000 * G / (np.pi * N) - scale**2 * gamma(2 / shape + 1)
+
 
 def recweib_b(G, N, D, trace=False):
     """
@@ -53,13 +56,15 @@ def recweib_b(G, N, D, trace=False):
 
     # Try Brent's method first
     try:
-        result = root_scalar(safe_residual, bracket=[0.2, 30.0], method='brentq')
+        result = root_scalar(safe_residual, bracket=[0.2, 30.0], method="brentq")
         if result.converged:
             shape = result.root
             scale = scale_dg_mean(D, shape)
             val = residual(shape, G, N, D)
             if trace:
-                print(f"Recovered shape: {shape:.4f}, scale: {scale:.4f}, residual: {val:.4e}")
+                print(
+                    f"Recovered shape: {shape:.4f}, scale: {scale:.4f}, residual: {val:.4e}"
+                )
             return {"shape": shape, "scale": scale, "val": val}
     except Exception:
         if trace:
@@ -67,7 +72,7 @@ def recweib_b(G, N, D, trace=False):
 
     # Fallback: grid search
     best_shape = None
-    min_resid = float('inf')
+    min_resid = float("inf")
     for s in np.linspace(0.2, 30.0, 300):
         r = safe_residual(s)
         if not np.isnan(r) and abs(r) < min_resid:
@@ -84,16 +89,16 @@ def recweib_b(G, N, D, trace=False):
     val = residual(shape, G, N, D)
 
     if trace:
-        print(f"Recovered shape (grid): {shape:.4f}, scale: {scale:.4f}, residual: {val:.4e}")
+        print(
+            f"Recovered shape (grid): {shape:.4f}, scale: {scale:.4f}, residual: {val:.4e}"
+        )
 
     return {"shape": shape, "scale": scale, "val": val}
 
+
 def generate_weibull_tree_list(
-        n_classes: int,
-        G: float,
-        Dg: float,
-        stems_ha: float
-    ) -> List[Tuple[float, float]]:
+    n_classes: int, G: float, Dg: float, stems_ha: float
+) -> List[Tuple[float, float]]:
     """
     Generate synthetic tree list using 2-parameter Weibull distribution.
     Ensures minimum diameter is 1 cm.
@@ -107,16 +112,16 @@ def generate_weibull_tree_list(
     Returns:
         List of tuples: (stems per class, diameter midpoint in cm)
     """
-    
+
     weibull_parameters = recweib_b(G, stems_ha, Dg)
-    shape = weibull_parameters['shape']
-    scale = weibull_parameters['scale']
-    a = 0.0                                             # Assume location parameter is zero
-    
+    shape = weibull_parameters["shape"]
+    scale = weibull_parameters["scale"]
+    a = 0.0  # Assume location parameter is zero
+
     x_max = scale * (-math.log(0.01)) ** (1.0 / shape)  # ~99th percentile
-    
-    d_min = 1.0                                         # Enforce minimum diameter
-    
+
+    d_min = 1.0  # Enforce minimum diameter
+
     interval = (x_max - d_min) / n_classes
 
     result = []
@@ -127,7 +132,7 @@ def generate_weibull_tree_list(
         x += interval
         d_mid = x - interval / 2.0
 
-        f = 1 - math.exp(-((x - a) / scale) ** shape)
+        f = 1 - math.exp(-(((x - a) / scale) ** shape))
         f = min(f, 1.0)
 
         p = f - f_prev

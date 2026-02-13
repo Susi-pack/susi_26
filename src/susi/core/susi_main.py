@@ -35,8 +35,8 @@ from susi.core.susi_utils import read_FMI_weather
 
 class Susi:
     def __init__(self, simulation_parameters: SimulationParams):
-        self.metadata = simulation_parameters.metadata
-        self.parameters = simulation_parameters.susi_params
+        self.metadata: SimulationMetaData = simulation_parameters.metadata
+        self.parameters: SusiParams = simulation_parameters.susi_params
 
         self.weather_forcing = read_FMI_weather(
             ID=0,
@@ -677,6 +677,7 @@ class Susi:
         # del stand, groundvegetation, esmass, esN, esP, esK, ferti, cpy, moss, stp, pt
 
     def create_output_folder(self) -> None:
+        assert self.metadata.experiment_folder_path is not None
         io_utils.create_folder(path=self.metadata.experiment_folder_path)
         return None
 
