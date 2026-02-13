@@ -534,7 +534,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
                 N_3 = int(stratum["tst:StemCount"])
 
         G_values = {1: G_1, 2: G_2, 4: G_3}
-        main_sp = max(G_values, key=G_values.get) if G_values else None
+        main_sp = max(G_values.keys(), key=lambda k: G_values[k]) if G_values else None
         N_total = N_1 + N_2 + N_3
 
         # Check the need of sapling stand thinning

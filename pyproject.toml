@@ -37,6 +37,9 @@ exclude = [
     "src/susi/io/susi_io.py",
     "src/scripts/susi_calls_scenarios.py",
     "src/inputs/susi_para.py",
+    "src/susi/core/metsi/naslund.py",
+    "src/susi/core/thinning_models.py",
+
 ]
 
 [tool.pytest]
