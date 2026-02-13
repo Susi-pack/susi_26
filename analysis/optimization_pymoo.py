@@ -14,11 +14,13 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.repair.rounding import RoundingRepair
 from pymoo.visualization.scatter import Scatter
-import matplotlib.pyplot as plt
 
 import susi.io.netcdf_utils as nc_utils
 from susi.io.app_settings import AppSettings
 
+# %%
+RANDOM_SEED = 42
+rng = np.random.default_rng(seed=RANDOM_SEED)
 
 # %% Load paroninkorpi metadata
 
@@ -255,10 +257,32 @@ reconstructed = transform_array_data_to_list_of_scenarios(
 
 assert reconstructed == vars_of_interest_by_stand
 
+# %% Each stand has different size. This is important when optimizing!
+# TODO: change with real values
+import warnings
+
+warnings.warn("Using placeholder study area values")
+STAND_AREAS_HA = rng.random(size=N_STANDS)
+
+
+def scale_target_variables_with_stand_area(
+    stand_areas: np.ndarray, arrays: list[np.ndarray]
+) -> list[np.ndarray]:
+    """
+    Each stand has a different area.
+    The weight each stand has in the total sum is weighted according to the area.
+    Scaling means simply multiplying by each stand's area.
+    """
+
+    return [stand_area * array for stand_area, array in zip(stand_areas, arrays)]
+
+
+arrays_scaled_by_area = scale_target_variables_with_stand_area(
+    stand_areas=STAND_AREAS_HA, arrays=arrays
+)
+
 
 # %% target function
-RANDOM_SEED = 42
-rng = np.random.default_rng(seed=RANDOM_SEED)
 
 
 def create_random_organism(scenarios_cardinality: tuple[int]) -> np.ndarray:
@@ -333,12 +357,12 @@ random_population = create_random_population(scenarios_cardinality, n_organisms=
 
 random_organism_fitness = target_function_for_single_organism(
     configuration=random_organism,
-    arrays_of_vars_of_interest=arrays,
+    arrays_of_vars_of_interest=arrays_scaled_by_area,
     number_of_target_variables=number_of_target_variables,
 )
 random_population_fitness = target_function_for_population(
     configurations=random_population,
-    arrays_of_vars_of_interest=arrays,
+    arrays_of_vars_of_interest=arrays_scaled_by_area,
     number_of_target_variables=number_of_target_variables,
 )
 
@@ -354,7 +378,7 @@ for i in range(N_ITER_TO_EVALUATE):
 
     random_organism_fitness = target_function_for_single_organism(
         configuration=random_organism,
-        arrays_of_vars_of_interest=arrays,
+        arrays_of_vars_of_interest=arrays_scaled_by_area,
         number_of_target_variables=number_of_target_variables,
     )
 end = time.time()
@@ -369,7 +393,7 @@ print(
 random_organism = create_random_organism(scenarios_cardinality)
 
 target_numba_function = make_target_function_numba_version(
-    arrays_of_vars_of_interest=arrays,
+    arrays_of_vars_of_interest=arrays_scaled_by_area,
     number_of_target_variables=number_of_target_variables,
     n_stands=N_STANDS,
 )
@@ -422,7 +446,7 @@ class MyProblem(Problem):
 
 
 problem = MyProblem(
-    arrays_of_vars_of_interest=arrays,
+    arrays_of_vars_of_interest=arrays_scaled_by_area,
     n_target_variables=number_of_target_variables,
     scenarios_cardinality=[
         c - 1 for c in scenarios_cardinality
@@ -463,10 +487,16 @@ def compute_single_variable_maxima(arrays: list[np.ndarray]) -> np.ndarray:
 
 # Minima and maxima for each dimension
 single_var_minima = np.stack(
-    [target_numba_function(m) for m in compute_single_variable_minima(arrays)]
+    [
+        target_numba_function(m)
+        for m in compute_single_variable_minima(arrays_scaled_by_area)
+    ]
 )
 single_var_maxima = np.stack(
-    [target_numba_function(m) for m in compute_single_variable_maxima(arrays)]
+    [
+        target_numba_function(m)
+        for m in compute_single_variable_maxima(arrays_scaled_by_area)
+    ]
 )
 
 
