@@ -1,6 +1,6 @@
 # %%
 from typing import Callable, Sequence
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import Enum
 import numpy as np
 from pathlib import Path
@@ -172,7 +172,7 @@ for n_stand in range(N_STANDS):
 
 # Usage example:
 # Forward transformation
-array_data = transform_list_of_scenarios_to_optimization_array_structure(
+array_data = nc_utils.transform_list_of_scenarios_to_optimization_array_structure(
     vars_of_interest_by_stand=vars_of_interest_by_stand,
     n_stands=N_STANDS,
     target_variable_paths=INTERESTING_VAR_PATHS,
@@ -183,7 +183,7 @@ arrays: list[np.ndarray] = array_data.arrays
 names = array_data.scenario_names
 
 # Reverse transformation
-reconstructed = transform_array_data_to_list_of_scenarios(
+reconstructed = nc_utils.transform_array_data_to_list_of_scenarios(
     array_data=array_data,
     n_stands=N_STANDS,
     target_variable_paths=INTERESTING_VAR_PATHS,
