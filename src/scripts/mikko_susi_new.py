@@ -21,6 +21,7 @@ from susi.core.thinning_models import (
 from scipy.optimize import root_scalar
 from shapely.geometry import Polygon, mapping
 from rasterio.mask import mask
+import xmltodict
 
 from susi.io.app_settings import AppSettings
 
@@ -259,7 +260,7 @@ def prepare_susi_params(
         / "paroninkorpi/weather_paroninkorpi/Weather_observations_Janakkala_1980_2024.csv"
     )
 
-    experiment_folder_path = (
+    parent_folder = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
     )
 
@@ -287,7 +288,7 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id=scenario, parent_output_folder=experiment_folder_path
+            experiment_id=scenario, parent_output_folder=parent_folder
         ),
         susi_params=SusiParams(
             weather_parameters=WeatherParams(
@@ -467,21 +468,61 @@ def list_all_files_in_directory(dir: Path) -> list[Path | str]:
 
 allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH)
 
+# We will simulate one stand for each allometry file
+N_STANDS = len(allometry_filepaths)
+
+
+# %% Get ditch depth for each stand from raster file
+def get_ditch_depth_from_raster_by_stand() -> list[float]:
+    """initial ditch depth, m"""
+    ditch_depth_raster_filepath = (
+        AppSettings().input_folder / "paroninkorpi/Ditches/ditch_depth_1m.tif"
+    )
+
+    stands_path = (
+        AppSettings().input_folder / "paroninkorpi/Forest_data/Paroninkorpi.xml"
+    )
+
+    with open(stands_path, encoding="utf8") as fd:
+        forestdata = xmltodict.parse(fd.read())
+
+    ditch_depths = []
+
+    stands = forestdata["ForestPropertyData"]["st:Stands"]
+    for stand in stands["st:Stand"]:
+        StandBasicData = stand["st:StandBasicData"]
+        polygon_str = StandBasicData["gdt:PolygonGeometry"]["gml:polygonProperty"][
+            "gml:Polygon"
+        ]["gml:exterior"]["gml:LinearRing"]["gml:coordinates"]
+
+        coords = []
+        for pair in polygon_str.strip().split(" "):
+            if pair.strip() == "":
+                continue
+            x, y = pair.split(",")
+            coords.append((float(x), float(y)))
+
+        ditch_depths.append(
+            lidar_ditch_depth(ditch_depth_raster_filepath, coords, buffer_m=10)
+        )
+
+    return ditch_depths
+
+
+ditch_depth_for_each_stand = get_ditch_depth_from_raster_by_stand()
+
+
 # %% Create params for all base scenario Susi runs
+
 
 # List of parameters that completely determine each Susi simulation
 all_parameters: list[SimulationParams] = []
 
-# We will simulate one stand for each allometry file
-stand_numbers = range(1, len(allometry_filepaths))
+
+stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
-    # TODO: Change the placeholder with the following when I get the lidar raster file
-    # Drainage attributes:
-    # ditch_depth = lidar_ditch_depth(
-    #     ditch_depth_raster, coords, buffer_m=10
-    # )  # initial ditch depth, m
-    PLACEHOLDER_DITCH_DEPTH = -0.3
-    ditch_depth = PLACEHOLDER_DITCH_DEPTH
+    # TODO: Replace this in function above
+    ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
 
     # TODO: Change the placeholder when we get the XML data
     FERTILITY_CLASS_PLACEHOLDER = 4
