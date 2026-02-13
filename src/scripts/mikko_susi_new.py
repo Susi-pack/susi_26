@@ -655,7 +655,7 @@ for params in all_parameters:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=6,
+    n_parallel_processes=7,
 )
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
