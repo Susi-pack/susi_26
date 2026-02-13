@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 import datetime
+from dataclasses import dataclass
 
 from multiprocessing import Pool
 from netCDF4 import Dataset
@@ -426,8 +427,6 @@ def run(simulation_parameters: SimulationParams) -> None:
     )
 
     # Study thinning alternatives:
-    # TODO: G_1 and G_2 are placeholder values right now.
-    # Change with actual values once we get the data.
     G_1 = 4
     G_2 = 2
 
@@ -471,32 +470,36 @@ allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH
 # We will simulate one stand for each allometry file
 N_STANDS = len(allometry_filepaths)
 
+# %% Get additional xml data for each stand
 
-# %% Get ditch depth for each stand from raster file
-def get_ditch_depth_from_raster_by_stand() -> list[float]:
-    """initial ditch depth, m"""
-    ditch_depth_raster_filepath = (
-        AppSettings().project_root_path
-        / "paroninkorpi/input/Ditches/ditch_depth_1m.tif"
-    )
 
-    stands_path = (
+@dataclass
+class DataFromXml:
+    coords: list[tuple[float, float]]
+    fertility_class: int
+    G_1: float
+    G_2: float
+
+
+def get_XML_data_for_each_stand() -> list[DataFromXml]:
+    xml_path = (
         AppSettings().project_root_path
         / "paroninkorpi/input/Forest_data/Paroninkorpi.xml"
     )
-
-    with open(stands_path, encoding="utf8") as fd:
+    with open(xml_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
 
-    ditch_depths = []
-
     stands = forestdata["ForestPropertyData"]["st:Stands"]
+
+    xml_data: list[DataFromXml] = []
+
     for stand in stands["st:Stand"]:
         StandBasicData = stand["st:StandBasicData"]
         polygon_str = StandBasicData["gdt:PolygonGeometry"]["gml:polygonProperty"][
             "gml:Polygon"
         ]["gml:exterior"]["gml:LinearRing"]["gml:coordinates"]
 
+        # coords
         coords = []
         for pair in polygon_str.strip().split(" "):
             if pair.strip() == "":
@@ -504,14 +507,97 @@ def get_ditch_depth_from_raster_by_stand() -> list[float]:
             x, y = pair.split(",")
             coords.append((float(x), float(y)))
 
+        # G_1, G_2
+        G_1 = G_2 = 0
+        N_1 = N_2 = 0
+
+        TreeStandData = stand["ts:TreeStandData"]
+        TreeStandSummary = TreeStandData["ts:TreeStandDataDate"]["tss:TreeStandSummary"]
+        try:
+            TreeStratum = TreeStandData["ts:TreeStandDataDate"]["tst:TreeStrata"][
+                "tst:TreeStratum"
+            ]
+        except:
+            continue
+
+        # Extract stratum attributes
+        for stratum in TreeStratum:
+            species = int(stratum["tst:TreeSpecies"])
+            if species == 1:
+                G_1 = float(stratum["tst:BasalArea"])
+                N_1 = int(stratum["tst:StemCount"])
+            elif species == 2:
+                G_2 = float(stratum["tst:BasalArea"])
+                N_2 = int(stratum["tst:StemCount"])
+            elif species >= 3:
+                G_3 = float(stratum["tst:BasalArea"])
+                N_3 = int(stratum["tst:StemCount"])
+
+        G_values = {1: G_1, 2: G_2, 4: G_3}
+        main_sp = max(G_values, key=G_values.get) if G_values else None
+        N_total = N_1 + N_2 + N_3
+
+        # Check the need of sapling stand thinning
+
+        def sampling_stand_thinning_rate(species_id, stem_count):
+            target_N = 1800 if species_id == 2 else 2000
+            return target_N / stem_count
+
+        Dg_total = float(TreeStandSummary["tss:MeanDiameter"])
+        if ((main_sp == 2) & (N_total > 2200) & (Dg_total < 8)) | (
+            (main_sp != 2) & (N_total > 2500) & (Dg_total < 8)
+        ):
+            thinning_rate = sampling_stand_thinning_rate(main_sp, N_total)
+
+            G_1 *= thinning_rate
+            G_2 *= thinning_rate
+            G_3 *= thinning_rate
+            N_1 *= thinning_rate
+            N_2 *= thinning_rate
+            N_3 *= thinning_rate
+
+        # FertilityClass
+        FertilityClass = int(StandBasicData["st:FertilityClass"])
+
+        xml_data.append(
+            DataFromXml(
+                coords=coords,
+                G_1=G_1,
+                G_2=G_2,
+                fertility_class=FertilityClass,
+            )
+        )
+    return xml_data
+
+
+# %% Get ditch depth for each stand from raster file
+def get_ditch_depth_from_raster_by_stand(xml_data: list[DataFromXml]) -> list[float]:
+    """initial ditch depth, m"""
+    ditch_depth_raster_filepath = (
+        AppSettings().project_root_path
+        / "paroninkorpi/input/Ditches/ditch_depth_1m.tif"
+    )
+
+    n_stands = len(xml_data)
+
+    ditch_depths = []
+    for n_stand in range(n_stands):
         ditch_depths.append(
-            lidar_ditch_depth(ditch_depth_raster_filepath, coords, buffer_m=10)
+            lidar_ditch_depth(
+                ditch_depth_raster_filepath, xml_data[n_stand].coords, buffer_m=10
+            )
         )
 
     return ditch_depths
 
 
-ditch_depth_for_each_stand = get_ditch_depth_from_raster_by_stand()
+xml_data = get_XML_data_for_each_stand()
+
+ditch_depth_for_each_stand = get_ditch_depth_from_raster_by_stand(xml_data)
+
+fertility_class_for_each_stand = [i.fertility_class for i in xml_data]
+G_1_for_each_stand = [i.G_1 for i in xml_data]
+G_2_for_each_stand = [i.G_2 for i in xml_data]
 
 
 # %% Create params for all base scenario Susi runs
@@ -524,10 +610,7 @@ all_parameters: list[SimulationParams] = []
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
-
-    # TODO: Change the placeholder when we get the XML data
-    FERTILITY_CLASS_PLACEHOLDER = 4
-    fertility_class = FERTILITY_CLASS_PLACEHOLDER
+    fertility_class = fertility_class_for_each_stand[stand_number - 1]
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
@@ -548,6 +631,26 @@ for stand_number in stand_numbers:
         )
 
         all_parameters.append(susi_params)
+
+# %% Get G_1 and G_2 per parameter set
+# In order to call SUsi, we need G_1 not per stand, but per scenario
+# (there's one parameter set per scenario)
+# This is a hacky way of doing things, but more or less forced
+# because SusiParams does not contain G_1 and G_2
+
+G_1_per_parameter_set = []
+G_2_per_parameter_set = []
+
+for params in all_parameters:
+    # First, get the stand number from the metadata.
+    # This is the hacky part)
+    stand_number = int(params.metadata.parent_output_folder.name[-2:])
+
+    # Then, add it to the list
+    G_1_per_parameter_set.append(G_1_for_each_stand[stand_number - 1])
+    G_2_per_parameter_set.append(G_2_for_each_stand[stand_number - 1])
+
+
 # %% Execute parallel processing
 
 execution_config = MultipleSusis(
@@ -557,6 +660,12 @@ execution_config = MultipleSusis(
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
     pool.map(func=run, iterable=execution_config.simulation_parameter_list)
+
+# # %% Temp checks. DELETE IN FUTURE!
+# for p in all_parameters:
+#     stand_number = int(p.metadata.parent_output_folder.name[-2:])
+#     print(f"stand: {stand_number}, id: {p.metadata.experiment_id}")
+#
 
 # %% Analysis
 #
