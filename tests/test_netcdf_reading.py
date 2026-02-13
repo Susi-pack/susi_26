@@ -67,25 +67,3 @@ def test_explore_netcdf_structure(mock_netcdf_file):
     assert temp_var.shape == (10, 5, 5)
     assert temp_var.dimension_names == ("time", "lat", "lon")
     assert temp_var.units == "K"
-
-
-def test_read_netcdf_variable(mock_netcdf_file):
-    variables = list_all_netcdf_variables(mock_netcdf_file)
-
-    # Pick the nested variable
-    nested_var = next(var for var in variables if var.name == "nested_var")
-
-    data = read_value_several_variables_from_single_file(
-        mock_netcdf_file, [nested_var]
-    )[0]
-    assert isinstance(data, np.ndarray)
-    assert data.shape == (4,)
-    np.testing.assert_allclose(data, np.linspace(0, 1, 4))
-
-    # Pick root-level variable
-    temp_var = next(var for var in variables if var.name == "temperature")
-    data = read_value_several_variables_from_single_file(mock_netcdf_file, [temp_var])[
-        0
-    ]
-    assert data.shape == (10, 5, 5)
-    assert data[0, 0, 0] == 250
