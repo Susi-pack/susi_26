@@ -11,7 +11,6 @@
 
 from pathlib import Path
 
-import netCDF4
 import numpy as np
 import shutil
 
@@ -48,21 +47,22 @@ def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
 
 
 def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
-    new_ds = netCDF4.Dataset(new_netcdf_filepath, "r")
-    golden_ds = netCDF4.Dataset(golden_netcdf_filepath, "r")
+    new_variables = netcdf_utils.list_all_netcdf_variables(new_netcdf_filepath)
+    golden_variables = netcdf_utils.list_all_netcdf_variables(golden_netcdf_filepath)
 
-    new_var_paths = netcdf_utils.list_variable_absolute_paths(group=new_ds)
-    golden_var_paths = netcdf_utils.list_variable_absolute_paths(group=golden_ds)
+    # Compare variable attributes first
+    assert new_variables == golden_variables
 
-    # Compare variable names first
-    assert golden_var_paths == new_var_paths
+    new_vars_values = netcdf_utils.read_value_several_variables_from_single_file(
+        netcdf_filepath=new_netcdf_filepath, variables=new_variables
+    )
+    golden_vars_values = netcdf_utils.read_value_several_variables_from_single_file(
+        netcdf_filepath=golden_netcdf_filepath, variables=golden_variables
+    )
 
-    for var in new_var_paths:
-        new = netcdf_utils.get_var_by_path(new_ds, var)
-        golden = netcdf_utils.get_var_by_path(golden_ds, var)
-
-        if not masked_arrays_equal(a=new, b=golden):
-            raise ValueError(f" There were differences in variable {var}")
+    for new_var, golden_var in zip(new_vars_values, golden_vars_values):
+        if not masked_arrays_equal(a=new_var.value, b=golden_var.value):
+            raise ValueError(" There were differences in some variable.")
     return True
 
 

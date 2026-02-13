@@ -40,6 +40,9 @@ exclude = [
 ]
 
 [tool.pytest]
-testpaths = [ # Name of the folders in which to look for tests.
-    "tests",
-]
+# Name of the folders in which to look for tests.
+testpaths = ["tests"]
+
+# Ignore the golden file test by default.
+# Run with pytest tests/golden_file_test/test_golden_file.py
+addopts = ["--ignore=tests/golden_file_test/test_golden_file.py"]

@@ -6,9 +6,12 @@ venv/
 *.pyc
 __pycache__/
 .DS_Store
-outputs/
+*.egg
+*.egg-info/
+
+# Spyder stuff
+.spyproject/
 .spyproject/*
-.python-version
 .spyproject/config/workspace.ini
 *.egg
 *.egg-info/
@@ -18,7 +21,8 @@ src/susi_26.egg-info
 .spyproject/
 .spyproject/config/workspace.ini
 
-# uv stuff (not usefult since some are using pip)
+
+# uv stuff
 uv.lock
 .python-version
 
