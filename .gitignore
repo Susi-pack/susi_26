@@ -25,11 +25,7 @@ uv.lock
 requirements_inaki.txt
 
 analysis/.ipynb_checkpoints
-pyrightconfig.json
-src/inputs/paroninkorpi/Stand_allometry/.~lock.susi_input_10.xlsx#
-golden_file_test/golden_file_new_experiment/
-mikko/
-uv.lock
 analysis/eyeballing.py
-src/inputs/paroninkorpi/Forest_data
-src/inputs/paroninkorpi/Ditches
+pyrightconfig.json
+golden_file_test/golden_file_new_experiment/
+paroninkorpi/

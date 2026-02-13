@@ -254,13 +254,13 @@ def prepare_susi_params(
     fertility_class: int,
     scenario: str,
 ) -> SimulationParams:
-    input_folder = AppSettings().input_folder
+    input_folder = AppSettings().project_root_path / "paroninkorpi/input"
     weather_file_path = (
         input_folder
-        / "paroninkorpi/weather_paroninkorpi/Weather_observations_Janakkala_1980_2024.csv"
+        / "weather_paroninkorpi/Weather_observations_Janakkala_1980_2024.csv"
     )
 
-    parent_folder = (
+    output_parent_folder = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
     )
 
@@ -288,7 +288,7 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id=scenario, parent_output_folder=parent_folder
+            experiment_id=scenario, parent_output_folder=output_parent_folder
         ),
         susi_params=SusiParams(
             weather_parameters=WeatherParams(
@@ -458,7 +458,7 @@ def run(simulation_parameters: SimulationParams) -> None:
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().input_folder / "paroninkorpi/Stand_allometry"
+    AppSettings().project_root_path / "paroninkorpi/input/Stand_allometry"
 )
 
 
@@ -476,11 +476,13 @@ N_STANDS = len(allometry_filepaths)
 def get_ditch_depth_from_raster_by_stand() -> list[float]:
     """initial ditch depth, m"""
     ditch_depth_raster_filepath = (
-        AppSettings().input_folder / "paroninkorpi/Ditches/ditch_depth_1m.tif"
+        AppSettings().project_root_path
+        / "paroninkorpi/input/Ditches/ditch_depth_1m.tif"
     )
 
     stands_path = (
-        AppSettings().input_folder / "paroninkorpi/Forest_data/Paroninkorpi.xml"
+        AppSettings().project_root_path
+        / "paroninkorpi/input/Forest_data/Paroninkorpi.xml"
     )
 
     with open(stands_path, encoding="utf8") as fd:
@@ -521,7 +523,6 @@ all_parameters: list[SimulationParams] = []
 
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
-    # TODO: Replace this in function above
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
 
     # TODO: Change the placeholder when we get the XML data
