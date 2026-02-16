@@ -8,6 +8,15 @@ __pycache__/
 .DS_Store
 *.egg
 *.egg-info/
+dist/
+build/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+develop-eggs/
+
 
 # Spyder stuff
 .spyproject/
@@ -15,16 +24,28 @@ __pycache__/
 .spyproject/config/workspace.ini
 *.egg
 *.egg-info/
+
 src/susi_26.egg-info
 
 # Spyder stuff
 .spyproject/
 .spyproject/config/workspace.ini
+.spyderproject/
+.directory
 
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
 
 # uv stuff
 uv.lock
 .python-version
+
+# OS generated files
+Thumbs.db
+desktop.ini
+.DS_Store
 
 requirements_inaki.txt
 
