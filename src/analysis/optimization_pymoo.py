@@ -69,7 +69,7 @@ sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
 all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
 
 # Filter the interesting variables
-INTERESTING_VAR_PATHS: list[nc_utils.NetcdfVariablePath] = (
+INTERESTING_VAR_PATHS: tuple[nc_utils.NetcdfVariablePath] = (
     "/stand/volume",
     "/balance/C/soil_c_balance_co2eq",
 )

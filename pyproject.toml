@@ -7,14 +7,18 @@ license = { file = "LICENSE" }
 authors = [{ name = "Your Name", email = "your.email@example.com" }]
 requires-python = ">=3.11"
 
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["susi*"]
+include = ["susi*", "analysis*"]
 namespaces = false
+
+[project.scripts]
+susi-analyze = "analysis.gui.__main__:main"
 
 [tool.ty.src]
 include = ["src", "tests", "src/susi/core/main.py"]

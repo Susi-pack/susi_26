@@ -68,7 +68,21 @@ def list_variable_absolute_paths(group: netCDF4.Dataset, path: str = "/") -> lis
     return vars_with_paths
 
 
-def _load_single_experiment_metadatas(
+def read_json_metadatas(
+    experiment_folderpath: Path,
+    metadata_filename: str = "metadata.json",
+    params_filename: str = "params.json",
+) -> tuple[dict, dict]:
+    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
+    params_filepath = experiment_folderpath.joinpath(params_filename)
+
+    metadata, params = map(
+        io_utils.read_json_file, [metadata_filepath, params_filepath]
+    )
+    return metadata, params
+
+
+def load_single_experiment_metadatas(
     experiment_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
@@ -77,12 +91,10 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
-
-    metadata, params = map(
-        io_utils.read_json_file, [metadata_filepath, params_filepath]
+    metadata, params = read_json_metadatas(
+        experiment_folderpath, metadata_filename, params_filename
     )
+
     return pd.json_normalize(metadata | params)
 
 
@@ -115,7 +127,7 @@ def load_all_metadatas_from_single_folder(folder: Path) -> pd.DataFrame:
     experiment_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
+            load_single_experiment_metadatas(exp_fpath)
             for exp_fpath in experiment_folderpaths
         ]
     )

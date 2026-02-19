@@ -15,7 +15,7 @@ from susi.io.netcdf_utils import (
     coerce_datetime_format,
     modify_after_load,
     list_subdirectories,
-    _load_single_experiment_metadatas,
+    load_single_experiment_metadatas,
     load_all_metadatas_from_single_folder,
     load_all_metadatas_from_folders,
     transform_list_of_scenarios_to_optimization_array_structure,
@@ -277,7 +277,7 @@ def mock_experiment_folders():
 def test_load_single_experiment_metadatas(mock_experiment_folders):
     exp_folder = mock_experiment_folders / "exp1"
 
-    result = _load_single_experiment_metadatas(exp_folder)
+    result = load_single_experiment_metadatas(exp_folder)
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
