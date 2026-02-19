@@ -54,3 +54,6 @@ analysis/eyeballing.py
 pyrightconfig.json
 paroninkorpi/
 tests/golden_file_test/golden_file_new_experiment
+
+# docs
+site/
