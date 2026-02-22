@@ -246,11 +246,12 @@ def read_netcdf_variable_values_for_stand(
 def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
     chosen_vars: list[NetcdfVariableInfo],
     metadata_by_stand: list[pd.DataFrame],
-) -> list[dict[ScenarioName, NetcdfVariableValue]]:
+) -> list[dict[ScenarioName, list[NetcdfVariableValue]]]:
     """
     Return nested structure:
         list <- dimension of number of stands
             dict <- dimension of scenarios for each stand
+                list <- dimension number of vars
     """
     chosen_variables_by_stand_and_scenario = []
 
@@ -266,7 +267,7 @@ def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
 def transform_list_of_scenarios_to_optimization_array_structure(
     vars_of_interest_by_stand: list[dict[ScenarioName, TargetVariableDict]],
     n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
+    target_variable_paths: Sequence[NetcdfVariablePath],
 ) -> ScenarioArrayData:
     target_variable_arrays: list[np.ndarray] = []
 
@@ -304,7 +305,7 @@ def transform_list_of_scenarios_to_optimization_array_structure(
 def transform_array_data_to_list_of_scenarios(
     array_data: ScenarioArrayData,
     n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
+    target_variable_paths: Sequence[NetcdfVariablePath],
 ) -> list[dict[ScenarioName, TargetVariableDict]]:
     vars_of_interest_by_stand: list[dict[ScenarioName, TargetVariableDict]] = []
 

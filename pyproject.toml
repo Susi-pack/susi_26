@@ -43,7 +43,8 @@ exclude = [
     "src/inputs/susi_para.py",
     "src/susi/core/metsi/naslund.py",
     "src/susi/core/thinning_models.py",
-
+    "src/analysis/scrapbook.py",
+    "src/analysis/figures.py",
 ]
 
 [tool.pytest]
