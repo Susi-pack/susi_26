@@ -17,6 +17,7 @@ load_default_settings_into_session_state()
 pages = [
     st.Page("pages/1_single_netcdf.py", title="Single"),
     st.Page("pages/2_multiple_netcdf.py", title="Multiple"),
+    st.Page("pages/annamari_figures.py", title="Annamari"),
     st.Page("pages/9_settings.py", title="Settings"),
 ]
 
