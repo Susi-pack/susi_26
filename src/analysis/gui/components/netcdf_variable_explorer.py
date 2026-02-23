@@ -69,6 +69,7 @@ def build(netcdf_variables: list[NetcdfVariableInfo]) -> list[NetcdfVariableInfo
     tree_nodes = build_tree_nodes(netcdf_variables)
 
     with col_left:
+        st.subheader("NetCDF Variable selection")
         # Use st.container with height parameter for scrollable area
         tree_container = st.container(height=400, border=True)
         with tree_container:
