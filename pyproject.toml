@@ -47,6 +47,11 @@ exclude = [
     "src/analysis/figures.py",
 ]
 
+[tool.ruff]
+exclude = ["src/analysis/figures.py",
+
+]
+
 [tool.pytest]
 # Name of the folders in which to look for tests.
 testpaths = ["tests"]

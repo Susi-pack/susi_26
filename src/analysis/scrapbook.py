@@ -3,10 +3,8 @@ from pathlib import Path
 import netCDF4
 import xarray as xr
 import pandas as pd
-from typing import NewType
 
 import susi.io.utils as io_utils
-from susi.io import netcdf_utils
 from susi.io.app_settings import AppSettings
 
 # %%

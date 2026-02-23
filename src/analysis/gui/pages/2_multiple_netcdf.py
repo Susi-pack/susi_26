@@ -1,4 +1,3 @@
-from curses import meta
 import streamlit as st
 import susi.io.netcdf_utils as nc_utils
 

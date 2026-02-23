@@ -1,5 +1,5 @@
 # %%
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Literal, assert_never
 from dataclasses import dataclass
 import numpy as np
 from pathlib import Path
@@ -105,9 +105,12 @@ def average_of_all_values(var: np.ndarray) -> float:
     return float(np.mean(var))
 
 
+TimeSeriesAggregation = Literal["mean_all", "mean_last_year"]
+
+
 @dataclass
 class TargetVariableProperties:
-    func_to_aggregate_data: Callable[[np.ndarray], float]
+    aggregation_method: TimeSeriesAggregation
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
@@ -116,7 +119,13 @@ def aggregate_time_series_to_float(
 ) -> float:
     inverter: int = -1 if target_variable_properties.invert_optimization else 1
 
-    return inverter * target_variable_properties.func_to_aggregate_data(time_series)
+    match target_variable_properties.aggregation_method:
+        case "mean_all":
+            return inverter * average_of_all_values(time_series)
+        case "mean_last_year":
+            return inverter * average_of_last_year_values(time_series)
+        case _:
+            assert_never()
 
 
 def compute_target_variables_from_netcdf_values(
@@ -128,7 +137,7 @@ def compute_target_variables_from_netcdf_values(
     return {
         netcdf_variable.path: aggregate_time_series_to_float(
             time_series=netcdf_variable.value,
-            target_variable_properties=PROPERTIES_OF_TARGET_VARIABLES[
+            target_variable_properties=properties_of_target_variables[
                 netcdf_variable.path
             ],
         )
@@ -138,13 +147,13 @@ def compute_target_variables_from_netcdf_values(
 
 PROPERTIES_OF_TARGET_VARIABLES = {
     nc_utils.NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
-        func_to_aggregate_data=average_of_last_year_values,
+        aggregation_method="mean_last_year",
         invert_optimization=True,
     ),
     nc_utils.NetcdfVariablePath(
         "/balance/C/soil_c_balance_co2eq"
     ): TargetVariableProperties(
-        func_to_aggregate_data=average_of_all_values,
+        aggregation_method="mean_all",
         invert_optimization=True,
     ),
 }

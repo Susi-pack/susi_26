@@ -158,7 +158,7 @@ if chosen_netcdf_variables:
 
                     ax1.set_xlabel("Time Step")
                     ax1.set_ylabel("Value")
-                    ax1.set_title(f"Temporal Evolution")
+                    ax1.set_title("Temporal Evolution")
                     if n_space <= 10:
                         ax1.legend(
                             bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small"
