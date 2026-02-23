@@ -6,12 +6,15 @@ Created on Tue Feb 15 17:37:58 2022
 
 import matplotlib.pylab as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.figure
 from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
 
+from susi.io import netcdf_utils as nc_utils
 
-def create_profile_line(
+
+def _create_profile_line(
     ax,
     wt,
     wtmin,
@@ -55,7 +58,7 @@ def create_profile_line(
     return ax
 
 
-def create_profile_boxplot(
+def _create_profile_boxplot(
     ax,
     datain,
     cols,
@@ -103,6 +106,10 @@ def create_profile_boxplot(
         ax.tick_params(axis="y", labelsize=fs)
 
     return ax
+
+
+create_profile_line = _create_profile_line
+create_profile_boxplot = _create_profile_boxplot
 
 
 def hydrology(ff, scen):
@@ -2177,4 +2184,5 @@ def compare_scens(ff):
 # stand(ff, 0)
 # mass(ff, 0)
 # nutrient_balance(ff, 'N', 0)
+
 
