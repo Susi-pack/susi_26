@@ -10,6 +10,9 @@ Spyder and this SUSI version can be found from requirements.txt
 # Run
 `python src/scripts/susi_calls.py`
 
+## Output analysis
+`susi-analyze`
+
 # Project structure
 SUSI project contains four folders:
 

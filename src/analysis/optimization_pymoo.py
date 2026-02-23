@@ -1,7 +1,6 @@
 # %%
-from typing import Callable, Sequence
+from typing import Callable, Sequence, Literal, assert_never
 from dataclasses import dataclass
-from enum import Enum
 import numpy as np
 from pathlib import Path
 from numba import jit
@@ -50,7 +49,7 @@ def product_of_elements_in_list(list_of_numbers: Sequence[int | float]) -> int |
     return product
 
 
-scenarios_cardinality = tuple(
+scenarios_cardinality: tuple[int, ...] = tuple(
     [stand_metadata_df.shape[0] for stand_metadata_df in metadata_by_stand]
 )
 n_total_combinations = product_of_elements_in_list(scenarios_cardinality)
@@ -69,9 +68,9 @@ sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
 all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
 
 # Filter the interesting variables
-INTERESTING_VAR_PATHS: list[nc_utils.NetcdfVariablePath] = (
-    "/stand/volume",
-    "/balance/C/soil_c_balance_co2eq",
+INTERESTING_VAR_PATHS = (
+    nc_utils.NetcdfVariablePath("/stand/volume"),
+    nc_utils.NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
 )
 
 chosen_vars = nc_utils.choose_netcdf_vars_by_path(
@@ -88,30 +87,30 @@ chosen_variables_by_stand_and_scenario = (
 
 
 # %% interesting_variables by stand
-def get_last_year_values(var: np.ndarray) -> np.ndarray:
-    return var[:, -1, :]
-
-
-def average_of_last_year_values(var: np.ndarray) -> float:
-    return np.mean(get_last_year_values(var))
-
-
-def average_of_all_values(var: np.ndarray) -> float:
-    return np.mean(var)
 
 
 def get_scenario_name_from_path(path: str) -> str:
     return path.split("_")[-1]
 
 
-class TimeSeriesAggregatingFunction(Enum):
-    AVERAGE_OF_LAST_YEAR = average_of_last_year_values
-    AVERAGE_OF_HISTORY = average_of_all_values
+def get_last_year_values(var: np.ndarray) -> np.ndarray:
+    return var[:, -1, :]
+
+
+def average_of_last_year_values(var: np.ndarray) -> float:
+    return float(np.mean(get_last_year_values(var)))
+
+
+def average_of_all_values(var: np.ndarray) -> float:
+    return float(np.mean(var))
+
+
+TimeSeriesAggregation = Literal["mean_all", "mean_last_year"]
 
 
 @dataclass
 class TargetVariableProperties:
-    func_to_aggregate_data: TimeSeriesAggregatingFunction
+    aggregation_method: TimeSeriesAggregation
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
@@ -120,7 +119,13 @@ def aggregate_time_series_to_float(
 ) -> float:
     inverter: int = -1 if target_variable_properties.invert_optimization else 1
 
-    return inverter * target_variable_properties.func_to_aggregate_data(time_series)
+    match target_variable_properties.aggregation_method:
+        case "mean_all":
+            return inverter * average_of_all_values(time_series)
+        case "mean_last_year":
+            return inverter * average_of_last_year_values(time_series)
+        case _:
+            assert_never()
 
 
 def compute_target_variables_from_netcdf_values(
@@ -132,7 +137,7 @@ def compute_target_variables_from_netcdf_values(
     return {
         netcdf_variable.path: aggregate_time_series_to_float(
             time_series=netcdf_variable.value,
-            target_variable_properties=PROPERTIES_OF_TARGET_VARIABLES[
+            target_variable_properties=properties_of_target_variables[
                 netcdf_variable.path
             ],
         )
@@ -141,12 +146,14 @@ def compute_target_variables_from_netcdf_values(
 
 
 PROPERTIES_OF_TARGET_VARIABLES = {
-    "/stand/volume": TargetVariableProperties(
-        func_to_aggregate_data=TimeSeriesAggregatingFunction.AVERAGE_OF_LAST_YEAR,
+    nc_utils.NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
+        aggregation_method="mean_last_year",
         invert_optimization=True,
     ),
-    "/balance/C/soil_c_balance_co2eq": TargetVariableProperties(
-        func_to_aggregate_data=TimeSeriesAggregatingFunction.AVERAGE_OF_HISTORY,
+    nc_utils.NetcdfVariablePath(
+        "/balance/C/soil_c_balance_co2eq"
+    ): TargetVariableProperties(
+        aggregation_method="mean_all",
         invert_optimization=True,
     ),
 }
@@ -219,12 +226,12 @@ arrays_scaled_by_area = scale_target_variables_with_stand_area(
 # %% target function
 
 
-def create_random_organism(scenarios_cardinality: tuple[int]) -> np.ndarray:
+def create_random_organism(scenarios_cardinality: tuple[int, ...]) -> np.ndarray:
     return np.array([rng.integers(low=0, high=m) for m in scenarios_cardinality])
 
 
 def create_random_population(
-    scenarios_cardinality: tuple[int], n_organisms: int
+    scenarios_cardinality: tuple[int, ...], n_organisms: int
 ) -> np.ndarray:
     return np.stack(
         [create_random_organism(scenarios_cardinality) for _ in range(n_organisms)]
@@ -358,7 +365,7 @@ class MyProblem(Problem):
         self,
         arrays_of_vars_of_interest: list[np.ndarray],
         n_target_variables: int,
-        scenarios_cardinality: tuple[int],
+        scenarios_cardinality: Sequence[int],
     ):
         super().__init__(
             n_var=N_STANDS,

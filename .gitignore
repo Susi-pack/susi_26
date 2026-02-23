@@ -57,3 +57,4 @@ tests/golden_file_test/golden_file_new_experiment
 
 # docs
 site/
+src/analysis/.ipynb_checkpoints

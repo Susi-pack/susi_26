@@ -68,7 +68,21 @@ def list_variable_absolute_paths(group: netCDF4.Dataset, path: str = "/") -> lis
     return vars_with_paths
 
 
-def _load_single_experiment_metadatas(
+def read_json_metadatas(
+    experiment_folderpath: Path,
+    metadata_filename: str = "metadata.json",
+    params_filename: str = "params.json",
+) -> tuple[dict, dict]:
+    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
+    params_filepath = experiment_folderpath.joinpath(params_filename)
+
+    metadata, params = map(
+        io_utils.read_json_file, [metadata_filepath, params_filepath]
+    )
+    return metadata, params
+
+
+def load_single_experiment_metadatas(
     experiment_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
@@ -77,12 +91,10 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
-
-    metadata, params = map(
-        io_utils.read_json_file, [metadata_filepath, params_filepath]
+    metadata, params = read_json_metadatas(
+        experiment_folderpath, metadata_filename, params_filename
     )
+
     return pd.json_normalize(metadata | params)
 
 
@@ -115,7 +127,7 @@ def load_all_metadatas_from_single_folder(folder: Path) -> pd.DataFrame:
     experiment_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
+            load_single_experiment_metadatas(exp_fpath)
             for exp_fpath in experiment_folderpaths
         ]
     )
@@ -234,11 +246,12 @@ def read_netcdf_variable_values_for_stand(
 def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
     chosen_vars: list[NetcdfVariableInfo],
     metadata_by_stand: list[pd.DataFrame],
-) -> list[dict[ScenarioName, NetcdfVariableValue]]:
+) -> list[dict[ScenarioName, list[NetcdfVariableValue]]]:
     """
     Return nested structure:
         list <- dimension of number of stands
             dict <- dimension of scenarios for each stand
+                list <- dimension number of vars
     """
     chosen_variables_by_stand_and_scenario = []
 
@@ -254,7 +267,7 @@ def read_chosen_variables_from_netcdf_by_stands_and_scenarios(
 def transform_list_of_scenarios_to_optimization_array_structure(
     vars_of_interest_by_stand: list[dict[ScenarioName, TargetVariableDict]],
     n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
+    target_variable_paths: Sequence[NetcdfVariablePath],
 ) -> ScenarioArrayData:
     target_variable_arrays: list[np.ndarray] = []
 
@@ -292,7 +305,7 @@ def transform_list_of_scenarios_to_optimization_array_structure(
 def transform_array_data_to_list_of_scenarios(
     array_data: ScenarioArrayData,
     n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
+    target_variable_paths: Sequence[NetcdfVariablePath],
 ) -> list[dict[ScenarioName, TargetVariableDict]]:
     vars_of_interest_by_stand: list[dict[ScenarioName, TargetVariableDict]] = []
 

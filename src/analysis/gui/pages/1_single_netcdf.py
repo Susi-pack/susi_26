@@ -1,0 +1,58 @@
+import streamlit as st
+from pathlib import Path
+
+import susi.io.netcdf_utils as nc_utils
+from susi.io.app_settings import AppSettings
+
+from analysis.gui.components import (
+    metadata_expander,
+    netcdf_variable_explorer,
+    netcdf_variable_plots_ui,
+)
+
+# %% Choose folder
+
+susi_folders = nc_utils.list_subdirectories(
+    path=st.session_state.settings["data_folder"]
+)
+
+chosen_susi_folder = st.selectbox(label="Choose SUSI folder", options=susi_folders)
+
+# %% Metadata expander
+metadata, susi_params = nc_utils.read_json_metadatas(
+    experiment_folderpath=chosen_susi_folder
+)
+
+metadata_expander.build(metadata=metadata, susi_params=susi_params)
+
+# %% Show summary table
+st.markdown("---")
+st.subheader("Summary")
+
+st.write("summary table will go here")
+
+# %% Read Netcdf variabales
+# The golden test netcdf is used to read the variable structure  of the netcdf file
+sample_netcdf_filepath = (
+    AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
+)
+all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
+
+# Actual netcdf file path for reading values (not only structure of the file)
+chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
+
+chosen_netcdf_variables = netcdf_variable_explorer.build(netcdf_variables=all_variables)
+
+
+# %% Display selection summary and plots
+st.markdown("---")
+st.subheader("Plots")
+if not chosen_netcdf_variables:
+    st.write("No variables chosen")
+else:
+    # Read actual values from the NetCDF file
+    variables_values = nc_utils.read_value_several_variables_from_single_file(
+        netcdf_filepath=chosen_netcdf_filepath,
+        variables=chosen_netcdf_variables,
+    )
+    netcdf_variable_plots_ui.build(variables_values)

@@ -1,10 +1,8 @@
-from typing_extensions import Self
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, model_validator
 import json
-import pandas as pd
 
 
-from susi.io.extra_pydantic_types import PositiveInt, StrictFrozenModel
+from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import SusiParams
 
