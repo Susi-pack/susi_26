@@ -1,11 +1,12 @@
 import streamlit as st
-from streamlit_tree_select import tree_select
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
 import susi.io.netcdf_utils as nc_utils
 from susi.io.app_settings import AppSettings
+
+from analysis.gui.components import metadata_expander, netcdf_variable_explorer
 
 # %% Choose folder
 
@@ -20,105 +21,27 @@ metadata, susi_params = nc_utils.read_json_metadatas(
     experiment_folderpath=chosen_susi_folder
 )
 
-with st.expander("see metadata", expanded=False):
-    st.write("metadata")
-    st.json(metadata)
-    st.write("Susi params")
-    st.json(susi_params)
+metadata_expander.build(metadata=metadata, susi_params=susi_params)
 
 # %% Read Netcdf variabales
 # The golden test netcdf is used to read the variable structure  of the netcdf file
 sample_netcdf_filepath = (
     AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
 )
-
 all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
 
-# Actual data file path for reading values
+# Actual netcdf file path for reading values (not only structure of the file)
 chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
 
-
-def build_tree_nodes(variables):
-    """Build tree-select nodes from variable paths.
-
-    All node values must be unique, so we use full paths for both
-    group nodes and leaf nodes.
-    """
-    # Build nested dictionary structure with full paths
-    tree_dict = {}
-
-    for var in variables:
-        parts = [p for p in var.path.split("/") if p]
-        current = tree_dict
-        current_path = ""
-
-        # Navigate/create path
-        for i, part in enumerate(parts[:-1]):
-            current_path = f"{current_path}/{part}" if current_path else f"/{part}"
-            if part not in current:
-                current[part] = {"children": {}, "full_path": current_path}
-            current = current[part]["children"]
-
-        # Add variable as leaf node
-        var_name = parts[-1] if parts else var.name
-        current[var_name] = {"variable": var}
-
-    # Convert to tree-select format
-    def dict_to_nodes(d, parent_path=""):
-        nodes = []
-        for key, value in d.items():
-            if "variable" in value:
-                # Leaf node (actual variable)
-                var = value["variable"]
-                nodes.append(
-                    {
-                        "label": f"{var.name}",
-                        "value": var.path,
-                        "title": f"Path: {var.path}\nShape: {var.shape}\nInfo: {var.units or 'N/A'}",
-                    }
-                )
-            else:
-                # Group node - use prefixed path to avoid conflicts with variables
-                full_path = value.get("full_path", key)
-                children = dict_to_nodes(value.get("children", {}), full_path)
-                nodes.append(
-                    {
-                        "label": key,
-                        "value": f"__group__{full_path}",  # Prefix to ensure uniqueness
-                        "children": children,
-                    }
-                )
-        return nodes
-
-    return dict_to_nodes(tree_dict)
-
-
-# Build tree and render
-tree_nodes = build_tree_nodes(all_variables)
 
 st.subheader("NetCDF Variables")
 st.markdown("Select variables from the tree:")
 
-# Use st.container with height parameter for scrollable area
-tree_container = st.container(height=400, border=True)
-with tree_container:
-    result = tree_select(
-        tree_nodes,
-        check_model="leaf",
-        show_expand_all=True,
-    )
+chosen_netcdf_variables = netcdf_variable_explorer.build(netcdf_variables=all_variables)
 
-# Map selected paths back to NetcdfVariableInfo objects
-selected_paths = result.get("checked", [])
-chosen_netcdf_variables = [var for var in all_variables if var.path in selected_paths]
 
-# Display selection summary and plots
+# %% Display selection summary and plots
 if chosen_netcdf_variables:
-    st.markdown("---")
-    st.subheader(f"Selected Variables ({len(chosen_netcdf_variables)})")
-    for var in chosen_netcdf_variables:
-        st.write(f"- `{var.path}` ({var.shape}, {var.units})")
-
     # Read actual values from the NetCDF file
     st.markdown("---")
     st.subheader("Variable Plots")
