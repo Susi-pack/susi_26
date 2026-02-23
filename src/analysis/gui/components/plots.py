@@ -64,7 +64,7 @@ def _create_profile_boxplot(
     hidex=True,
     hidey=False,
 ):
-    df = pd.DataFrame(data=datain, columns=list(range(cols)))
+    df = pd.DataFrame(data=datain, columns=np.arange(cols))
     df.boxplot(
         ax=ax,
         color=dict(boxes=colorin, whiskers=colorin, medians=colorin, caps=colorin),
@@ -187,7 +187,7 @@ def stand(
     ax.hlines(y=-0.35, xmin=0, xmax=cols, color="red", linestyles="--")
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
-    ax.set_ylim([wtmin, 0])
+    ax.set_ylim(bottom=wtmin, top=0)
     ax.set_ylabel("WT m", fontsize=fs)
     ax.legend()
     ax.grid(visible=False)
@@ -195,7 +195,7 @@ def stand(
 
     vol = _get_var(vars, "/stand/volume")[scen, :, :]
     growth = np.diff(vol, axis=0)
-    dfgrowth = pd.DataFrame(data=growth, columns=list(range(cols)))
+    dfgrowth = pd.DataFrame(data=growth, columns=np.arange(cols))
     axgrowth = fig.add_subplot(gs[8:10, :4])
     dfgrowth.boxplot(
         ax=axgrowth,
@@ -283,7 +283,7 @@ def stand(
     ax.get_xaxis().set_visible(False)
 
     lmass = _get_var(vars, "/stand/leafmass")[scen, :, :]
-    df = pd.DataFrame(data=lmass, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmass, columns=np.arange(cols))
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
@@ -374,7 +374,7 @@ def stand(
         _get_var(vars, "/stand/dominant/NPP")[scen, :, :]
         / _get_var(vars, "/stand/dominant/NPP_pot")[scen, :, :]
     )
-    df = pd.DataFrame(data=dom_phys_r, columns=list(range(cols)))
+    df = pd.DataFrame(data=dom_phys_r, columns=np.arange(cols))
     df.boxplot(
         ax=ax,
         color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
@@ -408,7 +408,7 @@ def stand(
     ax.set_xlabel("nutrient status")
 
     ndemand = _get_var(vars, "/stand/n_demand")[scen, :, :]
-    df = pd.DataFrame(data=ndemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=ndemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
@@ -431,7 +431,7 @@ def stand(
     ax.set_facecolor(facecolor)
 
     pdemand = _get_var(vars, "/stand/p_demand")[scen, :, :]
-    df = pd.DataFrame(data=pdemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=pdemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
@@ -453,7 +453,7 @@ def stand(
     ax.set_facecolor(facecolor)
 
     kdemand = _get_var(vars, "/stand/k_demand")[scen, :, :]
-    df = pd.DataFrame(data=kdemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=kdemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     df.boxplot(
         ax=ax,
@@ -654,7 +654,7 @@ def hydrology(
     axruno.get_xaxis().set_visible(False)
 
     deltas = _get_var(vars, "/strip/deltas")[scen, 1:, :] * 1000.0
-    dfdeltas = pd.DataFrame(data=deltas, columns=list(range(cols)))
+    dfdeltas = pd.DataFrame(data=deltas, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, :4])
     ax = _create_profile_boxplot(
@@ -670,7 +670,7 @@ def hydrology(
     )
 
     ET = _get_var(vars, "/cpy/ET_yr")[scen, 1:, :] * 1000.0
-    dfET = pd.DataFrame(data=ET, columns=list(range(cols)))
+    dfET = pd.DataFrame(data=ET, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, 4:8])
     ax = _create_profile_boxplot(
@@ -678,7 +678,7 @@ def hydrology(
     )
 
     transpi = _get_var(vars, "/cpy/transpi_yr")[scen, 1:, :] * 1000.0
-    dftranspi = pd.DataFrame(data=transpi, columns=list(range(cols)))
+    dftranspi = pd.DataFrame(data=transpi, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     ax = _create_profile_boxplot(
         ax,
@@ -694,7 +694,7 @@ def hydrology(
     )
 
     efloor = _get_var(vars, "/cpy/efloor_yr")[scen, 1:, :] * 1000.0
-    dfefloor = pd.DataFrame(data=efloor, columns=list(range(cols)))
+    dfefloor = pd.DataFrame(data=efloor, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, :4])
     ax = _create_profile_boxplot(
@@ -711,7 +711,7 @@ def hydrology(
     )
 
     swe = _get_var(vars, "/cpy/SWEmax")[scen, 1:, :]
-    dfswe = pd.DataFrame(data=swe, columns=list(range(cols)))
+    dfswe = pd.DataFrame(data=swe, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 4:8])
     ax = _create_profile_boxplot(
@@ -728,7 +728,7 @@ def hydrology(
     )
 
     interc = _get_var(vars, "/cpy/interc_yr")[scen, 1:, :] * 1000.0
-    dfinterc = pd.DataFrame(data=interc, columns=list(range(cols)))
+    dfinterc = pd.DataFrame(data=interc, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 8:])
     ax = _create_profile_boxplot(
@@ -787,7 +787,7 @@ def mass(
 
     soilout = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
 
-    df = pd.DataFrame(data=soil, columns=list(range(cols)))
+    df = pd.DataFrame(data=soil, columns=np.arange(cols))
     ax = fig.add_subplot(gs[8:10, :4])
     df.boxplot(
         ax=ax,
@@ -862,7 +862,7 @@ def mass(
     ax.set_facecolor(facecolor)
     ax.legend(loc="lower right", fontsize=7)
 
-    df = pd.DataFrame(data=litter, columns=list(range(cols)))
+    df = pd.DataFrame(data=litter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
@@ -886,7 +886,7 @@ def mass(
 
     gv = _get_var(vars, "/groundvegetation/gv_tot")[scen, :, :] / 10000.0
     grgv = np.diff(gv, axis=0)
-    df = pd.DataFrame(data=grgv, columns=list(range(cols)))
+    df = pd.DataFrame(data=grgv, columns=np.arange(cols))
     ax = fig.add_subplot(gs[4:6, :4])
     df.boxplot(
         ax=ax,
@@ -910,7 +910,7 @@ def mass(
 
     stand = _get_var(vars, "/stand/biomass")[scen, :, :] / 10000.0
     gr = np.diff(stand, axis=0)
-    df = pd.DataFrame(data=gr, columns=list(range(cols)))
+    df = pd.DataFrame(data=gr, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
@@ -933,7 +933,7 @@ def mass(
     ax.set_facecolor(facecolor)
 
     site = gr + grgv + soilout[1:, :] + litter[1:, :]
-    df = pd.DataFrame(data=site, columns=list(range(cols)))
+    df = pd.DataFrame(data=site, columns=np.arange(cols))
     ax = fig.add_subplot(gs[:2, :4])
     df.boxplot(
         ax=ax,
@@ -960,7 +960,7 @@ def mass(
         - _get_var(vars, "/stand/finerootlitter")[scen, :, :]
     )
 
-    df = pd.DataFrame(data=leaflitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=leaflitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[:2, 4:8])
     df.boxplot(
         ax=ax,
@@ -982,7 +982,7 @@ def mass(
 
     finerootlitter = _get_var(vars, "/stand/finerootlitter")[scen, :, :]
 
-    df = pd.DataFrame(data=finerootlitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=finerootlitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
@@ -1004,7 +1004,7 @@ def mass(
 
     woodylitter = _get_var(vars, "/stand/woodylitter")[scen, :, :]
 
-    df = pd.DataFrame(data=woodylitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=woodylitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[4:6, 4:8])
     df.boxplot(
         ax=ax,
@@ -1030,7 +1030,7 @@ def mass(
         + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :]
     )
 
-    df = pd.DataFrame(data=gvlitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=gvlitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[6:8, 4:8])
     df.boxplot(
         ax=ax,
@@ -1052,7 +1052,7 @@ def mass(
 
     out = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
 
-    df = pd.DataFrame(data=out, columns=list(range(cols)))
+    df = pd.DataFrame(data=out, columns=np.arange(cols))
     ax = fig.add_subplot(gs[8:10, 4:8])
     df.boxplot(
         ax=ax,
@@ -1217,7 +1217,7 @@ def carbon(
 
     lmwtoditch = _get_var(vars, "/balance/C/LMWdoc_to_water")[scen, :, :] * -1
     ax = fig.add_subplot(gs[10:12, :6])
-    df = pd.DataFrame(data=lmwtoditch, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmwtoditch, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1232,7 +1232,7 @@ def carbon(
 
     hmwtoditch = _get_var(vars, "/balance/C/HMW_to_water")[scen, :, :] * -1
     ax = fig.add_subplot(gs[10:12, 6:])
-    df = pd.DataFrame(data=hmwtoditch, columns=list(range(cols)))
+    df = pd.DataFrame(data=hmwtoditch, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1247,7 +1247,7 @@ def carbon(
 
     lmwtoatm = _get_var(vars, "/balance/C/LMWdoc_to_atm")[scen, :, :] * -1
     ax = fig.add_subplot(gs[8:10, :6])
-    df = pd.DataFrame(data=lmwtoatm, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmwtoatm, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1262,7 +1262,7 @@ def carbon(
 
     hmwtoatm = _get_var(vars, "/balance/C/HMW_to_atm")[scen, :, :] * -1
     ax = fig.add_subplot(gs[8:10, 6:])
-    df = pd.DataFrame(data=hmwtoatm, columns=list(range(cols)))
+    df = pd.DataFrame(data=hmwtoatm, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1277,7 +1277,7 @@ def carbon(
 
     co2 = _get_var(vars, "/balance/C/co2c_release")[scen, :, :] * -1
     ax = fig.add_subplot(gs[6:8, :6])
-    df = pd.DataFrame(data=co2, columns=list(range(cols)))
+    df = pd.DataFrame(data=co2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1292,7 +1292,7 @@ def carbon(
 
     ch4 = _get_var(vars, "/balance/C/ch4c_release")[scen, :, :] * -1
     ax = fig.add_subplot(gs[6:8, 6:])
-    df = pd.DataFrame(data=ch4, columns=list(range(cols)))
+    df = pd.DataFrame(data=ch4, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1307,7 +1307,7 @@ def carbon(
 
     standl = _get_var(vars, "/balance/C/stand_litter_in")[scen, :, :]
     ax = fig.add_subplot(gs[4:6, :6])
-    df = pd.DataFrame(data=standl, columns=list(range(cols)))
+    df = pd.DataFrame(data=standl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1322,7 +1322,7 @@ def carbon(
 
     gvl = _get_var(vars, "/balance/C/gv_litter_in")[scen, :, :]
     ax = fig.add_subplot(gs[4:6, 6:])
-    df = pd.DataFrame(data=gvl, columns=list(range(cols)))
+    df = pd.DataFrame(data=gvl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1337,7 +1337,7 @@ def carbon(
 
     soilc = _get_var(vars, "/balance/C/soil_c_balance_c")[scen, :, :]
     ax = fig.add_subplot(gs[2:4, :6])
-    df = pd.DataFrame(data=soilc, columns=list(range(cols)))
+    df = pd.DataFrame(data=soilc, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1352,7 +1352,7 @@ def carbon(
 
     soilco2 = _get_var(vars, "/balance/C/soil_c_balance_co2eq")[scen, :, :]
     ax = fig.add_subplot(gs[2:4, 6:])
-    df = pd.DataFrame(data=soilco2, columns=list(range(cols)))
+    df = pd.DataFrame(data=soilco2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1367,7 +1367,7 @@ def carbon(
 
     standc = _get_var(vars, "/balance/C/stand_c_balance_c")[scen, :, :]
     ax = fig.add_subplot(gs[:2, :6])
-    df = pd.DataFrame(data=standc, columns=list(range(cols)))
+    df = pd.DataFrame(data=standc, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1382,7 +1382,7 @@ def carbon(
 
     standco2 = _get_var(vars, "/balance/C/stand_c_balance_co2eq")[scen, :, :]
     ax = fig.add_subplot(gs[:2, 6:])
-    df = pd.DataFrame(data=standco2, columns=list(range(cols)))
+    df = pd.DataFrame(data=standco2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1457,7 +1457,7 @@ def nutrient_balance(
 
     towater = _get_var(vars, f"/balance/{substance}/to_water")[scen, :, :]
     ax = fig.add_subplot(gs[8:10, :6])
-    df = pd.DataFrame(data=towater, columns=list(range(cols)))
+    df = pd.DataFrame(data=towater, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1474,7 +1474,7 @@ def nutrient_balance(
         scen, :, :
     ]
     ax = fig.add_subplot(gs[8:10, 6:])
-    df = pd.DataFrame(data=brl, columns=list(range(cols)))
+    df = pd.DataFrame(data=brl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1489,7 +1489,7 @@ def nutrient_balance(
 
     de = _get_var(vars, f"/balance/{substance}/decomposition_tot")[scen, :, :]
     ax = fig.add_subplot(gs[6:8, :6])
-    df = pd.DataFrame(data=de, columns=list(range(cols)))
+    df = pd.DataFrame(data=de, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1504,7 +1504,7 @@ def nutrient_balance(
 
     dert = _get_var(vars, f"/balance/{substance}/decomposition_root_lyr")[scen, :, :]
     ax = fig.add_subplot(gs[6:8, 6:])
-    df = pd.DataFrame(data=dert, columns=list(range(cols)))
+    df = pd.DataFrame(data=dert, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1524,7 +1524,7 @@ def nutrient_balance(
     )
 
     ax = fig.add_subplot(gs[4:6, :6])
-    df = pd.DataFrame(data=supply, columns=list(range(cols)))
+    df = pd.DataFrame(data=supply, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1539,7 +1539,7 @@ def nutrient_balance(
 
     fert = _get_var(vars, f"/balance/{substance}/fertilization_release")[scen, :, :]
     ax = fig.add_subplot(gs[4:6, 6:])
-    df = pd.DataFrame(data=fert, columns=list(range(cols)))
+    df = pd.DataFrame(data=fert, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1554,7 +1554,7 @@ def nutrient_balance(
 
     dem = _get_var(vars, f"/balance/{substance}/stand_demand")[scen, :, :]
     ax = fig.add_subplot(gs[2:4, :6])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1569,7 +1569,7 @@ def nutrient_balance(
 
     dem = _get_var(vars, f"/balance/{substance}/gv_demand")[scen, :, :]
     ax = fig.add_subplot(gs[2:4, 6:])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1584,7 +1584,7 @@ def nutrient_balance(
 
     dem = _get_var(vars, f"/balance/{substance}/balance_root_lyr")[scen, :, :]
     ax = fig.add_subplot(gs[:2, :6])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,
@@ -1599,7 +1599,7 @@ def nutrient_balance(
 
     vg = _get_var(vars, "/stand/volumegrowth")[scen, :, :]
     ax = fig.add_subplot(gs[:2, 6:])
-    df = pd.DataFrame(data=vg, columns=list(range(cols)))
+    df = pd.DataFrame(data=vg, columns=np.arange(cols))
     ax = _create_profile_boxplot(
         ax,
         df,

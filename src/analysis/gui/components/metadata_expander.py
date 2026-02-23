@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 
 
 def build(metadata: dict, susi_params: dict) -> None:
