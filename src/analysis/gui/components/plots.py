@@ -1613,3 +1613,216 @@ def nutrient_balance(
     )
 
     return fig
+
+
+def compare_runs(variables_values_0, variables_values_1, scen=0):
+    def _get_var(vars, path):
+        return next(v for v in vars if v.path == path).value
+
+    facecolor = "#f2f5eb"
+    fs = 15
+    fig = plt.figure(num="run comparison", figsize=(15, 18))
+    gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
+    mass_to_c = 0.5
+
+    wt0 = np.mean(_get_var(variables_values_0, "/strip/dwtyr")[scen, :, :], axis=0)
+    sd0 = np.std(_get_var(variables_values_0, "/strip/dwtyr")[scen, :, :], axis=0)
+    wtmin = min(wt0) - 0.7
+    cols = np.shape(wt0)[0]
+
+    ax = fig.add_subplot(gs[10:, :4])
+    ax = _create_profile_line(
+        ax, wt0, wtmin, sd0, cols, "WT m", "annual", fs, facecolor, "blue"
+    )
+
+    wt1 = np.mean(_get_var(variables_values_1, "/strip/dwtyr")[scen, :, :], axis=0)
+    sd1 = np.std(_get_var(variables_values_1, "/strip/dwtyr")[scen, :, :], axis=0)
+
+    ax = fig.add_subplot(gs[10:, 4:8])
+    ax = _create_profile_line(
+        ax, wt1, wtmin, sd1, cols, "", "annual", fs, facecolor, "orange"
+    )
+
+    deltawt = (
+        _get_var(variables_values_1, "/strip/dwtyr")[scen, :, :]
+        - _get_var(variables_values_0, "/strip/dwtyr")[scen, :, :]
+    )
+    ax = fig.add_subplot(gs[10:, 8:])
+    ax = _create_profile_boxplot(
+        ax, deltawt, cols, "green", "WT difference", "WT m", fs, facecolor, zero=True
+    )
+
+    growth0 = _get_var(variables_values_0, "/stand/volumegrowth")[scen, :, :]
+    ax = fig.add_subplot(gs[8:10, :4])
+    ax = _create_profile_boxplot(
+        ax, growth0, cols, "blue", "Stand growth", "m3ha-1yr-1", fs, facecolor
+    )
+
+    growth1 = _get_var(variables_values_1, "/stand/volumegrowth")[scen, :, :]
+    ax = fig.add_subplot(gs[8:10, 4:8])
+    ax = _create_profile_boxplot(
+        ax, growth1, cols, "orange", "Stand growth", "m3ha-1yr-1", fs, facecolor
+    )
+
+    deltagr = growth1 - growth0
+    ax = fig.add_subplot(gs[8:10, 8:])
+    ax = _create_profile_boxplot(
+        ax,
+        deltagr,
+        cols,
+        "green",
+        "Growth difference",
+        "WT m",
+        fs,
+        facecolor,
+        zero=True,
+    )
+
+    hmwtoditch0 = _get_var(variables_values_0, "/export/hmwtoditch")[scen, :, :]
+    ax = fig.add_subplot(gs[6:8, :4])
+    ax = _create_profile_boxplot(
+        ax, hmwtoditch0, cols, "blue", "HMW to ditch", "", fs, facecolor
+    )
+
+    hmwtoditch1 = _get_var(variables_values_1, "/export/hmwtoditch")[scen, :, :]
+    ax = fig.add_subplot(gs[6:8, 4:8])
+    ax = _create_profile_boxplot(
+        ax, hmwtoditch1, cols, "orange", "HMW to ditch", "", fs, facecolor
+    )
+
+    deltahmw = hmwtoditch1 - hmwtoditch0
+    ax = fig.add_subplot(gs[6:8, 8:])
+    ax = _create_profile_boxplot(
+        ax, deltahmw, cols, "green", "HMW difference", "", fs, facecolor, zero=True
+    )
+
+    lmwtoditch0 = _get_var(variables_values_0, "/export/lmwtoditch")[scen, :, :]
+    ax = fig.add_subplot(gs[4:6, :4])
+    ax = _create_profile_boxplot(
+        ax, lmwtoditch0, cols, "blue", "LMW to ditch", "", fs, facecolor
+    )
+
+    lmwtoditch1 = _get_var(variables_values_1, "/export/lmwtoditch")[scen, :, :]
+    ax = fig.add_subplot(gs[4:6, 4:8])
+    ax = _create_profile_boxplot(
+        ax, lmwtoditch1, cols, "orange", "LMW to ditch", "", fs, facecolor
+    )
+
+    deltalmw = lmwtoditch1 - lmwtoditch0
+    ax = fig.add_subplot(gs[4:6, 8:])
+    ax = _create_profile_boxplot(
+        ax, deltalmw, cols, "green", "LMW difference", "", fs, facecolor, zero=True
+    )
+
+    litter0 = (
+        _get_var(variables_values_0, "/groundvegetation/ds_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_0, "/groundvegetation/h_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_0, "/groundvegetation/s_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_0, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
+        + _get_var(variables_values_0, "/stand/woodylitter")[scen, :, :] / 10000.0
+    ) * mass_to_c
+
+    soil0 = (
+        _get_var(variables_values_0, "/esom/Mass/out")[scen, :, :]
+        / 10000.0
+        * -1
+        * mass_to_c
+        + litter0
+    )
+
+    ax = fig.add_subplot(gs[2:4, :4])
+    ax = _create_profile_boxplot(
+        ax, soil0, cols, "blue", "Soil C balance", "", fs, facecolor
+    )
+
+    litter1 = (
+        _get_var(variables_values_1, "/groundvegetation/ds_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_1, "/groundvegetation/h_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_1, "/groundvegetation/s_litterfall")[scen, :, :]
+        / 10000.0
+        + _get_var(variables_values_1, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
+        + _get_var(variables_values_1, "/stand/woodylitter")[scen, :, :] / 10000.0
+    ) * mass_to_c
+
+    soil1 = (
+        _get_var(variables_values_1, "/esom/Mass/out")[scen, :, :]
+        / 10000.0
+        * -1
+        * mass_to_c
+        + litter1
+    )
+
+    ax = fig.add_subplot(gs[2:4, 4:8])
+    ax = _create_profile_boxplot(
+        ax, soil1, cols, "orange", "Soil C balance", "", fs, facecolor
+    )
+
+    deltasoil = soil1 - soil0
+    ax = fig.add_subplot(gs[2:4, 8:])
+    ax = _create_profile_boxplot(
+        ax, deltasoil, cols, "green", "Soil C difference", "", fs, facecolor, zero=True
+    )
+
+    gv = (
+        _get_var(variables_values_0, "/groundvegetation/gv_tot")[scen, :, :]
+        / 10000.0
+        * mass_to_c
+    )
+    grgv0 = np.diff(gv, axis=0)
+    stand = (
+        _get_var(variables_values_0, "/stand/biomass")[scen, :, :] / 10000.0 * mass_to_c
+    )
+    gr0 = np.diff(stand, axis=0)
+    out0 = (
+        _get_var(variables_values_0, "/esom/Mass/out")[scen, :, :]
+        / 10000.0
+        * -1
+        * mass_to_c
+    )
+
+    site0 = gr0 + grgv0 + out0[1:, :] + litter0[1:, :]
+
+    ax = fig.add_subplot(gs[:2, :4])
+    ax = _create_profile_boxplot(
+        ax, site0, cols, "blue", "Site C balance", "", fs, facecolor
+    )
+
+    gv = (
+        _get_var(variables_values_1, "/groundvegetation/gv_tot")[scen, :, :]
+        / 10000.0
+        * mass_to_c
+    )
+    grgv1 = np.diff(gv, axis=0)
+    stand = (
+        _get_var(variables_values_1, "/stand/biomass")[scen, :, :] / 10000.0 * mass_to_c
+    )
+    gr1 = np.diff(stand, axis=0)
+    out1 = (
+        _get_var(variables_values_1, "/esom/Mass/out")[scen, :, :]
+        / 10000.0
+        * -1
+        * mass_to_c
+    )
+
+    # BUG: It think this should be
+    site1 = gr1 + grgv1 + out1[1:, :] + litter1[1:, :]
+    # Previous
+    # site1 = gr1 + grgv1 + out1[1:, :] + litter0[1:, :]
+
+    ax = fig.add_subplot(gs[:2, 4:8])
+    ax = _create_profile_boxplot(
+        ax, site1, cols, "orange", "Site C balance", "", fs, facecolor
+    )
+
+    deltasite = site1 - site0
+    ax = fig.add_subplot(gs[:2, 8:])
+    ax = _create_profile_boxplot(
+        ax, deltasite, cols, "green", "Site C difference", "", fs, facecolor, zero=True
+    )
+
+    return fig
