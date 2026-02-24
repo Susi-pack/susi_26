@@ -2,7 +2,6 @@
 # Adapted by Iñaki Urzainki from Mikko Niemi's original code.
 
 # %% Imports
-from numba.tests.test_array_exprs import variable_name_reuse
 from typing import Optional
 import pandas as pd
 import xmltodict
@@ -53,7 +52,7 @@ class StandData(BaseModel):
 
     @computed_field
     @property
-    def coords(self) -> tuple[tuple[int, int], ...]:
+    def coords(self) -> tuple[tuple[float, float], ...]:
         return parse_polygon_to_coords(self.polygon)
 
 
@@ -110,10 +109,7 @@ def parse_CLI_arguments() -> CLIArguments:
 
     args = parser.parse_args()
 
-    if args.output is None:
-        args.output = args.xml_file.parent / "Stand_allometry"
-
-    return CLIArguments(xml_filepath=args.xml_file, output_folder=args.output)
+    return CLIArguments(xml_filepath=args.xml_file, output_folder=args.output_dir)
 
 
 def sampling_stand_thinning_rate(species_id, stem_count):
@@ -135,7 +131,7 @@ def read_stands_from_xml_file(xml_file_path: Path) -> dict:
     return stands
 
 
-def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[int, int], ...]:
+def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[float, float], ...]:
     """
     Example:
     input (str):  "377727.33186172193,6767404.564623927 377711.6057512127,6767410.3891093"
@@ -199,7 +195,7 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
         polygon=stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
             "gml:Polygon"
         ]["gml:exterior"]["gml:LinearRing"]["gml:coordinates"],
-        tree_strata=get_tree_strata_data(tree_strata_xml_data),
+        tree_strata=tree_strata,
         stem_count=round(sum(strata_stem_counts_per_stratum)),
         main_species=main_species,
         mean_diameter=float(tree_stand_summary["tss:MeanDiameter"]),
@@ -238,6 +234,91 @@ def compute_thinning_rate(stand_data: StandData) -> float:
     return thinning_rate
 
 
+def dump_json_info_to_file(
+    output_folder: Path, many_stand_datas: ManyStandDatas
+) -> None:
+    json_output = output_folder / "extra_XML_info.json"
+    json_output.write_text(many_stand_datas.model_dump_json())
+    return None
+
+
+def get_ykj_coordinates(coords: tuple[float, float]) -> tuple[float, float]:
+    transformer = Transformer.from_crs("EPSG:3067", "EPSG:2393", always_xy=True)
+    ykj_e, ykj_n = transformer.transform(coords[0], coords[1])
+    y = round(ykj_n / 1000)
+    x = round(ykj_e / 10000)
+    return x, y
+
+
+def process_stand(cli_args, stand_data: StandData):
+    thinning_rate = compute_thinning_rate(stand_data)
+
+    # Apply thinning:
+    strata_basal_areas_per_stratum = [
+        stratum.basal_area * thinning_rate for stratum in stand_data.tree_strata
+    ]
+    strata_stem_counts_per_stratum = [
+        stratum.stem_count * thinning_rate for stratum in stand_data.tree_strata
+    ]
+
+    # Location in YKJ coordinates, and input variables x & y to sawlog reduction model
+    # Coordinate transformer ETRS-TM35FIN (EPSG:3067) -> YKJ (EPSG:2393)
+
+    coords = (stand_data.coords[0][0], stand_data.coords[0][1])
+    x, y = get_ykj_coordinates(coords)
+
+    print("Assuming all sites are peatland sites")
+    PEAT = 1
+
+    # Generate stand allometry
+    gy = Growth_and_Yield_Table(
+        age_1=stand_data.tree_strata[0].age,
+        G_1=strata_basal_areas_per_stratum[0],
+        N_1=strata_stem_counts_per_stratum[0],
+        Dg_1=stand_data.tree_strata[0].mean_diameter,
+        Hg_1=stand_data.tree_strata[0].mean_height,
+        age_2=stand_data.tree_strata[1].age,
+        G_2=strata_basal_areas_per_stratum[1],
+        N_2=strata_stem_counts_per_stratum[1],
+        Dg_2=stand_data.tree_strata[1].mean_diameter,
+        Hg_2=stand_data.tree_strata[1].mean_height,
+        age_3=stand_data.tree_strata[2].age,
+        G_3=strata_basal_areas_per_stratum[2],
+        N_3=strata_stem_counts_per_stratum[2],
+        Dg_3=stand_data.tree_strata[2].mean_diameter,
+        Hg_3=stand_data.tree_strata[2].mean_height,
+        DDY=1300,  # Temperature sum, degree days
+        fertility_class=stand_data.fertility_class,
+        peat=PEAT,
+        y=y,
+        x=x,
+        altitude=123,  # Altitude above the sea level
+        n_trees=20,  # Number of reference trees per stratum
+    )
+    page_1 = gy.get_table()
+
+    # Write to Excel with two sheets
+    page2 = pd.DataFrame(
+        {
+            "StandID": [1],
+            "Schedule": [1],
+            "Year": [0],
+            "HarvestType": ["no_loggings"],
+            "Species_id": [stand_data.main_species],
+        }
+    )
+
+    with pd.ExcelWriter(
+        cli_args.output_folder / f"susi_input_{stand_data.id}.xlsx",
+        # engine="xlsxwriter",
+    ) as writer:
+        page_1.to_excel(writer, sheet_name="StandData", index=False)
+        page2.to_excel(writer, sheet_name="Loggings", index=False)
+
+    print(f"Allometric road map successfully generated for stand {stand_data.id}")
+    print()
+
+
 # %% main
 
 
@@ -249,79 +330,12 @@ def main():
     stand_datas = [get_stand_data_from_xml(stand) for stand in stands]
 
     for stand_data in stand_datas:
-        thinning_rate = compute_thinning_rate(stand_data)
+        process_stand(cli_args, stand_data)
 
-        # Apply thinning:
-        strata_basal_areas_per_stratum = [
-            stratum.basal_area * thinning_rate for stratum in stand_data.tree_strata
-        ]
-        strata_stem_counts_per_stratum = [
-            stratum.stem_count * thinning_rate for stratum in stand_data.tree_strata
-        ]
-
-        # Location in YKJ coordinates, and input variables x & y to sawlog reduction model
-        # Coordinate transformer ETRS-TM35FIN (EPSG:3067) -> YKJ (EPSG:2393)
-        transformer = Transformer.from_crs("EPSG:3067", "EPSG:2393", always_xy=True)
-        ykj_e, ykj_n = transformer.transform(
-            stand_data.coords[0][0], stand_data.coords[0][1]
-        )
-        y = round(ykj_n / 1000)
-        x = round(ykj_e / 10000)
-
-        print("Assuming all sites are peatland sites")
-        PEAT = 1
-
-        # Generate stand allometry
-        gy = Growth_and_Yield_Table(
-            age_1=stand_data.tree_strata[0].age,
-            G_1=strata_basal_areas_per_stratum[0],
-            N_1=strata_stem_counts_per_stratum[0],
-            Dg_1=stand_data.tree_strata[0].mean_diameter,
-            Hg_1=stand_data.tree_strata[0].mean_height,
-            age_2=stand_data.tree_strata[1].age,
-            G_2=strata_basal_areas_per_stratum[1],
-            N_2=strata_stem_counts_per_stratum[1],
-            Dg_2=stand_data.tree_strata[1].mean_diameter,
-            Hg_2=stand_data.tree_strata[1].mean_height,
-            age_3=stand_data.tree_strata[2].age,
-            G_3=strata_basal_areas_per_stratum[2],
-            N_3=strata_stem_counts_per_stratum[2],
-            Dg_3=stand_data.tree_strata[2].mean_diameter,
-            Hg_3=stand_data.tree_strata[2].mean_height,
-            DDY=1300,  # Temperature sum, degree days
-            fertility_class=stand_data.fertility_class,
-            peat=PEAT,
-            y=y,
-            x=x,
-            altitude=123,  # Altitude above the sea level
-            n_trees=20,  # Number of reference trees per stratum
-        )
-        susi_input = gy.get_table()
-
-        # Write to Excel with two sheets
-        page2 = pd.DataFrame(
-            {
-                "StandID": [1],
-                "Schedule": [1],
-                "Year": [0],
-                "HarvestType": ["no_loggings"],
-                "Species_id": [stand_data.main_species],
-            }
-        )
-
-        with pd.ExcelWriter(
-            cli_args.output_folder / f"susi_input_{stand_data.id}.xlsx",
-            engine="xlsxwriter",
-        ) as writer:
-            susi_input.to_excel(writer, sheet_name="StandData", index=False)
-            page2.to_excel(writer, sheet_name="Loggings", index=False)
-
-        print(f"Allometric road map successfully generated for stand {stand_data.id}")
-        print()
-
-    ManyStandDatas(stand_datas=stand_datas).model_dump_json()
-
-    stands = read_stands_from_xml_file(cli_args.xml_filepath)
+    dump_json_info_to_file(
+        output_folder=cli_args.output_folder,
+        many_stand_datas=ManyStandDatas(stand_datas=stand_datas),
+    )
 
 
 if __name__ == "__main__":
@@ -329,20 +343,3 @@ if __name__ == "__main__":
     import sys
 
     sys.exit()
-
-# %% Old code
-
-
-def _main_old():
-    cli_args = CLIArguments(
-        xml_filepath=Path(
-            "/home/txart/projects/hiket/susi_26/paroninkorpi/input/Forest_data/Paroninkorpi.xml"
-        ),
-        output_folder=Path(
-            "/home/txart/projects/hiket/susi_26/paroninkorpi/output/Stand_allometry"
-        ),
-    )
-
-    # %% Front
-
-    # Loop stands
