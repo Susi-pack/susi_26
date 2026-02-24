@@ -214,10 +214,28 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
     )
 
 
-def apply_thinning(
-    variable: list[int | float], thinning_rate: float
-) -> list[int | float]:
-    return [var * thinning_rate for var in variable]
+def compute_thinning_rate(stand_data: StandData) -> float:
+    # Check the need of sapling stand thinning
+    threshold = 2200 if stand_data.main_species == 2 else 2500
+
+    thinning_needed: bool = (stand_data.mean_diameter < 8) & (
+        stand_data.stem_count > threshold
+    )
+
+    if thinning_needed:
+        thinning_rate = sampling_stand_thinning_rate(
+            stand_data.main_species, stand_data.stem_count
+        )
+
+        print("Sampling stand thinning is necessary!")
+        print(
+            f"--- Stem count decreased from {stand_data.stem_count} to {round(thinning_rate * stand_data.stem_count)}"
+        )
+        print()
+
+    else:  # NO thinning
+        thinning_rate = 1.0
+    return thinning_rate
 
 
 # %% main
@@ -226,73 +244,20 @@ def apply_thinning(
 def main():
     cli_args = parse_CLI_arguments()
 
-    # TODO: json dump. Before or after?
-    # ManyStandDatas.model_dump_json()
-
     stands = read_stands_from_xml_file(cli_args.xml_filepath)
 
+    stand_datas = [get_stand_data_from_xml(stand) for stand in stands]
 
-if __name__ == "__main__":
-    main()
-    import sys
+    for stand_data in stand_datas:
+        thinning_rate = compute_thinning_rate(stand_data)
 
-    sys.exit()
-
-# %% Old code
-
-
-def _main_old():
-    cli_args = CLIArguments(
-        xml_filepath=Path(
-            "/home/txart/projects/hiket/susi_26/paroninkorpi/input/Forest_data/Paroninkorpi.xml"
-        ),
-        output_folder=Path(
-            "/home/txart/projects/hiket/susi_26/paroninkorpi/output/Stand_allometry"
-        ),
-    )
-
-    stands = read_stands_from_xml_file(cli_args.xml_filepath)
-
-    output_allometry_folder = cli_args.output_folder
-
-    # %% Front
-
-    # Loop stands
-    for stand in stands:
-        stand_data = get_stand_data_from_xml(stand)
-
-        # Check the need of sapling stand thinning
-        threshold = 2200 if stand_data.main_species == 2 else 2500
-
-        thinning_needed: bool = (stand_data.mean_diameter < 8) & (
-            stand_data.stem_count > threshold
-        )
-
-        if thinning_needed:
-            thinning_rate = sampling_stand_thinning_rate(
-                stand_data.main_species, stand_data.stem_count
-            )
-
-            strata_basal_areas_per_stratum = [
-                stratum.basal_area * thinning_rate for stratum in stand_data.tree_strata
-            ]
-            strata_stem_counts_per_stratum = [
-                stratum.stem_count * thinning_rate for stratum in stand_data.tree_strata
-            ]
-
-            print("Sampling stand thinning is necessary!")
-            print(
-                f"--- Stem count decreased from {stand_data.stem_count} to {round(thinning_rate * stand_data.stem_count)}"
-            )
-            print()
-
-        else:  # NO thinning
-            strata_basal_areas_per_stratum = [
-                stratum.basal_area for stratum in stand_data.tree_strata
-            ]
-            strata_stem_counts_per_stratum = [
-                stratum.stem_count for stratum in stand_data.tree_strata
-            ]
+        # Apply thinning:
+        strata_basal_areas_per_stratum = [
+            stratum.basal_area * thinning_rate for stratum in stand_data.tree_strata
+        ]
+        strata_stem_counts_per_stratum = [
+            stratum.stem_count * thinning_rate for stratum in stand_data.tree_strata
+        ]
 
         # Location in YKJ coordinates, and input variables x & y to sawlog reduction model
         # Coordinate transformer ETRS-TM35FIN (EPSG:3067) -> YKJ (EPSG:2393)
@@ -324,7 +289,7 @@ def _main_old():
             Dg_3=stand_data.tree_strata[2].mean_diameter,
             Hg_3=stand_data.tree_strata[2].mean_height,
             DDY=1300,  # Temperature sum, degree days
-            fertility_class=stand.fertility_class,
+            fertility_class=stand_data.fertility_class,
             peat=PEAT,
             y=y,
             x=x,
@@ -345,10 +310,39 @@ def _main_old():
         )
 
         with pd.ExcelWriter(
-            output_allometry_folder / f"susi_input_{stand.id}.xlsx", engine="xlsxwriter"
+            cli_args.output_folder / f"susi_input_{stand_data.id}.xlsx",
+            engine="xlsxwriter",
         ) as writer:
             susi_input.to_excel(writer, sheet_name="StandData", index=False)
             page2.to_excel(writer, sheet_name="Loggings", index=False)
 
-        print(f"Allometric road map successfully generated for stand {stand.id}")
+        print(f"Allometric road map successfully generated for stand {stand_data.id}")
         print()
+
+    ManyStandDatas(stand_datas=stand_datas).model_dump_json()
+
+    stands = read_stands_from_xml_file(cli_args.xml_filepath)
+
+
+if __name__ == "__main__":
+    main()
+    import sys
+
+    sys.exit()
+
+# %% Old code
+
+
+def _main_old():
+    cli_args = CLIArguments(
+        xml_filepath=Path(
+            "/home/txart/projects/hiket/susi_26/paroninkorpi/input/Forest_data/Paroninkorpi.xml"
+        ),
+        output_folder=Path(
+            "/home/txart/projects/hiket/susi_26/paroninkorpi/output/Stand_allometry"
+        ),
+    )
+
+    # %% Front
+
+    # Loop stands
