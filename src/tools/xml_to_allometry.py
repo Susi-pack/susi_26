@@ -184,8 +184,13 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
         strata_stem_counts_per_stratum.append(tree_stratum.stem_count)
 
     # The main species is the one with the largest basal area
-    main_species = strata_basal_areas_per_stratum.index(
-        max(strata_basal_areas_per_stratum)
+    # THe +1 is there to agree with Mikko's nomenclature starting at 1.
+    # I (Iñaki) don't know if that is more fundamental than that, i.e.,
+    # I do not know if it is a choice by Mikko or if the number of the
+    # species actually means something else.
+    # NOTE: in Mikko's script the species are {1,2,4}. Here they are {1,2,3}
+    main_species = (
+        strata_basal_areas_per_stratum.index(max(strata_basal_areas_per_stratum)) + 1
     )
 
     # Parse and validate all necessary XML data
