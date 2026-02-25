@@ -36,6 +36,7 @@ nav = [
     { "Get started" = "index.md" },
     { "Parameters" = "simulation_config.md" },
     { "Paroninkorpi optimization" = "optimization_pymoo.md" },
+    { "XML --> allometry file" = "xml_to_allometry.md" },
     { "Get started with zensical" = "zensical_index.md" },
 ]
 
