@@ -65,7 +65,7 @@ class Canopylayer:
                 # allometry instance to the dictionary
                 self.allodic[ncanopy] = Allometry()
                 # run the allometry; interpolation functions in the instance
-                self.allodic[ncanopy].motti_development(
+                self.allodic[ncanopy].allometry_development(
                     df=allometry_df_dict[ncanopy],
                     sp=species_id_dict[ncanopy],
                     sfc=self.sfc,

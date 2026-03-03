@@ -14,7 +14,7 @@ class Allometry:
     def __init__(self):
         pass
 
-    def motti_development(self, df, sp, sfc):
+    def allometry_development(self, df, sp, sfc):
         """
         Input:
             df: dataframe from allometry file page 1

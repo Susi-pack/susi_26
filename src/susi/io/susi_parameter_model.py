@@ -109,20 +109,20 @@ class WeatherParams(StrictFrozenModel):
 
 class AllometryParams(StrictFrozenModel):
     """
-    Motti files to read
+    Allometry .xlsx files to read
     """
 
     allometry_dir_path: DirectoryPath = Field(
-        description="Motti files input file folder"
+        description="Folder where to look for the allometry files."
     )
     dominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the dominant layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the dominant layer."
     )
     subdominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the subdominant layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the subdominant layer."
     )
     under: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the understorey layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the understorey layer."
     )
 
     # Information read from the excel file, not serialized
