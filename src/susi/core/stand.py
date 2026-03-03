@@ -18,7 +18,7 @@ class Stand:
         n_cols,
         sfc,
         agearr,
-        mottifile,
+        allometry_params,
         photopara,
     ):
         """
@@ -30,11 +30,11 @@ class Stand:
         Input:
             nscens , int, number of scenarios in the simulation
             yrs, int, number of years in the simulation
-            canopylayers, dict in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
+            canopylayers, CanopyLayerAllometryPointers in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
             ncols, int, number of columns along the strip
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
-            mottifile, dict of dicts, telling the growth and yield (Motti files) in each canopy layer with key pointing to integer in the canopylayer dict
+            allometry_parameters: AllometryParams
             photopara - photosynthesis parameters used in the assimilation model
         """
         self.n_cols = n_cols  # number of columns along the strip
@@ -46,30 +46,24 @@ class Stand:
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
-        ndominants = np.unique(
-            canopylayers["dominant"]
-        )  # number codes of different dominant layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
-        nsubdominants = np.unique(
-            canopylayers["subdominant"]
-        )  # number codes of different subdominant layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
-        nunder = np.unique(
-            canopylayers["under"]
-        )  # number codes of different undermost layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
+        ndominants = np.unique(canopylayers.dominant)
+        nsubdominants = np.unique(canopylayers.subdominant)
+        nunder = np.unique(canopylayers.under)
 
         ixdominants = {}  # location indices for dominant canopy layers, along the transect
         for m in ndominants:
             if m > 0:
-                ixdominants[m] = np.where(canopylayers["dominant"] == m)
+                ixdominants[m] = np.where(canopylayers.dominant == m)
 
         ixsubdominants = {}  # location indices for subdominant canopy layers
         for m in nsubdominants:
             if m > 0:
-                ixsubdominants[m] = np.where(canopylayers["subdominant"] == m)
+                ixsubdominants[m] = np.where(canopylayers.subdominant == m)
 
         ixunder = {}  # location indices for undersmost canopy layer
         for m in nunder:
             if m > 0:
-                ixunder[m] = np.where(canopylayers["under"] == m)
+                ixunder[m] = np.where(canopylayers.under == m)
 
         self.dominant = Canopylayer(
             "dominant",
@@ -79,8 +73,8 @@ class Stand:
             ndominants,
             sfc,
             agearr["dominant"],
-            mottifile.path,
-            mottifile.dominant,
+            allometry_params.dominant_data,
+            allometry_params.dominant_species_id,
             ixdominants,
             photopara,
             self.nut_stat,
@@ -93,8 +87,8 @@ class Stand:
             nsubdominants,
             sfc,
             agearr["subdominant"],
-            mottifile.path,
-            mottifile.subdominant,
+            allometry_params.subdominant_data,
+            allometry_params.subdominant_species_id,
             ixsubdominants,
             photopara,
             self.nut_stat,
@@ -107,8 +101,8 @@ class Stand:
             nunder,
             sfc,
             agearr["under"],
-            mottifile.path,
-            mottifile.under,
+            allometry_params.under_data,
+            allometry_params.under_species_id,
             ixunder,
             photopara,
             self.nut_stat,
@@ -477,7 +471,7 @@ class Stand:
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
             # self.k_demand = self.k_demand + (cl.k_demand+ cl.Kleafdemand) * cl.stems
-            
+
             self.n_demand = self.n_demand + cl.n_demand * cl.stems
             self.p_demand = self.p_demand + cl.p_demand * cl.stems
             self.k_demand = self.k_demand + cl.k_demand * cl.stems
@@ -627,8 +621,8 @@ class Stand:
         # print (area_modifyer)
         # print (self.dominant.stems + self.subdominant.stems + self.under.stems)
         # area_modifyer = 1
-       
-        # denominator ie. demand corrected 050226 
+
+        # denominator ie. demand corrected 050226
         nstat[0, :] = (N_supply * area_modifyer) / (
             self.n_demand + self.n_leaf_demand + groundvegetation.nup
         )

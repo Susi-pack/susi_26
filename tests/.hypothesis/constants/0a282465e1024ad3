@@ -1,0 +1,4 @@
+# file: /home/txart/projects/hiket/susi_26/src/tools/xml_to_allometry.py
+# hypothesis_version: 6.151.9
+
+[1.0, 123, 1000, 1300, 1800, 2000, 2200, 2500, 10000, ',', '.xml', '@id', 'EPSG:2393', 'EPSG:3067', 'ForestPropertyData', 'HarvestType', 'Loggings', 'Path to the XML file', 'Schedule', 'Species_id', 'StandData', 'StandID', 'Year', '__main__', 'cm', 'extra_XML_info.json', 'gdt:PolygonGeometry', 'gml:LinearRing', 'gml:Polygon', 'gml:coordinates', 'gml:exterior', 'gml:polygonProperty', 'm', 'm2/ha', 'm3/ha', 'no_loggings', 'output_dir', 'st:FertilityClass', 'st:MainGroup', 'st:SoilType', 'st:Stand', 'st:StandBasicData', 'st:Stands', 'st:SubGroup', 'ts:TreeStandData', 'ts:TreeStandDataDate', 'tss:BasalArea', 'tss:MeanAge', 'tss:MeanDiameter', 'tss:MeanHeight', 'tss:TreeStandSummary', 'tss:Volume', 'tst:Age', 'tst:BasalArea', 'tst:MeanDiameter', 'tst:MeanHeight', 'tst:StemCount', 'tst:TreeStrata', 'tst:TreeStratum', 'units: trees/ha', 'utf8', 'xml_file', 'years']

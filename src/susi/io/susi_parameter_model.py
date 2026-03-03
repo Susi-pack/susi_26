@@ -1,9 +1,13 @@
+from multiprocessing.sharedctypes import Value
+from numba.scripts.generate_lower_listing import description
+from functools import lru_cache
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable
-
+from typing import Callable, Self, TypedDict
 import numpy as np
+import pandas as pd
+
 from pydantic import (
     DirectoryPath,
     Field,
@@ -11,6 +15,9 @@ from pydantic import (
     SkipValidation,
     computed_field,
     field_validator,
+    PrivateAttr,
+    model_validator,
+    NonNegativeInt,
 )
 
 from susi.io.extra_pydantic_types import (
@@ -39,6 +46,55 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
+@lru_cache()
+def read_allometry_info_from_excel(filepath: Path) -> tuple[pd.DataFrame, int]:
+    """
+    Read allometry file, return allometry dataframe and species id.
+    It is cached so that the same file is not read twice.
+    """
+
+    cnames = [
+        "yr",
+        "age",
+        "N",
+        "BA",
+        "Hg",
+        "Dg",
+        "hdom",
+        "vol",
+        "logs",
+        "pulp",
+        "loss",
+        "yield",
+        "mortality",
+        "stem",
+        "stemloss",
+        "branch_living",
+        "branch_dead",
+        "leaves",
+        "stump",
+        "roots_coarse",
+        "roots_fine",
+    ]
+    df = pd.read_excel(
+        filepath, sheet_name=0, usecols=range(22), skiprows=1, header=None
+    )
+    df = df.drop([0], axis=1)
+    df.columns = cnames
+    cname = ["idSpe"]
+    df2 = pd.read_excel(filepath, sheet_name=1, usecols=[4], skiprows=1, header=None)
+    df2.columns = cname
+
+    # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
+    df = df.loc[df["age"] != 0]
+
+    steps = np.array(np.diff(df["age"]), dtype=float)
+    idx = np.ravel(np.argwhere(steps < 1.0)) + 1
+    df.loc[idx, "age"] = df.loc[idx, "age"] + 5.0 / 365.0
+
+    return df, df2["idSpe"][0]
+
+
 class SimulationConfig(StrictFrozenModel):
     # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
@@ -54,21 +110,106 @@ class WeatherParams(StrictFrozenModel):
     FMI_weather_filepath: FilePath = Field(description="Path to weather files.")
 
 
-class MottiFileParams(StrictFrozenModel):
+class AllometryParams(StrictFrozenModel):
     """
-    Motti files to read
+    Allometry .xlsx files to read
     """
 
-    path: DirectoryPath = Field(description="Motti files input file folder")
+    allometry_dir_path: DirectoryPath = Field(
+        description="Folder where to look for the allometry files."
+    )
     dominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the dominant layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the dominant layer."
     )
     subdominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the subdominant layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the subdominant layer."
     )
     under: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Motti file for the understorey layer."
+        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the understorey layer."
     )
+
+    # Information read from the excel file, not serialized
+    _dominant_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _dominant_species_id: dict[int, int] = PrivateAttr()
+
+    _subdominant_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _subdominant_species_id: dict[int, int] = PrivateAttr()
+
+    _under_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _under_species_id: dict[int, int] = PrivateAttr()
+
+    @model_validator(mode="after")
+    def parse_excels(self) -> Self:
+        _dominant_data = {}
+        _dominant_species_id = {}
+
+        _subdominant_data = {}
+        _subdominant_species_id = {}
+
+        _under_data = {}
+        _under_species_id = {}
+
+        for id, filename in self.dominant.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _dominant_data[id] = df
+                _dominant_species_id[id] = species_id
+
+        for id, filename in self.subdominant.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _subdominant_data[id] = df
+                _subdominant_species_id[id] = species_id
+
+        for id, filename in self.under.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _under_data[id] = df
+                _under_species_id[id] = species_id
+
+        self._dominant_data = _dominant_data
+        self._dominant_species_id = _dominant_species_id
+
+        self._subdominant_data = _subdominant_data
+        self._subdominant_species_id = _subdominant_species_id
+
+        self._under_data = _under_data
+        self._under_species_id = _under_species_id
+
+        return self
+
+    @property
+    def dominant_data(self) -> dict[int, pd.DataFrame]:
+        return self._dominant_data
+
+    @property
+    def dominant_species_id(self) -> dict[int, int]:
+        return self._dominant_species_id
+
+    @property
+    def subdominant_data(self) -> dict[int, pd.DataFrame]:
+        return self._subdominant_data
+
+    @property
+    def subdominant_species_id(self) -> dict[int, int]:
+        return self._subdominant_species_id
+
+    @property
+    def under_data(self) -> dict[int, pd.DataFrame]:
+        return self._under_data
+
+    @property
+    def under_species_id(self) -> dict[int, int]:
+        return self._under_species_id
 
 
 class CanopyStateParams(StrictFrozenModel):
@@ -414,6 +555,19 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
+class CanopyLayerAllometryPointers(StrictFrozenModel):
+    """
+    Pointers to the allometry files for all canopy layers: dominant, subdominant, understorey
+    Each list must contain one non-negative integer per soil column.
+    Integers in the list reference the keys in the `AllometryParams` dictionaries.
+    0 implies that layer is not present for that soil column.
+    """
+
+    dominant: list[NonNegativeInt]
+    subdominant: list[NonNegativeInt]
+    under: list[NonNegativeInt]
+
+
 class SiteParams(StrictFrozenModel):
     """
     Soil and stand parameters
@@ -430,6 +584,7 @@ class SiteParams(StrictFrozenModel):
     initial_understorey_age_years: NonNegativeFloat = Field(
         description="Age of the understorey at the beginning of the simulation. This is set to all nodes in the strip."
     )
+    canopylayers: CanopyLayerAllometryPointers
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -515,14 +670,6 @@ class SiteParams(StrictFrozenModel):
         """site fertility class for all nodes in the strip"""
         return np.ones(self.n, dtype=int) * self.site_fertility_class
 
-    @property
-    def canopylayers(self) -> dict[str, np.ndarray]:
-        return {
-            "dominant": np.ones(self.n, dtype=int),
-            "subdominant": np.zeros(self.n, dtype=int),
-            "under": np.zeros(self.n, dtype=int),
-        }
-
     @field_validator("h_mor", mode="before")
     @classmethod
     def compute_if_callable(cls, hmor, info):
@@ -539,6 +686,18 @@ class SiteParams(StrictFrozenModel):
                 raise ValueError(f"Failed to compute h_mor: {e}")
         return hmor
 
+    @model_validator(mode="after")
+    def canopy_layer_elements(self) -> Self:
+        n = self.n
+        for layer_name in ["dominant", "subdominant", "under"]:
+            layer_list = getattr(self.canopylayers, layer_name)
+            if len(layer_list) != n:
+                raise ValueError(
+                    f"CanopyLayerAllometryPointers.{layer_name} has {len(layer_list)} elements, "
+                    f"but must have {n} elements"
+                )
+        return self
+
 
 class SusiParams(StrictFrozenModel):
     """
@@ -547,13 +706,101 @@ class SusiParams(StrictFrozenModel):
 
     params_schema_version: int = 1
     weather_parameters: WeatherParams
-    motti_file_parameters: MottiFileParams
+    allometry_parameters: AllometryParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+
+    @model_validator(mode="after")
+    def stand_age_vs_allometry_pathway(self) -> Self:
+        """
+        Validates the following:
+        - Initial stand age is not below the minimum in the allometry file
+        - initial stand age + simulation time is not above the maximum age in the allometry file
+        """
+        simulation_duration_years = (
+            self.simulation_config.end_date.year
+            - self.simulation_config.start_date.year
+        )
+
+        self._validate_layer_age(
+            layer_name="dominant",
+            initial_age=self.site_parameters.initial_dominant_stand_age_years,
+            allometry_data=self.allometry_parameters.dominant_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        self._validate_layer_age(
+            layer_name="subdominant",
+            initial_age=self.site_parameters.initial_subdominant_stand_age_years,
+            allometry_data=self.allometry_parameters.subdominant_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        self._validate_layer_age(
+            layer_name="under",
+            initial_age=self.site_parameters.initial_understorey_age_years,
+            allometry_data=self.allometry_parameters.under_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        return self
+
+    @model_validator(mode="after")
+    def allometry_files_pointers(self) -> Self:
+        for layer_name in ["dominant", "subdominant", "under"]:
+            layer_pointers = getattr(self.site_parameters.canopylayers, layer_name)
+            layer_keys = getattr(self.allometry_parameters, layer_name).keys()
+            non_zero_pointers = set(p for p in layer_pointers if p != 0)
+            # only check non-zero pointers. 0 means no tree in the layer.
+            if non_zero_pointers:
+                missing_keys = non_zero_pointers - layer_keys
+                if missing_keys:
+                    raise ValueError(
+                        f"Allometry pointer(s) {missing_keys} in {layer_name} layer "
+                        f"do not exist in AllometryParams.{layer_name} keys {set(layer_keys)}"
+                    )
+        return self
+
+    def _validate_layer_age(
+        self,
+        layer_name: str,
+        initial_age: float,
+        allometry_data: dict[int, pd.DataFrame],
+        simulation_duration: float,
+    ) -> None:
+        """Helper method to validate age for a single canopy layer."""
+        if not allometry_data:
+            # This convers the case of no stand in the canopy layer
+            return
+
+        # Compute the minimum and maximum of all dataframes
+        min_age = float("inf")
+        max_age = float("-inf")
+
+        for df in allometry_data.values():
+            min_age = min(min_age, df["age"].min())
+            max_age = max(max_age, df["age"].max())
+
+        df = next(iter(allometry_data.values()))
+        min_age = df["age"].min()
+        max_age = df["age"].max()
+
+        if initial_age < min_age:
+            raise ValueError(
+                f"Initial {layer_name} stand age ({initial_age}) is below "
+                f"minimum age ({min_age}) in allometry file"
+            )
+
+        if initial_age + simulation_duration > max_age:
+            raise ValueError(
+                f"Initial {layer_name} stand age ({initial_age}) plus simulation "
+                f"duration ({simulation_duration:.1f} years) exceeds maximum age "
+                f"({max_age}) in allometry file"
+            )
 
     def dump_json_to_file(self, filepath: Path) -> None:
         with open(filepath, "w") as f:
