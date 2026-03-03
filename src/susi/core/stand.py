@@ -18,7 +18,7 @@ class Stand:
         n_cols,
         sfc,
         agearr,
-        mottifile,
+        allometry_params,
         photopara,
     ):
         """
@@ -34,7 +34,7 @@ class Stand:
             ncols, int, number of columns along the strip
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
-            mottifile, dict of dicts, telling the growth and yield (Motti files) in each canopy layer with key pointing to integer in the canopylayer dict
+            allometry_parameters: AllometryParams
             photopara - photosynthesis parameters used in the assimilation model
         """
         self.n_cols = n_cols  # number of columns along the strip
@@ -79,8 +79,8 @@ class Stand:
             ndominants,
             sfc,
             agearr["dominant"],
-            mottifile.path,
-            mottifile.dominant,
+            allometry_params.dominant_data,
+            allometry_params.dominant_species_id,
             ixdominants,
             photopara,
             self.nut_stat,
@@ -93,8 +93,8 @@ class Stand:
             nsubdominants,
             sfc,
             agearr["subdominant"],
-            mottifile.path,
-            mottifile.subdominant,
+            allometry_params.subdominant_data,
+            allometry_params.subdominant_species_id,
             ixsubdominants,
             photopara,
             self.nut_stat,
@@ -107,8 +107,8 @@ class Stand:
             nunder,
             sfc,
             agearr["under"],
-            mottifile.path,
-            mottifile.under,
+            allometry_params.under_data,
+            allometry_params.under_species_id,
             ixunder,
             photopara,
             self.nut_stat,
@@ -477,7 +477,7 @@ class Stand:
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
             # self.k_demand = self.k_demand + (cl.k_demand+ cl.Kleafdemand) * cl.stems
-            
+
             self.n_demand = self.n_demand + cl.n_demand * cl.stems
             self.p_demand = self.p_demand + cl.p_demand * cl.stems
             self.k_demand = self.k_demand + cl.k_demand * cl.stems
@@ -627,8 +627,8 @@ class Stand:
         # print (area_modifyer)
         # print (self.dominant.stems + self.subdominant.stems + self.under.stems)
         # area_modifyer = 1
-       
-        # denominator ie. demand corrected 050226 
+
+        # denominator ie. demand corrected 050226
         nstat[0, :] = (N_supply * area_modifyer) / (
             self.n_demand + self.n_leaf_demand + groundvegetation.nup
         )

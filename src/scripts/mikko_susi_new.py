@@ -35,7 +35,7 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    MottiFileParams,
+    AllometryParams,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -299,8 +299,8 @@ def prepare_susi_params(
                 start_date=start_date,
                 end_date=datetime.datetime(2024, 12, 31),
             ),
-            motti_file_parameters=MottiFileParams(
-                path=allometry_files_directory_path,
+            allometry_parameters=AllometryParams(
+                allometry_dir_path=allometry_files_directory_path,
                 dominant={1: allometry_filename_from_stand_number(stand_number)},
                 subdominant={0: "susi_motti_input_lyr_1.xlsx"},
                 under={0: "susi_motti_input_lyr_2.xlsx"},

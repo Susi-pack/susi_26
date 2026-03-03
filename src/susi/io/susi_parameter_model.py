@@ -1,9 +1,11 @@
+from functools import lru_cache
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable
-
+from typing import Callable, Self
 import numpy as np
+import pandas as pd
+
 from pydantic import (
     DirectoryPath,
     Field,
@@ -11,6 +13,8 @@ from pydantic import (
     SkipValidation,
     computed_field,
     field_validator,
+    PrivateAttr,
+    model_validator,
 )
 
 from susi.io.extra_pydantic_types import (
@@ -39,6 +43,55 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
+@lru_cache()
+def read_allometry_info_from_excel(filepath: Path) -> tuple[pd.DataFrame, int]:
+    """
+    Read allometry file, return allometry dataframe and species id.
+    It is cached so that the same file is not read twice.
+    """
+
+    cnames = [
+        "yr",
+        "age",
+        "N",
+        "BA",
+        "Hg",
+        "Dg",
+        "hdom",
+        "vol",
+        "logs",
+        "pulp",
+        "loss",
+        "yield",
+        "mortality",
+        "stem",
+        "stemloss",
+        "branch_living",
+        "branch_dead",
+        "leaves",
+        "stump",
+        "roots_coarse",
+        "roots_fine",
+    ]
+    df = pd.read_excel(
+        filepath, sheet_name=0, usecols=range(22), skiprows=1, header=None
+    )
+    df = df.drop([0], axis=1)
+    df.columns = cnames
+    cname = ["idSpe"]
+    df2 = pd.read_excel(filepath, sheet_name=1, usecols=[4], skiprows=1, header=None)
+    df2.columns = cname
+
+    # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
+    df = df.loc[df["age"] != 0]
+
+    steps = np.array(np.diff(df["age"]), dtype=float)
+    idx = np.ravel(np.argwhere(steps < 1.0)) + 1
+    df.loc[idx, "age"] = df.loc[idx, "age"] + 5.0 / 365.0
+
+    return df, df2["idSpe"][0]
+
+
 class SimulationConfig(StrictFrozenModel):
     # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
@@ -54,12 +107,14 @@ class WeatherParams(StrictFrozenModel):
     FMI_weather_filepath: FilePath = Field(description="Path to weather files.")
 
 
-class MottiFileParams(StrictFrozenModel):
+class AllometryParams(StrictFrozenModel):
     """
     Motti files to read
     """
 
-    path: DirectoryPath = Field(description="Motti files input file folder")
+    allometry_dir_path: DirectoryPath = Field(
+        description="Motti files input file folder"
+    )
     dominant: dict[int, str] = Field(
         description="int: 0 if not in use. str: Motti file for the dominant layer."
     )
@@ -69,6 +124,89 @@ class MottiFileParams(StrictFrozenModel):
     under: dict[int, str] = Field(
         description="int: 0 if not in use. str: Motti file for the understorey layer."
     )
+
+    # Information read from the excel file, not serialized
+    _dominant_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _dominant_species_id: dict[int, int] = PrivateAttr()
+
+    _subdominant_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _subdominant_species_id: dict[int, int] = PrivateAttr()
+
+    _under_data: dict[int, pd.DataFrame] = PrivateAttr()
+    _under_species_id: dict[int, int] = PrivateAttr()
+
+    @model_validator(mode="after")
+    def parse_excels(self) -> Self:
+        _dominant_data = {}
+        _dominant_species_id = {}
+
+        _subdominant_data = {}
+        _subdominant_species_id = {}
+
+        _under_data = {}
+        _under_species_id = {}
+
+        for id, filename in self.dominant.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _dominant_data[id] = df
+                _dominant_species_id[id] = species_id
+
+        for id, filename in self.subdominant.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _subdominant_data[id] = df
+                _subdominant_species_id[id] = species_id
+
+        for id, filename in self.under.items():
+            if id != 0:
+                df, species_id = read_allometry_info_from_excel(
+                    filepath=self.allometry_dir_path / filename
+                )
+
+                _under_data[id] = df
+                _under_species_id[id] = species_id
+
+        self._dominant_data = _dominant_data
+        self._dominant_species_id = _dominant_species_id
+
+        self._subdominant_data = _subdominant_data
+        self._subdominant_species_id = _subdominant_species_id
+
+        self._under_data = _under_data
+        self._under_species_id = _under_species_id
+
+        return self
+
+    @property
+    def dominant_data(self) -> dict[int, pd.DataFrame]:
+        return self._dominant_data
+
+    @property
+    def dominant_species_id(self) -> dict[int, int]:
+        return self._dominant_species_id
+
+    @property
+    def subdominant_data(self) -> dict[int, pd.DataFrame]:
+        return self._subdominant_data
+
+    @property
+    def subdominant_species_id(self) -> dict[int, int]:
+        return self._subdominant_species_id
+
+    @property
+    def under_data(self) -> dict[int, pd.DataFrame]:
+        return self._under_data
+
+    @property
+    def under_species_id(self) -> dict[int, int]:
+        return self._under_species_id
 
 
 class CanopyStateParams(StrictFrozenModel):
@@ -547,7 +685,7 @@ class SusiParams(StrictFrozenModel):
 
     params_schema_version: int = 1
     weather_parameters: WeatherParams
-    motti_file_parameters: MottiFileParams
+    allometry_parameters: AllometryParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams

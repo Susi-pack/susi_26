@@ -30,8 +30,8 @@ class Canopylayer:
         nlyrs,
         sfc,
         agearr,
-        mottipath,
-        mottifile,
+        allometry_df_dict,
+        species_id_dict,
         ixs,
         photopara,
         nut_stat,
@@ -62,16 +62,14 @@ class Canopylayer:
                 self.sfc = int(
                     np.median(self.sfc[self.ixs[ncanopy]])
                 )  # site fertility class
-
-                self.allodic[ncanopy] = (
-                    Allometry()
-                )  # allometry instance to the dictionary
-                mfile = (
-                    mottipath / mottifile[ncanopy]
-                )  # mottifile where the allometry tables exist
+                # allometry instance to the dictionary
+                self.allodic[ncanopy] = Allometry()
+                # run the allometry; interpolation functions in the instance
                 self.allodic[ncanopy].motti_development(
-                    mfile, self.sfc
-                )  # run the allometry; interpolation functions in the instance
+                    df=allometry_df_dict[ncanopy],
+                    sp=species_id_dict[ncanopy],
+                    sfc=self.sfc,
+                )
                 self.tree_species[self.ixs[ncanopy]] = int(self.allodic[ncanopy].sp)
         self.initialize_domain(
             agearr, nut_stat
@@ -486,7 +484,7 @@ class Canopylayer:
         self.NPP, self.NPP_pot = assimilation_yr(
             photopara, forc, wt, afp, self.leafarea * 2 * self.stems, lai_above
         )  # double sided LAI required
-        
+
         """
         self.NPP = (
             self.NPP * nut_stat / self.stems #* 1.1                            #This removed 05022026
@@ -496,32 +494,29 @@ class Canopylayer:
             self.NPP_pot * nut_stat / self.stems #* 1.1
         )  # returned back to tree basis units
         """
-        
-        
+
         # 1. Define the mask once
         condition = self.stems > 0
-        
+
         # 2. Pre-calculate the numerator
         adjusted_npp = self.NPP * nut_stat
         adjusted_npp_pot = self.NPP_pot * nut_stat
-        
+
         # 3. Perform the safe division: returned back to tree basis units
         self.NPP = np.divide(
-            adjusted_npp, 
-            self.stems, 
-            out=np.full_like(adjusted_npp, np.nan), 
-            where=condition
-        ) # returned back to tree basis unit
-        
+            adjusted_npp,
+            self.stems,
+            out=np.full_like(adjusted_npp, np.nan),
+            where=condition,
+        )  # returned back to tree basis unit
+
         self.NPP_pot = np.divide(
-            adjusted_npp_pot, 
-            self.stems, 
-            out=np.full_like(adjusted_npp_pot, np.nan), 
-            where=condition
-        ) # returned back to tree basis unit
-                
-         
-                
+            adjusted_npp_pot,
+            self.stems,
+            out=np.full_like(adjusted_npp_pot, np.nan),
+            where=condition,
+        )  # returned back to tree basis unit
+
         bm_increment = self.NPP
         bm = self.biomass
 
@@ -735,14 +730,14 @@ class Canopylayer:
 
         if printOpt:
             print("********************************************")
-            print ('bm', bm)
-            print ('bm_increment', bm_increment)
-            print ('nutstat ', nut_stat)
-            print('leafmin',leafmin)
-            print ('leafbase0',leafbase0) 
-            print ('leafbase1', leafbase1) 
+            print("bm", bm)
+            print("bm_increment", bm_increment)
+            print("nutstat ", nut_stat)
+            print("leafmin", leafmin)
+            print("leafbase0", leafbase0)
+            print("leafbase1", leafbase1)
 
-            print ('leafmax',leafmax)
+            print("leafmax", leafmax)
             print("net_change", net_ch)
             print("demanded growth", gr_demand)
             print("max_change", max_ch)
@@ -762,7 +757,6 @@ class Canopylayer:
             print("Pdemand ", P_net + Pleaf_litter)
             print("Plitter", Pleaf_litter)
             print("Pnet", P_net, P_con(nut_stat), P_con(previous_nut_stat))
-
 
             print("Kdemand ", K_net + Kleaf_litter)
             print("Klitter", Kleaf_litter)

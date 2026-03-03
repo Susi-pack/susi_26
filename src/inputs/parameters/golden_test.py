@@ -15,7 +15,7 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    MottiFileParams,
+    AllometryParams,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -36,8 +36,8 @@ PARAMETERS = SusiParams(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2017, 12, 31),
     ),
-    motti_file_parameters=MottiFileParams(
-        path=_app_settings.input_folder,
+    allometry_parameters=AllometryParams(
+        allometry_dir_path=_app_settings.input_folder,
         dominant={1: "CF_41.xlsx"},
         subdominant={0: "susi_motti_input_lyr_1.xlsx"},
         under={0: "susi_motti_input_lyr_2.xlsx"},
@@ -98,8 +98,8 @@ PARAMETERS = SusiParams(
                 decay_k=0.5,
                 eff=1.0,
             ),  # fertilization dose in kg ha-1, decay_k in yr-1
-            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.1, eff=1.0),  #45
-            K=NutrientFertilizationParameters(dose=120.0, decay_k=0.1, eff=1.0),  #100
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.1, eff=1.0),  # 45
+            K=NutrientFertilizationParameters(dose=120.0, decay_k=0.1, eff=1.0),  # 100
             pH_increment=0.5,
         ),
         peat_temperature=PeatTemperatureParams(),
