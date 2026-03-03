@@ -1,8 +1,10 @@
+from multiprocessing.sharedctypes import Value
+from numba.scripts.generate_lower_listing import description
 from functools import lru_cache
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Self
+from typing import Callable, Self, TypedDict
 import numpy as np
 import pandas as pd
 
@@ -15,6 +17,7 @@ from pydantic import (
     field_validator,
     PrivateAttr,
     model_validator,
+    NonNegativeInt,
 )
 
 from susi.io.extra_pydantic_types import (
@@ -552,6 +555,19 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
+class CanopyLayerAllometryPointers(StrictFrozenModel):
+    """
+    Pointers to the allometry files for all canopy layers: dominant, subdominant, understorey
+    Each list must contain one non-negative integer per soil column.
+    Integers in the list reference the keys in the `AllometryParams` dictionaries.
+    0 implies that layer is not present for that soil column.
+    """
+
+    dominant: list[NonNegativeInt]
+    subdominant: list[NonNegativeInt]
+    under: list[NonNegativeInt]
+
+
 class SiteParams(StrictFrozenModel):
     """
     Soil and stand parameters
@@ -568,6 +584,7 @@ class SiteParams(StrictFrozenModel):
     initial_understorey_age_years: NonNegativeFloat = Field(
         description="Age of the understorey at the beginning of the simulation. This is set to all nodes in the strip."
     )
+    canopylayers: CanopyLayerAllometryPointers
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -653,14 +670,6 @@ class SiteParams(StrictFrozenModel):
         """site fertility class for all nodes in the strip"""
         return np.ones(self.n, dtype=int) * self.site_fertility_class
 
-    @property
-    def canopylayers(self) -> dict[str, np.ndarray]:
-        return {
-            "dominant": np.ones(self.n, dtype=int),
-            "subdominant": np.zeros(self.n, dtype=int),
-            "under": np.zeros(self.n, dtype=int),
-        }
-
     @field_validator("h_mor", mode="before")
     @classmethod
     def compute_if_callable(cls, hmor, info):
@@ -676,6 +685,18 @@ class SiteParams(StrictFrozenModel):
             except Exception as e:
                 raise ValueError(f"Failed to compute h_mor: {e}")
         return hmor
+
+    @model_validator(mode="after")
+    def canopy_layer_elements(self) -> Self:
+        n = self.n
+        for layer_name in ["dominant", "subdominant", "under"]:
+            layer_list = getattr(self.canopylayers, layer_name)
+            if len(layer_list) != n:
+                raise ValueError(
+                    f"CanopyLayerAllometryPointers.{layer_name} has {len(layer_list)} elements, "
+                    f"but must have {n} elements"
+                )
+        return self
 
 
 class SusiParams(StrictFrozenModel):
@@ -726,6 +747,22 @@ class SusiParams(StrictFrozenModel):
             simulation_duration=simulation_duration_years,
         )
 
+        return self
+
+    @model_validator(mode="after")
+    def allometry_files_pointers(self) -> Self:
+        for layer_name in ["dominant", "subdominant", "under"]:
+            layer_pointers = getattr(self.site_parameters.canopylayers, layer_name)
+            layer_keys = getattr(self.allometry_parameters, layer_name).keys()
+            non_zero_pointers = set(p for p in layer_pointers if p != 0)
+            # only check non-zero pointers. 0 means no tree in the layer.
+            if non_zero_pointers:
+                missing_keys = non_zero_pointers - layer_keys
+                if missing_keys:
+                    raise ValueError(
+                        f"Allometry pointer(s) {missing_keys} in {layer_name} layer "
+                        f"do not exist in AllometryParams.{layer_name} keys {set(layer_keys)}"
+                    )
         return self
 
     def _validate_layer_age(

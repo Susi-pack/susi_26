@@ -30,7 +30,7 @@ class Stand:
         Input:
             nscens , int, number of scenarios in the simulation
             yrs, int, number of years in the simulation
-            canopylayers, dict in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
+            canopylayers, CanopyLayerAllometryPointers in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
             ncols, int, number of columns along the strip
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
@@ -46,30 +46,24 @@ class Stand:
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
-        ndominants = np.unique(
-            canopylayers["dominant"]
-        )  # number codes of different dominant layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
-        nsubdominants = np.unique(
-            canopylayers["subdominant"]
-        )  # number codes of different subdominant layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
-        nunder = np.unique(
-            canopylayers["under"]
-        )  # number codes of different undermost layers, number refers to key in mottifiles dictionary, 0 implies no dominant layer
+        ndominants = np.unique(canopylayers.dominant)
+        nsubdominants = np.unique(canopylayers.subdominant)
+        nunder = np.unique(canopylayers.under)
 
         ixdominants = {}  # location indices for dominant canopy layers, along the transect
         for m in ndominants:
             if m > 0:
-                ixdominants[m] = np.where(canopylayers["dominant"] == m)
+                ixdominants[m] = np.where(canopylayers.dominant == m)
 
         ixsubdominants = {}  # location indices for subdominant canopy layers
         for m in nsubdominants:
             if m > 0:
-                ixsubdominants[m] = np.where(canopylayers["subdominant"] == m)
+                ixsubdominants[m] = np.where(canopylayers.subdominant == m)
 
         ixunder = {}  # location indices for undersmost canopy layer
         for m in nunder:
             if m > 0:
-                ixunder[m] = np.where(canopylayers["under"] == m)
+                ixunder[m] = np.where(canopylayers.under == m)
 
         self.dominant = Canopylayer(
             "dominant",

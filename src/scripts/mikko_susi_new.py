@@ -43,6 +43,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
+    CanopyLayerAllometryPointers,
 )
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
@@ -319,6 +320,9 @@ def prepare_susi_params(
                 ),
                 initial_subdominant_stand_age_years=0.0,
                 initial_understorey_age_years=0.0,
+                canopylayers=CanopyLayerAllometryPointers(
+                    dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
+                ),
                 site_fertility_class=fertility_class,
                 sitename="susirun",
                 species=TreeSpecies("Pine"),

@@ -21,6 +21,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
+    CanopyLayerAllometryPointers,
 )
 
 _app_settings = AppSettings()
@@ -48,10 +49,13 @@ PARAMETERS = SusiParams(
     ),
     # The meaninglessness is only here.
     site_parameters=SiteParams(
-        L=100000.0,
+        L=10.0,
         initial_dominant_stand_age_years=60.0,
         initial_subdominant_stand_age_years=0.0,
         initial_understorey_age_years=0.0,
+        canopylayers=CanopyLayerAllometryPointers(
+            dominant=[1] * 5, subdominant=[0] * 5, under=[0] * 5
+        ),
         site_fertility_class=4,
         sitename="susirun",
         species=TreeSpecies("Pine"),
