@@ -8,19 +8,45 @@ from analysis.gui.components import (
     metadata_expander,
     netcdf_variable_explorer,
     netcdf_variable_plots_ui,
+    folder_selection,
 )
 
 # %% Choose folder
+st.header("Choose folder")
 
-susi_folders = nc_utils.list_subdirectories(
-    path=st.session_state.settings["data_folder"]
+col1, col2, col3 = st.columns([2, 3, 1])
+
+with col1:
+    st.markdown("**Data folder**")
+
+with col2:
+    st.write(st.session_state.settings["data_folder"])
+
+with col3:
+    if st.button("Browse…", use_container_width=True):
+        result = folder_selection.pick_folder_popup()
+        if result:
+            st.session_state.settings["data_folder"] = result
+            st.rerun()
+
+
+nc_utils.list_subdirectories(path=st.session_state.settings["data_folder"])
+
+
+chosen_scenario_folder = folder_selection.build_folder_selection_widget(
+    dir_path=folder_selection.build_folder_selection_widget(
+        dir_path=folder_selection.build_folder_selection_widget(
+            dir_path=st.session_state.settings["data_folder"], label="project"
+        ),
+        label="stand",
+    ),
+    label="scenario",
 )
 
-chosen_susi_folder = st.selectbox(label="Choose SUSI folder", options=susi_folders)
 
 # %% Metadata expander
 metadata, susi_params = nc_utils.read_json_metadatas(
-    experiment_folderpath=chosen_susi_folder
+    experiment_folderpath=chosen_scenario_folder
 )
 
 metadata_expander.build(metadata=metadata, susi_params=susi_params)
