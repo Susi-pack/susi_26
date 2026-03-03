@@ -49,8 +49,8 @@ PARAMETERS = SusiParams(
     # The meaninglessness is only here.
     site_parameters=SiteParams(
         L=100000.0,
-        initial_dominant_stand_age_years=10000.0,
-        initial_subdominant_stand_age_years=2323.0,
+        initial_dominant_stand_age_years=60.0,
+        initial_subdominant_stand_age_years=0.0,
         initial_understorey_age_years=0.0,
         site_fertility_class=4,
         sitename="susirun",

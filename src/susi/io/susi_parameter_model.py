@@ -693,6 +693,78 @@ class SusiParams(StrictFrozenModel):
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
 
+    @model_validator(mode="after")
+    def stand_age_vs_allometry_pathway(self) -> Self:
+        """
+        Validates the following:
+        - Initial stand age is not below the minimum in the allometry file
+        - initial stand age + simulation time is not above the maximum age in the allometry file
+        """
+        simulation_duration_years = (
+            self.simulation_config.end_date.year
+            - self.simulation_config.start_date.year
+        )
+
+        self._validate_layer_age(
+            layer_name="dominant",
+            initial_age=self.site_parameters.initial_dominant_stand_age_years,
+            allometry_data=self.allometry_parameters.dominant_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        self._validate_layer_age(
+            layer_name="subdominant",
+            initial_age=self.site_parameters.initial_subdominant_stand_age_years,
+            allometry_data=self.allometry_parameters.subdominant_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        self._validate_layer_age(
+            layer_name="under",
+            initial_age=self.site_parameters.initial_understorey_age_years,
+            allometry_data=self.allometry_parameters.under_data,
+            simulation_duration=simulation_duration_years,
+        )
+
+        return self
+
+    def _validate_layer_age(
+        self,
+        layer_name: str,
+        initial_age: float,
+        allometry_data: dict[int, pd.DataFrame],
+        simulation_duration: float,
+    ) -> None:
+        """Helper method to validate age for a single canopy layer."""
+        if not allometry_data:
+            # This convers the case of no stand in the canopy layer
+            return
+
+        # Compute the minimum and maximum of all dataframes
+        min_age = float("inf")
+        max_age = float("-inf")
+
+        for df in allometry_data.values():
+            min_age = min(min_age, df["age"].min())
+            max_age = max(max_age, df["age"].max())
+
+        df = next(iter(allometry_data.values()))
+        min_age = df["age"].min()
+        max_age = df["age"].max()
+
+        if initial_age < min_age:
+            raise ValueError(
+                f"Initial {layer_name} stand age ({initial_age}) is below "
+                f"minimum age ({min_age}) in allometry file"
+            )
+
+        if initial_age + simulation_duration > max_age:
+            raise ValueError(
+                f"Initial {layer_name} stand age ({initial_age}) plus simulation "
+                f"duration ({simulation_duration:.1f} years) exceeds maximum age "
+                f"({max_age}) in allometry file"
+            )
+
     def dump_json_to_file(self, filepath: Path) -> None:
         with open(filepath, "w") as f:
             f.write(self.model_dump_json(indent=4))
