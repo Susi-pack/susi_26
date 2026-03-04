@@ -49,7 +49,7 @@ class Susi:
         self,
     ):
         print(
-            "******** Susi-peatland simulator v.11 (2024) c Annamari Laurén *********************"
+            "******** Susi-peatland simulator v.12 (2026) c Annamari Laurén *********************"
         )
         print("           ")
         print("Initializing stand and site:")
@@ -498,6 +498,7 @@ class Susi:
                 # ---------- Organic matter decomposition and nutrient release-----------------
 
                 # ---------------- Fertilization --------------------------------
+                
                 if yr >= self.parameters.site_parameters.fertilization.application_year:
                     pH_increment = ferti.ph_effect(
                         yr, spara=self.parameters.site_parameters
