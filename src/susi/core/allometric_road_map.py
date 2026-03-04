@@ -574,7 +574,8 @@ class Growth_and_Yield_Table:
 
         return ReferenceTrees, next_state
 
-    def get_table(self):
+    def get_table(self, start_year: int, end_year: int, step_years=5):
+        """ """
         ReferenceTrees = []
 
         # Pine
@@ -698,7 +699,7 @@ class Growth_and_Yield_Table:
 
         # Stand development
         susi_input = pd.DataFrame(current_state)
-        for time_step in range(5, 41, 5):
+        for time_step in range(start_year, end_year + 1, step_years):
             ReferenceTrees, next_state = self.stand_development(
                 ReferenceTrees,
                 h_scalar,
