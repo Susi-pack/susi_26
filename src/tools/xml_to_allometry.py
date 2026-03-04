@@ -18,6 +18,7 @@ from susi.core.allometric_road_map import Growth_and_Yield_Table
 class CLIArguments:
     xml_filepath: Path
     output_folder: Path
+    do_thinning: bool
 
 
 class TreeStratum(BaseModel):
@@ -107,9 +108,17 @@ def parse_CLI_arguments() -> CLIArguments:
         help="Output folder for generated allometry files.",
     )
 
+    parser.add_argument(
+        "--do-thinning", action="store_true", help="Do thinning. Default: False"
+    )
+
     args = parser.parse_args()
 
-    return CLIArguments(xml_filepath=args.xml_file, output_folder=args.output_dir)
+    return CLIArguments(
+        xml_filepath=args.xml_file,
+        output_folder=args.output_dir,
+        do_thinning=args.do_thinning,
+    )
 
 
 def sampling_stand_thinning_rate(species_id, stem_count):
@@ -255,8 +264,11 @@ def get_ykj_coordinates(coords: tuple[float, float]) -> tuple[float, float]:
     return x, y
 
 
-def process_stand(cli_args, stand_data: StandData):
-    thinning_rate = compute_thinning_rate(stand_data)
+def process_stand(cli_args: CLIArguments, stand_data: StandData):
+    if cli_args.do_thinning:
+        thinning_rate = compute_thinning_rate(stand_data)
+    else:
+        thinning_rate = 1.0
 
     # Apply thinning:
     strata_basal_areas_per_stratum = [
@@ -329,6 +341,9 @@ def process_stand(cli_args, stand_data: StandData):
 
 def main():
     cli_args = parse_CLI_arguments()
+
+    print("Tool initialized with:")
+    print(f"    - thinning = {cli_args.do_thinning}")
 
     stands = read_stands_from_xml_file(cli_args.xml_filepath)
 
