@@ -17,7 +17,6 @@ import shutil
 
 from susi.io.execution_config import SimulationParams
 from susi.io import netcdf_utils
-from susi.core.susi_utils import read_FMI_weather
 from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData, _app_settings

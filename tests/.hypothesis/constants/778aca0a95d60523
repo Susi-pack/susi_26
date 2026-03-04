@@ -1,0 +1,4 @@
+# file: /home/txart/projects/hiket/susi_26/src/susi/core/weibull_recovery.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.01, 0.1, 0.2, 1.0, 2.0, 30.0, 1000000.0, 300, 40000, 'Grid search failed.', 'brentq', 'inf', 'scale', 'shape', 'val']

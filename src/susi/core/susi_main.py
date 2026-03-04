@@ -104,7 +104,7 @@ class Susi:
             n_cols=self.parameters.site_parameters.n,
             sfc=self.parameters.site_parameters.sfc,
             agearr=self.parameters.site_parameters.age,
-            mottifile=self.parameters.motti_file_parameters,
+            allometry_params=self.parameters.allometry_parameters,
             photopara=self.parameters.photo_parameters,
         )  # create stand class
         stand.update()

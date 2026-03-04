@@ -35,7 +35,7 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    MottiFileParams,
+    AllometryParams,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -43,6 +43,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
+    CanopyLayerAllometryPointers,
 )
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
@@ -299,8 +300,8 @@ def prepare_susi_params(
                 start_date=start_date,
                 end_date=datetime.datetime(2024, 12, 31),
             ),
-            motti_file_parameters=MottiFileParams(
-                path=allometry_files_directory_path,
+            allometry_parameters=AllometryParams(
+                allometry_dir_path=allometry_files_directory_path,
                 dominant={1: allometry_filename_from_stand_number(stand_number)},
                 subdominant={0: "susi_motti_input_lyr_1.xlsx"},
                 under={0: "susi_motti_input_lyr_2.xlsx"},
@@ -319,6 +320,9 @@ def prepare_susi_params(
                 ),
                 initial_subdominant_stand_age_years=0.0,
                 initial_understorey_age_years=0.0,
+                canopylayers=CanopyLayerAllometryPointers(
+                    dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
+                ),
                 site_fertility_class=fertility_class,
                 sitename="susirun",
                 species=TreeSpecies("Pine"),
@@ -457,15 +461,23 @@ def run(simulation_parameters: SimulationParams) -> None:
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().project_root_path / "paroninkorpi/input/Stand_allometry"
+    AppSettings().project_root_path / "paroninkorpi/input/stand_allometry_no_thinning"
 )
 
 
-def list_all_files_in_directory(dir: Path) -> list[Path | str]:
-    return [join(dir, f) for f in sorted(listdir(dir)) if isfile(join(dir, f))]
+def list_all_files_in_directory_with_given_extension(
+    dir: Path, extension: str
+) -> list[Path | str]:
+    return [
+        join(dir, f)
+        for f in sorted(listdir(dir))
+        if isfile(join(dir, f)) and f.endswith(extension)
+    ]
 
 
-allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH)
+allometry_filepaths = list_all_files_in_directory_with_given_extension(
+    ALLOMETRY_FILES_DIRECTORY_PATH, extension=".xlsx"
+)
 
 # We will simulate one stand for each allometry file
 N_STANDS = len(allometry_filepaths)
@@ -606,7 +618,6 @@ G_2_for_each_stand = [i.G_2 for i in xml_data]
 # List of parameters that completely determine each Susi simulation
 all_parameters: list[SimulationParams] = []
 
-
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
@@ -660,111 +671,3 @@ execution_config = MultipleSusis(
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
     pool.map(func=run, iterable=execution_config.simulation_parameter_list)
-
-# # %% Temp checks. DELETE IN FUTURE!
-# for p in all_parameters:
-#     stand_number = int(p.metadata.parent_output_folder.name[-2:])
-#     print(f"stand: {stand_number}, id: {p.metadata.experiment_id}")
-#
-
-# %% Analysis
-#
-#     """ Combine results to Excel from the existing ncf-files """
-#
-#     from pathlib import Path
-#
-#     folder_path = Path(folderName)
-#
-#     results = []
-#
-# # Loop stands:
-#     for stand in stands["st:Stand"]:
-#     StandNumber = int(stand["@id"])
-#
-# # Save stand basic to a new variable:
-#     StandBasicData = stand["st:StandBasicData"]
-#
-# # Loop through files containing stand number in their name:
-#     for file in folder_path.iterdir():
-#         if file.is_file() and (
-#             f"StandNumber_{StandNumber}_" in file.name
-#             or f"StandNumber_{StandNumber}." in file.name
-#         ):
-#             fertilized = "Ash" if "fertilized" in file.name else ""
-#             if "partialblocking" in file.name:
-#                 ditch_management = "partial_blocking"
-#             elif "DNM" in file.name:
-#                 ditch_management = "DNM_60_cm"
-#             else:
-#                 ditch_management = ""
-#             if "thinning" in file.name:
-#                 logging_type = "Thinning"
-#                 logging_yr = int(file.name.split("_")[-1].split(".")[0])
-#             else:
-#                 logging_type = ""
-#                 logging_yr = ""
-#
-#             mottifile = pd.read_excel(f"{allometry_files}susi_input_{StandNumber}.xlsx")
-#
-#             base_scenario_results = get_ncf_outputs(f"{folderName}{file.name}")
-#
-#             sim_result = {
-#                 "Area": area_name,
-#                 "StandNumber": StandNumber,
-#                 "Fertilization": fertilized,
-#                 "Ditch_management": ditch_management,
-#                 "Logging": logging_type,
-#                 "Logging_yr": logging_yr,
-#                 "Initial_ditch_depth": ditch_attributes[StandNumber]["ditch_depth"],
-#                 "Strip_width": ditch_attributes[StandNumber]["strip_width"],
-#                 "MainGroup": int(StandBasicData["st:MainGroup"]),
-#                 "SubGroup": int(StandBasicData["st:SubGroup"]),
-#                 "FertilityClass": int(StandBasicData["st:FertilityClass"]),
-#                 "SoilType": int(StandBasicData["st:SoilType"]),
-#                 "MainSp": pd.read_excel(
-#                     f"{allometry_files}susi_input_{StandNumber}.xlsx",
-#                     sheet_name="Loggings",
-#                 )["Species_id"][0],
-#                 "MeanAge": mottifile["Age"][0],
-#                 "BasalArea": np.round(mottifile["BA"][0], 1),
-#                 "StemCount": mottifile["N"][0],
-#                 "MeanDiameter": mottifile["Dg"][0],
-#                 "MeanHeight": mottifile["Hg"][0],
-#                 "Volume": np.round(mottifile["Volume"][0]),
-#                 "Annual_vol_gr": np.round(
-#                     (base_scenario_results["vol"][20] - base_scenario_results["vol"][0]) / 20, 1
-#                 ),  ## ADD HARVEST VOLUME
-#                 "dwtyr_latesummer": np.round(
-#                     np.mean(base_scenario_results["dwtyr_latesummer"][1:]), 2
-#                 ),
-#                 "stand_litter": np.round(np.mean(base_scenario_results["stand_litter"][1:])),
-#                 "gv_litter": np.round(np.mean(base_scenario_results["gv_litter"][1:])),
-#                 "co2c_release": (-1)
-#                 * np.round(np.mean(base_scenario_results["co2c_release"][1:])),
-#                 "ch4c_release": (-1)
-#                 * np.round(np.mean(base_scenario_results["ch4c_release"][1:]), 1),
-#                 "LMW_to_water": (-1)
-#                 * np.round(np.mean(base_scenario_results["LMW_to_water"][1:]), 1),
-#                 "LMW_to_atm": (-1)
-#                 * np.round(np.mean(base_scenario_results["LMW_to_atm"][1:]), 1),
-#                 "HMW_to_water": (-1)
-#                 * np.round(np.mean(base_scenario_results["HMW_to_water"][1:]), 1),
-#                 "HMW_to_atm": (-1)
-#                 * np.round(np.mean(base_scenario_results["HMW_to_atm"][1:]), 1),
-#                 "soil_C_balance": np.round(np.mean(base_scenario_results["soil_C"][1:])),
-#                 "stand_change": np.round(np.mean(base_scenario_results["stand_change"][1:])),
-#                 "gv_change": np.round(np.mean(base_scenario_results["gv_change"][1:])),
-#                 "ecos_C_balance": np.round(np.mean(base_scenario_results["ecosystem_C"][1:])),
-#                 "soil_CO2eq": np.round(np.mean(base_scenario_results["soil_CO2eq"][1:])),
-#                 "ecos_CO2eq": np.round(np.mean(base_scenario_results["ecosystem_CO2eq"][1:])),
-#                 "N_to_water": np.round(np.mean(base_scenario_results["N_to_water"][1:]), 2),
-#                 "P_to_water": np.round(np.mean(base_scenario_results["P_to_water"][1:]), 2),
-#             }
-#             results.append(sim_result)
-#
-# # Convert list of dicts to DataFrame
-#     df_results = pd.DataFrame(results)
-#
-#     df_results.to_excel(f"{base_folder}{area_name}_simulation_results.xlsx", index=False)
-#     print()
-#     print(f"Simulation results saved to {base_folder}{area_name}_simulation_results.xlsx")
