@@ -30,9 +30,6 @@ with col3:
             st.rerun()
 
 
-nc_utils.list_subdirectories(path=st.session_state.settings["data_folder"])
-
-
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(
         dir_path=folder_selection.build_folder_selection_widget(
