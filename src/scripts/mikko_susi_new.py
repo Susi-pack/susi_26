@@ -465,11 +465,19 @@ ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
 )
 
 
-def list_all_files_in_directory(dir: Path) -> list[Path | str]:
-    return [join(dir, f) for f in sorted(listdir(dir)) if isfile(join(dir, f))]
+def list_all_files_in_directory_with_given_extension(
+    dir: Path, extension: str
+) -> list[Path | str]:
+    return [
+        join(dir, f)
+        for f in sorted(listdir(dir))
+        if isfile(join(dir, f)) and f.endswith(extension)
+    ]
 
 
-allometry_filepaths = list_all_files_in_directory(ALLOMETRY_FILES_DIRECTORY_PATH)
+allometry_filepaths = list_all_files_in_directory_with_given_extension(
+    ALLOMETRY_FILES_DIRECTORY_PATH, extension=".xlsx"
+)
 
 # We will simulate one stand for each allometry file
 N_STANDS = len(allometry_filepaths)
@@ -609,7 +617,6 @@ G_2_for_each_stand = [i.G_2 for i in xml_data]
 
 # List of parameters that completely determine each Susi simulation
 all_parameters: list[SimulationParams] = []
-
 
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
