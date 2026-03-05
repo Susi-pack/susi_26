@@ -312,7 +312,7 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData):
         altitude=123,  # Altitude above the sea level
         n_trees=20,  # Number of reference trees per stratum
     )
-    page_1 = gy.get_table(start_year=5, end_year=60, step_years=5)
+    page_1 = gy.get_table(start_year=5, end_year=80, step_years=5)
 
     # Write to Excel with two sheets
     page2 = pd.DataFrame(
