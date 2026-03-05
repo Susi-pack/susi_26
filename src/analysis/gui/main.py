@@ -21,6 +21,7 @@ st.set_page_config(
 )
 
 pages = [
+    st.Page("pages/project_summary.py", title="Project summary"),
     st.Page("pages/1_single_netcdf.py", title="Single"),
     st.Page("pages/2_multiple_netcdf.py", title="Multiple"),
     st.Page("pages/annamari_figures.py", title="Annamari"),

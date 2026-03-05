@@ -18,7 +18,7 @@ ScenarioName = NewType("ScenarioName", str)  # Examples: "DNM", "default", "fert
 TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
 
 
-@dataclass
+@dataclass(frozen=True)
 class NetcdfVariableInfo:
     """
     Contains all information of a variable from the Susi netcdf file,
