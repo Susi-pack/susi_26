@@ -4,7 +4,7 @@ from multiprocessing import Pool
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
-from inputs.parameters import golden_test
+from inputs.parameters import sample_parameters
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import SusiParams
 
@@ -21,10 +21,12 @@ cli_args = parser.parse_args()
 # This is the best way I found to create multiple parameter models based on one.
 # There are some more here: https://github.com/pydantic/pydantic/discussions/3352
 # First, define a function to be able to do this repeatedly
-def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParams:
+def create_depth_scenarios(
+    base_params: SusiParams, ditch_depth_west: float
+) -> SusiParams:
     """
     Example function to create new parameter models based on another one.
-    This function changes the value of the parameter SusiParams.site_parameters.L,
+    This function changes the value of the parameter SusiParams.site_parameters.ditch_depth_west,
     and returns a fully validated model.
     """
 
@@ -32,25 +34,38 @@ def create_strip_scenarios(base_params: SusiParams, L_value: float) -> SusiParam
     data = base_params.model_dump(exclude_computed_fields=True)
 
     # 2. Modify the Python dictionary. Here we choose to change the L parameter
-    data["site_parameters"]["L"] = L_value
+    data["site_parameters"]["ditch_depth_west"] = [ditch_depth_west]
 
     # 3. Validate the model to check that you did not make a mistake
     return SusiParams.model_validate(data)
 
 
 # Next, create the scenarios
-long_strip = create_strip_scenarios(base_params=golden_test.PARAMETERS, L_value=60.0)
-short_strip = create_strip_scenarios(base_params=golden_test.PARAMETERS, L_value=20.0)
+shallow = create_depth_scenarios(
+    base_params=sample_parameters.PARAMETERS, ditch_depth_west=-0.2
+)
+deep = create_depth_scenarios(
+    base_params=sample_parameters.PARAMETERS, ditch_depth_west=-0.7
+)
 
 
 # Finally, create the list of parameters that will go into the susi simulation
 all_parameters = [
     SimulationParams(
-        metadata=SimulationMetaData(experiment_id="short_strip"),
-        susi_params=short_strip,
+        metadata=SimulationMetaData(
+            experiment_id="ditch_depth_experiment",
+            stand_id="stand_01",
+            scenario_id="deep_ditch",
+        ),
+        susi_params=deep,
     ),
     SimulationParams(
-        metadata=SimulationMetaData(experiment_id="long_strip"), susi_params=long_strip
+        metadata=SimulationMetaData(
+            experiment_id="ditch_depth_experiment",
+            stand_id="stand_01",
+            scenario_id="shallow_ditch",
+        ),
+        susi_params=shallow,
     ),
 ]
 
