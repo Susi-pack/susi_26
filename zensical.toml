@@ -35,6 +35,7 @@ Copyright &copy; 2026 Annamari Laurén
 nav = [
     { "Get started" = "index.md" },
     { "Parameters" = "simulation_config.md" },
+    { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "Paroninkorpi optimization" = "optimization_pymoo.md" },
     { "XML --> allometry file" = "xml_to_allometry.md" },
     { "Get started with zensical" = "zensical_index.md" },
