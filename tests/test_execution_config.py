@@ -1,16 +1,213 @@
+import datetime
 import pytest
+from pathlib import Path
+from pydantic import ValidationError
 
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
-from inputs.parameters import golden_test
-from tests import meaningless_susi_model
+from susi.io.susi_parameter_model import (
+    SusiParams,
+    WeatherParams,
+    SimulationConfig,
+    AllometryParams,
+    CanopyParams,
+    OrganicLayerParams,
+    OutputParams,
+    SiteParams,
+    PeatTypes,
+    TreeSpecies,
+    get_photo_parameters_by_location,
+    LocationsForPhotoParams,
+    CanopyLayerAllometryPointers,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
+    FertilizationParameters,
+    NutrientFertilizationParameters,
+    PeatTemperatureParams,
+)
 
 
 @pytest.fixture
-def two_duplicate_susi_params() -> list[SimulationParams]:
+def test_data_path():
+    return Path(__file__).parent / "data"
+
+
+@pytest.fixture
+def valid_susi_params(test_data_path):
+    return SusiParams(
+        weather_parameters=WeatherParams(
+            FMI_weather_filepath=test_data_path / "weather.csv",
+        ),
+        simulation_config=SimulationConfig(
+            start_date=datetime.datetime(2004, 1, 1),
+            end_date=datetime.datetime(2007, 12, 31),
+        ),
+        allometry_parameters=AllometryParams(
+            allometry_dir_path=test_data_path,
+            dominant={1: "test_allometry.xlsx"},
+            subdominant={0: "test_allometry.xlsx"},
+            under={0: "test_allometry.xlsx"},
+        ),
+        canopy_parameters=CanopyParams(),
+        organic_layer_parameters=OrganicLayerParams(),
+        output_parameters=OutputParams(),
+        photo_parameters=get_photo_parameters_by_location(
+            location=LocationsForPhotoParams("All_data")
+        ),
+        site_parameters=SiteParams(
+            L=10.0,
+            initial_dominant_stand_age_years=70.0,
+            initial_subdominant_stand_age_years=70.0,
+            initial_understorey_age_years=70.0,
+            canopylayers=CanopyLayerAllometryPointers(
+                dominant=[1, 1, 1, 1, 1],
+                subdominant=[0, 0, 0, 0, 0],
+                under=[0, 0, 0, 0, 0],
+            ),
+            site_fertility_class=4,
+            sitename="test",
+            species=TreeSpecies("Pine"),
+            sfc_specification=1,
+            hdom=None,
+            vol=None,
+            smc="Peatland",
+            nLyrs=60,
+            dzLyr=0.05,
+            ditch_depth_west=[-0.5],
+            ditch_depth_east=[-0.5],
+            ditch_depth_20y_west=[-0.5],
+            ditch_depth_20y_east=[-0.5],
+            scenario_name=["test"],
+            drain_age=100.0,
+            initial_h=-0.2,
+            slope=0.0,
+            peat_type=[PeatTypes.generic] * 8,
+            peat_type_bottom=[PeatTypes.generic],
+            anisotropy=10.0,
+            vonP=True,
+            vonP_top=[2, 5, 5, 5, 6, 6, 7, 7],
+            vonP_bottom=8,
+            bd_top=None,
+            bd_bottom=0.16,
+            peatN=None,
+            peatP=None,
+            peatK=None,
+            enable_peattop=True,
+            enable_peatmiddle=True,
+            enable_peatbottom=True,
+            rho_mor=90.0,
+            h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
+            cutting_yr=2004,
+            cutting_to_ba=12,
+            depoN=4.0,
+            depoP=0.1,
+            depoK=1.0,
+            fertilization=FertilizationParameters(
+                application_year=2005,
+                N=NutrientFertilizationParameters(
+                    dose=0.0,
+                    decay_k=0.5,
+                    eff=1.0,
+                ),
+                P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
+                K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
+                pH_increment=1.0,
+            ),
+            peat_temperature=PeatTemperatureParams(),
+        ),
+    )
+
+
+@pytest.fixture
+def another_valid_susi_params(test_data_path):
+    return SusiParams(
+        weather_parameters=WeatherParams(
+            FMI_weather_filepath=test_data_path / "weather.csv",
+        ),
+        simulation_config=SimulationConfig(
+            start_date=datetime.datetime(2004, 1, 1),
+            end_date=datetime.datetime(2007, 12, 31),
+        ),
+        allometry_parameters=AllometryParams(
+            allometry_dir_path=test_data_path,
+            dominant={1: "test_allometry.xlsx"},
+            subdominant={0: "test_allometry.xlsx"},
+            under={0: "test_allometry.xlsx"},
+        ),
+        canopy_parameters=CanopyParams(),
+        organic_layer_parameters=OrganicLayerParams(),
+        output_parameters=OutputParams(),
+        photo_parameters=get_photo_parameters_by_location(
+            location=LocationsForPhotoParams("All_data")
+        ),
+        site_parameters=SiteParams(
+            L=10.0,
+            initial_dominant_stand_age_years=70.0,
+            initial_subdominant_stand_age_years=70.0,
+            initial_understorey_age_years=70.0,
+            canopylayers=CanopyLayerAllometryPointers(
+                dominant=[1, 1, 1, 1, 1],
+                subdominant=[0, 0, 0, 0, 0],
+                under=[0, 0, 0, 0, 0],
+            ),
+            site_fertility_class=4,
+            sitename="test2",
+            species=TreeSpecies("Pine"),
+            sfc_specification=1,
+            hdom=None,
+            vol=None,
+            smc="Peatland",
+            nLyrs=60,
+            dzLyr=0.05,
+            ditch_depth_west=[-0.5],
+            ditch_depth_east=[-0.5],
+            ditch_depth_20y_west=[-0.5],
+            ditch_depth_20y_east=[-0.5],
+            scenario_name=["test"],
+            drain_age=100.0,
+            initial_h=-0.2,
+            slope=0.0,
+            peat_type=[PeatTypes.generic] * 8,
+            peat_type_bottom=[PeatTypes.generic],
+            anisotropy=10.0,
+            vonP=True,
+            vonP_top=[2, 5, 5, 5, 6, 6, 7, 7],
+            vonP_bottom=8,
+            bd_top=None,
+            bd_bottom=0.16,
+            peatN=None,
+            peatP=None,
+            peatK=None,
+            enable_peattop=True,
+            enable_peatmiddle=True,
+            enable_peatbottom=True,
+            rho_mor=90.0,
+            h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
+            cutting_yr=2004,
+            cutting_to_ba=12,
+            depoN=4.0,
+            depoP=0.1,
+            depoK=1.0,
+            fertilization=FertilizationParameters(
+                application_year=2005,
+                N=NutrientFertilizationParameters(
+                    dose=0.0,
+                    decay_k=0.5,
+                    eff=1.0,
+                ),
+                P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
+                K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
+                pH_increment=1.0,
+            ),
+            peat_temperature=PeatTemperatureParams(),
+        ),
+    )
+
+
+@pytest.fixture
+def two_duplicate_susi_params(valid_susi_params) -> list[SimulationParams]:
     return [
         SimulationParams(
-            susi_params=golden_test.PARAMETERS,
+            susi_params=valid_susi_params,
             metadata=SimulationMetaData(experiment_id=str(i)),
         )
         for i in range(2)
@@ -18,45 +215,57 @@ def two_duplicate_susi_params() -> list[SimulationParams]:
 
 
 @pytest.fixture
-def two_duplicate_experiment_folder_paths() -> list[SimulationParams]:
+def two_duplicate_experiment_folder_paths(
+    valid_susi_params, another_valid_susi_params
+) -> list[SimulationParams]:
     return [
         SimulationParams(
-            susi_params=golden_test.PARAMETERS,
+            susi_params=valid_susi_params,
             metadata=SimulationMetaData(experiment_id=str("THE_SAME")),
         ),
         SimulationParams(
-            susi_params=meaningless_susi_model.PARAMETERS,
+            susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(experiment_id=str("THE_SAME")),
         ),
     ]
 
 
 @pytest.fixture
-def two_valid_simus() -> list[SimulationParams]:
+def two_valid_simus(
+    valid_susi_params, another_valid_susi_params
+) -> list[SimulationParams]:
     return [
         SimulationParams(
-            susi_params=golden_test.PARAMETERS,
-            metadata=SimulationMetaData(experiment_id="one"),
+            susi_params=valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="one",
+                stand_id="stand_A",
+                scenario_id="scenario_1",
+            ),
         ),
-        # Create two different Susi params and output folders
         SimulationParams(
-            susi_params=meaningless_susi_model.PARAMETERS,
-            metadata=SimulationMetaData(experiment_id="two"),
+            susi_params=another_valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="two",
+                stand_id="stand_B",
+                scenario_id="scenario_1",
+            ),
         ),
     ]
 
 
 @pytest.fixture
-def one_hundred_valid_simus() -> list[SimulationParams]:
-    # Make sure we create different Susi parameters
-    # and different experiment_ids so that the other errors
-    # do not shade this one
+def one_hundred_valid_simus(valid_susi_params) -> list[SimulationParams]:
     return [
         SimulationParams(
-            susi_params=golden_test.PARAMETERS.model_copy(
+            susi_params=valid_susi_params.model_copy(
                 update={"params_schema_version": i}
             ),
-            metadata=SimulationMetaData(experiment_id=str(i)),
+            metadata=SimulationMetaData(
+                experiment_id=str(i),
+                stand_id=f"stand_{i}",
+                scenario_id="scenario_1",
+            ),
         )
         for i in range(100)
     ]
@@ -100,4 +309,72 @@ def test_less_parallel_processes_than_simus(two_valid_simus):
         MultipleSusis(
             n_parallel_processes=3,
             simulation_parameter_list=two_valid_simus,
+        )
+
+
+def test_valid_batch_multiple_stands_scenarios(
+    valid_susi_params, another_valid_susi_params
+):
+    """Valid batch run with multiple unique stand/scenario combos passes validation."""
+    simus = [
+        SimulationParams(
+            susi_params=valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="batch_exp",
+                stand_id="stand_A",
+                scenario_id="scenario_1",
+            ),
+        ),
+        SimulationParams(
+            susi_params=another_valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="batch_exp",
+                stand_id="stand_A",
+                scenario_id="scenario_2",
+            ),
+        ),
+    ]
+    multiple = MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
+    assert multiple is not None
+
+
+def test_different_experiment_ids_raise(valid_susi_params, another_valid_susi_params):
+    """Different experiment_ids in the same batch should raise error."""
+    simus = [
+        SimulationParams(
+            susi_params=valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="exp_one",
+                stand_id="stand_A",
+                scenario_id="scenario_1",
+            ),
+        ),
+        SimulationParams(
+            susi_params=another_valid_susi_params,
+            metadata=SimulationMetaData(
+                experiment_id="exp_two",
+                stand_id="stand_B",
+                scenario_id="scenario_1",
+            ),
+        ),
+    ]
+    with pytest.raises(ValueError, match="same experiment_id"):
+        MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
+
+
+def test_missing_stand_id_in_batch_raises():
+    """Missing stand_id in batch run should raise error at metadata creation."""
+    with pytest.raises(ValidationError, match="stand_id and scenario_id"):
+        SimulationMetaData(
+            experiment_id="batch_exp",
+            scenario_id="scenario_1",
+        )
+
+
+def test_missing_scenario_id_in_batch_raises():
+    """Missing scenario_id in batch run should raise error at metadata creation."""
+    with pytest.raises(ValidationError, match="stand_id and scenario_id"):
+        SimulationMetaData(
+            experiment_id="batch_exp",
+            stand_id="stand_A",
         )

@@ -498,7 +498,7 @@ class Susi:
                 # ---------- Organic matter decomposition and nutrient release-----------------
 
                 # ---------------- Fertilization --------------------------------
-                
+
                 if yr >= self.parameters.site_parameters.fertilization.application_year:
                     pH_increment = ferti.ph_effect(
                         yr, spara=self.parameters.site_parameters
@@ -679,6 +679,8 @@ class Susi:
 
     def create_output_folder(self) -> None:
         assert self.metadata.experiment_folder_path is not None
+        assert not self.metadata.experiment_folder_path.is_dir()
+        assert not self.metadata.experiment_folder_path.exists()
         io_utils.create_folder(path=self.metadata.experiment_folder_path)
         return None
 

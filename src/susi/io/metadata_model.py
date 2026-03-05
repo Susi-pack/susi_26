@@ -32,7 +32,17 @@ class SimulationMetaData(BaseModel):
     )
 
     experiment_id: str = Field(
-        description="A name that identifies the simulation experiment. This will be the name of the folder where Susi outputs are stored. The full path of `parent_output_folder` / `experiment_id` must not exist: otherwise we would be overwriting previous simulations' results.",
+        description="A name that identifies the simulation experiment. This will be the name of the folder where Susi outputs are stored. In single Susi runs `experiment_id` becomes the root folder of the experiment. The full path of `parent_output_folder` / `experiment_id` must not exist: otherwise we would be overwriting previous simulations' results.",
+    )
+
+    stand_id: str | None = Field(
+        description="Required when running multiple SUSI simulations with `MultipleSusi`, it gives the name to the first hierarchy of SUSI output folders (`scenario_id` is the second one). Not needed for single simulations.",
+        default=None,
+    )
+
+    scenario_id: str | None = Field(
+        description="Required when running multiple SUSI simulations with `MultipleSusi`, it gives the name to the second hierarchy of SUSI output folders (`stand_id` is the first one). Not needed for single simulations.",
+        default=None,
     )
 
     parent_output_folder: DirectoryPath = Field(
@@ -100,9 +110,16 @@ class SimulationMetaData(BaseModel):
     @property
     def experiment_folder_path(self) -> NewPath:
         """
-        Directory Path for Susi simulation results: metadata, parameters, and netcdf file. It is given by `parent_output_folder`/`experiment_id`. This path must not exists.
+        Directory Path for Susi simulation results: metadata, parameters, and netcdf file.
+        If stand_id and scenario_id are not given it results in `parent_output_folder`/`experiment_id`.
+        If stand_id and scenario_id are give it results in `parent_output_folder/experiment_id/stand_id/scenario_id`
+        The resulting path must not exist.
         """
-        return self.parent_output_folder.joinpath(self.experiment_id)
+
+        base = self.parent_output_folder / self.experiment_id
+        if self.stand_id and self.scenario_id:
+            return base / self.stand_id / self.scenario_id
+        return base
 
     @computed_field
     @property
@@ -122,11 +139,29 @@ class SimulationMetaData(BaseModel):
         assert self.experiment_folder_path is not None
         return self.experiment_folder_path.joinpath(self.netcdf_output_filename)
 
+    @field_validator("stand_id", "scenario_id")
+    def validate_folder_names(cls, v):
+        if v is None:
+            return v
+
+        if "/" in v or "\\" in v:
+            raise ValueError("Folder names must not contain path separators '/' or ''.")
+
+        return v
+
     @model_validator(mode="after")
     def check_experiment_folder_path_does_not_exist(self) -> Self:
         if self.experiment_folder_path.exists():
             raise ValueError(
                 "A file or a directory with the same path as the new Susi experiment folder already exists. The new path must not exist."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_stand_scenario_pair(self):
+        if (self.stand_id is None) != (self.scenario_id is None):
+            raise ValueError(
+                "stand_id and scenario_id must either both be set or both be None."
             )
         return self
 

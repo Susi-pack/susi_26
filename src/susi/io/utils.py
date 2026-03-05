@@ -15,7 +15,7 @@ def get_project_root() -> Path:
 
 def create_folder(path: Path) -> None:
     try:
-        path.mkdir(parents=False, exist_ok=False)
+        path.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
         raise FileExistsError(
             f"A folder with the same path, i.e., {path}, already exists."
