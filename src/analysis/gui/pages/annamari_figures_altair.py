@@ -1,11 +1,10 @@
 import streamlit as st
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 import susi.io.netcdf_utils as nc_utils
 from susi.io.app_settings import AppSettings
 
-from analysis.gui.components import plots, folder_selection
+from analysis.gui.components import plots_altair, folder_selection
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(
@@ -16,7 +15,6 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     ),
     label="scenario",
 )
-
 
 metadata, susi_params = nc_utils.read_json_metadatas(
     experiment_folderpath=chosen_scenario_folder
@@ -140,36 +138,148 @@ variables_values = nc_utils.read_value_several_variables_from_single_file(
 scen = 0
 
 st.markdown("## Stand")
-fig_stand = plots.stand(variables_values, scen=scen)
-st.pyplot(fig_stand)
-plt.close(fig_stand)
+charts = plots_altair.stand(variables_values, scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+with col2:
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+
+st.altair_chart(charts[8], width="stretch")
+
+col3, col4 = st.columns(2)
+with col3:
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+with col4:
+    st.altair_chart(charts[11], width="stretch")
+
+col5, col6, col7 = st.columns(3)
+with col5:
+    st.altair_chart(charts[12], width="stretch")
+    st.altair_chart(charts[15], width="stretch")
+with col6:
+    st.altair_chart(charts[13], width="stretch")
+    st.altair_chart(charts[16], width="stretch")
+with col7:
+    st.altair_chart(charts[14], width="stretch")
+    st.altair_chart(charts[17], width="stretch")
 
 st.markdown("## Hydrology")
-fig_hydro = plots.hydrology(variables_values, scen=scen)
-st.pyplot(fig_hydro)
-plt.close(fig_hydro)
+charts = plots_altair.hydrology(variables_values, scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+with col2:
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
 
 st.markdown("## Mass")
-fig_mass = plots.mass(variables_values, scen=scen)
-st.pyplot(fig_mass)
-plt.close(fig_mass)
+charts = plots_altair.mass(variables_values, scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+with col2:
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+    st.altair_chart(charts[11], width="stretch")
+    st.altair_chart(charts[12], width="stretch")
+
+st.altair_chart(charts[13], width="stretch")
+st.altair_chart(charts[14], width="stretch")
 
 st.markdown("## Carbon")
-fig_carbon = plots.carbon(variables_values, scen=scen)
-st.pyplot(fig_carbon)
-plt.close(fig_carbon)
+charts = plots_altair.carbon(variables_values, scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+    st.altair_chart(charts[12], width="stretch")
+with col2:
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[11], width="stretch")
+    st.altair_chart(charts[13], width="stretch")
 
 st.markdown("## Nitrogen Balance")
-fig_n = plots.nutrient_balance(variables_values, substance="N", scen=scen)
-st.pyplot(fig_n)
-plt.close(fig_n)
+charts = plots_altair.nutrient_balance(variables_values, substance="N", scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+with col2:
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[11], width="stretch")
 
 st.markdown("## Phosphorus Balance")
-fig_p = plots.nutrient_balance(variables_values, substance="P", scen=scen)
-st.pyplot(fig_p)
-plt.close(fig_p)
+charts = plots_altair.nutrient_balance(variables_values, substance="P", scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+with col2:
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[11], width="stretch")
 
 st.markdown("## Potassium Balance")
-fig_k = plots.nutrient_balance(variables_values, substance="K", scen=scen)
-st.pyplot(fig_k)
-plt.close(fig_k)
+charts = plots_altair.nutrient_balance(variables_values, substance="K", scen=scen)
+col1, col2 = st.columns(2)
+with col1:
+    st.altair_chart(charts[0], width="stretch")
+    st.altair_chart(charts[2], width="stretch")
+    st.altair_chart(charts[4], width="stretch")
+    st.altair_chart(charts[6], width="stretch")
+    st.altair_chart(charts[8], width="stretch")
+    st.altair_chart(charts[10], width="stretch")
+with col2:
+    st.altair_chart(charts[1], width="stretch")
+    st.altair_chart(charts[3], width="stretch")
+    st.altair_chart(charts[5], width="stretch")
+    st.altair_chart(charts[7], width="stretch")
+    st.altair_chart(charts[9], width="stretch")
+    st.altair_chart(charts[11], width="stretch")
