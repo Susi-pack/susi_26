@@ -4,15 +4,19 @@ import matplotlib.pyplot as plt
 
 import susi.io.netcdf_utils as nc_utils
 
-from analysis.gui.components import plots
+from analysis.gui.components import plots, folder_selection
 
-susi_folders = nc_utils.list_subdirectories(
-    path=st.session_state.settings["data_folder"]
+chosen_scenario_folder = folder_selection.build_folder_selection_widget(
+    dir_path=folder_selection.build_folder_selection_widget(
+        dir_path=st.session_state.settings["data_folder"], label="project"
+    ),
+    label="stand",
 )
+
 
 chosen_susi_folders = st.multiselect(
     label="Choose 2 SUSI netcdf files to compare",
-    options=susi_folders,
+    options=nc_utils.list_subdirectories(chosen_scenario_folder),
     max_selections=2,
 )
 
@@ -60,7 +64,7 @@ if len(chosen_susi_folders) == 2:
 
     scen = 0
 
-    st.markdown("## Run Comparison")
+    st.markdown("## Comparison")
     fig = plots.compare_runs(variables_values_0, variables_values_1, scen=scen)
     st.pyplot(fig)
     plt.close(fig)
