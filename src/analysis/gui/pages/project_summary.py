@@ -18,7 +18,7 @@ dir_path = folder_selection.build_folder_selection_widget(
 
 stand_folderpaths = nc_utils.list_subdirectories(path=dir_path)
 
-metadata_by_stand = nc_utils.load_all_metadatas_from_folders(folders=stand_folderpaths)
+metadata_by_stand = nc_utils.load_all_metadatas_from_stands(folders=stand_folderpaths)
 
 sample_netcdf_file_path = Path(metadata_by_stand[0]["netcdf_output_filepath"][0])
 
