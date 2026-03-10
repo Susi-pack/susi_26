@@ -27,6 +27,8 @@ from susi.io.netcdf_utils import (
     TargetVariableDict,
 )
 
+from susi.io.load_output_data import NetcdfVariableArray
+
 
 def create_mock_netcdf_file(filepath: Path):
     """
@@ -417,3 +419,104 @@ def test_transform_roundtrip():
     )
 
     assert result == original
+
+
+class TestNetcdfVariableArray:
+    """Tests for NetcdfVariableArray class."""
+
+    def test_construction_1d_array(self):
+        raw = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
+
+    def test_construction_2d_array(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
+
+    def test_construction_3d_array_single_scenario(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
+
+    def test_construction_3d_array_multiple_scenarios_raises(self):
+        raw = np.array(
+            [
+                [[1.0, 2.0], [3.0, 4.0]],
+                [[5.0, 6.0], [7.0, 8.0]],
+            ]
+        )
+        with pytest.raises(NotImplementedError):
+            NetcdfVariableArray(raw)
+
+    def test_construction_invalid_dimensions_raises(self):
+        raw = np.array([[[[1.0]]]])
+        arr = NetcdfVariableArray(raw)
+        with pytest.raises(ValueError):
+            _ = arr.processed
+
+    def test_last_timestep_3d(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        with pytest.raises(AssertionError):
+            arr.last_timestep()
+
+    def test_last_timestep_fails_for_1d(self):
+        raw = np.array([1.0, 2.0, 3.0])
+        arr = NetcdfVariableArray(raw)
+        with pytest.raises(AssertionError):
+            arr.last_timestep()
+
+    def test_spatial_mean_at_last_timestep(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.spatial_mean_at_last_timestep() == 5.5
+
+    def test_spatial_sum_at_last_timestep(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.spatial_sum_at_last_timestep() == 11.0
+
+    def test_mean_over_space(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        expected = np.array([1.5, 3.5, 5.5])
+        np.testing.assert_array_equal(arr.mean_over_space(), expected)
+
+    def test_mean_over_time(self):
+        raw = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        expected = np.array([2.5, 3.5, 4.5])
+        np.testing.assert_array_equal(arr.mean_over_time(), expected)
+
+    def test_mean_of_all_values_1d(self):
+        raw = np.array([1.0, 2.0, 3.0])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 2.0
+
+    def test_mean_of_all_values_2d(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 2.5
+
+    def test_mean_of_all_values_3d(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 3.5
+
+    def test_with_nan_values(self):
+        raw = np.array([[1.0, np.nan], [3.0, 4.0]])
+        arr = NetcdfVariableArray(raw)
+        result = arr.mean_of_all_values()
+        assert np.isnan(result)
+
+    def test_different_dtypes_float32(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        arr = NetcdfVariableArray(raw)
+        assert arr.processed.dtype == np.float32
+
+    def test_different_dtypes_int(self):
+        raw = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        arr = NetcdfVariableArray(raw)
+        result = arr.mean_of_all_values()
+        assert result == 2.5

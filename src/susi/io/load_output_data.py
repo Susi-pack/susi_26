@@ -107,7 +107,6 @@ class NetcdfVariableArray:
     # ------------------------------------------------------------------
 
     def last_timestep(self) -> np.ndarray:
-        assert self._raw.ndim == 2
         return self.processed[-1, :]
 
     # ------------------------------------------------------------------
