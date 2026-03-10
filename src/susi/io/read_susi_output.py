@@ -1,9 +1,9 @@
-from susi.io.output_data_loading import (
+from susi.io.load_output_data import (
     NetcdfVariablePath,
     StandID,
     ScenarioID,
 )
-import susi.io.output_data_loading as load_output
+import susi.io.load_output_data as load_output
 from susi.io.app_settings import AppSettings
 
 # %%
@@ -49,7 +49,7 @@ v = data_store.get_variable_value_for_scenario_and_stand(
     scenario_id=ScenarioID("default"),
 )
 
-v.last_timestamp_values()
+v.last_timestep()
 
 for _, info in all_variables.items():
     print(info.shape)
