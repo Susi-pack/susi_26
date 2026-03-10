@@ -34,84 +34,111 @@ class NetcdfVariableInfo:
     units: str  # Unit description
 
 
-@dataclass
 class NetcdfVariableArray:
     """
-    Netcdf variables are all numpy arrays.
-    But they have quirks, such as:
-    different shapes, first and last columns correspond to ditches,
-    some have an all-zeros initialization, etc.
-    Here are the methods to slice and aggregate them taking those quirks into account.
+    Wraps a raw NetCDF numpy array and exposes clean spatial/temporal aggregations.
+
+    Raw arrays may be 1-D, 2-D (usually time × location), or 3-D
+    (scenario × time × location).
+    In the 3-D case the first and last location columns are ditch columns and
+    are excluded from all calculations.
+    Only single-scenario (shape[0] == 1) 3-D arrays are currently supported.
+    The rest of the arrays (1-D, and 2-D) are only stored, not modified.
     """
 
-    raw: np.ndarray
+    def __init__(self, raw: np.ndarray) -> None:
+        self._raw = raw
+        self._validate()
 
-    @staticmethod
-    def _remove_scenario_column(array: np.ndarray) -> np.ndarray:
-        return array[0, :, :]
+    # ------------------------------------------------------------------
+    # Construction / validation
+    # ------------------------------------------------------------------
 
-    @staticmethod
-    def _remove_ditch_columns(array: np.ndarray) -> np.ndarray:
-        """
-        First and last columns correspond to ditches,
-        and they should not be interpreted as true variable values.
-        """
-        return array[:, 1:-1]
+    def _validate(self) -> None:
+        if self._raw.ndim == 3 and self._raw.shape[0] != 1:
+            raise NotImplementedError(
+                f"Only single-scenario 3-D arrays are supported "
+                f"(shape[0] must be 1, got {self._raw.shape[0]})."
+            )
+
+    # ------------------------------------------------------------------
+    # Core processed view
+    # ------------------------------------------------------------------
 
     @cached_property
     def processed(self) -> np.ndarray:
         """
-        Remove raw variable's quirks. Quirks include:
-        - first and last columns correspond to ditches
-        - all-zeros initialization
+        Return the array with implementation quirks removed:
+        - 1-D and 2-D arrays are returned as-is.
+        - 3-D arrays are reduced to 2-D by dropping the single scenario axis.
         """
-        shape = self.raw.shape
-        n_dims = len(shape)  # array dimensions
+
+        n_dims = self._raw.ndim
         match n_dims:
-            case 1:
-                return self.raw
-            case 2 | 3:
-                if shape[0] == 1:
-                    return self._remove_ditch_columns(
-                        self._remove_scenario_column(self.raw)
-                    )
-
-                else:
-                    raise NotImplementedError(
-                        "This is not implemented for more than 1 scenarios."
-                    )
-
+            case 1 | 2:
+                return self._raw
+            case 3:
+                # shape[0] == 1 is guaranteed by _validate
+                assert self._raw.shape[0] == 1
+                # Remove the scenario column
+                return self._strip_ditch_columns(self._raw[0, :, :])
             case _:
-                raise ValueError(
-                    f"Numpy arrays of dimensions 1,2,3 supported. Got {n_dims}."
-                )
+                raise ValueError(f"Expected 1-, 2-, or 3-D array; got {n_dims}-D.")
 
-    def _ensure_multi_dimensional(self) -> None:
-        n_dims = len(self.processed.shape)
-        if n_dims == 1:
-            raise ValueError("No last timestamp for variables with dimension == 1.")
+    @staticmethod
+    def _strip_ditch_columns(array: np.ndarray) -> np.ndarray:
+        """Remove the first and last columns (ditch columns) from a 2-D array."""
+        assert array.ndim == 2
+        return array[:, 1:-1]
 
-    def last_timestamp_values(self) -> np.ndarray:
-        self._ensure_multi_dimensional()
+    # ------------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _require_2D(array: np.ndarray) -> None:
+        if array.ndim != 2:
+            raise ValueError(
+                f"This function required a 2-D array. Got {array.ndim} instead."
+            )
+
+    # ------------------------------------------------------------------
+    # Time slicing
+    # ------------------------------------------------------------------
+
+    def last_timestep(self) -> np.ndarray:
+        assert self._raw.ndim == 2
         return self.processed[-1, :]
 
-    def average_of_last_timestamp(self) -> float:
-        self._ensure_multi_dimensional()
-        return float(self.last_timestamp_values().mean())
+    # ------------------------------------------------------------------
+    # Aggregators
+    # ------------------------------------------------------------------
 
-    def sum_of_last_timestamp(self) -> float:
-        self._ensure_multi_dimensional()
-        return float(self.last_timestamp_values().sum())
+    def spatial_mean_at_last_timestep(self) -> float:
+        """Mean over all locations at the final timestep."""
+        self._require_2D(self.processed)
+        return float(self.last_timestep().mean())
 
-    def average_over_space(self) -> np.ndarray:
-        self._ensure_multi_dimensional()
+    def spatial_sum_at_last_timestep(self) -> float:
+        """Sum over all locations at the final timestep."""
+        self._require_2D(self.processed)
+        return float(self.last_timestep().sum())
+
+    def mean_over_space(self) -> np.ndarray:
+        """Time-series of spatial means; one value per timestep (1-D)."""
+        self._require_2D(self.processed)
         return np.mean(self.processed, axis=1)
 
-    def average_over_time(self) -> np.ndarray:
-        self._ensure_multi_dimensional()
+    def mean_over_time(self) -> np.ndarray:
+        """Spatial profile of temporal means; one value per location (1-D)."""
+        self._require_2D(self.processed)
         return np.mean(self.processed, axis=0)
 
-    def average_of_all_values(self) -> float:
+    def mean_of_all_values(self) -> float:
+        """
+        Mean of every value in the processed array
+        Works for any dimensionality).
+        """
         return float(self.processed.mean())
 
 
@@ -346,6 +373,8 @@ def read_netcdf_files_for_selected_variables(
     for stand_id, metadata_df in metadata_by_stand.items():
         stands.append(stand_id)
 
+        # We rely on pandas dataframe ordering for the two orders from
+        # scenarios and netcdf_filepaths to match
         scenarios = _get_scenarios_for_stand(metadata_df)
         netcdf_filepaths = _get_netcdf_filepaths_for_stand(metadata_df)
 
@@ -357,9 +386,7 @@ def read_netcdf_files_for_selected_variables(
             )
 
             for var_path, var_value in variable_values.items():
-                data[var_path].update(
-                    {(stand_id, scenario_id): NetcdfVariableArray(raw=var_value)}
-                )
+                data[var_path][(stand_id, scenario_id)] = NetcdfVariableArray(var_value)
     return OutputDataStore(
         stands=stands,
         scenarios=scenarios_by_stand,
