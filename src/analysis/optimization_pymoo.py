@@ -1,8 +1,7 @@
 # %%
-from typing import Callable, Sequence, Literal, assert_never
+from typing import Callable, Sequence, Literal, assert_never, NewType
 from dataclasses import dataclass
 import numpy as np
-from pathlib import Path
 from numba import jit
 import time
 from pymoo.optimize import minimize
@@ -14,8 +13,14 @@ from pymoo.operators.mutation.pm import PM
 from pymoo.operators.repair.rounding import RoundingRepair
 from pymoo.visualization.scatter import Scatter
 
-import susi.io.netcdf_utils as nc_utils
 from susi.io.app_settings import AppSettings
+import susi.io.load_output_data as load_output
+from susi.io.load_output_data import (
+    NetcdfVariablePath,
+    StandID,
+    ScenarioID,
+    OutputDataStore,
+)
 
 # %%
 RANDOM_SEED = 42
@@ -23,25 +28,43 @@ rng = np.random.default_rng(seed=RANDOM_SEED)
 
 # %% Load paroninkorpi metadata
 
+PROJECT_ID = "paroninkorpi"
+stand_folderpaths = load_output.list_subdirectories(
+    AppSettings().output_folder / PROJECT_ID
+)
+# stand_ids: list[StandID] = [StandID(path.name) for path in stand_folderpaths]
 
-def stand_foldername_from_number(stand_number: int) -> str:
-    return f"paroninkorpi/stand_{stand_number:02d}"
+metadata_by_stand = load_output.load_all_metadatas_from_stands(
+    folders=stand_folderpaths
+)
 
 
-def stand_folderpath_from_number(stand_number: int) -> Path:
-    return AppSettings().output_folder / stand_foldername_from_number(stand_number)
+# %% Read netcdf file structure and choose (filter) variables
+# All Susi netcdf files have the same structure.
+# Pick one to get the group/variables hierarchical structure.
+# This will be useful in choosing what variables to read later.
+sample_netcdf_filepath = metadata_by_stand[
+    load_output.StandID(stand_folderpaths[0].name)
+].iloc[0]["netcdf_output_filepath"]
 
+all_variables: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableInfo] = (
+    load_output.list_all_netcdf_variables(sample_netcdf_filepath)
+)
 
-N_STANDS = 21
-stand_folderpaths = [
-    stand_folderpath_from_number(stand_n) for stand_n in range(1, N_STANDS + 1)
-]
+# %% Read variables
+VARS_OF_INTEREST = (
+    NetcdfVariablePath("/stand/volume"),
+    NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
+)
 
-metadata_by_stand = nc_utils.load_all_metadatas_from_folders(folders=stand_folderpaths)
+data_store: load_output.OutputDataStore = (
+    load_output.read_netcdf_files_for_selected_variables(
+        selected_variables=VARS_OF_INTEREST, metadata_by_stand=metadata_by_stand
+    )
+)
+
 
 # %% compute total number of combinations
-
-
 def product_of_elements_in_list(list_of_numbers: Sequence[int | float]) -> int | float:
     product = 1
     for element in list_of_numbers:
@@ -50,7 +73,7 @@ def product_of_elements_in_list(list_of_numbers: Sequence[int | float]) -> int |
 
 
 scenarios_cardinality: tuple[int, ...] = tuple(
-    [stand_metadata_df.shape[0] for stand_metadata_df in metadata_by_stand]
+    [len(scenarios) for stand, scenarios in data_store.scenarios.items()]
 )
 n_total_combinations = product_of_elements_in_list(scenarios_cardinality)
 
@@ -58,99 +81,38 @@ print("\nNumber of scenarios for each stand:")
 print(scenarios_cardinality)
 print(f"\nNumber of total combinations: {n_total_combinations:.2e}")
 
-
-# %% Read netcdf file structure and choose (filter) variables
-# All Susi netcdf files has the same structure.
-# Pick one and get the group/variables hierarchical structure.
-# This will be useful in choosing what variables to read later.
-sample_netcdf_filepath = metadata_by_stand[0].iloc[0]["netcdf_output_filepath"]
-
-all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
-
-# Filter the interesting variables
-INTERESTING_VAR_PATHS = (
-    nc_utils.NetcdfVariablePath("/stand/volume"),
-    nc_utils.NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
-)
-
-chosen_vars = nc_utils.choose_netcdf_vars_by_path(
-    paths=INTERESTING_VAR_PATHS, all_variables=all_variables
-)
-
-# list (dimension n_sites) of dicts (scenarios for each site).
-# Dicts hold arrays with the value of variables
-chosen_variables_by_stand_and_scenario = (
-    nc_utils.read_chosen_variables_from_netcdf_by_stands_and_scenarios(
-        chosen_vars=chosen_vars, metadata_by_stand=metadata_by_stand
-    )
-)
-
-
 # %% interesting_variables by stand
 
-
-def get_scenario_name_from_path(path: str) -> str:
-    return path.split("_")[-1]
-
-
-def get_last_year_values(var: np.ndarray) -> np.ndarray:
-    return var[:, -1, :]
-
-
-def average_of_last_year_values(var: np.ndarray) -> float:
-    return float(np.mean(get_last_year_values(var)))
-
-
-def average_of_all_values(var: np.ndarray) -> float:
-    return float(np.mean(var))
-
-
-TimeSeriesAggregation = Literal["mean_all", "mean_last_year"]
+TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
 
 
 @dataclass
 class TargetVariableProperties:
-    aggregation_method: TimeSeriesAggregation
+    aggregation_method: Literal["mean_all", "mean_last_timestep"]
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
 def aggregate_time_series_to_float(
-    time_series: np.ndarray, target_variable_properties: TargetVariableProperties
+    array: load_output.NetcdfVariableArray,
+    target_variable_properties: TargetVariableProperties,
 ) -> float:
     inverter: int = -1 if target_variable_properties.invert_optimization else 1
 
     match target_variable_properties.aggregation_method:
         case "mean_all":
-            return inverter * average_of_all_values(time_series)
-        case "mean_last_year":
-            return inverter * average_of_last_year_values(time_series)
+            return inverter * array.mean_of_all_values()
+        case "mean_last_timestep":
+            return inverter * array.spatial_mean_at_last_timestep()
         case _:
             assert_never()
 
 
-def compute_target_variables_from_netcdf_values(
-    netcdf_variables: list[nc_utils.NetcdfVariableValue],
-    properties_of_target_variables: dict[
-        nc_utils.NetcdfVariablePath, TargetVariableProperties
-    ],
-):
-    return {
-        netcdf_variable.path: aggregate_time_series_to_float(
-            time_series=netcdf_variable.value,
-            target_variable_properties=properties_of_target_variables[
-                netcdf_variable.path
-            ],
-        )
-        for netcdf_variable in netcdf_variables
-    }
-
-
 PROPERTIES_OF_TARGET_VARIABLES = {
-    nc_utils.NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
-        aggregation_method="mean_last_year",
+    load_output.NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
+        aggregation_method="mean_last_timestep",
         invert_optimization=True,
     ),
-    nc_utils.NetcdfVariablePath(
+    load_output.NetcdfVariablePath(
         "/balance/C/soil_c_balance_co2eq"
     ): TargetVariableProperties(
         aggregation_method="mean_all",
@@ -158,68 +120,113 @@ PROPERTIES_OF_TARGET_VARIABLES = {
     ),
 }
 
-# Get vars of interest
-vars_of_interest_by_stand: list[
-    dict[nc_utils.ScenarioName, nc_utils.TargetVariableDict]
-] = [{} for _ in range(0, N_STANDS)]
 
+# %% Transform data representation from data_store to optimization array
+@dataclass
+class TargetVariableArrays:
+    """
+    Target variable values in proper
+    array shape for the optimization.
 
-for n_stand in range(N_STANDS):
-    for scenario_name, netcdf_variables in chosen_variables_by_stand_and_scenario[
-        n_stand
-    ].items():
-        vars_of_interest_by_stand[n_stand][scenario_name] = (
-            compute_target_variables_from_netcdf_values(
-                netcdf_variables=netcdf_variables,
-                properties_of_target_variables=PROPERTIES_OF_TARGET_VARIABLES,
+    Holds stands, scenarios and variables data
+    to enable conversion between representations.
+    """
+
+    stands: list[StandID]  # ["stand_A", "stand_B", ...]
+    scenarios: dict[StandID, list[ScenarioID]]  # {"stand_A": ["scen_1", "scen_2"], ...}
+    variables: Sequence[NetcdfVariablePath]
+    variables_properties: Sequence[TargetVariableProperties]
+
+    # Each stand has a different area. This is weighted in the optimization.
+    stand_areas: dict[StandID, float]
+
+    data: list[np.ndarray]
+
+    def validate(self):
+        # 1st level corresponds to stands
+        if len(self.data) != len(self.stands):
+            raise ValueError(
+                "TargetVariableArray not initialized properly. First dimension must be stands."
             )
+        # rows correspond to scenarios; columns to target variables
+        for n_stand, scenarios in enumerate(self.scenarios.values()):
+            if self.data[n_stand].shape[0] != len(scenarios):
+                raise ValueError(
+                    f"TargetVariableArray not initialized properly. Rows must correspond to scenarios. Found mismatch in stand number {n_stand}"
+                )
+            if self.data[n_stand].shape[1] != len(self.variables):
+                raise ValueError(
+                    f"TargetVariableArray not initialized properly. Columns must correspond to variables. Found mismatch in stand number {n_stand}"
+                )
+            if self.data[n_stand].ndim != 2:
+                raise ValueError("Arrays must be 2-D.")
+
+
+def build_optimization_array(
+    data_store: OutputDataStore,
+    stand_areas: dict[StandID, float],
+    optimization_variables: dict[NetcdfVariablePath, TargetVariableProperties],
+) -> TargetVariableArrays:
+    number_of_target_variables = len(optimization_variables)
+
+    variables = []
+    variables_properties = []
+    for var_path, var_properties in optimization_variables.items():
+        variables.append(var_path)
+        variables_properties.append(var_properties)
+
+    # Initialize output variable
+    data = []
+
+    for stand_i, stand_name in enumerate(data_store.stands):
+        stand_area = stand_areas[stand_name]
+        number_of_scenarios = len(data_store.scenarios[stand_name])
+
+        # Initialize the array that holds the variables' values
+        target_var_array = (
+            np.ones((number_of_scenarios, number_of_target_variables)) * np.nan
         )
-# %% Transformation between data representations: list of scenarios to list of numpys
+
+        for scenario_i, scenario_name in enumerate(data_store.scenarios[stand_name]):
+            for var_i, (var_path, var_properties) in enumerate(
+                optimization_variables.items()
+            ):
+                target_var_array[scenario_i, var_i] = (
+                    stand_area
+                    * aggregate_time_series_to_float(
+                        array=data_store.get_variable_value_for_scenario_and_stand(
+                            variable_path=var_path,
+                            stand_id=stand_name,
+                            scenario_id=scenario_name,
+                        ),
+                        target_variable_properties=var_properties,
+                    )
+                )
+        data.append(target_var_array)
+    target_var_arrays = TargetVariableArrays(
+        stands=data_store.stands,
+        scenarios=data_store.scenarios,
+        variables=variables,
+        variables_properties=variables_properties,
+        stand_areas=stand_areas,
+        data=data,
+    )
+    target_var_arrays.validate()
+    return target_var_arrays
 
 
-# Usage example:
-# Forward transformation
-array_data = nc_utils.transform_list_of_scenarios_to_optimization_array_structure(
-    vars_of_interest_by_stand=vars_of_interest_by_stand,
-    n_stands=N_STANDS,
-    target_variable_paths=INTERESTING_VAR_PATHS,
-)
-
-# We have both arrays and names in one object
-arrays: list[np.ndarray] = array_data.arrays
-names = array_data.scenario_names
-
-# Reverse transformation
-reconstructed = nc_utils.transform_array_data_to_list_of_scenarios(
-    array_data=array_data,
-    n_stands=N_STANDS,
-    target_variable_paths=INTERESTING_VAR_PATHS,
-)
-
-assert reconstructed == vars_of_interest_by_stand
-
-# %% Each stand has different size. This is important when optimizing!
 # TODO: change with real values
 import warnings
 
 warnings.warn("Using placeholder study area values")
-STAND_AREAS_HA = rng.random(size=N_STANDS)
+STAND_AREAS_HA: dict[StandID, float] = {
+    stand_id: rng.random() for stand_id in data_store.stands
+}
 
-
-def scale_target_variables_with_stand_area(
-    stand_areas: np.ndarray, arrays: list[np.ndarray]
-) -> list[np.ndarray]:
-    """
-    Each stand has a different area.
-    The weight each stand has in the total sum is weighted according to the area.
-    Scaling means simply multiplying by each stand's area.
-    """
-
-    return [stand_area * array for stand_area, array in zip(stand_areas, arrays)]
-
-
-arrays_scaled_by_area = scale_target_variables_with_stand_area(
-    stand_areas=STAND_AREAS_HA, arrays=arrays
+target_var_arrays = build_optimization_array(
+    data_store=data_store,
+    optimization_variables=PROPERTIES_OF_TARGET_VARIABLES,
+    stand_areas=STAND_AREAS_HA,
 )
 
 
@@ -246,7 +253,10 @@ def target_function_for_single_organism(
     chosen_vars = np.stack(
         [arr[idx] for arr, idx in zip(arrays_of_vars_of_interest, configuration)]
     )
-    assert chosen_vars.shape == (N_STANDS, number_of_target_variables)
+    assert chosen_vars.shape == (
+        len(arrays_of_vars_of_interest),
+        number_of_target_variables,
+    )
 
     return chosen_vars.sum(axis=0)
 
@@ -291,24 +301,25 @@ def target_function_for_population(
     )
 
 
-number_of_target_variables = len(INTERESTING_VAR_PATHS)
+number_of_target_variables = len(VARS_OF_INTEREST)
 
 random_organism = create_random_organism(scenarios_cardinality)
 random_population = create_random_population(scenarios_cardinality, n_organisms=10)
 
 random_organism_fitness = target_function_for_single_organism(
     configuration=random_organism,
-    arrays_of_vars_of_interest=arrays_scaled_by_area,
+    arrays_of_vars_of_interest=target_var_arrays.data,
     number_of_target_variables=number_of_target_variables,
 )
 random_population_fitness = target_function_for_population(
     configurations=random_population,
-    arrays_of_vars_of_interest=arrays_scaled_by_area,
+    arrays_of_vars_of_interest=target_var_arrays.data,
     number_of_target_variables=number_of_target_variables,
 )
 
 # %% number of total candidates that can be evaluated per second
 # This helps to choose the right optimization algorithm
+N_STANDS = len(target_var_arrays.stands)
 
 start = time.time()
 
@@ -319,7 +330,7 @@ for i in range(N_ITER_TO_EVALUATE):
 
     random_organism_fitness = target_function_for_single_organism(
         configuration=random_organism,
-        arrays_of_vars_of_interest=arrays_scaled_by_area,
+        arrays_of_vars_of_interest=target_var_arrays.data,
         number_of_target_variables=number_of_target_variables,
     )
 end = time.time()
@@ -334,7 +345,7 @@ print(
 random_organism = create_random_organism(scenarios_cardinality)
 
 target_numba_function = make_target_function_numba_version(
-    arrays_of_vars_of_interest=arrays_scaled_by_area,
+    arrays_of_vars_of_interest=target_var_arrays.data,
     number_of_target_variables=number_of_target_variables,
     n_stands=N_STANDS,
 )
@@ -354,7 +365,7 @@ print(
     f"Total runtime to evaluate {N_ITER_TO_EVALUATE} iterations without numba: {end - start} seconds."
 )
 
-# %% pymoo (not started yet)
+# %% pymoo
 # NOTE: pymoo was made for floats, not ints. Putting int values is cumbersome, although there are some tutorials in the docs.
 # Perhaps use DEAP instead?
 # Or write my own algo?
@@ -387,7 +398,7 @@ class MyProblem(Problem):
 
 
 problem = MyProblem(
-    arrays_of_vars_of_interest=arrays_scaled_by_area,
+    arrays_of_vars_of_interest=target_var_arrays.data,
     n_target_variables=number_of_target_variables,
     scenarios_cardinality=[
         c - 1 for c in scenarios_cardinality
@@ -415,7 +426,7 @@ res = minimize(
 
 # %% Visualize solutions
 
-variable_labels = [var_path.split("/")[-1] for var_path in INTERESTING_VAR_PATHS]
+variable_labels = [var_path.split("/")[-1] for var_path in VARS_OF_INTEREST]
 
 
 def compute_single_variable_minima(arrays: list[np.ndarray]) -> np.ndarray:
@@ -430,13 +441,13 @@ def compute_single_variable_maxima(arrays: list[np.ndarray]) -> np.ndarray:
 single_var_minima = np.stack(
     [
         target_numba_function(m)
-        for m in compute_single_variable_minima(arrays_scaled_by_area)
+        for m in compute_single_variable_minima(target_var_arrays.data)
     ]
 )
 single_var_maxima = np.stack(
     [
         target_numba_function(m)
-        for m in compute_single_variable_maxima(arrays_scaled_by_area)
+        for m in compute_single_variable_maxima(target_var_arrays.data)
     ]
 )
 

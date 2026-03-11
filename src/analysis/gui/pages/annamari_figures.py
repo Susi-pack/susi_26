@@ -2,174 +2,176 @@ import streamlit as st
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 from susi.io.app_settings import AppSettings
 
 from analysis.gui.components import plots, folder_selection
 
+chosen_project_folder = folder_selection.build_folder_selection_widget(
+    dir_path=st.session_state.settings["data_folder"], label="project"
+)
+
+chosen_stand_folder = folder_selection.build_folder_selection_widget(
+    dir_path=chosen_project_folder, label="stand"
+)
+
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
-    dir_path=folder_selection.build_folder_selection_widget(
-        dir_path=folder_selection.build_folder_selection_widget(
-            dir_path=st.session_state.settings["data_folder"], label="project"
-        ),
-        label="stand",
-    ),
-    label="scenario",
+    dir_path=chosen_stand_folder, label="scenario"
 )
 
 
-metadata, susi_params = nc_utils.read_json_metadatas(
+metadata, susi_params = load_output.read_json_metadatas(
     experiment_folderpath=chosen_scenario_folder
 )
 
 sample_netcdf_filepath = (
     AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
 )
-all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
+all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
 
 VARIABLE_PATHS = (
-    nc_utils.NetcdfVariablePath("/strip/dwtyr"),
-    nc_utils.NetcdfVariablePath("/strip/dwtyr_growingseason"),
-    nc_utils.NetcdfVariablePath("/strip/dwtyr_latesummer"),
-    nc_utils.NetcdfVariablePath("/strip/dwt"),
-    nc_utils.NetcdfVariablePath("/strip/roff"),
-    nc_utils.NetcdfVariablePath("/strip/roffwest"),
-    nc_utils.NetcdfVariablePath("/strip/roffeast"),
-    nc_utils.NetcdfVariablePath("/strip/surfacerunoff"),
-    nc_utils.NetcdfVariablePath("/strip/deltas"),
-    nc_utils.NetcdfVariablePath("/strip/elevation"),
-    nc_utils.NetcdfVariablePath("/cpy/ET_yr"),
-    nc_utils.NetcdfVariablePath("/cpy/transpi_yr"),
-    nc_utils.NetcdfVariablePath("/cpy/efloor_yr"),
-    nc_utils.NetcdfVariablePath("/cpy/SWEmax"),
-    nc_utils.NetcdfVariablePath("/cpy/interc_yr"),
-    nc_utils.NetcdfVariablePath("/stand/volume"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/volume"),
-    nc_utils.NetcdfVariablePath("/stand/subdominant/volume"),
-    nc_utils.NetcdfVariablePath("/stand/under/volume"),
-    nc_utils.NetcdfVariablePath("/stand/logvolume"),
-    nc_utils.NetcdfVariablePath("/stand/pulpvolume"),
-    nc_utils.NetcdfVariablePath("/stand/leafmass"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/leafmass"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/leafmax"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/leafmin"),
-    nc_utils.NetcdfVariablePath("/stand/subdominant/leafmass"),
-    nc_utils.NetcdfVariablePath("/stand/subdominant/leafmax"),
-    nc_utils.NetcdfVariablePath("/stand/subdominant/leafmin"),
-    nc_utils.NetcdfVariablePath("/stand/under/leafmass"),
-    nc_utils.NetcdfVariablePath("/stand/under/leafmax"),
-    nc_utils.NetcdfVariablePath("/stand/under/leafmin"),
-    nc_utils.NetcdfVariablePath("/stand/nut_stat"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/NPP"),
-    nc_utils.NetcdfVariablePath("/stand/dominant/NPP_pot"),
-    nc_utils.NetcdfVariablePath("/stand/n_demand"),
-    nc_utils.NetcdfVariablePath("/stand/p_demand"),
-    nc_utils.NetcdfVariablePath("/stand/k_demand"),
-    nc_utils.NetcdfVariablePath("/stand/nonwoodylitter"),
-    nc_utils.NetcdfVariablePath("/stand/woodylitter"),
-    nc_utils.NetcdfVariablePath("/stand/finerootlitter"),
-    nc_utils.NetcdfVariablePath("/stand/biomass"),
-    nc_utils.NetcdfVariablePath("/stand/volumegrowth"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/ds_litterfall"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/h_litterfall"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/s_litterfall"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/gv_tot"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/out"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/L0L"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/L0W"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/LL"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/LW"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/FL"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/FW"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/H"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/P1"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/P2"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/P3"),
-    nc_utils.NetcdfVariablePath("/balance/C/LMWdoc_to_water"),
-    nc_utils.NetcdfVariablePath("/balance/C/HMW_to_water"),
-    nc_utils.NetcdfVariablePath("/balance/C/LMWdoc_to_atm"),
-    nc_utils.NetcdfVariablePath("/balance/C/HMW_to_atm"),
-    nc_utils.NetcdfVariablePath("/balance/C/co2c_release"),
-    nc_utils.NetcdfVariablePath("/balance/C/ch4c_release"),
-    nc_utils.NetcdfVariablePath("/balance/C/stand_litter_in"),
-    nc_utils.NetcdfVariablePath("/balance/C/gv_litter_in"),
-    nc_utils.NetcdfVariablePath("/balance/C/soil_c_balance_c"),
-    nc_utils.NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
-    nc_utils.NetcdfVariablePath("/balance/C/stand_c_balance_c"),
-    nc_utils.NetcdfVariablePath("/balance/C/stand_c_balance_co2eq"),
-    nc_utils.NetcdfVariablePath("/balance/N/to_water"),
-    nc_utils.NetcdfVariablePath("/balance/N/decomposition_below_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/N/decomposition_tot"),
-    nc_utils.NetcdfVariablePath("/balance/N/decomposition_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/N/deposition"),
-    nc_utils.NetcdfVariablePath("/balance/N/fertilization_release"),
-    nc_utils.NetcdfVariablePath("/balance/N/stand_demand"),
-    nc_utils.NetcdfVariablePath("/balance/N/gv_demand"),
-    nc_utils.NetcdfVariablePath("/balance/N/balance_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/P/to_water"),
-    nc_utils.NetcdfVariablePath("/balance/P/decomposition_below_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/P/decomposition_tot"),
-    nc_utils.NetcdfVariablePath("/balance/P/decomposition_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/P/deposition"),
-    nc_utils.NetcdfVariablePath("/balance/P/fertilization_release"),
-    nc_utils.NetcdfVariablePath("/balance/P/stand_demand"),
-    nc_utils.NetcdfVariablePath("/balance/P/gv_demand"),
-    nc_utils.NetcdfVariablePath("/balance/P/balance_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/K/to_water"),
-    nc_utils.NetcdfVariablePath("/balance/K/decomposition_below_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/K/decomposition_tot"),
-    nc_utils.NetcdfVariablePath("/balance/K/decomposition_root_lyr"),
-    nc_utils.NetcdfVariablePath("/balance/K/deposition"),
-    nc_utils.NetcdfVariablePath("/balance/K/fertilization_release"),
-    nc_utils.NetcdfVariablePath("/balance/K/stand_demand"),
-    nc_utils.NetcdfVariablePath("/balance/K/gv_demand"),
-    nc_utils.NetcdfVariablePath("/balance/K/balance_root_lyr"),
+    load_output.NetcdfVariablePath("/strip/dwtyr"),
+    load_output.NetcdfVariablePath("/strip/dwtyr_growingseason"),
+    load_output.NetcdfVariablePath("/strip/dwtyr_latesummer"),
+    load_output.NetcdfVariablePath("/strip/dwt"),
+    load_output.NetcdfVariablePath("/strip/roff"),
+    load_output.NetcdfVariablePath("/strip/roffwest"),
+    load_output.NetcdfVariablePath("/strip/roffeast"),
+    load_output.NetcdfVariablePath("/strip/surfacerunoff"),
+    load_output.NetcdfVariablePath("/strip/deltas"),
+    load_output.NetcdfVariablePath("/strip/elevation"),
+    load_output.NetcdfVariablePath("/cpy/ET_yr"),
+    load_output.NetcdfVariablePath("/cpy/transpi_yr"),
+    load_output.NetcdfVariablePath("/cpy/efloor_yr"),
+    load_output.NetcdfVariablePath("/cpy/SWEmax"),
+    load_output.NetcdfVariablePath("/cpy/interc_yr"),
+    load_output.NetcdfVariablePath("/stand/volume"),
+    load_output.NetcdfVariablePath("/stand/dominant/volume"),
+    load_output.NetcdfVariablePath("/stand/subdominant/volume"),
+    load_output.NetcdfVariablePath("/stand/under/volume"),
+    load_output.NetcdfVariablePath("/stand/logvolume"),
+    load_output.NetcdfVariablePath("/stand/pulpvolume"),
+    load_output.NetcdfVariablePath("/stand/leafmass"),
+    load_output.NetcdfVariablePath("/stand/dominant/leafmass"),
+    load_output.NetcdfVariablePath("/stand/dominant/leafmax"),
+    load_output.NetcdfVariablePath("/stand/dominant/leafmin"),
+    load_output.NetcdfVariablePath("/stand/subdominant/leafmass"),
+    load_output.NetcdfVariablePath("/stand/subdominant/leafmax"),
+    load_output.NetcdfVariablePath("/stand/subdominant/leafmin"),
+    load_output.NetcdfVariablePath("/stand/under/leafmass"),
+    load_output.NetcdfVariablePath("/stand/under/leafmax"),
+    load_output.NetcdfVariablePath("/stand/under/leafmin"),
+    load_output.NetcdfVariablePath("/stand/nut_stat"),
+    load_output.NetcdfVariablePath("/stand/dominant/NPP"),
+    load_output.NetcdfVariablePath("/stand/dominant/NPP_pot"),
+    load_output.NetcdfVariablePath("/stand/n_demand"),
+    load_output.NetcdfVariablePath("/stand/p_demand"),
+    load_output.NetcdfVariablePath("/stand/k_demand"),
+    load_output.NetcdfVariablePath("/stand/nonwoodylitter"),
+    load_output.NetcdfVariablePath("/stand/woodylitter"),
+    load_output.NetcdfVariablePath("/stand/finerootlitter"),
+    load_output.NetcdfVariablePath("/stand/biomass"),
+    load_output.NetcdfVariablePath("/stand/volumegrowth"),
+    load_output.NetcdfVariablePath("/groundvegetation/ds_litterfall"),
+    load_output.NetcdfVariablePath("/groundvegetation/h_litterfall"),
+    load_output.NetcdfVariablePath("/groundvegetation/s_litterfall"),
+    load_output.NetcdfVariablePath("/groundvegetation/gv_tot"),
+    load_output.NetcdfVariablePath("/esom/Mass/out"),
+    load_output.NetcdfVariablePath("/esom/Mass/L0L"),
+    load_output.NetcdfVariablePath("/esom/Mass/L0W"),
+    load_output.NetcdfVariablePath("/esom/Mass/LL"),
+    load_output.NetcdfVariablePath("/esom/Mass/LW"),
+    load_output.NetcdfVariablePath("/esom/Mass/FL"),
+    load_output.NetcdfVariablePath("/esom/Mass/FW"),
+    load_output.NetcdfVariablePath("/esom/Mass/H"),
+    load_output.NetcdfVariablePath("/esom/Mass/P1"),
+    load_output.NetcdfVariablePath("/esom/Mass/P2"),
+    load_output.NetcdfVariablePath("/esom/Mass/P3"),
+    load_output.NetcdfVariablePath("/balance/C/LMWdoc_to_water"),
+    load_output.NetcdfVariablePath("/balance/C/HMW_to_water"),
+    load_output.NetcdfVariablePath("/balance/C/LMWdoc_to_atm"),
+    load_output.NetcdfVariablePath("/balance/C/HMW_to_atm"),
+    load_output.NetcdfVariablePath("/balance/C/co2c_release"),
+    load_output.NetcdfVariablePath("/balance/C/ch4c_release"),
+    load_output.NetcdfVariablePath("/balance/C/stand_litter_in"),
+    load_output.NetcdfVariablePath("/balance/C/gv_litter_in"),
+    load_output.NetcdfVariablePath("/balance/C/soil_c_balance_c"),
+    load_output.NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
+    load_output.NetcdfVariablePath("/balance/C/stand_c_balance_c"),
+    load_output.NetcdfVariablePath("/balance/C/stand_c_balance_co2eq"),
+    load_output.NetcdfVariablePath("/balance/N/to_water"),
+    load_output.NetcdfVariablePath("/balance/N/decomposition_below_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/N/decomposition_tot"),
+    load_output.NetcdfVariablePath("/balance/N/decomposition_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/N/deposition"),
+    load_output.NetcdfVariablePath("/balance/N/fertilization_release"),
+    load_output.NetcdfVariablePath("/balance/N/stand_demand"),
+    load_output.NetcdfVariablePath("/balance/N/gv_demand"),
+    load_output.NetcdfVariablePath("/balance/N/balance_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/P/to_water"),
+    load_output.NetcdfVariablePath("/balance/P/decomposition_below_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/P/decomposition_tot"),
+    load_output.NetcdfVariablePath("/balance/P/decomposition_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/P/deposition"),
+    load_output.NetcdfVariablePath("/balance/P/fertilization_release"),
+    load_output.NetcdfVariablePath("/balance/P/stand_demand"),
+    load_output.NetcdfVariablePath("/balance/P/gv_demand"),
+    load_output.NetcdfVariablePath("/balance/P/balance_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/K/to_water"),
+    load_output.NetcdfVariablePath("/balance/K/decomposition_below_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/K/decomposition_tot"),
+    load_output.NetcdfVariablePath("/balance/K/decomposition_root_lyr"),
+    load_output.NetcdfVariablePath("/balance/K/deposition"),
+    load_output.NetcdfVariablePath("/balance/K/fertilization_release"),
+    load_output.NetcdfVariablePath("/balance/K/stand_demand"),
+    load_output.NetcdfVariablePath("/balance/K/gv_demand"),
+    load_output.NetcdfVariablePath("/balance/K/balance_root_lyr"),
 )
 
-chosen_vars = nc_utils.choose_netcdf_vars_by_path(
-    paths=VARIABLE_PATHS, all_variables=all_variables
-)
+stand_id = load_output.StandID(chosen_stand_folder.name)
+scenario_id = load_output.ScenarioID(metadata["experiment_id"])
 
-variables_values = nc_utils.read_value_several_variables_from_single_file(
-    netcdf_filepath=chosen_netcdf_filepath,
-    variables=chosen_vars,
-)
+metadata_by_stand = {
+    stand_id: load_output._load_single_experiment_metadatas(chosen_scenario_folder)
+}
 
-scen = 0
+data_store = load_output.read_netcdf_files_for_selected_variables(
+    selected_variables=VARIABLE_PATHS, metadata_by_stand=metadata_by_stand
+)
 
 st.markdown("## Stand")
-fig_stand = plots.stand(variables_values, scen=scen)
+fig_stand = plots.stand(data_store, stand_id, scenario_id)
 st.pyplot(fig_stand)
 plt.close(fig_stand)
 
 st.markdown("## Hydrology")
-fig_hydro = plots.hydrology(variables_values, scen=scen)
+fig_hydro = plots.hydrology(data_store, stand_id, scenario_id)
 st.pyplot(fig_hydro)
 plt.close(fig_hydro)
 
 st.markdown("## Mass")
-fig_mass = plots.mass(variables_values, scen=scen)
+fig_mass = plots.mass(data_store, stand_id, scenario_id)
 st.pyplot(fig_mass)
 plt.close(fig_mass)
 
 st.markdown("## Carbon")
-fig_carbon = plots.carbon(variables_values, scen=scen)
+fig_carbon = plots.carbon(data_store, stand_id, scenario_id)
 st.pyplot(fig_carbon)
 plt.close(fig_carbon)
 
 st.markdown("## Nitrogen Balance")
-fig_n = plots.nutrient_balance(variables_values, substance="N", scen=scen)
+fig_n = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="N")
 st.pyplot(fig_n)
 plt.close(fig_n)
 
 st.markdown("## Phosphorus Balance")
-fig_p = plots.nutrient_balance(variables_values, substance="P", scen=scen)
+fig_p = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="P")
 st.pyplot(fig_p)
 plt.close(fig_p)
 
 st.markdown("## Potassium Balance")
-fig_k = plots.nutrient_balance(variables_values, substance="K", scen=scen)
+fig_k = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="K")
 st.pyplot(fig_k)
 plt.close(fig_k)

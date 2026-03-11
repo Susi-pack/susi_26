@@ -1,7 +1,7 @@
 import streamlit as st
 from pathlib import Path
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 from susi.io.app_settings import AppSettings
 
 from analysis.gui.components import (
@@ -12,7 +12,7 @@ from analysis.gui.components import (
 )
 
 # %% Choose folder
-st.header("Choose folder")
+st.header("Choose project folder")
 
 col1, col2, col3 = st.columns([2, 3, 1])
 
@@ -42,7 +42,7 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 
 # %% Metadata expander
-metadata, susi_params = nc_utils.read_json_metadatas(
+metadata, susi_params = load_output.read_json_metadatas(
     experiment_folderpath=chosen_scenario_folder
 )
 
@@ -59,7 +59,7 @@ st.write("summary table will go here")
 sample_netcdf_filepath = (
     AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
 )
-all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_filepath)
+all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 # Actual netcdf file path for reading values (not only structure of the file)
 chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
@@ -73,9 +73,8 @@ st.subheader("Plots")
 if not chosen_netcdf_variables:
     st.write("No variables chosen")
 else:
-    # Read actual values from the NetCDF file
-    variables_values = nc_utils.read_value_several_variables_from_single_file(
+    variables_values = load_output.read_value_several_variables_from_single_file(
         netcdf_filepath=chosen_netcdf_filepath,
-        variables=chosen_netcdf_variables,
+        variable_paths=list(chosen_netcdf_variables.keys()),
     )
     netcdf_variable_plots_ui.build(variables_values)

@@ -6,26 +6,26 @@ import netCDF4
 from tempfile import TemporaryDirectory
 import json
 
-from susi.io.netcdf_utils import (
+from susi.io.load_output_data import (
     list_all_netcdf_variables,
-    list_variable_absolute_paths,
     _get_variable_by_path,
     read_value_several_variables_from_single_file,
-    choose_netcdf_vars_by_path,
     coerce_datetime_format,
     modify_after_load,
     list_subdirectories,
-    load_single_experiment_metadatas,
-    load_all_metadatas_from_single_folder,
-    load_all_metadatas_from_folders,
-    transform_list_of_scenarios_to_optimization_array_structure,
-    transform_array_data_to_list_of_scenarios,
+    _load_single_experiment_metadatas,
+    _load_all_metadatas_from_single_stand,
+    load_all_metadatas_from_stands,
     NetcdfVariableInfo,
-    ScenarioArrayData,
     NetcdfVariablePath,
-    ScenarioName,
+    ScenarioID,
+    StandID,
     TargetVariableDict,
+    OutputDataStore,
+    read_netcdf_files_for_selected_variables,
 )
+
+from susi.io.load_output_data import NetcdfVariableArray
 
 
 def create_mock_netcdf_file(filepath: Path):
@@ -33,17 +33,14 @@ def create_mock_netcdf_file(filepath: Path):
     Create a mock NetCDF file with some variables and groups.
     """
     with netCDF4.Dataset(filepath, "w") as nc:
-        # Global dimensions
         nc.createDimension("time", 10)
         nc.createDimension("lat", 5)
         nc.createDimension("lon", 5)
 
-        # Root-level variable
         var1 = nc.createVariable("temperature", "f4", ("time", "lat", "lon"))
         var1.units = "K"
         var1[:] = np.arange(250, 250 + 10 * 5 * 5, dtype=np.float32).reshape(10, 5, 5)
 
-        # Group
         group = nc.createGroup("balance")
         group.createDimension("x", 3)
         group.createDimension("y", 2)
@@ -52,7 +49,6 @@ def create_mock_netcdf_file(filepath: Path):
         var2.units = "kg/m2"
         var2[:] = np.arange(6).reshape(3, 2)
 
-        # Nested subgroup
         subgroup = group.createGroup("nested")
         subgroup.createDimension("z", 4)
         var3 = subgroup.createVariable("nested_var", "f8", ("z",))
@@ -71,31 +67,19 @@ def mock_netcdf_file():
 def test_explore_netcdf_structure(mock_netcdf_file):
     variables = list_all_netcdf_variables(mock_netcdf_file)
 
-    # Check we found the expected number of variables
-    paths = [var.path for var in variables]
+    assert isinstance(variables, dict)
     expected_paths = [
-        "/temperature",
-        "/balance/fertilization_release",
-        "/balance/nested/nested_var",
+        NetcdfVariablePath("/temperature"),
+        NetcdfVariablePath("/balance/fertilization_release"),
+        NetcdfVariablePath("/balance/nested/nested_var"),
     ]
-    assert set(paths) == set(expected_paths)
+    assert set(variables.keys()) == set(expected_paths)
 
-    # Check attributes of one variable
-    temp_var = next(var for var in variables if var.name == "temperature")
+    temp_var = variables[NetcdfVariablePath("/temperature")]
     assert temp_var.shape == (10, 5, 5)
     assert temp_var.dimension_names == ("time", "lat", "lon")
     assert temp_var.units == "K"
-
-
-def test_list_variable_absolute_paths(mock_netcdf_file):
-    with netCDF4.Dataset(mock_netcdf_file, "r") as nc:
-        paths = list_variable_absolute_paths(nc)
-    expected = [
-        "/temperature",
-        "/balance/fertilization_release",
-        "/balance/nested/nested_var",
-    ]
-    assert set(paths) == set(expected)
+    assert temp_var.name == "temperature"
 
 
 def test_get_variable_by_path_internal(mock_netcdf_file):
@@ -111,77 +95,25 @@ def test_get_variable_by_path_internal(mock_netcdf_file):
 
 
 def test_read_value_several_variables_from_single_file(mock_netcdf_file):
-    variables = list_all_netcdf_variables(mock_netcdf_file)
-    chosen = choose_netcdf_vars_by_path(
-        [
-            NetcdfVariablePath("/temperature"),
-            NetcdfVariablePath("/balance/fertilization_release"),
-        ],
-        variables,
-    )
-
-    values = read_value_several_variables_from_single_file(mock_netcdf_file, chosen)
-
-    assert len(values) == 2
-    paths = {v.path for v in values}
-    assert paths == {"/temperature", "/balance/fertilization_release"}
-
-    temp_val = next(v for v in values if v.path == "/temperature")
-    assert temp_val.value.shape == (10, 5, 5)
-
-    fert_val = next(v for v in values if v.path == "/balance/fertilization_release")
-    assert fert_val.value.shape == (3, 2)
-
-
-def test_choose_netcdf_vars_by_path():
-    variables = [
-        NetcdfVariableInfo(
-            path=NetcdfVariablePath("/temp"),
-            name="temp",
-            dimension_names=("x",),
-            shape=(5,),
-            units="K",
-        ),
-        NetcdfVariableInfo(
-            path=NetcdfVariablePath("/humidity"),
-            name="humidity",
-            dimension_names=("x",),
-            shape=(5,),
-            units="%",
-        ),
-        NetcdfVariableInfo(
-            path=NetcdfVariablePath("/pressure"),
-            name="pressure",
-            dimension_names=("x",),
-            shape=(5,),
-            units="hPa",
-        ),
+    selected_vars = [
+        NetcdfVariablePath("/balance/fertilization_release"),
+        NetcdfVariablePath("/balance/nested/nested_var"),
     ]
 
-    chosen = choose_netcdf_vars_by_path(
-        [NetcdfVariablePath("/temp"), NetcdfVariablePath("/pressure")], variables
+    values = read_value_several_variables_from_single_file(
+        mock_netcdf_file, selected_vars
     )
 
-    assert len(chosen) == 2
-    assert {v.path for v in chosen} == {"/temp", "/pressure"}
+    assert isinstance(values, dict)
+    assert set(values.keys()) == set(selected_vars)
 
+    fert_val = values[NetcdfVariablePath("/balance/fertilization_release")]
+    assert isinstance(fert_val, NetcdfVariableArray)
+    assert fert_val.processed.shape == (3, 2)
 
-def test_choose_netcdf_vars_by_path_empty():
-    variables = [
-        NetcdfVariableInfo(
-            path=NetcdfVariablePath("/temp"),
-            name="temp",
-            dimension_names=("x",),
-            shape=(5,),
-            units="K",
-        ),
-    ]
-
-    chosen = choose_netcdf_vars_by_path(
-        (NetcdfVariablePath("/nonexistent"),), variables
-    )
-
-    assert len(chosen) == 0
+    nested_val = values[NetcdfVariablePath("/balance/nested/nested_var")]
+    assert isinstance(nested_val, NetcdfVariableArray)
+    assert nested_val.processed.shape == (4,)
 
 
 def test_coerce_datetime_format():
@@ -277,7 +209,7 @@ def mock_experiment_folders():
 def test_load_single_experiment_metadatas(mock_experiment_folders):
     exp_folder = mock_experiment_folders / "exp1"
 
-    result = load_single_experiment_metadatas(exp_folder)
+    result = _load_single_experiment_metadatas(exp_folder)
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
@@ -286,134 +218,198 @@ def test_load_single_experiment_metadatas(mock_experiment_folders):
 
 
 def test_load_all_metadatas_from_single_folder(mock_experiment_folders):
-    result = load_all_metadatas_from_single_folder(mock_experiment_folders)
+    result = _load_all_metadatas_from_single_stand(mock_experiment_folders)
 
     assert len(result) == 2
     assert set(result["experiment_id"]) == {"exp1", "exp2"}
 
 
-def test_load_all_metadatas_from_folders(mock_experiment_folders):
-    folder1 = mock_experiment_folders / "sub1"
-    folder2 = mock_experiment_folders / "sub2"
+def test_load_all_metadatas_from_stands(mock_experiment_folders):
+    folder1 = mock_experiment_folders / "stand_A"
+    folder2 = mock_experiment_folders / "stand_B"
     folder1.mkdir()
     folder2.mkdir()
     create_mock_experiment_folder(folder1, "exp3")
     create_mock_experiment_folder(folder2, "exp4")
 
-    result = load_all_metadatas_from_folders([folder1, folder2])
+    result = load_all_metadatas_from_stands([folder1, folder2])
 
-    assert len(result) == 2
-    assert isinstance(result[0], pd.DataFrame)
-    assert isinstance(result[1], pd.DataFrame)
-
-
-def test_transform_list_of_scenarios_to_optimization_array_structure():
-    vars_of_interest_by_stand = [
-        {
-            ScenarioName("scenario_A"): TargetVariableDict(
-                {NetcdfVariablePath("/var1"): 1.0, NetcdfVariablePath("/var2"): 2.0}
-            ),
-            ScenarioName("scenario_B"): TargetVariableDict(
-                {NetcdfVariablePath("/var1"): 3.0, NetcdfVariablePath("/var2"): 4.0}
-            ),
-        },
-        {
-            ScenarioName("scenario_C"): TargetVariableDict(
-                {NetcdfVariablePath("/var1"): 5.0, NetcdfVariablePath("/var2"): 6.0}
-            ),
-        },
-    ]
-
-    result = transform_list_of_scenarios_to_optimization_array_structure(
-        vars_of_interest_by_stand,
-        n_stands=2,
-        target_variable_paths=[
-            NetcdfVariablePath("/var1"),
-            NetcdfVariablePath("/var2"),
-        ],
-    )
-
-    assert isinstance(result, ScenarioArrayData)
-    assert len(result.arrays) == 2
-    assert len(result.scenario_names) == 2
-
-    assert result.arrays[0].shape == (2, 2)
-    assert result.arrays[1].shape == (1, 2)
-
-    assert result.scenario_names[0] == ["scenario_A", "scenario_B"]
-    assert result.scenario_names[1] == ["scenario_C"]
-
-    np.testing.assert_array_equal(result.arrays[0], [[1.0, 2.0], [3.0, 4.0]])
-    np.testing.assert_array_equal(result.arrays[1], [[5.0, 6.0]])
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {StandID("stand_A"), StandID("stand_B")}
+    assert len(result[StandID("stand_A")]) == 1
+    assert len(result[StandID("stand_B")]) == 1
 
 
-def test_transform_array_data_to_list_of_scenarios():
-    array_data = ScenarioArrayData(
-        arrays=[np.array([[1.0, 2.0], [3.0, 4.0]]), np.array([[5.0, 6.0]])],
-        scenario_names=[
-            [ScenarioName("scenario_A"), ScenarioName("scenario_B")],
-            [ScenarioName("scenario_C")],
-        ],
-    )
+class TestNetcdfVariableArray:
+    """Tests for NetcdfVariableArray class."""
 
-    result = transform_array_data_to_list_of_scenarios(
-        array_data,
-        n_stands=2,
-        target_variable_paths=[
-            NetcdfVariablePath("/var1"),
-            NetcdfVariablePath("/var2"),
-        ],
-    )
+    def test_construction_1d_array(self):
+        raw = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
 
-    assert len(result) == 2
+    def test_construction_2d_array(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
 
-    assert result[0][ScenarioName("scenario_A")] == TargetVariableDict(
-        {
-            NetcdfVariablePath("/var1"): 1.0,
-            NetcdfVariablePath("/var2"): 2.0,
+    def test_construction_3d_array_single_scenario(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        assert arr._raw is raw
+
+    def test_construction_3d_array_multiple_scenarios_raises(self):
+        raw = np.array(
+            [
+                [[1.0, 2.0], [3.0, 4.0]],
+                [[5.0, 6.0], [7.0, 8.0]],
+            ]
+        )
+        with pytest.raises(NotImplementedError):
+            NetcdfVariableArray(raw)
+
+    def test_construction_invalid_dimensions_raises(self):
+        raw = np.array([[[[1.0]]]])
+        arr = NetcdfVariableArray(raw)
+        with pytest.raises(ValueError):
+            _ = arr.processed
+
+    def test_last_timestep_3d(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        result = arr.last_timestep()
+        np.testing.assert_array_equal(result, np.array([5.0]))
+
+    def test_last_timestep_fails_for_1d(self):
+        raw = np.array([1.0, 2.0, 3.0])
+        arr = NetcdfVariableArray(raw)
+        with pytest.raises(IndexError):
+            arr.last_timestep()
+
+    def test_spatial_mean_at_last_timestep(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.spatial_mean_at_last_timestep() == 5.5
+
+    def test_spatial_sum_at_last_timestep(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.spatial_sum_at_last_timestep() == 11.0
+
+    def test_mean_over_space(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        expected = np.array([1.5, 3.5, 5.5])
+        np.testing.assert_array_equal(arr.mean_over_space(), expected)
+
+    def test_mean_over_time(self):
+        raw = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        arr = NetcdfVariableArray(raw)
+        expected = np.array([2.5, 3.5, 4.5])
+        np.testing.assert_array_equal(arr.mean_over_time(), expected)
+
+    def test_mean_of_all_values_1d(self):
+        raw = np.array([1.0, 2.0, 3.0])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 2.0
+
+    def test_mean_of_all_values_2d(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 2.5
+
+    def test_mean_of_all_values_3d(self):
+        raw = np.array([[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]])
+        arr = NetcdfVariableArray(raw)
+        assert arr.mean_of_all_values() == 3.5
+
+    def test_with_nan_values(self):
+        raw = np.array([[1.0, np.nan], [3.0, 4.0]])
+        arr = NetcdfVariableArray(raw)
+        result = arr.mean_of_all_values()
+        assert np.isnan(result)
+
+    def test_different_dtypes_float32(self):
+        raw = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+        arr = NetcdfVariableArray(raw)
+        assert arr.processed.dtype == np.float32
+
+    def test_different_dtypes_int(self):
+        raw = np.array([[1, 2], [3, 4]], dtype=np.int32)
+        arr = NetcdfVariableArray(raw)
+        result = arr.mean_of_all_values()
+        assert result == 2.5
+
+
+class TestOutputDataStore:
+    """Tests for OutputDataStore class."""
+
+    @pytest.fixture
+    def mock_output_datastore(self, mock_netcdf_file):
+        selected_vars = [NetcdfVariablePath("/balance/fertilization_release")]
+        metadata_by_stand = {
+            StandID("stand_A"): pd.DataFrame(
+                {
+                    "experiment_id": ["scenario_1", "scenario_2"],
+                    "netcdf_output_filepath": [mock_netcdf_file, mock_netcdf_file],
+                }
+            )
         }
-    )
-    assert result[0][ScenarioName("scenario_B")] == TargetVariableDict(
-        {
-            NetcdfVariablePath("/var1"): 3.0,
-            NetcdfVariablePath("/var2"): 4.0,
+        return read_netcdf_files_for_selected_variables(
+            selected_variables=selected_vars,
+            metadata_by_stand=metadata_by_stand,
+        )
+
+    def test_output_datastore_creation(self, mock_output_datastore):
+        assert isinstance(mock_output_datastore, OutputDataStore)
+        assert mock_output_datastore.stands == [StandID("stand_A")]
+        assert mock_output_datastore.scenarios == {
+            StandID("stand_A"): [ScenarioID("scenario_1"), ScenarioID("scenario_2")]
         }
-    )
-    assert result[1][ScenarioName("scenario_C")] == TargetVariableDict(
-        {
-            NetcdfVariablePath("/var1"): 5.0,
-            NetcdfVariablePath("/var2"): 6.0,
+        assert mock_output_datastore.variables == [
+            NetcdfVariablePath("/balance/fertilization_release")
+        ]
+
+    def test_get_variable_values_all_scenarios(self, mock_output_datastore):
+        result = mock_output_datastore.get_variable_values_all_scenarios(
+            NetcdfVariablePath("/balance/fertilization_release")
+        )
+        assert isinstance(result, dict)
+        assert (StandID("stand_A"), ScenarioID("scenario_1")) in result
+        assert (StandID("stand_A"), ScenarioID("scenario_2")) in result
+
+    def test_get_variable_value_for_scenario_and_stand(self, mock_output_datastore):
+        result = mock_output_datastore.get_variable_value_for_scenario_and_stand(
+            variable_path=NetcdfVariablePath("/balance/fertilization_release"),
+            stand_id=StandID("stand_A"),
+            scenario_id=ScenarioID("scenario_1"),
+        )
+        assert isinstance(result, NetcdfVariableArray)
+
+    def test_output_datastore_with_multiple_stands(self, mock_netcdf_file):
+        selected_vars = [NetcdfVariablePath("/balance/fertilization_release")]
+        metadata_by_stand = {
+            StandID("stand_A"): pd.DataFrame(
+                {
+                    "experiment_id": ["scen_A1"],
+                    "netcdf_output_filepath": [mock_netcdf_file],
+                }
+            ),
+            StandID("stand_B"): pd.DataFrame(
+                {
+                    "experiment_id": ["scen_B1", "scen_B2"],
+                    "netcdf_output_filepath": [mock_netcdf_file, mock_netcdf_file],
+                }
+            ),
         }
-    )
+        store = read_netcdf_files_for_selected_variables(
+            selected_variables=selected_vars,
+            metadata_by_stand=metadata_by_stand,
+        )
 
-
-def test_transform_roundtrip():
-    original = [
-        {
-            ScenarioName("A"): TargetVariableDict(
-                {NetcdfVariablePath("/v1"): 1.5, NetcdfVariablePath("/v2"): 2.5}
-            ),
-            ScenarioName("B"): TargetVariableDict(
-                {NetcdfVariablePath("/v1"): 3.5, NetcdfVariablePath("/v2"): 4.5}
-            ),
-        },
-        {
-            ScenarioName("C"): TargetVariableDict(
-                {NetcdfVariablePath("/v1"): 5.5, NetcdfVariablePath("/v2"): 6.5}
-            ),
-        },
-    ]
-
-    array_data = transform_list_of_scenarios_to_optimization_array_structure(
-        original,
-        n_stands=2,
-        target_variable_paths=[NetcdfVariablePath("/v1"), NetcdfVariablePath("/v2")],
-    )
-
-    result = transform_array_data_to_list_of_scenarios(
-        array_data,
-        n_stands=2,
-        target_variable_paths=[NetcdfVariablePath("/v1"), NetcdfVariablePath("/v2")],
-    )
-
-    assert result == original
+        assert store.stands == [StandID("stand_A"), StandID("stand_B")]
+        assert store.scenarios[StandID("stand_A")] == [ScenarioID("scen_A1")]
+        assert store.scenarios[StandID("stand_B")] == [
+            ScenarioID("scen_B1"),
+            ScenarioID("scen_B2"),
+        ]
