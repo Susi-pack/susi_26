@@ -11,7 +11,6 @@ from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
 
-from susi.io import netcdf_utils as nc_utils
 
 
 def _create_profile_line(

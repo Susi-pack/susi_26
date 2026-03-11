@@ -8,7 +8,7 @@ import matplotlib as mpl
 import colorsys
 
 from analysis.gui.components import folder_selection
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 
 st.header("Project summary")
 
@@ -16,35 +16,35 @@ dir_path = folder_selection.build_folder_selection_widget(
     dir_path=st.session_state.settings["data_folder"], label="project"
 )
 
-stand_folderpaths = nc_utils.list_subdirectories(path=dir_path)
+stand_folderpaths = load_output.list_subdirectories(path=dir_path)
 
-metadata_by_stand = nc_utils.load_all_metadatas_from_stands(folders=stand_folderpaths)
+metadata_by_stand = load_output.load_all_metadatas_from_stands(
+    folders=stand_folderpaths
+)
 
-sample_netcdf_file_path = Path(metadata_by_stand[0]["netcdf_output_filepath"][0])
+sample_netcdf_filepath = metadata_by_stand[
+    load_output.StandID(stand_folderpaths[0].name)
+].iloc[0]["netcdf_output_filepath"]
 
-st.write(sample_netcdf_file_path)
+st.write(sample_netcdf_filepath)
 
+all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 CHOSEN_VARIABLES = (
-    nc_utils.NetcdfVariablePath("/strip/dwtyr"),
-    nc_utils.NetcdfVariablePath("/stand/volumegrowth"),
-    nc_utils.NetcdfVariablePath("/export/hmwtoditch"),
-    nc_utils.NetcdfVariablePath("/export/lmwtoditch"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/ds_litterfall"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/h_litterfall"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/s_litterfall"),
-    nc_utils.NetcdfVariablePath("/stand/nonwoodylitter"),
-    nc_utils.NetcdfVariablePath("/stand/woodylitter"),
-    nc_utils.NetcdfVariablePath("/esom/Mass/out"),
-    nc_utils.NetcdfVariablePath("/groundvegetation/gv_tot"),
-    nc_utils.NetcdfVariablePath("/stand/biomass"),
+    load_output.NetcdfVariablePath("/strip/dwtyr"),
+    load_output.NetcdfVariablePath("/stand/volumegrowth"),
+    load_output.NetcdfVariablePath("/export/hmwtoditch"),
+    load_output.NetcdfVariablePath("/export/lmwtoditch"),
+    load_output.NetcdfVariablePath("/groundvegetation/ds_litterfall"),
+    load_output.NetcdfVariablePath("/groundvegetation/h_litterfall"),
+    load_output.NetcdfVariablePath("/groundvegetation/s_litterfall"),
+    load_output.NetcdfVariablePath("/stand/nonwoodylitter"),
+    load_output.NetcdfVariablePath("/stand/woodylitter"),
+    load_output.NetcdfVariablePath("/esom/Mass/out"),
+    load_output.NetcdfVariablePath("/groundvegetation/gv_tot"),
+    load_output.NetcdfVariablePath("/stand/biomass"),
 )
 
-all_variables = nc_utils.list_all_netcdf_variables(sample_netcdf_file_path)
-
-chosen_vars = nc_utils.choose_netcdf_vars_by_path(
-    paths=CHOSEN_VARIABLES, all_variables=all_variables
-)
 
 # TODO: (Later) Try to cache this
 # cached_read_of_all_variables = lru_cache(
@@ -56,20 +56,21 @@ chosen_vars = nc_utils.choose_netcdf_vars_by_path(
 # The issue with the approach above is that the dataframe object of metadata_by_stand is not cacheable.
 # Maybe we can cache it with Streamlit directly?
 
-chosen_variables_by_stand_and_scenario = (
-    nc_utils.read_chosen_variables_from_netcdf_by_stands_and_scenarios(
-        chosen_vars=chosen_vars, metadata_by_stand=metadata_by_stand
+data_store: load_output.OutputDataStore = (
+    load_output.read_netcdf_files_for_selected_variables(
+        selected_variables=CHOSEN_VARIABLES, metadata_by_stand=metadata_by_stand
     )
 )
 
 rows = []
-for stand_idx, scenarios_dict in enumerate(chosen_variables_by_stand_and_scenario):
-    stand_name = stand_folderpaths[stand_idx].name
-    for scenario_name, var_values in scenarios_dict.items():
-        row = {"stand": stand_name, "scenario": scenario_name}
-        for var_val in var_values:
-            var_path = str(var_val.path)
-            row[var_path] = np.mean(var_val.value)
+for stand_id in data_store.stands:
+    for scenario_id in data_store.scenarios[stand_id]:
+        row = {"stand": stand_id, "scenario": scenario_id}
+        for var_path in data_store.variables:
+            var_array = data_store.get_variable_value_for_scenario_and_stand(
+                var_path, stand_id, scenario_id
+            )
+            row[var_path] = var_array.mean_of_all_values()
         rows.append(row)
 
 df_means = pd.DataFrame(rows)

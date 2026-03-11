@@ -2,7 +2,8 @@ import streamlit as st
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
+from susi.io.load_output_data import NetcdfVariablePath
 
 from analysis.gui.components import plots, folder_selection
 
@@ -16,15 +17,15 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 chosen_susi_folders = st.multiselect(
     label="Choose 2 SUSI netcdf files to compare",
-    options=nc_utils.list_subdirectories(chosen_scenario_folder),
+    options=load_output.list_subdirectories(chosen_scenario_folder),
     max_selections=2,
 )
 
 if len(chosen_susi_folders) == 2:
-    metadata_0, susi_params_0 = nc_utils.read_json_metadatas(
+    metadata_0, susi_params_0 = load_output.read_json_metadatas(
         experiment_folderpath=chosen_susi_folders[0]
     )
-    metadata_1, susi_params_1 = nc_utils.read_json_metadatas(
+    metadata_1, susi_params_1 = load_output.read_json_metadatas(
         experiment_folderpath=chosen_susi_folders[1]
     )
 
@@ -32,40 +33,34 @@ if len(chosen_susi_folders) == 2:
     chosen_netcdf_filepath_1 = Path(metadata_1["netcdf_output_filepath"])
 
     VARIABLE_PATHS = (
-        nc_utils.NetcdfVariablePath("/strip/dwtyr"),
-        nc_utils.NetcdfVariablePath("/stand/volumegrowth"),
-        nc_utils.NetcdfVariablePath("/export/hmwtoditch"),
-        nc_utils.NetcdfVariablePath("/export/lmwtoditch"),
-        nc_utils.NetcdfVariablePath("/groundvegetation/ds_litterfall"),
-        nc_utils.NetcdfVariablePath("/groundvegetation/h_litterfall"),
-        nc_utils.NetcdfVariablePath("/groundvegetation/s_litterfall"),
-        nc_utils.NetcdfVariablePath("/stand/nonwoodylitter"),
-        nc_utils.NetcdfVariablePath("/stand/woodylitter"),
-        nc_utils.NetcdfVariablePath("/esom/Mass/out"),
-        nc_utils.NetcdfVariablePath("/groundvegetation/gv_tot"),
-        nc_utils.NetcdfVariablePath("/stand/biomass"),
+        NetcdfVariablePath("/strip/dwtyr"),
+        NetcdfVariablePath("/stand/volumegrowth"),
+        NetcdfVariablePath("/export/hmwtoditch"),
+        NetcdfVariablePath("/export/lmwtoditch"),
+        NetcdfVariablePath("/groundvegetation/ds_litterfall"),
+        NetcdfVariablePath("/groundvegetation/h_litterfall"),
+        NetcdfVariablePath("/groundvegetation/s_litterfall"),
+        NetcdfVariablePath("/stand/nonwoodylitter"),
+        NetcdfVariablePath("/stand/woodylitter"),
+        NetcdfVariablePath("/esom/Mass/out"),
+        NetcdfVariablePath("/groundvegetation/gv_tot"),
+        NetcdfVariablePath("/stand/biomass"),
     )
 
-    all_variables = nc_utils.list_all_netcdf_variables(chosen_netcdf_filepath_0)
+    all_variables = load_output.list_all_netcdf_variables(chosen_netcdf_filepath_0)
 
-    chosen_vars = nc_utils.choose_netcdf_vars_by_path(
-        paths=VARIABLE_PATHS, all_variables=all_variables
-    )
-
-    variables_values_0 = nc_utils.read_value_several_variables_from_single_file(
+    variables_values_0 = load_output.read_value_several_variables_from_single_file(
         netcdf_filepath=chosen_netcdf_filepath_0,
-        variables=chosen_vars,
+        variable_paths=VARIABLE_PATHS,
     )
 
-    variables_values_1 = nc_utils.read_value_several_variables_from_single_file(
+    variables_values_1 = load_output.read_value_several_variables_from_single_file(
         netcdf_filepath=chosen_netcdf_filepath_1,
-        variables=chosen_vars,
+        variable_paths=VARIABLE_PATHS,
     )
-
-    scen = 0
 
     st.markdown("## Comparison")
-    fig = plots.compare_runs(variables_values_0, variables_values_1, scen=scen)
+    fig = plots.compare_runs(variables_values_0, variables_values_1)
     st.pyplot(fig)
     plt.close(fig)
 elif len(chosen_susi_folders) == 1:

@@ -2,11 +2,18 @@ import altair as alt
 import numpy as np
 import pandas as pd
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 
 
-def _get_var(vars: list[nc_utils.NetcdfVariableValue], path: str) -> np.ndarray:
-    return next(v for v in vars if v.path == path).value
+def _get_var(
+    data_store: load_output.OutputDataStore,
+    path: str,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
+) -> np.ndarray:
+    return data_store.get_variable_value_for_scenario_and_stand(
+        load_output.NetcdfVariablePath(path), stand_id, scenario_id
+    ).processed
 
 
 def _create_line_chart(
@@ -147,20 +154,28 @@ def _create_scatter(
     return chart
 
 
-def stand(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> alt.Chart:
-    cols = np.shape(_get_var(vars, "/strip/dwtyr")[scen])[1]
+def stand(
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
+):
+    cols = np.shape(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id))[1]
 
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sdls = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
 
-    vol = _get_var(vars, "/stand/volume")[scen, :, :]
+    vol = _get_var(data_store, "/stand/volume", stand_id, scenario_id)
     growth = np.diff(vol, axis=0)
     dfgrowth = pd.DataFrame(data=growth, columns=np.arange(cols))
 
     totvol = vol[-1, :]
-    domvol = _get_var(vars, "/stand/dominant/volume")[scen, -1, :]
-    subdomvol = _get_var(vars, "/stand/subdominant/volume")[scen, -1, :]
-    undervol = _get_var(vars, "/stand/under/volume")[scen, -1, :]
+    domvol = _get_var(data_store, "/stand/dominant/volume", stand_id, scenario_id)[-1, :]
+    subdomvol = _get_var(data_store, "/stand/subdominant/volume", stand_id, scenario_id)[-1, :]
+    undervol = _get_var(data_store, "/stand/under/volume", stand_id, scenario_id)[-1, :]
     dfvol = pd.DataFrame(
         {
             "total": totvol,
@@ -171,40 +186,40 @@ def stand(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> alt.Chart:
         index=range(cols),
     )
 
-    logvol = _get_var(vars, "/stand/logvolume")[scen, :, :]
-    pulpvol = _get_var(vars, "/stand/pulpvolume")[scen, :, :]
+    logvol = _get_var(data_store, "/stand/logvolume"), stand_id, scenario_id)
+    pulpvol = _get_var(data_store, "/stand/pulpvolume"), stand_id, scenario_id)
 
-    lmass = _get_var(vars, "/stand/leafmass")[scen, :, :]
+    lmass = _get_var(data_store, "/stand/leafmass"), stand_id, scenario_id)
     dflmass = pd.DataFrame(data=lmass, columns=np.arange(cols))
 
-    dlmass_dom = _get_var(vars, "/stand/dominant/leafmass")[scen, :, :]
-    upperlim_dom = _get_var(vars, "/stand/dominant/leafmax")[scen, :, :]
-    lowerlim_dom = _get_var(vars, "/stand/dominant/leafmin")[scen, :, :]
+    dlmass_dom = _get_var(data_store, "/stand/dominant/leafmass"), stand_id, scenario_id)
+    upperlim_dom = _get_var(data_store, "/stand/dominant/leafmax"), stand_id, scenario_id)
+    lowerlim_dom = _get_var(data_store, "/stand/dominant/leafmin"), stand_id, scenario_id)
 
-    dlmass_subdom = _get_var(vars, "/stand/subdominant/leafmass")[scen, :, :]
-    upperlim_subdom = _get_var(vars, "/stand/subdominant/leafmax")[scen, :, :]
-    lowerlim_subdom = _get_var(vars, "/stand/subdominant/leafmin")[scen, :, :]
+    dlmass_subdom = _get_var(data_store, "/stand/subdominant/leafmass"), stand_id, scenario_id)
+    upperlim_subdom = _get_var(data_store, "/stand/subdominant/leafmax"), stand_id, scenario_id)
+    lowerlim_subdom = _get_var(data_store, "/stand/subdominant/leafmin"), stand_id, scenario_id)
 
-    dlmass_under = _get_var(vars, "/stand/under/leafmass")[scen, :, :]
-    upperlim_under = _get_var(vars, "/stand/under/leafmax")[scen, :, :]
-    lowerlim_under = _get_var(vars, "/stand/under/leafmin")[scen, :, :]
+    dlmass_under = _get_var(data_store, "/stand/under/leafmass"), stand_id, scenario_id)
+    upperlim_under = _get_var(data_store, "/stand/under/leafmax"), stand_id, scenario_id)
+    lowerlim_under = _get_var(data_store, "/stand/under/leafmin"), stand_id, scenario_id)
 
-    ns = _get_var(vars, "/stand/nut_stat")[scen, :, :]
+    ns = _get_var(data_store, "/stand/nut_stat"), stand_id, scenario_id)
     dfns = pd.DataFrame(data=ns, columns=np.arange(cols))
 
     dom_phys_r = (
-        _get_var(vars, "/stand/dominant/NPP")[scen, :, :]
-        / _get_var(vars, "/stand/dominant/NPP_pot")[scen, :, :]
+        _get_var(data_store, "/stand/dominant/NPP"), stand_id, scenario_id)
+        / _get_var(data_store, "/stand/dominant/NPP_pot"), stand_id, scenario_id)
     )
     df_phys_r = pd.DataFrame(data=dom_phys_r, columns=np.arange(cols))
 
-    ndemand = _get_var(vars, "/stand/n_demand")[scen, :, :]
+    ndemand = _get_var(data_store, "/stand/n_demand"), stand_id, scenario_id)
     df_ndemand = pd.DataFrame(data=ndemand, columns=np.arange(cols))
 
-    pdemand = _get_var(vars, "/stand/p_demand")[scen, :, :]
+    pdemand = _get_var(data_store, "/stand/p_demand"), stand_id, scenario_id)
     df_pdemand = pd.DataFrame(data=pdemand, columns=np.arange(cols))
 
-    kdemand = _get_var(vars, "/stand/k_demand")[scen, :, :]
+    kdemand = _get_var(data_store, "/stand/k_demand"), stand_id, scenario_id)
     df_kdemand = pd.DataFrame(data=kdemand, columns=np.arange(cols))
 
     chart_wt = _create_profile_line(
@@ -221,7 +236,7 @@ def stand(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> alt.Chart:
         pd.DataFrame(vol), "Stand Volume Increment", "$m^3 ha^{-1}$", "blue"
     )
 
-    vol_data = _get_var(vars, "/stand/volume")[scen, 0:, :]
+    vol_data = _get_var(data_store, "/stand/volume", stand_id, scenario_id)[0:, :]
     chart_volume = _create_line_chart(
         pd.DataFrame(vol_data), "Volume", "$m^3 ha^{-1}$", "blue"
     )
@@ -371,42 +386,50 @@ def stand(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> alt.Chart:
     )
 
 
-def hydrology(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
-    cols = np.shape(_get_var(vars, "/strip/dwtyr")[scen])[1]
+def hydrology(
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
+) -> tuple:
+    cols = np.shape(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id))[1]
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    sd = np.std(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtgs = np.mean(_get_var(vars, "/strip/dwtyr_growingseason")[scen, :, :], axis=0)
-    sdgs = np.std(_get_var(vars, "/strip/dwtyr_growingseason")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
+    sd = np.std(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
+    wtgs = np.mean(
+        _get_var(data_store, "/strip/dwtyr_growingseason", stand_id, scenario_id), axis=0
+    )
+    sdgs = np.std(
+        _get_var(data_store, "/strip/dwtyr_growingseason"), stand_id, scenario_id), axis=0
+    )
+    wtls = np.mean(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
+    sdls = np.std(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
 
-    wt_ts = np.mean(_get_var(vars, "/strip/dwt")[scen, :, :], axis=1)
+    wt_ts = np.mean(_get_var(data_store, "/strip/dwt"), stand_id, scenario_id), axis=1)
     days = len(wt_ts)
 
-    runoff_total = np.cumsum(_get_var(vars, "/strip/roff")[scen, :])
-    runoff_west = np.cumsum(_get_var(vars, "/strip/roffwest")[scen, :])
-    runoff_east = np.cumsum(_get_var(vars, "/strip/roffeast")[scen, :])
+    runoff_total = np.cumsum(_get_var(data_store, "/strip/roff", stand_id, scenario_id))
+    runoff_west = np.cumsum(_get_var(data_store, "/strip/roffwest", stand_id, scenario_id))
+    runoff_east = np.cumsum(_get_var(data_store, "/strip/roffeast", stand_id, scenario_id))
     runoff_surface = np.cumsum(
-        np.mean(_get_var(vars, "/strip/surfacerunoff")[scen, :, :], axis=1)
+        np.mean(_get_var(data_store, "/strip/surfacerunoff"), stand_id, scenario_id), axis=1)
     )
 
-    deltas = _get_var(vars, "/strip/deltas")[scen, 1:, :] * 1000.0
+    deltas = _get_var(data_store, "/strip/deltas", stand_id, scenario_id)[1:, :] * 1000.0
     df_deltas = pd.DataFrame(data=deltas, columns=np.arange(cols))
 
-    ET = _get_var(vars, "/cpy/ET_yr")[scen, 1:, :] * 1000.0
+    ET = _get_var(data_store, "/cpy/ET_yr", stand_id, scenario_id)[1:, :] * 1000.0
     df_ET = pd.DataFrame(data=ET, columns=np.arange(cols))
 
-    transpi = _get_var(vars, "/cpy/transpi_yr")[scen, 1:, :] * 1000.0
+    transpi = _get_var(data_store, "/cpy/transpi_yr", stand_id, scenario_id)[1:, :] * 1000.0
     df_transpi = pd.DataFrame(data=transpi, columns=np.arange(cols))
 
-    efloor = _get_var(vars, "/cpy/efloor_yr")[scen, 1:, :] * 1000.0
+    efloor = _get_var(data_store, "/cpy/efloor_yr", stand_id, scenario_id)[1:, :] * 1000.0
     df_efloor = pd.DataFrame(data=efloor, columns=np.arange(cols))
 
-    swe = _get_var(vars, "/cpy/SWEmax")[scen, 1:, :]
+    swe = _get_var(data_store, "/cpy/SWEmax", stand_id, scenario_id)[1:, :]
     df_swe = pd.DataFrame(data=swe, columns=np.arange(cols))
 
-    interc = _get_var(vars, "/cpy/interc_yr")[scen, 1:, :] * 1000.0
+    interc = _get_var(data_store, "/cpy/interc_yr", stand_id, scenario_id)[1:, :] * 1000.0
     df_interc = pd.DataFrame(data=interc, columns=np.arange(cols))
 
     chart_wt_annual = _create_profile_line(wt, "Water Table - Annual", "WT (m)", "blue")
@@ -486,37 +509,37 @@ def hydrology(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
 
 
 def mass(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
-    cols = np.shape(_get_var(vars, "/strip/dwtyr")[scen])[1]
+    cols = np.shape(_get_var(data_store, "/strip/dwtyr")[scen])[1]
 
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wtls = np.mean(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
+    sdls = np.std(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
 
     litter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/woodylitter")[scen, :, :] / 10000.0
+        _get_var(data_store, "/groundvegetation/ds_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/groundvegetation/h_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/groundvegetation/s_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/stand/nonwoodylitter"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/stand/woodylitter"), stand_id, scenario_id) / 10000.0
     )
 
-    soil = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1 + litter
-    soilout = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
+    soil = _get_var(data_store, "/esom/Mass/out"), stand_id, scenario_id) / 10000.0 * -1 + litter
+    soilout = _get_var(data_store, "/esom/Mass/out"), stand_id, scenario_id) / 10000.0 * -1
 
     df_soil = pd.DataFrame(data=soil, columns=np.arange(cols))
 
     esoms = ["L0L", "L0W", "LL", "LW", "FL", "FW", "H", "P1", "P2", "P3"]
     inipeat = np.zeros(cols)
     for sto in esoms[7:]:
-        inipeat += _get_var(vars, f"/esom/Mass/{sto}")[scen, 0, :] / 10000.0
+        inipeat += _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :] / 10000.0
     endpeat = np.zeros(cols)
     for sto in esoms[7:]:
-        endpeat += _get_var(vars, f"/esom/Mass/{sto}")[scen, -1, :] / 10000.0
+        endpeat += _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[-1, :] / 10000.0
     inimor = np.zeros(cols)
     for sto in esoms[:7]:
-        inimor += _get_var(vars, f"/esom/Mass/{sto}")[scen, 0, :] / 10000.0
+        inimor += _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :] / 10000.0
     endmor = np.zeros(cols)
     for sto in esoms[:7]:
-        endmor += _get_var(vars, f"/esom/Mass/{sto}")[scen, -1, :] / 10000.0
+        endmor += _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[-1, :] / 10000.0
 
     df_peat_mor = pd.DataFrame(
         {
@@ -530,11 +553,11 @@ def mass(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
 
     df_litter = pd.DataFrame(data=litter, columns=np.arange(cols))
 
-    gv = _get_var(vars, "/groundvegetation/gv_tot")[scen, :, :] / 10000.0
+    gv = _get_var(data_store, "/groundvegetation/gv_tot"), stand_id, scenario_id) / 10000.0
     grgv = np.diff(gv, axis=0)
     df_grgv = pd.DataFrame(data=grgv, columns=np.arange(cols))
 
-    stand = _get_var(vars, "/stand/biomass")[scen, :, :] / 10000.0
+    stand = _get_var(data_store, "/stand/biomass"), stand_id, scenario_id) / 10000.0
     gr_stand = np.diff(stand, axis=0)
     df_gr_stand = pd.DataFrame(data=gr_stand, columns=np.arange(cols))
 
@@ -542,25 +565,25 @@ def mass(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
     df_site = pd.DataFrame(data=site, columns=np.arange(cols))
 
     leaflitter = (
-        _get_var(vars, "/stand/nonwoodylitter")[scen, :, :]
-        - _get_var(vars, "/stand/finerootlitter")[scen, :, :]
+        _get_var(data_store, "/stand/nonwoodylitter"), stand_id, scenario_id)
+        - _get_var(data_store, "/stand/finerootlitter"), stand_id, scenario_id)
     )
     df_leaflitter = pd.DataFrame(data=leaflitter, columns=np.arange(cols))
 
-    finerootlitter = _get_var(vars, "/stand/finerootlitter")[scen, :, :]
+    finerootlitter = _get_var(data_store, "/stand/finerootlitter"), stand_id, scenario_id)
     df_finerootlitter = pd.DataFrame(data=finerootlitter, columns=np.arange(cols))
 
-    woodylitter = _get_var(vars, "/stand/woodylitter")[scen, :, :]
+    woodylitter = _get_var(data_store, "/stand/woodylitter"), stand_id, scenario_id)
     df_woodylitter = pd.DataFrame(data=woodylitter, columns=np.arange(cols))
 
     gvlitter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :]
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :]
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :]
+        _get_var(data_store, "/groundvegetation/ds_litterfall"), stand_id, scenario_id)
+        + _get_var(data_store, "/groundvegetation/h_litterfall"), stand_id, scenario_id)
+        + _get_var(data_store, "/groundvegetation/s_litterfall"), stand_id, scenario_id)
     )
     df_gvlitter = pd.DataFrame(data=gvlitter, columns=np.arange(cols))
 
-    out = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
+    out = _get_var(data_store, "/esom/Mass/out"), stand_id, scenario_id) / 10000.0 * -1
     df_out = pd.DataFrame(data=out, columns=np.arange(cols))
 
     chart_wt = _create_profile_line(
@@ -639,58 +662,58 @@ def mass(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
 
 
 def carbon(vars: list[nc_utils.NetcdfVariableValue], scen: int = 0) -> tuple:
-    cols = np.shape(_get_var(vars, "/strip/dwtyr")[scen])[1]
+    cols = np.shape(_get_var(data_store, "/strip/dwtyr")[scen])[1]
     mass_to_c = 0.5
 
     litter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/woodylitter")[scen, :, :] / 10000.0
+        _get_var(data_store, "/groundvegetation/ds_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/groundvegetation/h_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/groundvegetation/s_litterfall"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/stand/nonwoodylitter"), stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/stand/woodylitter"), stand_id, scenario_id) / 10000.0
     ) * mass_to_c
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr"), stand_id, scenario_id), axis=0)
+    wtls = np.mean(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
+    sdls = np.std(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
 
-    elevation = np.array(_get_var(vars, "/strip/elevation"))
+    elevation = np.array(_get_var(data_store, "/strip/elevation"))
     h = elevation + wtls
 
-    lmwtoditch = _get_var(vars, "/balance/C/LMWdoc_to_water")[scen, :, :] * -1
+    lmwtoditch = _get_var(data_store, "/balance/C/LMWdoc_to_water"), stand_id, scenario_id) * -1
     df_lmwtoditch = pd.DataFrame(data=lmwtoditch, columns=np.arange(cols))
 
-    hmwtoditch = _get_var(vars, "/balance/C/HMW_to_water")[scen, :, :] * -1
+    hmwtoditch = _get_var(data_store, "/balance/C/HMW_to_water"), stand_id, scenario_id) * -1
     df_hmwtoditch = pd.DataFrame(data=hmwtoditch, columns=np.arange(cols))
 
-    lmwtoatm = _get_var(vars, "/balance/C/LMWdoc_to_atm")[scen, :, :] * -1
+    lmwtoatm = _get_var(data_store, "/balance/C/LMWdoc_to_atm"), stand_id, scenario_id) * -1
     df_lmwtoatm = pd.DataFrame(data=lmwtoatm, columns=np.arange(cols))
 
-    hmwtoatm = _get_var(vars, "/balance/C/HMW_to_atm")[scen, :, :] * -1
+    hmwtoatm = _get_var(data_store, "/balance/C/HMW_to_atm"), stand_id, scenario_id) * -1
     df_hmwtoatm = pd.DataFrame(data=hmwtoatm, columns=np.arange(cols))
 
-    co2 = _get_var(vars, "/balance/C/co2c_release")[scen, :, :] * -1
+    co2 = _get_var(data_store, "/balance/C/co2c_release"), stand_id, scenario_id) * -1
     df_co2 = pd.DataFrame(data=co2, columns=np.arange(cols))
 
-    ch4 = _get_var(vars, "/balance/C/ch4c_release")[scen, :, :] * -1
+    ch4 = _get_var(data_store, "/balance/C/ch4c_release"), stand_id, scenario_id) * -1
     df_ch4 = pd.DataFrame(data=ch4, columns=np.arange(cols))
 
-    standl = _get_var(vars, "/balance/C/stand_litter_in")[scen, :, :]
+    standl = _get_var(data_store, "/balance/C/stand_litter_in"), stand_id, scenario_id)
     df_standl = pd.DataFrame(data=standl, columns=np.arange(cols))
 
-    gvl = _get_var(vars, "/balance/C/gv_litter_in")[scen, :, :]
+    gvl = _get_var(data_store, "/balance/C/gv_litter_in"), stand_id, scenario_id)
     df_gvl = pd.DataFrame(data=gvl, columns=np.arange(cols))
 
-    soilc = _get_var(vars, "/balance/C/soil_c_balance_c")[scen, :, :]
+    soilc = _get_var(data_store, "/balance/C/soil_c_balance_c"), stand_id, scenario_id)
     df_soilc = pd.DataFrame(data=soilc, columns=np.arange(cols))
 
-    soilco2 = _get_var(vars, "/balance/C/soil_c_balance_co2eq")[scen, :, :]
+    soilco2 = _get_var(data_store, "/balance/C/soil_c_balance_co2eq"), stand_id, scenario_id)
     df_soilco2 = pd.DataFrame(data=soilco2, columns=np.arange(cols))
 
-    standc = _get_var(vars, "/balance/C/stand_c_balance_c")[scen, :, :]
+    standc = _get_var(data_store, "/balance/C/stand_c_balance_c"), stand_id, scenario_id)
     df_standc = pd.DataFrame(data=standc, columns=np.arange(cols))
 
-    standco2 = _get_var(vars, "/balance/C/stand_c_balance_co2eq")[scen, :, :]
+    standco2 = _get_var(data_store, "/balance/C/stand_c_balance_co2eq"), stand_id, scenario_id)
     df_standco2 = pd.DataFrame(data=standco2, columns=np.arange(cols))
 
     chart_wt = _create_profile_line(wt, "Water Table - Annual", "WT (m)", "blue")
@@ -759,49 +782,55 @@ def nutrient_balance(
     substance: str,
     scen: int = 0,
 ) -> tuple:
-    cols = np.shape(_get_var(vars, "/strip/dwtyr")[scen])[1]
+    cols = np.shape(_get_var(data_store, "/strip/dwtyr")[scen])[1]
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr"), stand_id, scenario_id), axis=0)
+    wtls = np.mean(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
+    sdls = np.std(_get_var(data_store, "/strip/dwtyr_latesummer"), stand_id, scenario_id), axis=0)
 
-    elevation = np.array(_get_var(vars, "/strip/elevation"))
+    elevation = np.array(_get_var(data_store, "/strip/elevation"))
     h = elevation + wtls
 
-    towater = _get_var(vars, f"/balance/{substance}/to_water")[scen, :, :]
+    towater = _get_var(data_store, f"/balance/{substance}/to_water"), stand_id, scenario_id)
     df_towater = pd.DataFrame(data=towater, columns=np.arange(cols))
 
-    brl = _get_var(vars, f"/balance/{substance}/decomposition_below_root_lyr")[
+    brl = _get_var(data_store, f"/balance/{substance}/decomposition_below_root_lyr")[
         scen, :, :
     ]
     df_brl = pd.DataFrame(data=brl, columns=np.arange(cols))
 
-    de = _get_var(vars, f"/balance/{substance}/decomposition_tot")[scen, :, :]
+    de = _get_var(data_store, f"/balance/{substance}/decomposition_tot"), stand_id, scenario_id)
     df_de = pd.DataFrame(data=de, columns=np.arange(cols))
 
-    dert = _get_var(vars, f"/balance/{substance}/decomposition_root_lyr")[scen, :, :]
+    dert = _get_var(data_store, f"/balance/{substance}/decomposition_root_lyr")[
+        scen, :, :
+    ]
     df_dert = pd.DataFrame(data=dert, columns=np.arange(cols))
 
     supply = (
-        _get_var(vars, f"/balance/{substance}/decomposition_root_lyr")[scen, :, :]
-        + _get_var(vars, f"/balance/{substance}/deposition")[scen, :, :]
-        + _get_var(vars, f"/balance/{substance}/fertilization_release")[scen, :, :]
+        _get_var(data_store, f"/balance/{substance}/decomposition_root_lyr"), stand_id, scenario_id)
+        + _get_var(data_store, f"/balance/{substance}/deposition"), stand_id, scenario_id)
+        + _get_var(data_store, f"/balance/{substance}/fertilization_release")[
+            scen, :, :
+        ]
     )
     df_supply = pd.DataFrame(data=supply, columns=np.arange(cols))
 
-    fert = _get_var(vars, f"/balance/{substance}/fertilization_release")[scen, :, :]
+    fert = _get_var(data_store, f"/balance/{substance}/fertilization_release")[
+        scen, :, :
+    ]
     df_fert = pd.DataFrame(data=fert, columns=np.arange(cols))
 
-    dem = _get_var(vars, f"/balance/{substance}/stand_demand")[scen, :, :]
+    dem = _get_var(data_store, f"/balance/{substance}/stand_demand"), stand_id, scenario_id)
     df_dem = pd.DataFrame(data=dem, columns=np.arange(cols))
 
-    dem_gv = _get_var(vars, f"/balance/{substance}/gv_demand")[scen, :, :]
+    dem_gv = _get_var(data_store, f"/balance/{substance}/gv_demand"), stand_id, scenario_id)
     df_dem_gv = pd.DataFrame(data=dem_gv, columns=np.arange(cols))
 
-    bal = _get_var(vars, f"/balance/{substance}/balance_root_lyr")[scen, :, :]
+    bal = _get_var(data_store, f"/balance/{substance}/balance_root_lyr"), stand_id, scenario_id)
     df_bal = pd.DataFrame(data=bal, columns=np.arange(cols))
 
-    vg = _get_var(vars, "/stand/volumegrowth")[scen, :, :]
+    vg = _get_var(data_store, "/stand/volumegrowth"), stand_id, scenario_id)
     df_vg = pd.DataFrame(data=vg, columns=np.arange(cols))
 
     chart_wt = _create_profile_line(wt, "Water Table - Annual", "WT (m)", "blue")

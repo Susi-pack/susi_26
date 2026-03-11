@@ -4,7 +4,7 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import pandas as pd
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 
 
 def _create_profile_line(
@@ -161,22 +161,35 @@ def temporal_stats(data: np.ndarray) -> matplotlib.figure.Figure:
 # %% Annamari plots
 
 
-def _get_var(vars: list[nc_utils.NetcdfVariableValue], path: str) -> np.ndarray:
-    return next(v for v in vars if v.path == path).value
+def _get_var(
+    data_store: load_output.OutputDataStore,
+    path: str,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
+) -> np.ndarray:
+    return data_store.get_variable_value_for_scenario_and_stand(
+        load_output.NetcdfVariablePath(path), stand_id, scenario_id
+    ).processed
 
 
 def stand(
-    vars: list[nc_utils.NetcdfVariableValue], scen: int = 0
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
 ) -> matplotlib.figure.Figure:
     facecolor = "#f2f5eb"
     fs = 15
     fig = plt.figure(figsize=(15, 18))
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
     cols = np.shape(wt)[0]
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sdls = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :4])
@@ -193,7 +206,7 @@ def stand(
     ax.grid(visible=False)
     ax.set_facecolor(facecolor)
 
-    vol = _get_var(vars, "/stand/volume")[scen, :, :]
+    vol = _get_var(data_store, "/stand/volume", stand_id, scenario_id)
     growth = np.diff(vol, axis=0)
     dfgrowth = pd.DataFrame(data=growth, columns=np.arange(cols))
     axgrowth = fig.add_subplot(gs[8:10, :4])
@@ -219,9 +232,13 @@ def stand(
 
     ax = fig.add_subplot(gs[10:, 4:8])
     totvol = vol[-1, :]
-    domvol = _get_var(vars, "/stand/dominant/volume")[scen, -1, :]
-    subdomvol = _get_var(vars, "/stand/subdominant/volume")[scen, -1, :]
-    undervol = _get_var(vars, "/stand/under/volume")[scen, -1, :]
+    domvol = _get_var(data_store, "/stand/dominant/volume", stand_id, scenario_id)[
+        -1, :
+    ]
+    subdomvol = _get_var(
+        data_store, "/stand/subdominant/volume", stand_id, scenario_id
+    )[-1, :]
+    undervol = _get_var(data_store, "/stand/under/volume", stand_id, scenario_id)[-1, :]
     df = pd.DataFrame(
         {
             "total": totvol,
@@ -241,9 +258,9 @@ def stand(
 
     ax = fig.add_subplot(gs[10:, 8:])
     totvol = vol[:, :]
-    domvol = _get_var(vars, "/stand/dominant/volume")[scen, :, :]
-    subdomvol = _get_var(vars, "/stand/subdominant/volume")[scen, :, :]
-    undervol = _get_var(vars, "/stand/under/volume")[scen, :, :]
+    domvol = _get_var(data_store, "/stand/dominant/volume", stand_id, scenario_id)
+    subdomvol = _get_var(data_store, "/stand/subdominant/volume", stand_id, scenario_id)
+    undervol = _get_var(data_store, "/stand/under/volume", stand_id, scenario_id)
     for c in range(cols):
         ax.plot(totvol[:, c], alpha=0.2)
     for c in range(cols):
@@ -258,7 +275,7 @@ def stand(
     ax.set_title("Stand volume increment")
 
     ax = fig.add_subplot(gs[8:10, 4:8])
-    vol_data = _get_var(vars, "/stand/volume")[scen, 0:, :]
+    vol_data = _get_var(data_store, "/stand/volume", stand_id, scenario_id)[0:, :]
     for c in range(cols):
         ax.plot(np.diff(vol_data[:, c]), alpha=0.2)
 
@@ -268,8 +285,8 @@ def stand(
     ax.get_xaxis().set_visible(False)
 
     ax = fig.add_subplot(gs[8:10, 8:])
-    logvol = _get_var(vars, "/stand/logvolume")[scen, :, :]
-    pulpvol = _get_var(vars, "/stand/pulpvolume")[scen, :, :]
+    logvol = _get_var(data_store, "/stand/logvolume", stand_id, scenario_id)
+    pulpvol = _get_var(data_store, "/stand/pulpvolume", stand_id, scenario_id)
     for c in range(cols):
         yrs = len(logvol[:, c])
         ax.plot(range(1, yrs), logvol[1:, c], alpha=0.2)
@@ -282,7 +299,7 @@ def stand(
     ax.set_title("Log and pulp volume")
     ax.get_xaxis().set_visible(False)
 
-    lmass = _get_var(vars, "/stand/leafmass")[scen, :, :]
+    lmass = _get_var(data_store, "/stand/leafmass", stand_id, scenario_id)
     df = pd.DataFrame(data=lmass, columns=np.arange(cols))
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
@@ -315,9 +332,9 @@ def stand(
     ax.get_xaxis().set_visible(False)
 
     ax = fig.add_subplot(gs[6:8, 8:])
-    dlmass = _get_var(vars, "/stand/dominant/leafmass")[scen, :, :]
-    upperlim = _get_var(vars, "/stand/dominant/leafmax")[scen, :, :]
-    lowerlim = _get_var(vars, "/stand/dominant/leafmin")[scen, :, :]
+    dlmass = _get_var(data_store, "/stand/dominant/leafmass", stand_id, scenario_id)
+    upperlim = _get_var(data_store, "/stand/dominant/leafmax", stand_id, scenario_id)
+    lowerlim = _get_var(data_store, "/stand/dominant/leafmin", stand_id, scenario_id)
     for c in range(cols):
         yrs = len(dlmass[:, c])
         ax.fill_between(
@@ -326,9 +343,9 @@ def stand(
         ax.plot(dlmass[:, c], alpha=0.5, color="green")
     ax.plot(dlmass[:, c], alpha=0.5, color="green", label="dominant")
 
-    dlmass = _get_var(vars, "/stand/subdominant/leafmass")[scen, :, :]
-    upperlim = _get_var(vars, "/stand/subdominant/leafmax")[scen, :, :]
-    lowerlim = _get_var(vars, "/stand/subdominant/leafmin")[scen, :, :]
+    dlmass = _get_var(data_store, "/stand/subdominant/leafmass", stand_id, scenario_id)
+    upperlim = _get_var(data_store, "/stand/subdominant/leafmax", stand_id, scenario_id)
+    lowerlim = _get_var(data_store, "/stand/subdominant/leafmin", stand_id, scenario_id)
     for c in range(cols):
         yrs = len(dlmass[:, c])
         ax.fill_between(
@@ -337,9 +354,9 @@ def stand(
         ax.plot(dlmass[:, c], alpha=0.5, color="cyan")
     ax.plot(dlmass[:, c], alpha=0.5, color="cyan", label="subdominant")
 
-    dlmass = _get_var(vars, "/stand/under/leafmass")[scen, :, :]
-    upperlim = _get_var(vars, "/stand/under/leafmax")[scen, :, :]
-    lowerlim = _get_var(vars, "/stand/under/leafmin")[scen, :, :]
+    dlmass = _get_var(data_store, "/stand/under/leafmass", stand_id, scenario_id)
+    upperlim = _get_var(data_store, "/stand/under/leafmax", stand_id, scenario_id)
+    lowerlim = _get_var(data_store, "/stand/under/leafmin", stand_id, scenario_id)
     for c in range(cols):
         yrs = len(dlmass[:, c])
         ax.fill_between(
@@ -355,7 +372,7 @@ def stand(
     ax.set_title("Leaf mass in canopy layers")
     ax.get_xaxis().set_visible(False)
 
-    ns = _get_var(vars, "/stand/nut_stat")[scen, :, :]
+    ns = _get_var(data_store, "/stand/nut_stat", stand_id, scenario_id)
     ax = fig.add_subplot(gs[4:6, :4])
 
     for c in range(cols):
@@ -370,10 +387,9 @@ def stand(
     ax.get_xaxis().set_visible(False)
 
     ax = fig.add_subplot(gs[4:6, 4:8])
-    dom_phys_r = (
-        _get_var(vars, "/stand/dominant/NPP")[scen, :, :]
-        / _get_var(vars, "/stand/dominant/NPP_pot")[scen, :, :]
-    )
+    dom_phys_r = _get_var(
+        data_store, "/stand/dominant/NPP", stand_id, scenario_id
+    ) / _get_var(data_store, "/stand/dominant/NPP_pot", stand_id, scenario_id)
     df = pd.DataFrame(data=dom_phys_r, columns=np.arange(cols))
     df.boxplot(
         ax=ax,
@@ -407,7 +423,7 @@ def stand(
     ax.set_ylabel("volume growth")
     ax.set_xlabel("nutrient status")
 
-    ndemand = _get_var(vars, "/stand/n_demand")[scen, :, :]
+    ndemand = _get_var(data_store, "/stand/n_demand", stand_id, scenario_id)
     df = pd.DataFrame(data=ndemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
@@ -430,7 +446,7 @@ def stand(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    pdemand = _get_var(vars, "/stand/p_demand")[scen, :, :]
+    pdemand = _get_var(data_store, "/stand/p_demand", stand_id, scenario_id)
     df = pd.DataFrame(data=pdemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
@@ -452,7 +468,7 @@ def stand(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    kdemand = _get_var(vars, "/stand/k_demand")[scen, :, :]
+    kdemand = _get_var(data_store, "/stand/k_demand", stand_id, scenario_id)
     df = pd.DataFrame(data=kdemand, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     df.boxplot(
@@ -511,20 +527,32 @@ def stand(
 
 
 def hydrology(
-    vars: list[nc_utils.NetcdfVariableValue], scen: int = 0
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
 ) -> matplotlib.figure.Figure:
     facecolor = "#f2f5eb"
     fs = 15
     fig = plt.figure(num="hydro", figsize=(15, 18))
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
     cols = np.shape(wt)[0]
-    sd = np.std(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtgs = np.mean(_get_var(vars, "/strip/dwtyr_growingseason")[scen, :, :], axis=0)
-    sdgs = np.std(_get_var(vars, "/strip/dwtyr_growingseason")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    sd = np.std(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
+    wtgs = np.mean(
+        _get_var(data_store, "/strip/dwtyr_growingseason", stand_id, scenario_id),
+        axis=0,
+    )
+    sdgs = np.std(
+        _get_var(data_store, "/strip/dwtyr_growingseason", stand_id, scenario_id),
+        axis=0,
+    )
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sdls = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     wtmin = np.min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :4])
@@ -575,15 +603,19 @@ def hydrology(
         hidey=True,
     )
 
-    wt = np.mean(_get_var(vars, "/strip/dwt")[scen, :, :], axis=1)
+    wt = np.mean(_get_var(data_store, "/strip/dwt", stand_id, scenario_id), axis=1)
     days = np.shape(wt)[0]
-    sd = np.std(_get_var(vars, "/strip/dwt")[scen, :, :], axis=1)
+    sd = np.std(_get_var(data_store, "/strip/dwt", stand_id, scenario_id), axis=1)
 
     axwtts = fig.add_subplot(gs[8:10, :])
     axwtts.plot(wt, color="green", label="WT")
     axwtts.hlines(y=-0.35, xmin=0, xmax=days, color="red", linestyles="--")
     for c in range(1, cols - 1):
-        axwtts.plot(range(days), _get_var(vars, "/strip/dwt")[scen, :, c], alpha=0.2)
+        axwtts.plot(
+            range(days),
+            _get_var(data_store, "/strip/dwt", stand_id, scenario_id)[:, c],
+            alpha=0.2,
+        )
 
     axwtts.tick_params(axis="y", labelsize=fs)
     axwtts.set_ylim(bottom=wtmin, top=0)
@@ -592,7 +624,7 @@ def hydrology(
     axwtts.grid(visible=False)
     axwtts.set_facecolor(facecolor)
 
-    runoff = np.cumsum(_get_var(vars, "/strip/roff")[scen, :])
+    runoff = np.cumsum(_get_var(data_store, "/strip/roff", stand_id, scenario_id))
     ulimruno = max(runoff) * 1.1 * 1000.0
     axruno = fig.add_subplot(gs[7, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="blue", label="total runoff")
@@ -607,7 +639,7 @@ def hydrology(
     axruno.set_facecolor(facecolor)
     axruno.get_xaxis().set_visible(False)
 
-    runoff = np.cumsum(_get_var(vars, "/strip/roffwest")[scen, :])
+    runoff = np.cumsum(_get_var(data_store, "/strip/roffwest", stand_id, scenario_id))
     axruno = fig.add_subplot(gs[6, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="green", label="west runoff")
     axruno.set_ylim(bottom=0.0, top=ulimruno)
@@ -621,7 +653,7 @@ def hydrology(
     axruno.set_facecolor(facecolor)
     axruno.get_xaxis().set_visible(False)
 
-    runoff = np.cumsum(_get_var(vars, "/strip/roffeast")[scen, :])
+    runoff = np.cumsum(_get_var(data_store, "/strip/roffeast", stand_id, scenario_id))
     axruno = fig.add_subplot(gs[5, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="red", label="east runoff")
     axruno.set_ylim(bottom=0.0, top=ulimruno)
@@ -636,7 +668,9 @@ def hydrology(
     axruno.get_xaxis().set_visible(False)
 
     runoff = np.cumsum(
-        np.mean(_get_var(vars, "/strip/surfacerunoff")[scen, :, :], axis=1)
+        np.mean(
+            _get_var(data_store, "/strip/surfacerunoff", stand_id, scenario_id), axis=1
+        )
     )
     axruno = fig.add_subplot(gs[4, :])
     axruno.plot(
@@ -653,7 +687,9 @@ def hydrology(
     axruno.set_facecolor(facecolor)
     axruno.get_xaxis().set_visible(False)
 
-    deltas = _get_var(vars, "/strip/deltas")[scen, 1:, :] * 1000.0
+    deltas = (
+        _get_var(data_store, "/strip/deltas", stand_id, scenario_id)[1:, :] * 1000.0
+    )
     dfdeltas = pd.DataFrame(data=deltas, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, :4])
@@ -669,7 +705,7 @@ def hydrology(
         zero=False,
     )
 
-    ET = _get_var(vars, "/cpy/ET_yr")[scen, 1:, :] * 1000.0
+    ET = _get_var(data_store, "/cpy/ET_yr", stand_id, scenario_id)[1:, :] * 1000.0
     dfET = pd.DataFrame(data=ET, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, 4:8])
@@ -677,7 +713,9 @@ def hydrology(
         ax, dfET, cols, "green", "ET", "", fs, facecolor, zero=False, hidex=True
     )
 
-    transpi = _get_var(vars, "/cpy/transpi_yr")[scen, 1:, :] * 1000.0
+    transpi = (
+        _get_var(data_store, "/cpy/transpi_yr", stand_id, scenario_id)[1:, :] * 1000.0
+    )
     dftranspi = pd.DataFrame(data=transpi, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     ax = _create_profile_boxplot(
@@ -693,7 +731,9 @@ def hydrology(
         hidex=True,
     )
 
-    efloor = _get_var(vars, "/cpy/efloor_yr")[scen, 1:, :] * 1000.0
+    efloor = (
+        _get_var(data_store, "/cpy/efloor_yr", stand_id, scenario_id)[1:, :] * 1000.0
+    )
     dfefloor = pd.DataFrame(data=efloor, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, :4])
@@ -710,7 +750,7 @@ def hydrology(
         hidex=True,
     )
 
-    swe = _get_var(vars, "/cpy/SWEmax")[scen, 1:, :]
+    swe = _get_var(data_store, "/cpy/SWEmax", stand_id, scenario_id)[1:, :]
     dfswe = pd.DataFrame(data=swe, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 4:8])
@@ -727,7 +767,9 @@ def hydrology(
         hidex=True,
     )
 
-    interc = _get_var(vars, "/cpy/interc_yr")[scen, 1:, :] * 1000.0
+    interc = (
+        _get_var(data_store, "/cpy/interc_yr", stand_id, scenario_id)[1:, :] * 1000.0
+    )
     dfinterc = pd.DataFrame(data=interc, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 8:])
@@ -748,17 +790,23 @@ def hydrology(
 
 
 def mass(
-    vars: list[nc_utils.NetcdfVariableValue], scen: int = 0
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
 ) -> matplotlib.figure.Figure:
     facecolor = "#f2f5eb"
     fs = 15
     fig = plt.figure(figsize=(15, 18))
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
     cols = np.shape(wt)[0]
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sdls = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :4])
@@ -776,16 +824,24 @@ def mass(
     ax.set_facecolor(facecolor)
 
     litter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/woodylitter")[scen, :, :] / 10000.0
+        _get_var(data_store, "/groundvegetation/ds_litterfall", stand_id, scenario_id)
+        / 10000.0
+        + _get_var(data_store, "/groundvegetation/h_litterfall", stand_id, scenario_id)
+        / 10000.0
+        + _get_var(data_store, "/groundvegetation/s_litterfall", stand_id, scenario_id)
+        / 10000.0
+        + _get_var(data_store, "/stand/nonwoodylitter", stand_id, scenario_id) / 10000.0
+        + _get_var(data_store, "/stand/woodylitter", stand_id, scenario_id) / 10000.0
     )
 
-    soil = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1 + litter
+    soil = (
+        _get_var(data_store, "/esom/Mass/out", stand_id, scenario_id) / 10000.0 * -1
+        + litter
+    )
 
-    soilout = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
+    soilout = (
+        _get_var(data_store, "/esom/Mass/out", stand_id, scenario_id) / 10000.0 * -1
+    )
 
     df = pd.DataFrame(data=soil, columns=np.arange(cols))
     ax = fig.add_subplot(gs[8:10, :4])
@@ -813,16 +869,39 @@ def mass(
     esoms = ["L0L", "L0W", "LL", "LW", "FL", "FW", "H", "P1", "P2", "P3"]
     inipeat = np.zeros(cols)
     for sto in esoms[7:]:
-        inipeat += _get_var(vars, f"/esom/Mass/{sto}")[scen, 0, :] / 10000.0
+        inipeat += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :]
+            / 10000.0
+        )
     endpeat = np.zeros(cols)
-    for sto in esoms[7:]:
-        endpeat += _get_var(vars, f"/esom/Mass/{sto}")[scen, -1, :] / 10000.0
     inimor = np.zeros(cols)
-    for sto in esoms[:7]:
-        inimor += _get_var(vars, f"/esom/Mass/{sto}")[scen, 0, :] / 10000.0
     endmor = np.zeros(cols)
+    for sto in esoms[7:]:
+        inipeat += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :]
+            / 10000.0
+        )
+        endpeat += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[-1, :]
+            / 10000.0
+        )
     for sto in esoms[:7]:
-        endmor += _get_var(vars, f"/esom/Mass/{sto}")[scen, -1, :] / 10000.0
+        inimor += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :]
+            / 10000.0
+        )
+        endmor += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[-1, :]
+            / 10000.0
+        )
+        inimor += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[0, :]
+            / 10000.0
+        )
+        endmor += (
+            _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[-1, :]
+            / 10000.0
+        )
 
     maxval = np.max(np.vstack((inipeat + inimor, endpeat + endmor)))
     minval = np.min(np.vstack((inipeat + inimor, endpeat + endmor)))
@@ -884,7 +963,10 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    gv = _get_var(vars, "/groundvegetation/gv_tot")[scen, :, :] / 10000.0
+    gv = (
+        _get_var(data_store, "/groundvegetation/gv_tot", stand_id, scenario_id)
+        / 10000.0
+    )
     grgv = np.diff(gv, axis=0)
     df = pd.DataFrame(data=grgv, columns=np.arange(cols))
     ax = fig.add_subplot(gs[4:6, :4])
@@ -908,7 +990,7 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    stand = _get_var(vars, "/stand/biomass")[scen, :, :] / 10000.0
+    stand = _get_var(data_store, "/stand/biomass", stand_id, scenario_id) / 10000.0
     gr = np.diff(stand, axis=0)
     df = pd.DataFrame(data=gr, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, :4])
@@ -955,10 +1037,9 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    leaflitter = (
-        _get_var(vars, "/stand/nonwoodylitter")[scen, :, :]
-        - _get_var(vars, "/stand/finerootlitter")[scen, :, :]
-    )
+    leaflitter = _get_var(
+        data_store, "/stand/nonwoodylitter", stand_id, scenario_id
+    ) - _get_var(data_store, "/stand/finerootlitter", stand_id, scenario_id)
 
     df = pd.DataFrame(data=leaflitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[:2, 4:8])
@@ -980,7 +1061,9 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    finerootlitter = _get_var(vars, "/stand/finerootlitter")[scen, :, :]
+    finerootlitter = _get_var(
+        data_store, "/stand/finerootlitter", stand_id, scenario_id
+    )
 
     df = pd.DataFrame(data=finerootlitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
@@ -1002,7 +1085,7 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    woodylitter = _get_var(vars, "/stand/woodylitter")[scen, :, :]
+    woodylitter = _get_var(data_store, "/stand/woodylitter", stand_id, scenario_id)
 
     df = pd.DataFrame(data=woodylitter, columns=np.arange(cols))
     ax = fig.add_subplot(gs[4:6, 4:8])
@@ -1025,9 +1108,9 @@ def mass(
     ax.set_facecolor(facecolor)
 
     gvlitter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :]
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :]
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :]
+        _get_var(data_store, "/groundvegetation/ds_litterfall", stand_id, scenario_id)
+        + _get_var(data_store, "/groundvegetation/h_litterfall", stand_id, scenario_id)
+        + _get_var(data_store, "/groundvegetation/s_litterfall", stand_id, scenario_id)
     )
 
     df = pd.DataFrame(data=gvlitter, columns=np.arange(cols))
@@ -1050,7 +1133,7 @@ def mass(
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
-    out = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1
+    out = _get_var(data_store, "/esom/Mass/out", stand_id, scenario_id) / 10000.0 * -1
 
     df = pd.DataFrame(data=out, columns=np.arange(cols))
     ax = fig.add_subplot(gs[8:10, 4:8])
@@ -1074,14 +1157,20 @@ def mass(
 
     ax = fig.add_subplot(gs[10:, 8:])
     esoms = ["L0L", "L0W", "LL", "LW", "FL", "FW", "H", "P1", "P2", "P3"]
-    yrs = np.shape(_get_var(vars, "/esom/Mass/L0L")[scen, :, :])[0]
+    yrs = np.shape(_get_var(data_store, "/esom/Mass/L0L", stand_id, scenario_id))[0]
     for c in range(cols):
         peat = np.zeros(yrs)
         for sto in esoms[7:]:
-            peat += _get_var(vars, f"/esom/Mass/{sto}")[scen, :, c] / 10000.0
+            peat += (
+                _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[:, c]
+                / 10000.0
+            )
         mor = np.zeros(yrs)
         for sto in esoms[:7]:
-            mor += _get_var(vars, f"/esom/Mass/{sto}")[scen, :, c] / 10000.0
+            mor += (
+                _get_var(data_store, f"/esom/Mass/{sto}", stand_id, scenario_id)[:, c]
+                / 10000.0
+            )
 
         ax.plot(np.diff(peat), color="brown")
         ax.plot(np.diff(mor), color="orange")
@@ -1104,7 +1193,8 @@ def mass(
     ax.set_facecolor(facecolor)
 
     out_with_litter = (
-        _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1 + litter
+        _get_var(data_store, "/esom/Mass/out", stand_id, scenario_id) / 10000.0 * -1
+        + litter
     )
 
     ax = fig.add_subplot(gs[6:8, 8:])
@@ -1147,34 +1237,22 @@ def mass(
 
 
 def carbon(
-    vars: list[nc_utils.NetcdfVariableValue], scen: int = 0
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
 ) -> matplotlib.figure.Figure:
     facecolor = "#f2f5eb"
     fs = 15
     fig = plt.figure(figsize=(15, 18))
     fig.suptitle("Carbon balance components", fontsize=fs + 2)
     gs = gridspec.GridSpec(ncols=12, nrows=14, figure=fig, wspace=0.5, hspace=0.5)
-    mass_to_c = 0.5
 
-    litter = (
-        _get_var(vars, "/groundvegetation/ds_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/h_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/groundvegetation/s_litterfall")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(vars, "/stand/woodylitter")[scen, :, :] / 10000.0
-    ) * mass_to_c
-
-    soil = (
-        _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1 * mass_to_c + litter
-    )
-
-    out = _get_var(vars, "/esom/Mass/out")[scen, :, :] / 10000.0 * -1 * mass_to_c
-
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
     cols = np.shape(wt)[0]
-    sd = np.std(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    sd = np.std(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[12:, :6])
@@ -1193,9 +1271,15 @@ def carbon(
         hidey=False,
     )
 
-    elevation = np.array(_get_var(vars, "/strip/elevation"))
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sd = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    elevation = np.array(
+        _get_var(data_store, "/strip/elevation", stand_id, scenario_id)
+    )
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sd = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     h = elevation + wtls
 
     ax = fig.add_subplot(gs[12:, 6:])
@@ -1215,7 +1299,9 @@ def carbon(
         elevation=elevation,
     )
 
-    lmwtoditch = _get_var(vars, "/balance/C/LMWdoc_to_water")[scen, :, :] * -1
+    lmwtoditch = (
+        _get_var(data_store, "/balance/C/LMWdoc_to_water", stand_id, scenario_id) * -1
+    )
     ax = fig.add_subplot(gs[10:12, :6])
     df = pd.DataFrame(data=lmwtoditch, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1230,7 +1316,9 @@ def carbon(
         zero=False,
     )
 
-    hmwtoditch = _get_var(vars, "/balance/C/HMW_to_water")[scen, :, :] * -1
+    hmwtoditch = (
+        _get_var(data_store, "/balance/C/HMW_to_water", stand_id, scenario_id) * -1
+    )
     ax = fig.add_subplot(gs[10:12, 6:])
     df = pd.DataFrame(data=hmwtoditch, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1245,7 +1333,9 @@ def carbon(
         zero=False,
     )
 
-    lmwtoatm = _get_var(vars, "/balance/C/LMWdoc_to_atm")[scen, :, :] * -1
+    lmwtoatm = (
+        _get_var(data_store, "/balance/C/LMWdoc_to_atm", stand_id, scenario_id) * -1
+    )
     ax = fig.add_subplot(gs[8:10, :6])
     df = pd.DataFrame(data=lmwtoatm, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1260,7 +1350,7 @@ def carbon(
         zero=False,
     )
 
-    hmwtoatm = _get_var(vars, "/balance/C/HMW_to_atm")[scen, :, :] * -1
+    hmwtoatm = _get_var(data_store, "/balance/C/HMW_to_atm", stand_id, scenario_id) * -1
     ax = fig.add_subplot(gs[8:10, 6:])
     df = pd.DataFrame(data=hmwtoatm, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1275,7 +1365,7 @@ def carbon(
         zero=False,
     )
 
-    co2 = _get_var(vars, "/balance/C/co2c_release")[scen, :, :] * -1
+    co2 = _get_var(data_store, "/balance/C/co2c_release", stand_id, scenario_id) * -1
     ax = fig.add_subplot(gs[6:8, :6])
     df = pd.DataFrame(data=co2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1290,7 +1380,7 @@ def carbon(
         zero=False,
     )
 
-    ch4 = _get_var(vars, "/balance/C/ch4c_release")[scen, :, :] * -1
+    ch4 = _get_var(data_store, "/balance/C/ch4c_release", stand_id, scenario_id) * -1
     ax = fig.add_subplot(gs[6:8, 6:])
     df = pd.DataFrame(data=ch4, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1305,7 +1395,7 @@ def carbon(
         zero=False,
     )
 
-    standl = _get_var(vars, "/balance/C/stand_litter_in")[scen, :, :]
+    standl = _get_var(data_store, "/balance/C/stand_litter_in", stand_id, scenario_id)
     ax = fig.add_subplot(gs[4:6, :6])
     df = pd.DataFrame(data=standl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1320,7 +1410,7 @@ def carbon(
         zero=False,
     )
 
-    gvl = _get_var(vars, "/balance/C/gv_litter_in")[scen, :, :]
+    gvl = _get_var(data_store, "/balance/C/gv_litter_in", stand_id, scenario_id)
     ax = fig.add_subplot(gs[4:6, 6:])
     df = pd.DataFrame(data=gvl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1335,7 +1425,7 @@ def carbon(
         zero=False,
     )
 
-    soilc = _get_var(vars, "/balance/C/soil_c_balance_c")[scen, :, :]
+    soilc = _get_var(data_store, "/balance/C/soil_c_balance_c", stand_id, scenario_id)
     ax = fig.add_subplot(gs[2:4, :6])
     df = pd.DataFrame(data=soilc, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1350,7 +1440,9 @@ def carbon(
         zero=False,
     )
 
-    soilco2 = _get_var(vars, "/balance/C/soil_c_balance_co2eq")[scen, :, :]
+    soilco2 = _get_var(
+        data_store, "/balance/C/soil_c_balance_co2eq", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[2:4, 6:])
     df = pd.DataFrame(data=soilco2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1365,7 +1457,7 @@ def carbon(
         zero=False,
     )
 
-    standc = _get_var(vars, "/balance/C/stand_c_balance_c")[scen, :, :]
+    standc = _get_var(data_store, "/balance/C/stand_c_balance_c", stand_id, scenario_id)
     ax = fig.add_subplot(gs[:2, :6])
     df = pd.DataFrame(data=standc, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1380,7 +1472,9 @@ def carbon(
         zero=False,
     )
 
-    standco2 = _get_var(vars, "/balance/C/stand_c_balance_co2eq")[scen, :, :]
+    standco2 = _get_var(
+        data_store, "/balance/C/stand_c_balance_co2eq", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[:2, 6:])
     df = pd.DataFrame(data=standco2, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1399,9 +1493,10 @@ def carbon(
 
 
 def nutrient_balance(
-    vars: list[nc_utils.NetcdfVariableValue],
+    data_store: load_output.OutputDataStore,
+    stand_id: load_output.StandID,
+    scenario_id: load_output.ScenarioID,
     substance: str,
-    scen: int = 0,
 ) -> matplotlib.figure.Figure:
     facecolor = "#f2f5eb"
     fs = 15
@@ -1410,11 +1505,12 @@ def nutrient_balance(
     fig.suptitle(tx, fontsize=fs + 2)
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.5, hspace=0.5)
 
-    wt = np.mean(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt = np.mean(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
     cols = np.shape(wt)[0]
-    sd = np.std(_get_var(vars, "/strip/dwtyr")[scen, :, :], axis=0)
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sdls = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    sd = np.std(_get_var(data_store, "/strip/dwtyr", stand_id, scenario_id), axis=0)
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :6])
@@ -1433,9 +1529,15 @@ def nutrient_balance(
         hidey=False,
     )
 
-    elevation = np.array(_get_var(vars, "/strip/elevation"))
-    wtls = np.mean(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
-    sd = np.std(_get_var(vars, "/strip/dwtyr_latesummer")[scen, :, :], axis=0)
+    elevation = np.array(
+        _get_var(data_store, "/strip/elevation", stand_id, scenario_id)
+    )
+    wtls = np.mean(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
+    sd = np.std(
+        _get_var(data_store, "/strip/dwtyr_latesummer", stand_id, scenario_id), axis=0
+    )
     h = elevation + wtls
 
     ax = fig.add_subplot(gs[10:, 6:])
@@ -1455,7 +1557,9 @@ def nutrient_balance(
         elevation=elevation,
     )
 
-    towater = _get_var(vars, f"/balance/{substance}/to_water")[scen, :, :]
+    towater = _get_var(
+        data_store, f"/balance/{substance}/to_water", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[8:10, :6])
     df = pd.DataFrame(data=towater, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1470,9 +1574,12 @@ def nutrient_balance(
         zero=False,
     )
 
-    brl = _get_var(vars, f"/balance/{substance}/decomposition_below_root_lyr")[
-        scen, :, :
-    ]
+    brl = _get_var(
+        data_store,
+        f"/balance/{substance}/decomposition_below_root_lyr",
+        stand_id,
+        scenario_id,
+    )
     ax = fig.add_subplot(gs[8:10, 6:])
     df = pd.DataFrame(data=brl, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1487,7 +1594,9 @@ def nutrient_balance(
         zero=False,
     )
 
-    de = _get_var(vars, f"/balance/{substance}/decomposition_tot")[scen, :, :]
+    de = _get_var(
+        data_store, f"/balance/{substance}/decomposition_tot", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[6:8, :6])
     df = pd.DataFrame(data=de, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1502,7 +1611,12 @@ def nutrient_balance(
         zero=False,
     )
 
-    dert = _get_var(vars, f"/balance/{substance}/decomposition_root_lyr")[scen, :, :]
+    dert = _get_var(
+        data_store,
+        f"/balance/{substance}/decomposition_root_lyr",
+        stand_id,
+        scenario_id,
+    )
     ax = fig.add_subplot(gs[6:8, 6:])
     df = pd.DataFrame(data=dert, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1518,9 +1632,21 @@ def nutrient_balance(
     )
 
     supply = (
-        _get_var(vars, f"/balance/{substance}/decomposition_root_lyr")[scen, :, :]
-        + _get_var(vars, f"/balance/{substance}/deposition")[scen, :, :]
-        + _get_var(vars, f"/balance/{substance}/fertilization_release")[scen, :, :]
+        _get_var(
+            data_store,
+            f"/balance/{substance}/decomposition_root_lyr",
+            stand_id,
+            scenario_id,
+        )
+        + _get_var(
+            data_store, f"/balance/{substance}/deposition", stand_id, scenario_id
+        )
+        + _get_var(
+            data_store,
+            f"/balance/{substance}/fertilization_release",
+            stand_id,
+            scenario_id,
+        )
     )
 
     ax = fig.add_subplot(gs[4:6, :6])
@@ -1537,7 +1663,9 @@ def nutrient_balance(
         zero=False,
     )
 
-    fert = _get_var(vars, f"/balance/{substance}/fertilization_release")[scen, :, :]
+    fert = _get_var(
+        data_store, f"/balance/{substance}/fertilization_release", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[4:6, 6:])
     df = pd.DataFrame(data=fert, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1552,7 +1680,9 @@ def nutrient_balance(
         zero=False,
     )
 
-    dem = _get_var(vars, f"/balance/{substance}/stand_demand")[scen, :, :]
+    dem = _get_var(
+        data_store, f"/balance/{substance}/stand_demand", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[2:4, :6])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1567,7 +1697,7 @@ def nutrient_balance(
         zero=False,
     )
 
-    dem = _get_var(vars, f"/balance/{substance}/gv_demand")[scen, :, :]
+    dem = _get_var(data_store, f"/balance/{substance}/gv_demand", stand_id, scenario_id)
     ax = fig.add_subplot(gs[2:4, 6:])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1582,7 +1712,9 @@ def nutrient_balance(
         zero=False,
     )
 
-    dem = _get_var(vars, f"/balance/{substance}/balance_root_lyr")[scen, :, :]
+    dem = _get_var(
+        data_store, f"/balance/{substance}/balance_root_lyr", stand_id, scenario_id
+    )
     ax = fig.add_subplot(gs[:2, :6])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1597,7 +1729,7 @@ def nutrient_balance(
         zero=False,
     )
 
-    vg = _get_var(vars, "/stand/volumegrowth")[scen, :, :]
+    vg = _get_var(data_store, "/stand/volumegrowth", stand_id, scenario_id)
     ax = fig.add_subplot(gs[:2, 6:])
     df = pd.DataFrame(data=vg, columns=np.arange(cols))
     ax = _create_profile_boxplot(
@@ -1615,9 +1747,16 @@ def nutrient_balance(
     return fig
 
 
-def compare_runs(variables_values_0, variables_values_1, scen=0):
-    def _get_var(vars, path):
-        return next(v for v in vars if v.path == path).value
+def compare_runs(
+    variables_values_0: dict[
+        load_output.NetcdfVariablePath, load_output.NetcdfVariableArray
+    ],
+    variables_values_1: dict[
+        load_output.NetcdfVariablePath, load_output.NetcdfVariableArray
+    ],
+) -> matplotlib.figure.Figure:
+    def _get_var(var_dict, path: str) -> np.ndarray:
+        return var_dict[load_output.NetcdfVariablePath(path)].processed
 
     facecolor = "#f2f5eb"
     fs = 15
@@ -1625,8 +1764,8 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
     gs = gridspec.GridSpec(ncols=12, nrows=12, figure=fig, wspace=0.25, hspace=0.25)
     mass_to_c = 0.5
 
-    wt0 = np.mean(_get_var(variables_values_0, "/strip/dwtyr")[scen, :, :], axis=0)
-    sd0 = np.std(_get_var(variables_values_0, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt0 = np.mean(_get_var(variables_values_0, "/strip/dwtyr"), axis=0)
+    sd0 = np.std(_get_var(variables_values_0, "/strip/dwtyr"), axis=0)
     wtmin = min(wt0) - 0.7
     cols = np.shape(wt0)[0]
 
@@ -1635,30 +1774,29 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
         ax, wt0, wtmin, sd0, cols, "WT m", "annual", fs, facecolor, "blue"
     )
 
-    wt1 = np.mean(_get_var(variables_values_1, "/strip/dwtyr")[scen, :, :], axis=0)
-    sd1 = np.std(_get_var(variables_values_1, "/strip/dwtyr")[scen, :, :], axis=0)
+    wt1 = np.mean(_get_var(variables_values_1, "/strip/dwtyr"), axis=0)
+    sd1 = np.std(_get_var(variables_values_1, "/strip/dwtyr"), axis=0)
 
     ax = fig.add_subplot(gs[10:, 4:8])
     ax = _create_profile_line(
         ax, wt1, wtmin, sd1, cols, "", "annual", fs, facecolor, "orange"
     )
 
-    deltawt = (
-        _get_var(variables_values_1, "/strip/dwtyr")[scen, :, :]
-        - _get_var(variables_values_0, "/strip/dwtyr")[scen, :, :]
+    deltawt = _get_var(variables_values_1, "/strip/dwtyr") - _get_var(
+        variables_values_0, "/strip/dwtyr"
     )
     ax = fig.add_subplot(gs[10:, 8:])
     ax = _create_profile_boxplot(
         ax, deltawt, cols, "green", "WT difference", "WT m", fs, facecolor, zero=True
     )
 
-    growth0 = _get_var(variables_values_0, "/stand/volumegrowth")[scen, :, :]
+    growth0 = _get_var(variables_values_0, "/stand/volumegrowth")
     ax = fig.add_subplot(gs[8:10, :4])
     ax = _create_profile_boxplot(
         ax, growth0, cols, "blue", "Stand growth", "m3ha-1yr-1", fs, facecolor
     )
 
-    growth1 = _get_var(variables_values_1, "/stand/volumegrowth")[scen, :, :]
+    growth1 = _get_var(variables_values_1, "/stand/volumegrowth")
     ax = fig.add_subplot(gs[8:10, 4:8])
     ax = _create_profile_boxplot(
         ax, growth1, cols, "orange", "Stand growth", "m3ha-1yr-1", fs, facecolor
@@ -1678,13 +1816,13 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
         zero=True,
     )
 
-    hmwtoditch0 = _get_var(variables_values_0, "/export/hmwtoditch")[scen, :, :]
+    hmwtoditch0 = _get_var(variables_values_0, "/export/hmwtoditch")
     ax = fig.add_subplot(gs[6:8, :4])
     ax = _create_profile_boxplot(
         ax, hmwtoditch0, cols, "blue", "HMW to ditch", "", fs, facecolor
     )
 
-    hmwtoditch1 = _get_var(variables_values_1, "/export/hmwtoditch")[scen, :, :]
+    hmwtoditch1 = _get_var(variables_values_1, "/export/hmwtoditch")
     ax = fig.add_subplot(gs[6:8, 4:8])
     ax = _create_profile_boxplot(
         ax, hmwtoditch1, cols, "orange", "HMW to ditch", "", fs, facecolor
@@ -1696,13 +1834,13 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
         ax, deltahmw, cols, "green", "HMW difference", "", fs, facecolor, zero=True
     )
 
-    lmwtoditch0 = _get_var(variables_values_0, "/export/lmwtoditch")[scen, :, :]
+    lmwtoditch0 = _get_var(variables_values_0, "/export/lmwtoditch")
     ax = fig.add_subplot(gs[4:6, :4])
     ax = _create_profile_boxplot(
         ax, lmwtoditch0, cols, "blue", "LMW to ditch", "", fs, facecolor
     )
 
-    lmwtoditch1 = _get_var(variables_values_1, "/export/lmwtoditch")[scen, :, :]
+    lmwtoditch1 = _get_var(variables_values_1, "/export/lmwtoditch")
     ax = fig.add_subplot(gs[4:6, 4:8])
     ax = _create_profile_boxplot(
         ax, lmwtoditch1, cols, "orange", "LMW to ditch", "", fs, facecolor
@@ -1715,21 +1853,15 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
     )
 
     litter0 = (
-        _get_var(variables_values_0, "/groundvegetation/ds_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_0, "/groundvegetation/h_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_0, "/groundvegetation/s_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_0, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(variables_values_0, "/stand/woodylitter")[scen, :, :] / 10000.0
+        _get_var(variables_values_0, "/groundvegetation/ds_litterfall") / 10000.0
+        + _get_var(variables_values_0, "/groundvegetation/h_litterfall") / 10000.0
+        + _get_var(variables_values_0, "/groundvegetation/s_litterfall") / 10000.0
+        + _get_var(variables_values_0, "/stand/nonwoodylitter") / 10000.0
+        + _get_var(variables_values_0, "/stand/woodylitter") / 10000.0
     ) * mass_to_c
 
     soil0 = (
-        _get_var(variables_values_0, "/esom/Mass/out")[scen, :, :]
-        / 10000.0
-        * -1
-        * mass_to_c
+        _get_var(variables_values_0, "/esom/Mass/out") / 10000.0 * -1 * mass_to_c
         + litter0
     )
 
@@ -1739,21 +1871,15 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
     )
 
     litter1 = (
-        _get_var(variables_values_1, "/groundvegetation/ds_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_1, "/groundvegetation/h_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_1, "/groundvegetation/s_litterfall")[scen, :, :]
-        / 10000.0
-        + _get_var(variables_values_1, "/stand/nonwoodylitter")[scen, :, :] / 10000.0
-        + _get_var(variables_values_1, "/stand/woodylitter")[scen, :, :] / 10000.0
+        _get_var(variables_values_1, "/groundvegetation/ds_litterfall") / 10000.0
+        + _get_var(variables_values_1, "/groundvegetation/h_litterfall") / 10000.0
+        + _get_var(variables_values_1, "/groundvegetation/s_litterfall") / 10000.0
+        + _get_var(variables_values_1, "/stand/nonwoodylitter") / 10000.0
+        + _get_var(variables_values_1, "/stand/woodylitter") / 10000.0
     ) * mass_to_c
 
     soil1 = (
-        _get_var(variables_values_1, "/esom/Mass/out")[scen, :, :]
-        / 10000.0
-        * -1
-        * mass_to_c
+        _get_var(variables_values_1, "/esom/Mass/out") / 10000.0 * -1 * mass_to_c
         + litter1
     )
 
@@ -1768,22 +1894,11 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
         ax, deltasoil, cols, "green", "Soil C difference", "", fs, facecolor, zero=True
     )
 
-    gv = (
-        _get_var(variables_values_0, "/groundvegetation/gv_tot")[scen, :, :]
-        / 10000.0
-        * mass_to_c
-    )
+    gv = _get_var(variables_values_0, "/groundvegetation/gv_tot") / 10000.0 * mass_to_c
     grgv0 = np.diff(gv, axis=0)
-    stand = (
-        _get_var(variables_values_0, "/stand/biomass")[scen, :, :] / 10000.0 * mass_to_c
-    )
+    stand = _get_var(variables_values_0, "/stand/biomass") / 10000.0 * mass_to_c
     gr0 = np.diff(stand, axis=0)
-    out0 = (
-        _get_var(variables_values_0, "/esom/Mass/out")[scen, :, :]
-        / 10000.0
-        * -1
-        * mass_to_c
-    )
+    out0 = _get_var(variables_values_0, "/esom/Mass/out") / 10000.0 * -1 * mass_to_c
 
     site0 = gr0 + grgv0 + out0[1:, :] + litter0[1:, :]
 
@@ -1792,27 +1907,13 @@ def compare_runs(variables_values_0, variables_values_1, scen=0):
         ax, site0, cols, "blue", "Site C balance", "", fs, facecolor
     )
 
-    gv = (
-        _get_var(variables_values_1, "/groundvegetation/gv_tot")[scen, :, :]
-        / 10000.0
-        * mass_to_c
-    )
+    gv = _get_var(variables_values_1, "/groundvegetation/gv_tot") / 10000.0 * mass_to_c
     grgv1 = np.diff(gv, axis=0)
-    stand = (
-        _get_var(variables_values_1, "/stand/biomass")[scen, :, :] / 10000.0 * mass_to_c
-    )
+    stand = _get_var(variables_values_1, "/stand/biomass") / 10000.0 * mass_to_c
     gr1 = np.diff(stand, axis=0)
-    out1 = (
-        _get_var(variables_values_1, "/esom/Mass/out")[scen, :, :]
-        / 10000.0
-        * -1
-        * mass_to_c
-    )
+    out1 = _get_var(variables_values_1, "/esom/Mass/out") / 10000.0 * -1 * mass_to_c
 
-    # BUG: It think this should be
     site1 = gr1 + grgv1 + out1[1:, :] + litter1[1:, :]
-    # Previous
-    # site1 = gr1 + grgv1 + out1[1:, :] + litter0[1:, :]
 
     ax = fig.add_subplot(gs[:2, 4:8])
     ax = _create_profile_boxplot(

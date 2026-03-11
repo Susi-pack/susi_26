@@ -1,22 +1,21 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from susi.io.netcdf_utils import NetcdfVariableValue
+from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 from analysis.gui.components import plots
 
 
-def build(variables_values: list[NetcdfVariableValue]) -> None:
-    for var_value in variables_values:
-        st.markdown(f"**{var_value.path}**")
+def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
+    for var_path, var_value in variables_values.items():
+        st.markdown(f"**{var_path}**")
 
-        if len(var_value.value.shape) != 3:
+        if len(var_value._raw.shape) != 3:
             st.info(
-                f"Variable has shape {var_value.value.shape}. Only 3D variables (scenario, time, space) are currently plotted."
+                f"Variable has shape {var_value._raw.shape}. Only 3D variables (scenario, time, space) are currently plotted."
             )
         else:
-            # 3D variable: (scenario, time, space)
-            data = var_value.value[0, :, :]  # Take first scenario
+            data = var_value.processed
             n_time, n_space = data.shape
 
             col1, col2 = st.columns(2)

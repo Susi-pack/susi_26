@@ -3,7 +3,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog
 
-import susi.io.netcdf_utils as nc_utils
+import susi.io.load_output_data as load_output
 
 
 def pick_folder_popup() -> Path:
@@ -19,7 +19,7 @@ def pick_folder_popup() -> Path:
 
 
 def build_folder_selection_widget(dir_path: Path, label: str) -> Path:
-    subdirs = nc_utils.list_subdirectories(dir_path)
+    subdirs = load_output.list_subdirectories(dir_path)
     dir_names = [dir.name for dir in subdirs]
 
     selected_dir_name = st.selectbox(
