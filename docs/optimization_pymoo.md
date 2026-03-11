@@ -5,99 +5,118 @@ This document explains the data structures and computational representations use
 ## Two computational representations
 There are two representations for the same data. One is analogous to the underlying Netcdf file structure, and it is useful understand it in a humna-readable way; the other is useful for the optimization algorighm 
 
-### 1. List of Dicts of NetCDF Variables
+### 1. OutputDataStore (SoA - Structure of Arrays)
 
-The primary data representation in this codebase is a **nested list-dict structure** that mirrors the structure of the Susi netcdf files:
-
+The primary data representation in this codebase is a **SoA structure keyed by variable first**, defined in `src/susi/io/load_output_data.py`:
 
 ```python
-list[dict[ScenarioName, TargetVariableDict]]
+OutputDataStore(
+    stands: list[StandID],                                    # ["stand_A", "stand_B", ...]
+    scenarios: dict[StandID, list[ScenarioID]],              # {"stand_A": ["scen_1", "scen_2"], ...}
+    variables: Sequence[NetcdfVariablePath],                 # ["/balance/K", "/volume", ...]
+    data: dict[NetcdfVariablePath, dict[(StandID, ScenarioID), NetcdfVariableArray]]
+)
 ```
 
 #### Structure Hierarchy
 
 | Level | Type | Description |
 |-------|------|-------------|
-| Outer list | `list` | 21 stands (one per forest stand) |
-| Dict keys | `ScenarioName` | Scenario names: "default", "DNM", "fertilized", etc. |
-| Dict values | `list[NetcdfVariableValue]` | List of variables with their netcdf paths and values |
+| `stands` | `list[StandID]` | List of stand identifiers |
+| `scenarios` | `dict[StandID, list[ScenarioID]]` | Scenarios per stand |
+| `variables` | `Sequence[NetcdfVariablePath]` | Variable paths in netcdf |
+| `data` | `dict` | SoA: variable → (stand, scenario) → values |
 
-#### Dataclasses from `src/susi/io/netcdf_utils.py`
+#### Classes from `src/susi/io/load_output_data.py`
 
-- **`NetcdfVariableInfo`** - Metadata about a variable (path, name, dimensions, shape, units)
-- **`NetcdfVariableValue`** - Contains the variable path and its `np.ndarray` values
+- **`NetcdfVariableArray`** - Wraps raw NetCDF arrays with spatial/temporal interfaces
+- **`NetcdfVariableInfo`** - Metadata about a variable (name, dimensions, shape, units)
 - **`NetcdfVariablePath`** - Type alias: `str`
-- **`TargetVariableDict`** - Type alias: `dict[NetcdfVariablePath, float]`
-- **`ScenarioName`** - Type alias: `str`
+- **`StandID`** - Type alias: `str`
+- **`ScenarioID`** - Type alias: `str`
 
 
-
-Example (without full typing):
+Example:
 ```python
-vars_of_interest_by_stand = [
-    {  # Stand 0
-        "default": {"/stand/volume": 150.5, "/balance/C/soil_c_balance_co2eq": 12.3},
-        "DNM": {"/stand/volume": 145.2, "/balance/C/soil_c_balance_co2eq": 14.1},
-        "fertilized": {"/stand/volume": 160.8, "/balance/C/soil_c_balance_co2eq": 11.0},
-    },
-    {  # Stand 1
-        # ... more scenarios
-    },
-    # ... 21 stands total
-]
+store = OutputDataStore(
+    stands=["stand_01", "stand_02"],
+    scenarios={"stand_01": ["default", "fertilized"], "stand_02": ["default"]},
+    variables=["/stand/volume", "/balance/C/soileq"],
+    data={
+        "/stand_c_balance_co2/volume": {
+            ("stand_01", "default"): NetcdfVariableArray(...),
+            ("stand_01", "fertilized"): NetcdfVariableArray(...),
+            ("stand_02", "default"): NetcdfVariableArray(...),
+        },
+        "/balance/C/soil_c_balance_co2eq": {...}
+    }
+)
+
+# Access a specific value
+value = store.get_variable_value_for_scenario_and_stand(
+    "/stand/volume", "stand_01", "default"
+)
+
+# Or get all scenarios for a variable
+all_volumes = store.get_variable_values_all_scenarios("/stand/volume")
+value = all_volumes[("stand_01", "default")]
 ```
 
-### 2. List of np.ndarrays (Optimization)
-`ScenarioArrayData` is an representation capturing the arrays that go to the optimization, and the `scenario_names` of each scenario. Keeping the scenario names is necessary in order to be able to know which array corresponds to which scenario.
+### 2. NetcdfVariableArray (Optimization)
+
+Each variable value in the SoA is wrapped in a `NetcdfVariableArray` which provides clean interfaces for optimization:
 
 ```python
-ScenarioArrayData(
-    arrays: list[np.ndarray],           # One array per stand
-    scenario_names: list[list[ScenarioName]]  # Names for each scenario
+NetcdfVariableArray(
+    raw: np.ndarray  # Raw data from NetCDF
 )
 ```
 
-Each array has shape `(n_scenarios, n_variables)`:
+**Processed view:** Removes implementation quirks (ditch columns, single-scenario axis reduction)
+
+**Available methods:**
+- `last_timestep()` - Get final timestep values
+- `spatial_mean_at_last_timestep()` - Mean over locations at final timestep
+- `spatial_sum_at_last_timestep()` - Sum over locations at final timestep
+- `mean_over_space()` - Time-series of spatial means (1-D)
+- `mean_over_time()` - Spatial profile of temporal means (1-D)
+- `mean_of_all_values()` - Mean of every value
+
+## Reading Data
+
+The main function to read netcdf files into the SoA structure:
 
 ```python
-arrays[0]  # Stand 0
-# array shape: (3, 2) for 3 scenarios and 2 target variables
-# So different columns correspond to different target variables
-# array content:
-# [[150.5, 12.3],   # default
-#  [145.2, 14.1],   # DNM
-#  [160.8, 11.0]]   # fertilized
-```
+from susi.io.load_output_data import (
+    read_netcdf_files_for_selected_variables,
+    load_all_metadatas_from_stands,
+)
 
-## Conversion Functions
+# 1. Load metadata from stand folders
+stands_folder = Path("output/my_experiment")
+stand_folders = list_subdirectories(stands_folder)
+metadata_by_stand = load_all_metadatas_from_stands(stand_folders)
 
-The following functions in `src/susi/io/netcdf_utils.py` allow switching between representations:
+# 2. Read selected variables
+selected_variables = ["/stand/volume", "/balance/C/soil_c_balance_co2eq"]
+store = read_netcdf_files_for_selected_variables(
+    selected_variables=selected_variables,
+    metadata_by_stand=metadata_by_stand,
+)
 
-### Netcdf variables dict -> optimization arrays
-
-```python
-transform_list_of_scenarios_to_optimization_array_structure(
-    vars_of_interest_by_stand: list[dict[ScenarioName, TargetVariableDict]],
-    n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
-) -> ScenarioArrayData
-```
-
-### optimization arrays -> Netcdf variables dict
-
-```python
-transform_array_data_to_list_of_scenarios(
-    array_data: ScenarioArrayData,
-    n_stands: int,
-    target_variable_paths: list[NetcdfVariablePath],
-) -> list[dict[ScenarioName, TargetVariableDict]]
+# 3. Access data
+value = store.get_variable_value_for_scenario_and_stand(
+    variable_path="/stand/volume",
+    stand_id="stand_01",
+    scenario_id="default",
+)
 ```
 
 ## Usage in Optimization
 
 In `optimization_pymoo.py`:
 
-1. **Read netcdf data** → produces list of dicts
-2. **Transform to arrays** → `transform_list_of_scenarios_to_optimization_array_structure()`
-3. **Scale by stand area** → multiply each array by its stand's area
-4. **Run optimization** → target function uses array indexing for fast lookups
+1. **Read netcdf data** → produces `OutputDataStore`
+2. **Extract variable values** → use `get_variable_value_for_scenario_and_stand()`
+3. **Scale by stand area** → multiply by stand's area
+4. **Run optimization** → direct array access for fast lookups
