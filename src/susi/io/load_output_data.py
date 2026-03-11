@@ -189,7 +189,7 @@ def list_subdirectories(path: Path) -> list[Path]:
 #     return vars_with_paths
 #
 #
-def _read_json_metadatas(
+def read_json_metadatas(
     experiment_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
@@ -212,7 +212,7 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata, params = _read_json_metadatas(
+    metadata, params = read_json_metadatas(
         experiment_folderpath, metadata_filename, params_filename
     )
 
@@ -309,13 +309,13 @@ def _get_variable_by_path(
         return _get_variable_by_path(group.groups[sub_group_name], path_parts[1:])
 
 
-def _read_value_several_variables_from_single_file(
+def read_value_several_variables_from_single_file(
     netcdf_filepath: Path, variable_paths: Sequence[NetcdfVariablePath]
-) -> dict[NetcdfVariablePath, np.ndarray]:
+) -> dict[NetcdfVariablePath, NetcdfVariableArray]:
     """
     Read the values of a list of NetcdfVariables from a NetCDF file.
     """
-    data: dict[NetcdfVariablePath, np.ndarray] = {}
+    data: dict[NetcdfVariablePath, NetcdfVariableArray] = {}
 
     with netCDF4.Dataset(netcdf_filepath, "r") as nc:
         for variable_path in variable_paths:
@@ -324,7 +324,7 @@ def _read_value_several_variables_from_single_file(
 
             values = _get_variable_by_path(nc, var_path_parts)
 
-            data[variable_path] = values[:]
+            data[variable_path] = NetcdfVariableArray(raw=values[:])
 
     return data
 
@@ -380,12 +380,12 @@ def read_netcdf_files_for_selected_variables(
         scenarios_by_stand[stand_id] = scenarios
 
         for scenario_id, netcdf_filepath in zip(scenarios, netcdf_filepaths):
-            variable_values = _read_value_several_variables_from_single_file(
+            variable_values = read_value_several_variables_from_single_file(
                 netcdf_filepath=netcdf_filepath, variable_paths=selected_variables
             )
 
             for var_path, var_value in variable_values.items():
-                data[var_path][(stand_id, scenario_id)] = NetcdfVariableArray(var_value)
+                data[var_path][(stand_id, scenario_id)] = var_value
     return OutputDataStore(
         stands=stands,
         scenarios=scenarios_by_stand,
