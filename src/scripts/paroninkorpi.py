@@ -661,9 +661,11 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
-        base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        # base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        base_scenarios = ["default", "partialblocking", "DNM"]
     else:
-        base_scenarios = ["default", "fertilized", "partialblocking"]
+        # base_scenarios = ["default", "fertilized", "partialblocking"]
+        base_scenarios = ["default", "partialblocking"]
 
     for scen in base_scenarios:
         if scen == "DNM":
@@ -687,7 +689,7 @@ for stand_number in stand_numbers:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=2,
+    n_parallel_processes=7,
 )
 
 # run() expects 3 arguments. We transpose or "zip" them here
