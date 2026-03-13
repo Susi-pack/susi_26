@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 import datetime
+import json
 from dataclasses import dataclass
 
 from multiprocessing import Pool
@@ -48,6 +49,43 @@ from susi.io.susi_parameter_model import (
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.io.metadata_model import SimulationMetaData
+
+
+# %% External data files
+
+
+def load_file_pointers() -> dict:
+    """Load file paths from the external configuration file."""
+    config_path = (
+        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
+    )
+
+    if not config_path.exists():
+        print("ERROR: Configuration file not found!")
+        print(f"Expected location: {config_path}")
+        print()
+        print(
+            "This script expects a 'file_pointers.json' file to live in 'inputs/paroninkorpi/'."
+        )
+        print("Please create this file with the following structure:")
+        print(
+            """
+{
+    "weather_file": "path/to/weather.csv",
+    "allometry_directory": "path/to/allometry",
+    "forest_data_xml": "path/to/forest.xml",
+    "ditch_depth_raster": "path/to/ditch.tif"
+}
+"""
+        )
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+
+FILE_POINTERS = load_file_pointers()
+
 
 # %% Functions
 
@@ -256,11 +294,7 @@ def prepare_susi_params(
     fertility_class: int,
     scenario: str,
 ) -> SimulationParams:
-    input_folder = AppSettings().project_root_path / "paroninkorpi/input"
-    weather_file_path = (
-        input_folder
-        / "weather_paroninkorpi/Weather_observations_Janakkala_1980_2024.csv"
-    )
+    weather_file_path = AppSettings().project_root_path / FILE_POINTERS["weather_file"]
 
     output_parent_folder = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
@@ -463,7 +497,7 @@ def run(
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().project_root_path / "paroninkorpi/input/stand_allometry_no_thinning"
+    AppSettings().project_root_path / FILE_POINTERS["allometry_directory"]
 )
 
 
@@ -496,10 +530,7 @@ class DataFromXml:
 
 
 def get_XML_data_for_each_stand() -> list[DataFromXml]:
-    xml_path = (
-        AppSettings().project_root_path
-        / "paroninkorpi/input/Forest_data/Paroninkorpi.xml"
-    )
+    xml_path = AppSettings().project_root_path / FILE_POINTERS["forest_data_xml"]
     with open(xml_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
 
@@ -588,8 +619,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
 def get_ditch_depth_from_raster_by_stand(xml_data: list[DataFromXml]) -> list[float]:
     """initial ditch depth, m"""
     ditch_depth_raster_filepath = (
-        AppSettings().project_root_path
-        / "paroninkorpi/input/Ditches/ditch_depth_1m.tif"
+        AppSettings().project_root_path / FILE_POINTERS["ditch_depth_raster"]
     )
 
     n_stands = len(xml_data)
