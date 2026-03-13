@@ -647,9 +647,8 @@ class SiteParams(StrictFrozenModel):
     depoN: float
     depoP: float
     depoK: float
-    fertilization: FertilizationParameters|None = None
+    fertilization: FertilizationParameters | None = None
     peat_temperature: PeatTemperatureParams
-
 
     @computed_field
     @property
@@ -700,7 +699,6 @@ class SiteParams(StrictFrozenModel):
         return self
 
 
-     
 class SusiParams(StrictFrozenModel):
     """
     Parameter class to be stantiated.
@@ -715,19 +713,18 @@ class SusiParams(StrictFrozenModel):
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
-    
-    @model_validator(mode="after")
-    def check_fertilization_within_bounds(self) -> Self:
-        # Now 'self' is SusiParams, which CAN see both children
-        config = self.simulation_config
-        site = self.site_parameters
-        
-        if site.fertilization is not None:
-            app_year = site.fertilization.application_year
-            if not (config.start_date.year <= app_year <= config.end_date.year):
-                raise ValueError(f"Fertilization year {app_year} is out of bounds!")
-        return self
 
+    # @model_validator(mode="after")
+    # def check_fertilization_within_bounds(self) -> Self:
+    #     # Now 'self' is SusiParams, which CAN see both children
+    #     config = self.simulation_config
+    #     site = self.site_parameters
+    #
+    #     if site.fertilization is not None:
+    #         app_year = site.fertilization.application_year
+    #         if not (config.start_date.year <= app_year <= config.end_date.year):
+    #             raise ValueError(f"Fertilization year {app_year} is out of bounds!")
+    #     return self
 
     @model_validator(mode="after")
     def stand_age_vs_allometry_pathway(self) -> Self:
