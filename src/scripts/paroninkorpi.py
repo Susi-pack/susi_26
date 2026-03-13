@@ -71,10 +71,10 @@ def load_file_pointers() -> dict:
         print(
             """
 {
-    "weather_file": "path/to/weather.csv",
-    "allometry_directory": "path/to/allometry",
-    "forest_data_xml": "path/to/forest.xml",
-    "ditch_depth_raster": "path/to/ditch.tif"
+    "weather_file": "path/from/project/root/to/weather.csv",
+    "allometry_directory": "path/from/project/root/to/allometry/folder",
+    "forest_data_xml": "path/from/project/root/to/forest.xml",
+    "ditch_depth_raster": "path/from/project/root/to/ditch.tif"
 }
 """
         )
