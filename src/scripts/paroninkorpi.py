@@ -296,10 +296,6 @@ def prepare_susi_params(
 ) -> SimulationParams:
     weather_file_path = AppSettings().project_root_path / FILE_POINTERS["weather_file"]
 
-    output_parent_folder = (
-        AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
-    )
-
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
@@ -426,7 +422,7 @@ def create_thinning_parameters(
     # Get parameters of the base model into a Python dictionary
     params = base_params.model_dump(exclude_computed_fields=True)
 
-    base_scenario_name = params["metadata"]["experiment_id"]
+    base_scenario_name = params["metadata"]["scenario_id"]
 
     thinning_scenario_name = f"{base_scenario_name}_thinning_at_yr_{cutting_yr}"
 
@@ -436,7 +432,7 @@ def create_thinning_parameters(
 
     params["susi_params"]["site_parameters"]["scenario_name"] = [thinning_scenario_name]
 
-    params["metadata"]["experiment_id"] = thinning_scenario_name
+    params["metadata"]["scenario_id"] = thinning_scenario_name
 
     # Validate the model to check that you did not make a mistake
     return SimulationParams.model_validate(params)
