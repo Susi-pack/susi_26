@@ -290,7 +290,9 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id=scenario, parent_output_folder=output_parent_folder
+            experiment_id="paroninkorpi",
+            stand_id=f"stand_{stand_number}",
+            scenario_id=scenario,
         ),
         susi_params=SusiParams(
             weather_parameters=WeatherParams(
@@ -409,7 +411,11 @@ def create_thinning_parameters(
 # %% Run function
 
 
-def run(simulation_parameters: SimulationParams) -> None:
+def run(
+    simulation_parameters: SimulationParams,
+    G_1: int | float,
+    G_2: int | float,
+) -> None:
     """
     Logic:
     1. Run Susi once for each base scenario.
@@ -429,10 +435,6 @@ def run(simulation_parameters: SimulationParams) -> None:
     base_scenario_results = get_ncf_outputs(
         simulation_parameters.metadata.netcdf_output_filepath
     )
-
-    # Study thinning alternatives:
-    G_1 = 4
-    G_2 = 2
 
     for yr in range(0, 20, 5):
         ba_to_cut = should_implement_thinning(
@@ -618,6 +620,10 @@ G_2_for_each_stand = [i.G_2 for i in xml_data]
 # List of parameters that completely determine each Susi simulation
 all_parameters: list[SimulationParams] = []
 
+# These are necessary in order to check for thinning
+G_1_per_parameter_set = []
+G_2_per_parameter_set = []
+
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
@@ -641,33 +647,27 @@ for stand_number in stand_numbers:
             scenario=scen,
         )
 
+        G_1_per_parameter_set.append(G_1_for_each_stand[stand_number - 1])
+        G_2_per_parameter_set.append(G_2_for_each_stand[stand_number - 1])
+
         all_parameters.append(susi_params)
-
-# %% Get G_1 and G_2 per parameter set
-# In order to call SUsi, we need G_1 not per stand, but per scenario
-# (there's one parameter set per scenario)
-# This is a hacky way of doing things, but more or less forced
-# because SusiParams does not contain G_1 and G_2
-
-G_1_per_parameter_set = []
-G_2_per_parameter_set = []
-
-for params in all_parameters:
-    # First, get the stand number from the metadata.
-    # This is the hacky part)
-    stand_number = int(params.metadata.parent_output_folder.name[-2:])
-
-    # Then, add it to the list
-    G_1_per_parameter_set.append(G_1_for_each_stand[stand_number - 1])
-    G_2_per_parameter_set.append(G_2_for_each_stand[stand_number - 1])
 
 
 # %% Execute parallel processing
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=7,
+    n_parallel_processes=2,
+)
+
+# run() expects 3 arguments. We transpose or "zip" them here
+multiprocessing_args = list(
+    zip(
+        execution_config.simulation_parameter_list,
+        G_1_per_parameter_set,
+        G_2_per_parameter_set,
+    )
 )
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
-    pool.map(func=run, iterable=execution_config.simulation_parameter_list)
+    pool.starmap(func=run, iterable=multiprocessing_args)
