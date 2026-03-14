@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 import datetime
+import json
 from dataclasses import dataclass
 
 from multiprocessing import Pool
@@ -48,6 +49,43 @@ from susi.io.susi_parameter_model import (
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.io.metadata_model import SimulationMetaData
+
+
+# %% External data files
+
+
+def load_file_pointers() -> dict:
+    """Load file paths from the external configuration file."""
+    config_path = (
+        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
+    )
+
+    if not config_path.exists():
+        print("ERROR: Configuration file not found!")
+        print(f"Expected location: {config_path}")
+        print()
+        print(
+            "This script expects a 'file_pointers.json' file to live in 'inputs/paroninkorpi/'."
+        )
+        print("Please create this file with the following structure:")
+        print(
+            """
+{
+    "weather_file": "path/from/project/root/to/weather.csv",
+    "allometry_directory": "path/from/project/root/to/allometry/folder",
+    "forest_data_xml": "path/from/project/root/to/forest.xml",
+    "ditch_depth_raster": "path/from/project/root/to/ditch.tif"
+}
+"""
+        )
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with open(config_path, "r") as f:
+        return json.load(f)
+
+
+FILE_POINTERS = load_file_pointers()
+
 
 # %% Functions
 
@@ -256,6 +294,7 @@ def prepare_susi_params(
     fertility_class: int,
     scenario: str,
 ) -> SimulationParams:
+<<<<<<< HEAD:src/scripts/mikko_susi_new.py
     input_folder = AppSettings().project_root_path / "inputs/"
     weather_file_path = (
         input_folder
@@ -265,6 +304,9 @@ def prepare_susi_params(
     output_parent_folder = (
         AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
     )
+=======
+    weather_file_path = AppSettings().project_root_path / FILE_POINTERS["weather_file"]
+>>>>>>> b4c222237edb56b0db58a5f474cf83aeab04966d:src/scripts/paroninkorpi.py
 
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
@@ -290,8 +332,8 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id="Paroninkorpi", 
-            stand_id="stand_"+str(stand_number ),
+            experiment_id="paroninkorpi",
+            stand_id=f"stand_{stand_number}",
             scenario_id=scenario,
         ),
         susi_params=SusiParams(
@@ -392,7 +434,7 @@ def create_thinning_parameters(
     # Get parameters of the base model into a Python dictionary
     params = base_params.model_dump(exclude_computed_fields=True)
 
-    base_scenario_name = params["metadata"]["experiment_id"]
+    base_scenario_name = params["metadata"]["scenario_id"]
 
     thinning_scenario_name = f"{base_scenario_name}_thinning_at_yr_{cutting_yr}"
 
@@ -402,7 +444,7 @@ def create_thinning_parameters(
 
     params["susi_params"]["site_parameters"]["scenario_name"] = [thinning_scenario_name]
 
-    params["metadata"]["experiment_id"] = thinning_scenario_name
+    params["metadata"]["scenario_id"] = thinning_scenario_name
 
     # Validate the model to check that you did not make a mistake
     return SimulationParams.model_validate(params)
@@ -411,7 +453,11 @@ def create_thinning_parameters(
 # %% Run function
 
 
-def run(simulation_parameters: SimulationParams) -> None:
+def run(
+    simulation_parameters: SimulationParams,
+    G_1: int | float,
+    G_2: int | float,
+) -> None:
     """
     Logic:
     1. Run Susi once for each base scenario.
@@ -431,10 +477,6 @@ def run(simulation_parameters: SimulationParams) -> None:
     base_scenario_results = get_ncf_outputs(
         simulation_parameters.metadata.netcdf_output_filepath
     )
-
-    # Study thinning alternatives:
-    G_1 = 4
-    G_2 = 2
 
     for yr in range(0, 20, 5):
         ba_to_cut = should_implement_thinning(
@@ -463,7 +505,8 @@ def run(simulation_parameters: SimulationParams) -> None:
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().project_root_path / "inputs/Paroninkorpi"
+    AppSettings().project_root_path / FILE_POINTERS["allometry_directory"]
+
 )
 
 def list_all_files_in_directory_with_given_extension(
@@ -495,10 +538,8 @@ class DataFromXml:
 
 
 def get_XML_data_for_each_stand() -> list[DataFromXml]:
-    xml_path = (
-        AppSettings().project_root_path
-        / "inputs/Paroninkorpi/Paroninkorpi.xml"
-    )
+
+    xml_path = AppSettings().project_root_path / FILE_POINTERS["forest_data_xml"]
     with open(xml_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
 
@@ -587,8 +628,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
 def get_ditch_depth_from_raster_by_stand(xml_data: list[DataFromXml]) -> list[float]:
     """initial ditch depth, m"""
     ditch_depth_raster_filepath = (
-        AppSettings().project_root_path
-        / "inputs/Paroninkorpi/ditch_depth_1m.tif"
+        AppSettings().project_root_path / FILE_POINTERS["ditch_depth_raster"]
     )
 
     n_stands = len(xml_data)
@@ -619,6 +659,10 @@ G_2_for_each_stand = [i.G_2 for i in xml_data]
 # List of parameters that completely determine each Susi simulation
 all_parameters: list[SimulationParams] = []
 
+# These are necessary in order to check for thinning
+G_1_per_parameter_set = []
+G_2_per_parameter_set = []
+
 stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
@@ -626,11 +670,19 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
+<<<<<<< HEAD:src/scripts/mikko_susi_new.py
         #base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
         base_scenarios = ["default", "partialblocking", "DNM"]
     else:
         #base_scenarios = ["default", "fertilized", "partialblocking"]
         base_scenarios = ["default",  "partialblocking"]
+=======
+        # base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        base_scenarios = ["default", "partialblocking", "DNM"]
+    else:
+        # base_scenarios = ["default", "fertilized", "partialblocking"]
+        base_scenarios = ["default", "partialblocking"]
+>>>>>>> b4c222237edb56b0db58a5f474cf83aeab04966d:src/scripts/paroninkorpi.py
 
     for scen in base_scenarios:
         if scen == "DNM":
@@ -644,25 +696,10 @@ for stand_number in stand_numbers:
             scenario=scen,
         )
 
+        G_1_per_parameter_set.append(G_1_for_each_stand[stand_number - 1])
+        G_2_per_parameter_set.append(G_2_for_each_stand[stand_number - 1])
+
         all_parameters.append(susi_params)
-
-# %% Get G_1 and G_2 per parameter set
-# In order to call SUsi, we need G_1 not per stand, but per scenario
-# (there's one parameter set per scenario)
-# This is a hacky way of doing things, but more or less forced
-# because SusiParams does not contain G_1 and G_2
-
-G_1_per_parameter_set = []
-G_2_per_parameter_set = []
-
-for params in all_parameters:
-    # First, get the stand number from the metadata.
-    # This is the hacky part)
-    stand_number = int(params.metadata.parent_output_folder.name[-2:])
-
-    # Then, add it to the list
-    G_1_per_parameter_set.append(G_1_for_each_stand[stand_number - 1])
-    G_2_per_parameter_set.append(G_2_for_each_stand[stand_number - 1])
 
 
 # %% Execute parallel processing
@@ -672,5 +709,14 @@ execution_config = MultipleSusis(
     n_parallel_processes=1,
 )
 
+# run() expects 3 arguments. We transpose or "zip" them here
+multiprocessing_args = list(
+    zip(
+        execution_config.simulation_parameter_list,
+        G_1_per_parameter_set,
+        G_2_per_parameter_set,
+    )
+)
+
 with Pool(processes=execution_config.n_parallel_processes) as pool:
-    pool.map(func=run, iterable=execution_config.simulation_parameter_list)
+    pool.starmap(func=run, iterable=multiprocessing_args)

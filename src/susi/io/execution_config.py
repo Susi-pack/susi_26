@@ -111,10 +111,10 @@ class MultipleSusis(BaseModel):
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
+        self._check_stand_and_scenario_ids_are_set()
+        self._check_single_experiment_id()
         self._check_not_more_processes_than_runs()
         self._check_for_duplicated_susi_params()
         self._check_for_duplicated_experiment_folder_paths()
-        self._check_stand_and_scenario_ids_are_set()
-        self._check_single_experiment_id()
 
         return self
