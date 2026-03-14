@@ -57,7 +57,7 @@ from susi.io.metadata_model import SimulationMetaData
 def load_file_pointers() -> dict:
     """Load file paths from the external configuration file."""
     config_path = (
-        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
+        AppSettings().project_root_path / "inputs/Paroninkorpi/file_pointers.json"
     )
 
     if not config_path.exists():
@@ -294,19 +294,8 @@ def prepare_susi_params(
     fertility_class: int,
     scenario: str,
 ) -> SimulationParams:
-<<<<<<< HEAD:src/scripts/mikko_susi_new.py
-    input_folder = AppSettings().project_root_path / "inputs/"
-    weather_file_path = (
-        input_folder
-        / "Paroninkorpi/weather_files/Weather_observations_Janakkala_1980_2024.csv"
-    )
 
-    output_parent_folder = (
-        AppSettings().output_folder / f"paroninkorpi/stand_{stand_number:02d}"
-    )
-=======
     weather_file_path = AppSettings().project_root_path / FILE_POINTERS["weather_file"]
->>>>>>> b4c222237edb56b0db58a5f474cf83aeab04966d:src/scripts/paroninkorpi.py
 
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
@@ -670,19 +659,12 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
-<<<<<<< HEAD:src/scripts/mikko_susi_new.py
-        #base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
-        base_scenarios = ["default", "partialblocking", "DNM"]
-    else:
-        #base_scenarios = ["default", "fertilized", "partialblocking"]
-        base_scenarios = ["default",  "partialblocking"]
-=======
+
         # base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
         base_scenarios = ["default", "partialblocking", "DNM"]
     else:
         # base_scenarios = ["default", "fertilized", "partialblocking"]
         base_scenarios = ["default", "partialblocking"]
->>>>>>> b4c222237edb56b0db58a5f474cf83aeab04966d:src/scripts/paroninkorpi.py
 
     for scen in base_scenarios:
         if scen == "DNM":
@@ -706,7 +688,7 @@ for stand_number in stand_numbers:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=1,
+    n_parallel_processes=5,
 )
 
 # run() expects 3 arguments. We transpose or "zip" them here
@@ -717,6 +699,6 @@ multiprocessing_args = list(
         G_2_per_parameter_set,
     )
 )
-
-with Pool(processes=execution_config.n_parallel_processes) as pool:
-    pool.starmap(func=run, iterable=multiprocessing_args)
+if __name__=='__main__':
+    with Pool(processes=execution_config.n_parallel_processes) as pool:
+        pool.starmap(func=run, iterable=multiprocessing_args)
