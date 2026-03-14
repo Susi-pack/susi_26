@@ -256,10 +256,10 @@ def prepare_susi_params(
     fertility_class: int,
     scenario: str,
 ) -> SimulationParams:
-    input_folder = AppSettings().project_root_path / "paroninkorpi/input"
+    input_folder = AppSettings().project_root_path / "inputs/"
     weather_file_path = (
         input_folder
-        / "weather_paroninkorpi/Weather_observations_Janakkala_1980_2024.csv"
+        / "Paroninkorpi/weather_files/Weather_observations_Janakkala_1980_2024.csv"
     )
 
     output_parent_folder = (
@@ -290,7 +290,9 @@ def prepare_susi_params(
 
     return SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id=scenario, parent_output_folder=output_parent_folder
+            experiment_id="Paroninkorpi", 
+            stand_id="stand_"+str(stand_number ),
+            scenario_id=scenario,
         ),
         susi_params=SusiParams(
             weather_parameters=WeatherParams(
@@ -461,9 +463,8 @@ def run(simulation_parameters: SimulationParams) -> None:
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().project_root_path / "paroninkorpi/input/stand_allometry_no_thinning"
+    AppSettings().project_root_path / "inputs/Paroninkorpi"
 )
-
 
 def list_all_files_in_directory_with_given_extension(
     dir: Path, extension: str
@@ -496,7 +497,7 @@ class DataFromXml:
 def get_XML_data_for_each_stand() -> list[DataFromXml]:
     xml_path = (
         AppSettings().project_root_path
-        / "paroninkorpi/input/Forest_data/Paroninkorpi.xml"
+        / "inputs/Paroninkorpi/Paroninkorpi.xml"
     )
     with open(xml_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
@@ -587,7 +588,7 @@ def get_ditch_depth_from_raster_by_stand(xml_data: list[DataFromXml]) -> list[fl
     """initial ditch depth, m"""
     ditch_depth_raster_filepath = (
         AppSettings().project_root_path
-        / "paroninkorpi/input/Ditches/ditch_depth_1m.tif"
+        / "inputs/Paroninkorpi/ditch_depth_1m.tif"
     )
 
     n_stands = len(xml_data)
@@ -625,9 +626,11 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
-        base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        #base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        base_scenarios = ["default", "partialblocking", "DNM"]
     else:
-        base_scenarios = ["default", "fertilized", "partialblocking"]
+        #base_scenarios = ["default", "fertilized", "partialblocking"]
+        base_scenarios = ["default",  "partialblocking"]
 
     for scen in base_scenarios:
         if scen == "DNM":
@@ -666,7 +669,7 @@ for params in all_parameters:
 
 execution_config = MultipleSusis(
     simulation_parameter_list=all_parameters,
-    n_parallel_processes=7,
+    n_parallel_processes=1,
 )
 
 with Pool(processes=execution_config.n_parallel_processes) as pool:
