@@ -12,7 +12,7 @@ dependencies = [
     "netcdf4>=1.7.4",
     "numba>=0.64.0",
     "openpyxl>=3.1.5",
-    "pandas>=3.0.1",
+    "pandas<3",
     "pydantic>=2.12.5",
     "pyproj>=3.7.2",
     "rasterio>=1.4.4",
@@ -20,7 +20,8 @@ dependencies = [
     "seaborn>=0.13.2",
     "shapely>=2.1.2",
     "spyder-kernels>=3.0.0,<3.1.0",
-    "streamlit>=1.19.0",
+    "streamlit>=1.35.0",
+    "streamlit-tree-select>=0.0.5",
     "xmltodict>=1.0.4",
 ]
 
