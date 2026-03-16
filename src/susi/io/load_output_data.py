@@ -226,9 +226,7 @@ def coerce_datetime_format(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def modify_after_load(
-    df: pd.DataFrame, set_experiment_id_as_index: bool = False
-) -> pd.DataFrame:
+def modify_after_load(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
     # set datetime formats
@@ -236,10 +234,6 @@ def modify_after_load(
 
     # sort by starting date first
     df = df.sort_values(by="timestamp_start", ignore_index=True, ascending=False)
-
-    # set experiment_id as index
-    if set_experiment_id_as_index:
-        df = df.set_index(keys="experiment_id")
 
     return df
 
@@ -351,8 +345,7 @@ def read_value_several_variables_from_single_file(
 
 
 def _get_scenarios_for_stand(metadata_df: pd.DataFrame) -> list[ScenarioID]:
-    # TODO: change key "experiment_id" to the new scenario key.
-    return list(metadata_df["experiment_id"])
+    return list(metadata_df["scenario_id"])
 
 
 def _get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:

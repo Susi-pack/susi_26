@@ -1,11 +1,6 @@
 import streamlit as st
-from functools import lru_cache
-from pathlib import Path
 
 import pandas as pd
-import numpy as np
-import matplotlib as mpl
-import colorsys
 
 from analysis.gui.components import folder_selection
 import susi.io.load_output_data as load_output
@@ -22,13 +17,13 @@ metadata_by_stand = load_output.load_all_metadatas_from_stands(
     folders=stand_folderpaths
 )
 
+
 sample_netcdf_filepath = metadata_by_stand[
     load_output.StandID(stand_folderpaths[0].name)
 ].iloc[0]["netcdf_output_filepath"]
 
-st.write(sample_netcdf_filepath)
 
-all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
+# all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 CHOSEN_VARIABLES = (
     load_output.NetcdfVariablePath("/strip/dwtyr"),
@@ -65,12 +60,15 @@ data_store: load_output.OutputDataStore = (
 rows = []
 for stand_id in data_store.stands:
     for scenario_id in data_store.scenarios[stand_id]:
-        row = {"stand": stand_id, "scenario": scenario_id}
+        row: dict[str, str | int | float] = {
+            "stand": str(stand_id),
+            "scenario": str(scenario_id),
+        }
         for var_path in data_store.variables:
             var_array = data_store.get_variable_value_for_scenario_and_stand(
                 var_path, stand_id, scenario_id
             )
-            row[var_path] = var_array.mean_of_all_values()
+            row[str(var_path)] = var_array.mean_of_all_values()
         rows.append(row)
 
 df_means = pd.DataFrame(rows)
