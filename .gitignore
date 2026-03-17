@@ -47,6 +47,7 @@ Thumbs.db
 desktop.ini
 .DS_Store
 
+
 requirements_inaki.txt
 
 analysis/.ipynb_checkpoints
@@ -62,3 +63,6 @@ src/analysis/.ipynb_checkpoints
 xmltomotti_no_thinning
 xmltomotti_yes_thinning
 devlog/
+
+# streamlit
+.streamlit/
