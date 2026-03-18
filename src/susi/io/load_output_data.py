@@ -109,6 +109,9 @@ class NetcdfVariableArray:
     def last_timestep(self) -> np.ndarray:
         return self.processed[-1, :]
 
+    def initial_timestep(self) -> np.ndarray:
+        return self.processed[0, :]
+
     # ------------------------------------------------------------------
     # Aggregators
     # ------------------------------------------------------------------
@@ -117,6 +120,11 @@ class NetcdfVariableArray:
         """Mean over all locations at the final timestep."""
         self._require_2D(self.processed)
         return float(self.last_timestep().mean())
+
+    def spatial_mean_at_initial_timestep(self) -> float:
+        """Mean over all locations at the initialization of the simulation."""
+        self._require_2D(self.processed)
+        return float(self.initial_timestep().mean())
 
     def spatial_sum_at_last_timestep(self) -> float:
         """Sum over all locations at the final timestep."""
@@ -127,6 +135,11 @@ class NetcdfVariableArray:
         """Time-series of spatial means; one value per timestep (1-D)."""
         self._require_2D(self.processed)
         return np.mean(self.processed, axis=1)
+
+    def mean_over_space_sum_over_time(self) -> float:
+        """Sum of the time series and spatial mean;  (scalar)."""
+        self._require_2D(self.processed)
+        return np.sum(np.mean(self.processed, axis=1))
 
     def mean_over_time(self) -> np.ndarray:
         """Spatial profile of temporal means; one value per location (1-D)."""
