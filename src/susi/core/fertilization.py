@@ -132,6 +132,14 @@ class NoFertilization(AbstractFertilization):
     Otherwise, it is useless.
     """
 
+    def compute_ph_effect(self, years_since_fertilization: int) -> float:
+        return 0.0
+
+    def compute_nutrient_release(
+        self, years_since_fertilization: int
+    ) -> dict[Nutrient, np.ndarray]:
+        return self._zero_release()
+
     def compute_effect(self, year: int) -> FertilizationEffect:
         return FertilizationEffect(
             is_active=False,

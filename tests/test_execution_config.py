@@ -21,6 +21,7 @@ from susi.io.susi_parameter_model import (
     CanopyLayerAllometryPointers,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     FertilizationParameters,
+    StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     PeatTemperatureParams,
 )
@@ -101,7 +102,7 @@ def valid_susi_params(test_data_path):
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
-            fertilization=FertilizationParameters(
+            fertilization=StandardNPKFertilizationParameters(
                 application_year=2005,
                 N=NutrientFertilizationParameters(
                     dose=0.0,
@@ -187,7 +188,7 @@ def another_valid_susi_params(test_data_path):
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
-            fertilization=FertilizationParameters(
+            fertilization=StandardNPKFertilizationParameters(
                 application_year=2005,
                 N=NutrientFertilizationParameters(
                     dose=0.0,
