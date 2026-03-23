@@ -169,6 +169,7 @@ class Susi:
         ferti = initialize_fertilization(
             fertilization_params=self.parameters.site_parameters.fertilization,
             n_cols=self.parameters.site_parameters.n,
+            simulation_end_year=self.parameters.simulation_config.end_date.year,
         )
 
         out.initialize_esom("Mass")  # creating output variables for organic matter
