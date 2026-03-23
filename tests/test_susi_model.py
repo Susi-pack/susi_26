@@ -6,7 +6,6 @@ from susi.io.susi_parameter_model import (
     AllometryParams,
     CanopyLayerAllometryPointers,
     CanopyParams,
-    FertilizationParameters,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     OrganicLayerParams,

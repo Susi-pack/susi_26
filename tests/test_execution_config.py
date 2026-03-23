@@ -20,7 +20,6 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     CanopyLayerAllometryPointers,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    FertilizationParameters,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     PeatTemperatureParams,

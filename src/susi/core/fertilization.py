@@ -40,12 +40,31 @@ class AbstractFertilization(ABC):
     Always instantiate one of its children; never this abstract class.
     """
 
-    def __init__(self, n_cols: int, fpara: FertilizationParameters | None):
+    def __init__(self, n_cols: int, fpara: FertilizationParameters | None = None):
         self.ncols = n_cols
-        # Nutrient release from the fertilizer.
-        # Initialized as zero = no release.
         self.fpara = fpara
 
+    # ---- Core API ----
+    def compute_effect(self, year: int) -> FertilizationEffect:
+        years_since = self._years_since_fertilization(year)
+
+        if not self.is_active(years_since):
+            return FertilizationEffect(
+                is_active=False,
+                pH_increment=0.0,
+                nutrient_release=self._zero_release(),
+            )
+
+        # If active, years_since is guaranteed to not be None
+        assert years_since is not None
+
+        return FertilizationEffect(
+            is_active=True,
+            pH_increment=self.compute_ph_effect(years_since),
+            nutrient_release=self.compute_nutrient_release(years_since),
+        )
+
+    # ---- Hooks for subclasses ----
     @abstractmethod
     def compute_ph_effect(self, years_since_fertilization: int) -> float: ...
 
@@ -54,6 +73,7 @@ class AbstractFertilization(ABC):
         self, years_since_fertilization: int
     ) -> dict[Nutrient, np.ndarray]: ...
 
+    # ---- Shared helpers ----
     def _years_since_fertilization(self, year: int) -> int | None:
         if self.fpara is None:
             return None
@@ -67,25 +87,9 @@ class AbstractFertilization(ABC):
         Fertilization activates once the simulation year is at or above
         the specified fertilization year.
         """
-        return years_since is not None and years_since >= 0
-
-    def compute_effect(self, year: int) -> FertilizationEffect:
-        years_since_fertilization = self._years_since_fertilization(year)
-
-        if self.is_active(years_since=years_since_fertilization):
-            return FertilizationEffect(
-                is_active=True,
-                pH_increment=self.compute_ph_effect(years_since_fertilization),
-                nutrient_release=self.compute_nutrient_release(
-                    years_since_fertilization
-                ),
-            )
-
-        return FertilizationEffect(
-            is_active=False,
-            pH_increment=0.0,
-            nutrient_release=self._zero_release(),
-        )
+        if years_since is None:
+            return False
+        return years_since >= 0
 
 
 class StandardNPKFertilization(AbstractFertilization):
@@ -95,7 +99,7 @@ class StandardNPKFertilization(AbstractFertilization):
     def compute_nutrient_release(
         self, years_since_fertilization: int
     ) -> dict[Nutrient, np.ndarray]:
-        assert years_since_fertilization >= 0
+
         release = {}
         for nutr in ["N", "P", "K"]:
             fertilization_nutrient = getattr(self.fpara, nutr)
@@ -121,6 +125,7 @@ class AshFertilization(AbstractFertilization):
     def compute_nutrient_release(
         self, years_since_fertilization: int
     ) -> dict[Nutrient, np.ndarray]:
+
         raise NotImplementedError()
 
 
@@ -132,6 +137,12 @@ class NoFertilization(AbstractFertilization):
     Otherwise, it is useless.
     """
 
+    def __init__(self, n_cols: int):
+        super().__init__(n_cols=n_cols, fpara=None)
+
+    def is_active(self, years_since: int) -> bool:
+        return False
+
     def compute_ph_effect(self, years_since_fertilization: int) -> float:
         return 0.0
 
@@ -139,13 +150,6 @@ class NoFertilization(AbstractFertilization):
         self, years_since_fertilization: int
     ) -> dict[Nutrient, np.ndarray]:
         return self._zero_release()
-
-    def compute_effect(self, year: int) -> FertilizationEffect:
-        return FertilizationEffect(
-            is_active=False,
-            pH_increment=0.0,
-            nutrient_release=self._zero_release(),
-        )
 
 
 def initialize_fertilization(
@@ -156,7 +160,7 @@ def initialize_fertilization(
     """
     match fertilization_params:
         case None:
-            return NoFertilization(n_cols=n_cols, fpara=None)
+            return NoFertilization(n_cols=n_cols)
         case AshFertilizationParameters():
             return AshFertilization(n_cols=n_cols, fpara=fertilization_params)
         case StandardNPKFertilizationParameters():

@@ -29,7 +29,7 @@ from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
     TreeSpecies,
-    FertilizationParameters,
+    StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     SiteParams,
     WeatherParams,
@@ -361,7 +361,7 @@ def prepare_susi_params(
                 depoN=3.5,  # Lestijärvi
                 depoP=1.0,  # Lestijärvi
                 depoK=0.6,  # Lestijärvi
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=fertilization_application_year,
                     N=NutrientFertilizationParameters(
                         dose=0.0,

@@ -570,7 +570,7 @@ class AshFertilizationParameters(StrictFrozenModel):
 
 
 FertilizationParameters = Union[
-    AshFertilizationParameters, StandardNPKFertilizationParameters
+    StandardNPKFertilizationParameters | AshFertilizationParameters
 ]
 
 
@@ -686,7 +686,9 @@ class SiteParams(StrictFrozenModel):
     depoN: float
     depoP: float
     depoK: float
-    fertilization: FertilizationParameters | None = None
+    fertilization: FertilizationParameters | None = Field(
+        description="Use None for no fertilization.", default=None
+    )
     peat_temperature: PeatTemperatureParams
 
     @computed_field

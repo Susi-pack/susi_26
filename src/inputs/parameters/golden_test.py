@@ -9,7 +9,7 @@ from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
     TreeSpecies,
-    FertilizationParameters,
+    StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     SiteParams,
     WeatherParams,
@@ -95,7 +95,7 @@ PARAMETERS = SusiParams(
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
-        fertilization=FertilizationParameters(
+        fertilization=StandardNPKFertilizationParameters(
             application_year=3004,
             N=NutrientFertilizationParameters(
                 dose=0.0,
