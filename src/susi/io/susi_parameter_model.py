@@ -1,3 +1,4 @@
+from scipy.stats import describe
 from functools import lru_cache
 import datetime
 from enum import Enum
@@ -541,19 +542,22 @@ class AshFertilizationParameters(StrictFrozenModel):
 
     application_year: int
     grain_radius: NonNegativeFloat = Field(
-        default=0.005, description="Radius of ash grains in meters."
+        default=0.005, description="Radius of ash grains (m)."
     )
     particle_cracking_rate: NonNegativeFloat = Field(
-        default=2.0  # alpha: kokeile 0.1 (hidas) vs 2.0 (nopea)
+        default=2.0, description="How fast particles break down"
     )
     dissolution_rate: NonNegativeFloat = Field(
-        default=0.005, description="kg / m^2 / year"
+        default=0.005, description="Liukoisuusvakiot. (kg/m^2/year)"
     )
     K_dissolution_rate: NonNegativeFloat = Field(
-        default=0.00012, description="(kg/m^2/year)"
+        default=0.00012, description="Potassium release rate. (kg/m^2/year)"
     )
     P_dissolution_rate: NonNegativeFloat = Field(
-        default=0.000045, description="(kg/m^2/year)"
+        default=0.000045, description="Phosphorus release rate. (kg/m^2/year)"
+    )
+    density: NonNegativeFloat = Field(
+        default=1000, description="Density of ash grains (kg/m^3)"
     )
     fertilizer_dose: NonNegativeFloat = Field(
         description="Mass of the ash fertilizer (kg/ha)"
@@ -565,7 +569,7 @@ class AshFertilizationParameters(StrictFrozenModel):
         description="Amount of phosphorus in the fertilizer (kg/ha)"
     )
     time_exp: NonNegativeFloat = Field(
-        description="Exponent in the grain cracking function"
+        description="Exponent in the grain cracking function."
     )
 
 

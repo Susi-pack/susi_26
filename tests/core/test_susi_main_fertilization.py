@@ -19,6 +19,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     PeatTypes,
     StandardNPKFertilizationParameters,
+    AshFertilizationParameters,
 )
 
 
@@ -140,7 +141,9 @@ class TestSusiMainFertilizationIntegration:
         """Test that fertilization is initialized as NoFertilization when None."""
         from susi.core.fertilization import initialize_fertilization, NoFertilization
 
-        result = initialize_fertilization(fertilization_params=None, n_cols=4)
+        result = initialize_fertilization(
+            fertilization_params=None, n_cols=4, simulation_end_year=2005
+        )
         assert isinstance(result, NoFertilization)
         assert result.ncols == 4
 
@@ -161,7 +164,36 @@ class TestSusiMainFertilizationIntegration:
             pH_increment=0.5,
         )
 
-        result = initialize_fertilization(fertilization_params=fert_params, n_cols=4)
+        result = initialize_fertilization(
+            fertilization_params=fert_params, n_cols=4, simulation_end_year=2005
+        )
         assert isinstance(result, StandardNPKFertilization)
+        assert result.ncols == 4
+        assert result.fpara == fert_params
+
+    def test_fertilization_initialization_ash(self, base_susi_params, test_data_path):
+        """Test that fertilization is initialized as AshFertilization when provided."""
+        from susi.core.fertilization import (
+            initialize_fertilization,
+            AshFertilization,
+        )
+
+        fert_params = AshFertilizationParameters(
+            application_year=2005,
+            grain_radius=0.005,
+            particle_cracking_rate=2.0,
+            dissolution_rate=0.005,
+            K_dissolution_rate=0.00012,
+            P_dissolution_rate=0.000045,
+            fertilizer_dose=100.0,
+            K_in_ash=50.0,
+            P_in_ash=20.0,
+            time_exp=1.0,
+        )
+
+        result = initialize_fertilization(
+            fertilization_params=fert_params, n_cols=4, simulation_end_year=2005
+        )
+        assert isinstance(result, AshFertilization)
         assert result.ncols == 4
         assert result.fpara == fert_params

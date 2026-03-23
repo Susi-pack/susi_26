@@ -131,93 +131,114 @@ class AshFertilization(AbstractFertilization):
         self,
         n_cols: int,
         fpara: AshFertilizationParameters,
-        n_years_to_simulate_after_fertilization: int,
+        n_years_to_simulate_since_fertilization: int,
     ):
         super().__init__(n_cols=n_cols, fpara=fpara)
 
+        # Ash fertilization curves are precomputed,
+        # and accessed later for the yearly values
+        self.pH_history, self.K_release_history, self.P_release_history = (
+            self._precompute_ash_fertilization(
+                n_years_to_simulate_since_fertilization, fpara
+            )
+        )
+
+    def _precompute_ash_fertilization(
+        self,
+        n_years_to_simulate_since_fertilization: int,
+        fpara: AshFertilizationParameters,
+    ):
         """
-        Precompute
-        Simuloi lannoiterakeiden murenemista ja ravinteiden vapautumista.
+        Calculates the disintegration of ash grains and the release of P and K from ash and the ewffect on soil pH
+        Inputs:
+            n_years_to_simulate_since_fertilization: number of years since fertilization until simulation ends
+            fpara: AshFertilizationParameters
         """
 
-        dt = 1  # years. Must be 1 to coincide with SUSI timestep
-        years = np.arange(0, n_years_to_simulate_after_fertilization, dt)
-        tiheys = 1000  # kg/m3 (tuhkarakeen tiheys)
-        pH_alku = 4.0
+        dt = 1  # Yearly timestep. Must be the same as SUSI.
+        t = np.arange(0, n_years_to_simulate_since_fertilization, dt)
 
-        # Alustetaan taulukot tuloksille
-        K_vapautuminen = np.zeros_like(years)
-        P_vapautuminen = np.zeros_like(years)
-        ph_historia = np.zeros_like(years)
+        # Result table initialization
+        mass = np.zeros_like(t)
+        mass_release = np.zeros_like(t)
+        ash_surface_area = np.zeros_like(t)
+        K_release = np.zeros_like(t)
+        P_release = np.zeros_like(t)
+        pH_history = np.zeros_like(t)
 
-        # Alkumäärät (kg)
-        K_varasto = fpara.K_in_ash.copy()
-        P_varasto = fpara.P_in_ash.copy()
+        # initial storages in ash (kg)
+        K_storage = fpara.K_in_ash
+        P_storage = fpara.P_in_ash
 
         # 1. Lasketaan montako raetta meillä on alussa
-        yksittaisen_rakeen_tilavuus = (4 / 3) * np.pi * (fpara.grain_radius**3)
-        yksittaisen_rakeen_massa = tiheys * yksittaisen_rakeen_tilavuus
-        n_partikkelit_0 = fpara.fertilizer_dose / yksittaisen_rakeen_massa
+        volume_of_single_grain = (4 / 3) * np.pi * (fpara.grain_radius**3)
+        mass_of_single_grain = fpara.density * volume_of_single_grain
+        n_particles_0 = fpara.fertilizer_dose / mass_of_single_grain
 
-        nykyinen_massa = fpara.fertilizer_dose
+        current_fertilizer_mass = fpara.fertilizer_dose
 
-        for year in years:
+        for i in range(len(t)):
             # 2. Murenemisfunktio: hiukkasten lukumäärä kasvaa ajan neliössä
             # n = n_0 * (1 + alpha * t^2)
-            n_partikkelit = n_partikkelit_0 * (
-                1 + fpara.particle_cracking_rate * (year**fpara.time_exp)
+            n_particles = n_particles_0 * (
+                1 + fpara.particle_cracking_rate * (t[i] ** fpara.time_exp)
             )
 
             # 3. Lasketaan yksittäisen murentuneen hiukkasen massa tällä hetkellä
-            m_hiukkanen = nykyinen_massa / n_partikkelit
+            m_particle = current_fertilizer_mass / n_particles
 
             # 4. Lasketaan hiukkasen säde ja kokonaispinta-ala
             # r = (3m / 4*pi*rho)^(1/3)
-            r_eff = ((3 * m_hiukkanen) / (4 * np.pi * tiheys)) ** (1 / 3)
-            A_yksi = 4 * np.pi * (r_eff**2)
-            A_kokonais = n_partikkelit * A_yksi
+            r_eff = ((3 * m_particle) / (4 * np.pi * fpara.density)) ** (1 / 3)
+            A_particle = 4 * np.pi * (r_eff**2)
+            A_total = n_particles * A_particle
 
             # 5. Lasketaan vapautuva ravinne (dm = k * A * dt) tämä on massan laskenta
-            dm = fpara.dissolution_rate * A_kokonais * dt
-            dm = min(dm, nykyinen_massa)  # Ei voi vapauttaa enemmän kuin on
+            dm = fpara.dissolution_rate * A_total * dt
+            dm = min(dm, current_fertilizer_mass)  # Ei voi vapauttaa enemmän kuin on
 
             # 2. Kaliumin vapautuminen (nopeampi)
-            dK = fpara.K_dissolution_rate * A_kokonais * dt
-            dK = min(dK, K_varasto)
-            K_varasto -= dK
+            dK = fpara.K_dissolution_rate * A_total * dt
+            dK = min(dK, K_storage)
+            K_storage -= dK
 
             # 3. Fosforin vapautuminen (hitaampi)
-            dP = fpara.P_dissolution_rate * A_kokonais * dt
-            dP = min(dP, P_varasto)
-            P_varasto -= dP
+            dP = fpara.P_dissolution_rate * A_total * dt
+            dP = min(dP, P_storage)
+            P_storage -= dP
 
-            K_vapautuminen[year] = dK / dt
-            P_vapautuminen[year] = dP / dt
+            K_release[i] = dK / dt
+            P_release[i] = dP / dt
 
             # 6.lasketaan pHn nousu
-            vapautunut_tuhka = fpara.fertilizer_dose - nykyinen_massa
-            nykyinen_pH = pH_alku + (vapautunut_tuhka * (2.5 / 15000))
+            dissolved_ash = fpara.fertilizer_dose - current_fertilizer_mass
+            # this is cumulative increment from the begiining of the simulation
+            pH_increment = dissolved_ash * (2.5 / 15000)
 
-            ph_historia[year] = nykyinen_pH
+            # Tallennus
+            mass[i] = current_fertilizer_mass
+            mass_release[i] = dm / dt
+            ash_surface_area[i] = A_total
+
+            mass_release[i] = dm / dt
+            pH_history[i] = pH_increment
 
             # Päivitys seuraavalle kierrokselle
-            nykyinen_massa -= dm
+            current_fertilizer_mass -= dm
 
-        self.ph_historia = ph_historia
-        self.P_vapautuminen = P_vapautuminen
-        self.K_vapautuminen = K_vapautuminen
+        return pH_history, K_release, P_release
 
     def _compute_active_effect(
         self, years_since_fertilization: int
     ) -> FertilizationEffect:
         return FertilizationEffect(
             is_active=True,
-            pH_increment=self.ph_historia[years_since_fertilization],
+            pH_increment=self.ph_history[years_since_fertilization],
             nutrient_release={
                 "N": np.zeros(self.ncols),
-                "P": self.P_vapautuminen[years_since_fertilization]
+                "P": self.P_release_history[years_since_fertilization]
                 * np.ones(self.ncols),
-                "K": self.K_vapautuminen[years_since_fertilization]
+                "K": self.K_release_history[years_since_fertilization]
                 * np.ones(self.ncols),
             },
         )
@@ -259,7 +280,7 @@ def initialize_fertilization(
             return AshFertilization(
                 n_cols=n_cols,
                 fpara=fertilization_params,
-                n_years_to_simulate_after_fertilization=simulation_end_year
+                n_years_to_simulate_since_fertilization=simulation_end_year
                 - fertilization_params.application_year,
             )
         case StandardNPKFertilizationParameters():

@@ -90,20 +90,6 @@ class TestNoFertilization:
         assert np.all(effect.nutrient_release["P"] == 0.0)
         assert np.all(effect.nutrient_release["K"] == 0.0)
 
-    def test_abstract_methods_implemented(self):
-        """Test that NoFertilization implements the abstract methods."""
-        # Arrange
-        fert = NoFertilization(n_cols=3)
-
-        # Act & Assert
-        # These should not raise NotImplementedError
-        assert fert.compute_ph_effect(5) == 0.0
-        nutrient_release = fert.compute_nutrient_release(5)
-        assert isinstance(nutrient_release, dict)
-        assert "N" in nutrient_release
-        assert "P" in nutrient_release
-        assert "K" in nutrient_release
-
 
 class TestInitializeFertilization:
     """Test initialize_fertilization factory function."""
@@ -115,7 +101,7 @@ class TestInitializeFertilization:
         n_cols = 5
 
         # Act
-        fert = initialize_fertilization(fert_params, n_cols)
+        fert = initialize_fertilization(fert_params, n_cols, simulation_end_year=0)
 
         # Assert
         assert isinstance(fert, NoFertilization)
@@ -135,7 +121,7 @@ class TestInitializeFertilization:
         n_cols = 4
 
         # Act
-        fert = initialize_fertilization(fert_params, n_cols)
+        fert = initialize_fertilization(fert_params, n_cols, simulation_end_year=0)
 
         # Assert
         assert isinstance(fert, StandardNPKFertilization)
@@ -162,7 +148,7 @@ class TestInitializeFertilization:
         n_cols = 3
 
         # Act
-        fert = initialize_fertilization(fert_params, n_cols)
+        fert = initialize_fertilization(fert_params, n_cols, simulation_end_year=2006)
 
         # Assert
         assert isinstance(
