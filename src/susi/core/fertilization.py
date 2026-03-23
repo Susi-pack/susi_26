@@ -6,7 +6,7 @@ Created on Sat Mar  5 19:31:27 2022
 """
 
 import numpy as np
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import assert_never, Literal, get_args
 from dataclasses import dataclass
 
@@ -46,6 +46,10 @@ class AbstractFertilization(ABC):
 
     # ---- Core API ----
     def compute_effect(self, year: int) -> FertilizationEffect:
+        """
+        Template method: handles the inactive guard,
+        delegates active logic to subclasses.
+        """
         years_since = self._years_since_fertilization(year)
 
         if not self.is_active(years_since):
@@ -58,20 +62,12 @@ class AbstractFertilization(ABC):
         # If active, years_since is guaranteed to not be None
         assert years_since is not None
 
-        return FertilizationEffect(
-            is_active=True,
-            pH_increment=self.compute_ph_effect(years_since),
-            nutrient_release=self.compute_nutrient_release(years_since),
-        )
+        return self._compute_active_effect(years_since)
 
-    # ---- Hooks for subclasses ----
-    @abstractmethod
-    def compute_ph_effect(self, years_since_fertilization: int) -> float: ...
-
-    @abstractmethod
-    def compute_nutrient_release(
+    # ---- Subclasses must implement this ----
+    def _compute_active_effect(
         self, years_since_fertilization: int
-    ) -> dict[Nutrient, np.ndarray]: ...
+    ) -> FertilizationEffect: ...
 
     # ---- Shared helpers ----
     def _years_since_fertilization(self, year: int) -> int | None:
@@ -117,16 +113,86 @@ class StandardNPKFertilization(AbstractFertilization):
             )
         return release
 
+    def _compute_active_effect(
+        self, years_since_fertilization: int
+    ) -> FertilizationEffect:
+
+        return FertilizationEffect(
+            is_active=True,
+            pH_increment=self.compute_ph_effect(years_since_fertilization),
+            nutrient_release=self.compute_nutrient_release(years_since_fertilization),
+        )
+
 
 class AshFertilization(AbstractFertilization):
-    def compute_ph_effect(self, years_since_fertilization: int) -> float:
-        raise NotImplementedError()
+    def __init__(self, n_cols: int, fpara: FertilizationParameters):
+        super().__init__(n_cols=n_cols, fpara=fpara)
 
-    def compute_nutrient_release(
+        self.nykynen_massa = self.fpara.fertilizer_dose
+
+        # Alkumäärät (kg)
+        self.varasto_K = self.fpara.K_in_ash
+        self.varasto_P = self.fpara.P_in_ash
+
+        self.pH_alku = 4.0
+        self.tiheys = 1000  # kg/m3 (tuhkarakeen tiheys)
+
+        yksittaisen_rakeen_tilavuus = (4 / 3) * np.pi * (self.fpara.grain_radius**3)
+        yksittaisen_rakeen_massa = self.tiheys * yksittaisen_rakeen_tilavuus
+        self.n_partikkelit_0 = self.fpara.fertilizer_dose / yksittaisen_rakeen_massa
+
+    def _compute_active_effect(
         self, years_since_fertilization: int
-    ) -> dict[Nutrient, np.ndarray]:
+    ) -> FertilizationEffect:
+        """
+        Simuloi lannoiterakeiden murenemista ja ravinteiden vapautumista.
+        """
+        # 2. Murenemisfunktio: hiukkasten lukumäärä kasvaa ajan neliössä
+        # n = n_0 * (1 + alpha * t^2)
+        n_partikkelit = self.n_partikkelit_0 * (
+            1
+            + self.fpara.particle_cracking_rate
+            * (years_since_fertilization**self.fpara.time_exp)
+        )
 
-        raise NotImplementedError()
+        # 3. Lasketaan yksittäisen murentuneen hiukkasen massa tällä hetkellä
+        m_hiukkanen = self.nykyinen_massa / n_partikkelit
+
+        # 4. Lasketaan hiukkasen säde ja kokonaispinta-ala
+        # r = (3m / 4*pi*rho)^(1/3)
+        r_eff = ((3 * m_hiukkanen) / (4 * np.pi * self.tiheys)) ** (1 / 3)
+        A_yksi = 4 * np.pi * (r_eff**2)
+        A_kokonais = n_partikkelit * A_yksi
+
+        # 5. Lasketaan vapautuva ravinne (dm = k * A * dt) tämä on massan laskenta
+        dm = self.fpara.dissolution_rate * A_kokonais
+        dm = min(dm, self.nykyinen_massa)  # Ei voi vapauttaa enemmän kuin on
+
+        # 2. Kaliumin vapautuminen (nopeampi)
+        dK = self.fpara.K_dissolution_rate * A_kokonais
+        dK = min(dK, self.varasto_K)
+        self.varasto_K -= dK
+
+        # 3. Fosforin vapautuminen (hitaampi)
+        dP = self.fpara.P_dissolution_rate * A_kokonais
+        dP = min(dP, self.varasto_P)
+        self.varasto_P -= dP
+
+        # 6.lasketaan pHn nousu
+        vapautunut_tuhka = self.fpara.fertilizer_dose - self.nykyinen_massa
+        nykyinen_pH = self.pH_alku + (vapautunut_tuhka * (2.5 / 15000))
+
+        self.nykyinen_massa -= dm
+
+        return FertilizationEffect(
+            is_active=True,
+            pH_increment=nykyinen_pH,
+            nutrient_release={
+                "N": np.zeros(self.ncols),
+                "P": dP * np.ones(self.ncols),
+                "K": dK * np.ones(self.ncols),
+            },
+        )
 
 
 class NoFertilization(AbstractFertilization):
