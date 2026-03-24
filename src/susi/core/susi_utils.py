@@ -92,8 +92,8 @@ def peat_hydrol_properties(x, unit="g/cm3", var="bd", ptype="A"):
 
     # wcont = lambda x, (a0, a1, a2): a0 + a1*x + a2*x**2.
     wcont = lambda x, *a: a[0] + a[1] * x + a[2] * x**2.0
-    van_g = lambda pot, *p: p[1] + (p[0] - p[1]) / (1.0 + (p[2] * pot) ** p[3]) ** (
-        1.0 - 1.0 / p[3]
+    van_g = lambda pot, *p: (
+        p[1] + (p[0] - p[1]) / (1.0 + (p[2] * pot) ** p[3]) ** (1.0 - 1.0 / p[3])
     )
     # K = lambda x, (a0, a1): 10.**(a0 + a1*x) / 100.   # to m/s
     K = lambda x, *a: 10.0 ** (a[0] + a[1] * x) / 100.0  # to m/s

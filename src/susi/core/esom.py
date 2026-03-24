@@ -47,7 +47,7 @@ class Esom:
                 "k6": 1.05,
             },  # modifiers for nutrient release in comparison to mass release
             #'N':{'k1':0.1, 'k2': 0.5, 'k6':0.5},                               #old version from ROMUL
-            #"N": {"k1": 0.1, "k2": 0.1, "k6": 0.125},
+            # "N": {"k1": 0.1, "k2": 0.1, "k6": 0.125},
             "N": {"k1": 0.1, "k2": 0.5, "k6": 0.175},
             #'P':{'k1':1.1, 'k2': 1.1, 'k6':1.0},
             "P": {"k1": 1.1, "k2": 0.45, "k6": 0.3},
@@ -687,9 +687,9 @@ class Esom:
         self.P1_out = P1_ini - self.M[:, :, 7] * 10000.0
         self.P2_out = P2_ini - self.M[:, :, 8] * 10000.0
         self.P3_out = P3_ini - self.M[:, :, 9] * 10000.0
-        
+
         self.out_root_lyr = self.out - self.P2_out - self.P3_out
-        self.out_below_root_lyr = self.P2_out #+ self.P3_out
+        self.out_below_root_lyr = self.P2_out  # + self.P3_out
 
         # return self.out
 
