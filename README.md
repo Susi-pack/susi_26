@@ -1,10 +1,13 @@
 # Overview
 Peatland simulator SUSI version used in Saari et al. (nimi) 2025 and Niemi et al. (2025) (nimi)
-
-SUSI version was built in Python using Spyder programming tool. All packages and versions for running 
-Spyder and this SUSI version can be found from requirements.txt
-
 # Installation
+## Using `uv`
+`uv sync`
+That creates a virtual environment and installs the project + dependencies.
+
+Then, activate the environment:
+`source .venv/bin/activate`
+
 `pip install -e .`
 
 # Run
