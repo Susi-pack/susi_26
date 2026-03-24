@@ -495,8 +495,8 @@ def run(
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
     AppSettings().project_root_path / FILE_POINTERS["allometry_directory"]
-
 )
+
 
 def list_all_files_in_directory_with_given_extension(
     dir: Path, extension: str
@@ -659,7 +659,6 @@ for stand_number in stand_numbers:
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
-
         # base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
         base_scenarios = ["default", "partialblocking", "DNM"]
     else:
@@ -699,6 +698,6 @@ multiprocessing_args = list(
         G_2_per_parameter_set,
     )
 )
-if __name__=='__main__':
+if __name__ == "__main__":
     with Pool(processes=execution_config.n_parallel_processes) as pool:
         pool.starmap(func=run, iterable=multiprocessing_args)
