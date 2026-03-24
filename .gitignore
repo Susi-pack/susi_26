@@ -38,9 +38,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# uv stuff
-uv.lock
-.python-version
 
 # OS generated files
 Thumbs.db
