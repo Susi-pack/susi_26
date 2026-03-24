@@ -1,5 +1,7 @@
-# susi folders
-outputs/
+# Ignore the contents of the outputs folder,
+# but track the folder itself
+outputs/*
+!outputs/.gitkeep
 
 #python stuff
 venv/
