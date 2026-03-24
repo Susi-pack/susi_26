@@ -7,17 +7,22 @@ license = { file = "LICENSE" }
 authors = [{ name = "Your Name", email = "your.email@example.com" }]
 requires-python = ">=3.11"
 dependencies = [
+    "altair[all]>=6.0.0",
     "matplotlib>=3.10.8",
     "netcdf4>=1.7.4",
     "numba>=0.64.0",
     "numpy>=2.4.3",
     "openpyxl>=3.1.5",
-    "pandas>=3.0.1",
+    "pandas>=2.3.0",
     "pydantic>=2.12.5",
     "pyproj>=3.7.2",
     "scipy>=1.17.1",
     "seaborn>=0.13.2",
+    "streamlit>=1.19.0",
+    "streamlit-tree-select>=0.0.5",
 ]
+[dependency-groups]
+dev = ["hypothesis>=6.151.9", "pytest>=9.0.2", "xmltodict>=1.0.4"]
 
 
 [build-system]
