@@ -1,4 +1,5 @@
 # %%
+from susi.io.utils import read_json_file
 from typing import Callable, Sequence, Literal, assert_never, NewType
 from dataclasses import dataclass
 import numpy as np
@@ -215,18 +216,32 @@ def build_optimization_array(
     return target_var_arrays
 
 
-# TODO: change with real values
-import warnings
+# %% Get stand areas from json file derived from xml
+JSON_FROM_XML_PATH = (
+    AppSettings().project_root_path / "xmltoallometry_with_areas/extra_XML_info.json"
+)
+j = read_json_file(path=JSON_FROM_XML_PATH)
 
-warnings.warn("Using placeholder study area values")
-STAND_AREAS_HA: dict[StandID, float] = {
-    stand_id: rng.random() for stand_id in data_store.stands
+
+def _get_stand_area_from_json_file(json: dict, stand_number: int) -> float:
+    return json["stand_datas"][str(stand_number)]["area"]
+
+
+def _stand_id_to_stand_number(stand_id: StandID) -> int:
+    return int(str(stand_id).split("_")[-1])
+
+
+stand_areas_ha: dict[StandID, float] = {
+    stand_id: _get_stand_area_from_json_file(
+        json=j, stand_number=_stand_id_to_stand_number(stand_id)
+    )
+    for stand_id in data_store.stands
 }
 
 target_var_arrays = build_optimization_array(
     data_store=data_store,
     optimization_variables=PROPERTIES_OF_TARGET_VARIABLES,
-    stand_areas=STAND_AREAS_HA,
+    stand_areas=stand_areas_ha,
 )
 
 
