@@ -16,7 +16,7 @@ import shutil
 
 
 from susi.io.execution_config import SimulationParams
-from susi.io import netcdf_utils
+from susi.io import load_output_data
 from susi.core.susi_main import Susi
 from inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData, _app_settings
@@ -46,22 +46,29 @@ def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
 
 
 def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
-    new_variables = netcdf_utils.list_all_netcdf_variables(new_netcdf_filepath)
-    golden_variables = netcdf_utils.list_all_netcdf_variables(golden_netcdf_filepath)
+    new_variables = load_output_data.list_all_netcdf_variables(new_netcdf_filepath)
+    golden_variables = load_output_data.list_all_netcdf_variables(
+        golden_netcdf_filepath
+    )
 
     # Compare variable attributes first
-    assert new_variables == golden_variables
+    assert new_variables.keys() == golden_variables.keys()
 
-    new_vars_values = netcdf_utils.read_value_several_variables_from_single_file(
-        netcdf_filepath=new_netcdf_filepath, variables=new_variables
+    new_vars_values = load_output_data.read_value_several_variables_from_single_file(
+        netcdf_filepath=new_netcdf_filepath, variable_paths=list(new_variables.keys())
     )
-    golden_vars_values = netcdf_utils.read_value_several_variables_from_single_file(
-        netcdf_filepath=golden_netcdf_filepath, variables=golden_variables
+    golden_vars_values = load_output_data.read_value_several_variables_from_single_file(
+        netcdf_filepath=golden_netcdf_filepath,
+        variable_paths=list(golden_variables.keys()),
     )
 
-    for new_var, golden_var in zip(new_vars_values, golden_vars_values):
-        if not masked_arrays_equal(a=new_var.value, b=golden_var.value):
-            raise ValueError(" There were differences in some variable.")
+    for key in new_vars_values.keys():
+        golden_var_value = golden_vars_values[key]._raw
+        new_var_value = new_vars_values[key]._raw
+        if not masked_arrays_equal(a=golden_var_value, b=new_var_value):
+            raise ValueError(
+                f"There were differences in variable {key}.\n Golden value: {golden_var_value}\n New value: {new_var_value}"
+            )
     return True
 
 
