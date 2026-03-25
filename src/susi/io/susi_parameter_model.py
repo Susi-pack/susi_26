@@ -1,10 +1,9 @@
-from multiprocessing.sharedctypes import Value
-from numba.scripts.generate_lower_listing import description
+from scipy.stats import describe
 from functools import lru_cache
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Self, TypedDict
+from typing import Callable, Self, Union
 import numpy as np
 import pandas as pd
 
@@ -523,16 +522,60 @@ class NutrientFertilizationParameters(StrictFrozenModel):
     eff: NonNegativeFloat = Field(description="Nutrient use efficiency")
 
 
-class FertilizationParameters(StrictFrozenModel):
+class StandardNPKFertilizationParameters(StrictFrozenModel):
     """
-    Canopy parameters
+    Fertilization parameters for all fertilizers except wood ash.
+    First order decay function.
     """
 
-    application_year: int = 2201
+    application_year: int
     N: NutrientFertilizationParameters
     P: NutrientFertilizationParameters
     K: NutrientFertilizationParameters
-    pH_increment: NonNegativeFloat = 1.0
+    pH_increment: NonNegativeFloat = 0.0
+
+
+class AshFertilizationParameters(StrictFrozenModel):
+    """
+    Ash fertilization parameters
+    """
+
+    application_year: int
+    grain_radius: NonNegativeFloat = Field(
+        default=0.005, description="Radius of ash grains (m)."
+    )
+    particle_cracking_rate: NonNegativeFloat = Field(
+        default=2.0, description="How fast particles break down"
+    )
+    dissolution_rate: NonNegativeFloat = Field(
+        default=0.005, description="Liukoisuusvakiot. (kg/m^2/year)"
+    )
+    K_dissolution_rate: NonNegativeFloat = Field(
+        default=0.00012, description="Potassium release rate. (kg/m^2/year)"
+    )
+    P_dissolution_rate: NonNegativeFloat = Field(
+        default=0.000045, description="Phosphorus release rate. (kg/m^2/year)"
+    )
+    density: NonNegativeFloat = Field(
+        default=1000, description="Density of ash grains (kg/m^3)"
+    )
+    fertilizer_dose: NonNegativeFloat = Field(
+        description="Mass of the ash fertilizer (kg/ha)"
+    )
+    K_in_ash: NonNegativeFloat = Field(
+        description="Amount of potassium in the fertilizer (kg/ha)"
+    )
+    P_in_ash: NonNegativeFloat = Field(
+        description="Amount of phosphorus in the fertilizer (kg/ha)"
+    )
+    time_exp: NonNegativeFloat = Field(
+        description="Exponent in the grain cracking function."
+    )
+
+
+FertilizationParameters = Union[
+    StandardNPKFertilizationParameters | AshFertilizationParameters
+]
 
 
 class PeatTemperatureParams(StrictFrozenModel):
@@ -647,7 +690,9 @@ class SiteParams(StrictFrozenModel):
     depoN: float
     depoP: float
     depoK: float
-    fertilization: FertilizationParameters | None = None
+    fertilization: FertilizationParameters | None = Field(
+        description="Use None for no fertilization.", default=None
+    )
     peat_temperature: PeatTemperatureParams
 
     @computed_field
@@ -714,17 +759,17 @@ class SusiParams(StrictFrozenModel):
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
 
-    # @model_validator(mode="after")
-    # def check_fertilization_within_bounds(self) -> Self:
-    #     # Now 'self' is SusiParams, which CAN see both children
-    #     config = self.simulation_config
-    #     site = self.site_parameters
-    #
-    #     if site.fertilization is not None:
-    #         app_year = site.fertilization.application_year
-    #         if not (config.start_date.year <= app_year <= config.end_date.year):
-    #             raise ValueError(f"Fertilization year {app_year} is out of bounds!")
-    #     return self
+    @model_validator(mode="after")
+    def check_fertilization_within_bounds(self) -> Self:
+        # Now 'self' is SusiParams, which CAN see both children
+        config = self.simulation_config
+        site = self.site_parameters
+
+        if site.fertilization is not None:
+            app_year = site.fertilization.application_year
+            if not (config.start_date.year <= app_year <= config.end_date.year):
+                raise ValueError(f"Fertilization year {app_year} is out of bounds!")
+        return self
 
     @model_validator(mode="after")
     def stand_age_vs_allometry_pathway(self) -> Self:
@@ -796,10 +841,6 @@ class SusiParams(StrictFrozenModel):
         for df in allometry_data.values():
             min_age = min(min_age, df["age"].min())
             max_age = max(max_age, df["age"].max())
-
-        df = next(iter(allometry_data.values()))
-        min_age = df["age"].min()
-        max_age = df["age"].max()
 
         if initial_age < min_age:
             raise ValueError(

@@ -6,7 +6,7 @@ from susi.io.susi_parameter_model import (
     AllometryParams,
     CanopyLayerAllometryPointers,
     CanopyParams,
-    FertilizationParameters,
+    StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
@@ -98,7 +98,7 @@ def valid_susi_params(test_data_path):
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
-            fertilization=FertilizationParameters(
+            fertilization=StandardNPKFertilizationParameters(
                 application_year=2005,
                 N=NutrientFertilizationParameters(
                     dose=0.0,
@@ -184,7 +184,7 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
-            fertilization=FertilizationParameters(
+            fertilization=StandardNPKFertilizationParameters(
                 application_year=2005,
                 N=NutrientFertilizationParameters(
                     dose=0.0,
@@ -274,7 +274,7 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,
@@ -369,7 +369,7 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,
@@ -456,7 +456,7 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,
@@ -543,7 +543,7 @@ def test_subdominant_layer_validation(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,
@@ -630,7 +630,7 @@ def test_under_layer_validation(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,
@@ -716,7 +716,7 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
-            fertilization=FertilizationParameters(
+            fertilization=StandardNPKFertilizationParameters(
                 application_year=2005,
                 N=NutrientFertilizationParameters(
                     dose=0.0,
@@ -806,7 +806,7 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
-                fertilization=FertilizationParameters(
+                fertilization=StandardNPKFertilizationParameters(
                     application_year=2005,
                     N=NutrientFertilizationParameters(
                         dose=0.0,

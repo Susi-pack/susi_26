@@ -2543,10 +2543,16 @@ class Outputs:
         self.ncf["methane"]["ch4"][scen, year, :] = ch4
         self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4 * 27.0
 
-    def write_fertilization(self, scen, year, ferti):
-        self.ncf["fertilization"]["n_release"][scen, year, :] = ferti.release["N"]
-        self.ncf["fertilization"]["p_release"][scen, year, :] = ferti.release["P"]
-        self.ncf["fertilization"]["k_release"][scen, year, :] = ferti.release["K"]
+    def write_fertilization(self, scen, year, fertilization_effect):
+        self.ncf["fertilization"]["n_release"][scen, year, :] = (
+            fertilization_effect.nutrient_release["N"]
+        )
+        self.ncf["fertilization"]["p_release"][scen, year, :] = (
+            fertilization_effect.nutrient_release["P"]
+        )
+        self.ncf["fertilization"]["k_release"][scen, year, :] = (
+            fertilization_effect.nutrient_release["K"]
+        )
 
     def write_export(self, scen, year, esmass):
         self.ncf["export"]["hmwtoditch"][scen, year, :] = esmass.hmwtoditch
