@@ -2,7 +2,8 @@
 # Adapted by Iñaki Urzainki from Mikko Niemi's original code.
 
 # %% Imports
-from typing import Optional
+from susi.io.load_output_data import StandID
+from typing import Optional, NewType
 import pandas as pd
 import xmltodict
 from pydantic import BaseModel, computed_field, Field
@@ -34,7 +35,7 @@ class StandData(BaseModel):
     Stand data  from the XML file
     """
 
-    id: int
+    id: StandID
     fertility_class: int
     polygon: str
     tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum]
@@ -50,6 +51,7 @@ class StandData(BaseModel):
     basal_area: Optional[float] = Field(default=None, description="m2/ha")
     mean_height: Optional[float] = Field(default=None, description="m")
     total_volume: Optional[float] = Field(default=None, description="m3/ha")
+    area: Optional[float] = Field(default=None, description="ha")
 
     @computed_field
     @property
@@ -62,7 +64,15 @@ class ManyStandDatas(BaseModel):
     Only used to serialize everything to the same .json
     """
 
-    stand_datas: list[StandData]
+    stand_datas: dict[StandID, StandData]
+
+
+def _create_many_stand_datas(stand_datas: list[StandData]) -> ManyStandDatas:
+    many_stand_datas = {}
+    for stand_data in stand_datas:
+        many_stand_datas[stand_data.id] = stand_data
+
+    return ManyStandDatas(stand_datas=many_stand_datas)
 
 
 # %% Functions
@@ -204,7 +214,7 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
 
     # Parse and validate all necessary XML data
     return StandData(
-        id=int(stand["@id"]),
+        id=StandID(stand["@id"]),
         fertility_class=int(stand_basic_data["st:FertilityClass"]),
         polygon=stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
             "gml:Polygon"
@@ -221,6 +231,7 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
         basal_area=float(tree_stand_summary["tss:BasalArea"]),
         mean_height=float(tree_stand_summary["tss:MeanHeight"]),
         total_volume=float(tree_stand_summary["tss:Volume"]),
+        area=float(stand_basic_data["st:Area"]),
     )
 
 
@@ -264,7 +275,7 @@ def get_ykj_coordinates(coords: tuple[float, float]) -> tuple[float, float]:
     return x, y
 
 
-def process_stand(cli_args: CLIArguments, stand_data: StandData):
+def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
     if cli_args.do_thinning:
         thinning_rate = compute_thinning_rate(stand_data)
     else:
@@ -283,9 +294,6 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData):
 
     coords = (stand_data.coords[0][0], stand_data.coords[0][1])
     x, y = get_ykj_coordinates(coords)
-
-    print("Assuming all sites are peatland sites")
-    PEAT = 1
 
     # Generate stand allometry
     gy = Growth_and_Yield_Table(
@@ -333,7 +341,6 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData):
         page2.to_excel(writer, sheet_name="Loggings", index=False)
 
     print(f"Allometric road map successfully generated for stand {stand_data.id}")
-    print()
 
 
 # %% main
@@ -349,17 +356,16 @@ def main():
 
     stand_datas = [get_stand_data_from_xml(stand) for stand in stands]
 
+    # PEAT=1 assumes all sites are peatland sites.
+    print("Assuming all sites are peatland sites!")
     for stand_data in stand_datas:
-        process_stand(cli_args, stand_data)
+        process_stand(cli_args, stand_data, PEAT=1)
 
     dump_json_info_to_file(
         output_folder=cli_args.output_folder,
-        many_stand_datas=ManyStandDatas(stand_datas=stand_datas),
+        many_stand_datas=_create_many_stand_datas(stand_datas=stand_datas),
     )
 
 
 if __name__ == "__main__":
     main()
-    import sys
-
-    sys.exit()
