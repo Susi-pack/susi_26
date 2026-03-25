@@ -1,5 +1,7 @@
-# susi folders
-outputs/
+# Ignore the contents of the outputs folder,
+# but track the folder itself
+outputs/*
+!outputs/.gitkeep
 
 #python stuff
 venv/
@@ -38,14 +40,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# uv stuff
-uv.lock
-.python-version
 
 # OS generated files
 Thumbs.db
 desktop.ini
 .DS_Store
+
 
 requirements_inaki.txt
 
@@ -61,3 +61,7 @@ src/analysis/.ipynb_checkpoints
 .hypothesis/constants
 xmltomotti_no_thinning
 xmltomotti_yes_thinning
+devlog/
+
+# streamlit
+.streamlit/

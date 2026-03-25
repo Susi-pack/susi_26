@@ -141,7 +141,7 @@ def test_modify_after_load():
         }
     )
 
-    result = modify_after_load(df, set_experiment_id_as_index=False)
+    result = modify_after_load(df)
 
     assert pd.api.types.is_datetime64_any_dtype(result["timestamp_start"])
     assert result.iloc[0]["timestamp_start"] > result.iloc[1]["timestamp_start"]
@@ -157,11 +157,10 @@ def test_modify_after_load_with_index():
         }
     )
 
-    result = modify_after_load(df, set_experiment_id_as_index=True)
+    result = modify_after_load(df)
 
-    assert "experiment_id" not in result.columns
-    assert "exp1" in result.index
-    assert "exp2" in result.index
+    assert pd.api.types.is_datetime64_any_dtype(result["timestamp_start"])
+    assert "experiment_id" in result.columns
 
 
 def test_list_subdirectories():
@@ -350,7 +349,7 @@ class TestOutputDataStore:
         metadata_by_stand = {
             StandID("stand_A"): pd.DataFrame(
                 {
-                    "experiment_id": ["scenario_1", "scenario_2"],
+                    "scenario_id": ["scenario_1", "scenario_2"],
                     "netcdf_output_filepath": [mock_netcdf_file, mock_netcdf_file],
                 }
             )
@@ -391,13 +390,13 @@ class TestOutputDataStore:
         metadata_by_stand = {
             StandID("stand_A"): pd.DataFrame(
                 {
-                    "experiment_id": ["scen_A1"],
+                    "scenario_id": ["scen_A1"],
                     "netcdf_output_filepath": [mock_netcdf_file],
                 }
             ),
             StandID("stand_B"): pd.DataFrame(
                 {
-                    "experiment_id": ["scen_B1", "scen_B2"],
+                    "scenario_id": ["scen_B1", "scen_B2"],
                     "netcdf_output_filepath": [mock_netcdf_file, mock_netcdf_file],
                 }
             ),

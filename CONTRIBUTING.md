@@ -1,14 +1,11 @@
 # 📘 CONTRIBUTING.md
 
-This document explains how our team collaborates using **GitHub**, **feature branches**, **pull requests**, **pre-commit hooks**, and **GitHub Actions CI**.
+This document explains how our team collaborates using **GitHub**.
 All contributors must follow this workflow.
 
-Here's a summary of the steps needed to contribute.
-For further details, keep on reading.
-
----
 
 # ✔  Process Summary
+We use the Feature/Branch workflow: the `main` branch is always stable; no commits directly to main; all development happens in branches that are commited to `main` through Pull Requests.
 
 0. Clone SUSI and install the dev environment
 1. Create a branch
@@ -21,32 +18,18 @@ For further details, keep on reading.
 8. We will review the PR. If successful, we will merge it
 9. Delete your branch
 
----
 
 # 📥 0. Install SUSI dev environment
+See instructions in the README.md.
 
-1. Clone the latest version of the code.
-```bash
-git clone <repo-url>
-```
-2. Navigate into the project folder and install the Python environment.
-```bash
-uv sync
-```
-(You need the [`uv`](https://docs.astral.sh/uv/getting-started/installation/)  Python package and environment manager)
+## `ruff` formatting and linting
+We use **[ruff](https://docs.astral.sh/ruff/)** to format and lint the code.
 
-3. Activate the Python environment.
-```bash
-source .venv/bin/activate
-```
+There are 2 options for you to format the code using the same tool.
+1. (most ergonomic) install `ruff` in your favourite IDE.
+2. Run `ruff` in the CLI to format the code.
 
-4. Install the pre-commit hooks (more info on this below)
-```bash
-pre-commit install
-```
-You're ready!
-
-(Tip: Since we use **[ruff](https://docs.astral.sh/ruff/)** to format the code, you might consider installng it in your favourite IDE for a better developer experience.)
+Note: this will improve when the CI pipeline is set up.
 
 ---
 
@@ -60,6 +43,7 @@ to ensure you have the latest version of the model.
 
 Tip: get used to do this often. You never know when someone has changed the original code.
 
+---
 
 # 🔀 2. Create a branch
 
@@ -68,23 +52,6 @@ Tip: get used to do this often. You never know when someone has changed the orig
 * Every contribution occurs on a feature branch. This means that if you want to add or modify some code, you must create a new branch.
 * No commits go directly to `main`. Instead, Pull Requests are created so that every change to `main` is reviewable.
 
-### Branch naming conventions
-
-```
-feature/<short-description>
-bugfix/<issue-or-description>
-refactor/<scope>
-```
-- Feature: new code behaviour.
-- Bugfix: no new behaviour, just fix something that was broken.
-- Refactor: no new behaviour, just move things around.
-
-**Examples:**
-
-```
-feature/add-simulation-runner
-bugfix/fix-numpy-shape-error
-```
 ### How to create a branch
 1. Make sure you are in the `main` branch
 ```bash
@@ -110,7 +77,7 @@ For that to happen, we need to open a Pull Request (see below).
 
 # 💱 3. Modify code
 
-You know how to do this!
+You know how to do this (hopefully)!
 
 ---
 
@@ -130,11 +97,11 @@ pytest
 ```
 
 All tests must pass before submitting a Pull Request.
-(This is enforced automatically by the CI with GitHub Actions, see below).
+(This will be enforced automatically by the CI through GitHub Actions when ready).
 
 ---
 
-# 🧹 4. Commit and `pre-commit`
+# 🧹 4. Commit
 ## Add and Commit the changes in your branch
 
 You can add changes to the code by running
@@ -146,7 +113,7 @@ And commit them with
 git commit -m "<your commit message>"
 ```
 
-## `pre-commit`: Automatic formating
+## (NOT YET ENFORCED, IGNORE) `pre-commit`: Automatic formating
 We enforce code formating, linting, import cleanup, and notebook hygiene via **pre-commit**.
 
 The tools we use are:
@@ -201,15 +168,17 @@ Be nice and write a PR that is:
 * Good title and description
 * Remember: ideally, tests are included for new functionality
 
+Alternative: use the `gh` CLI interface.
+
 ### PR Requirements for approval
 
-* All pre-commit checks pass
-* All CI checks pass (see section below)
+* (NOT YET ENFORCED, IGNORE) All pre-commit checks pass
+* (NOT YET ENFORCED, IGNORE) All CI checks pass (see section below)
 * One of the admins gives the OK
 
 ---
 
-# 🚀 8. CI (GitHub Actions)
+# 🚀 8. (NOT YET ENFORCED, IGNORE) CI (GitHub Actions)
 
 Continuous Integration (CI) runs automatically on Pull Requests and on pushes to `main`.
 CI checks:

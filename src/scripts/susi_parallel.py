@@ -87,6 +87,6 @@ def run_susi(simulation_parameters: SimulationParams) -> None:
 
 
 # %% Execute parallel processing
-
-with Pool(processes=execution_config.n_parallel_processes) as pool:
-    pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)
+if __name__ == "__main__":
+    with Pool(processes=execution_config.n_parallel_processes) as pool:
+        pool.map(func=run_susi, iterable=execution_config.simulation_parameter_list)

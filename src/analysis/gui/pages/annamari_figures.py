@@ -7,16 +7,32 @@ from susi.io.app_settings import AppSettings
 
 from analysis.gui.components import plots, folder_selection
 
-chosen_project_folder = folder_selection.build_folder_selection_widget(
-    dir_path=st.session_state.settings["data_folder"], label="project"
-)
+st.header("Choose project folder")
 
-chosen_stand_folder = folder_selection.build_folder_selection_widget(
-    dir_path=chosen_project_folder, label="stand"
-)
+col1, col2, col3 = st.columns([2, 3, 1])
+
+with col1:
+    st.markdown("**Data folder**")
+
+with col2:
+    st.write(st.session_state.settings["data_folder"])
+
+with col3:
+    if st.button("Browse…", use_container_width=True):
+        result = folder_selection.pick_folder_popup()
+        if result:
+            st.session_state.settings["data_folder"] = result
+            st.rerun()
+
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
-    dir_path=chosen_stand_folder, label="scenario"
+    dir_path=folder_selection.build_folder_selection_widget(
+        dir_path=folder_selection.build_folder_selection_widget(
+            dir_path=st.session_state.settings["data_folder"], label="project"
+        ),
+        label="stand",
+    ),
+    label="scenario",
 )
 
 
@@ -24,12 +40,8 @@ metadata, susi_params = load_output.read_json_metadatas(
     experiment_folderpath=chosen_scenario_folder
 )
 
-sample_netcdf_filepath = (
-    AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
-)
-all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
-
 chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
+all_variables = load_output.list_all_netcdf_variables(chosen_netcdf_filepath)
 
 VARIABLE_PATHS = (
     load_output.NetcdfVariablePath("/strip/dwtyr"),
@@ -130,48 +142,43 @@ VARIABLE_PATHS = (
     load_output.NetcdfVariablePath("/balance/K/balance_root_lyr"),
 )
 
-stand_id = load_output.StandID(chosen_stand_folder.name)
-scenario_id = load_output.ScenarioID(metadata["experiment_id"])
-
-metadata_by_stand = {
-    stand_id: load_output._load_single_experiment_metadatas(chosen_scenario_folder)
-}
-
-data_store = load_output.read_netcdf_files_for_selected_variables(
-    selected_variables=VARIABLE_PATHS, metadata_by_stand=metadata_by_stand
+data: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableArray] = (
+    load_output.read_value_several_variables_from_single_file(
+        netcdf_filepath=chosen_netcdf_filepath, variable_paths=VARIABLE_PATHS
+    )
 )
 
 st.markdown("## Stand")
-fig_stand = plots.stand(data_store, stand_id, scenario_id)
+fig_stand = plots.stand(data=data)
 st.pyplot(fig_stand)
 plt.close(fig_stand)
 
 st.markdown("## Hydrology")
-fig_hydro = plots.hydrology(data_store, stand_id, scenario_id)
+fig_hydro = plots.hydrology(data=data)
 st.pyplot(fig_hydro)
 plt.close(fig_hydro)
 
 st.markdown("## Mass")
-fig_mass = plots.mass(data_store, stand_id, scenario_id)
+fig_mass = plots.mass(data=data)
 st.pyplot(fig_mass)
 plt.close(fig_mass)
 
 st.markdown("## Carbon")
-fig_carbon = plots.carbon(data_store, stand_id, scenario_id)
+fig_carbon = plots.carbon(data=data)
 st.pyplot(fig_carbon)
 plt.close(fig_carbon)
 
 st.markdown("## Nitrogen Balance")
-fig_n = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="N")
+fig_n = plots.nutrient_balance(data=data, substance="N")
 st.pyplot(fig_n)
 plt.close(fig_n)
 
 st.markdown("## Phosphorus Balance")
-fig_p = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="P")
+fig_p = plots.nutrient_balance(data=data, substance="P")
 st.pyplot(fig_p)
 plt.close(fig_p)
 
 st.markdown("## Potassium Balance")
-fig_k = plots.nutrient_balance(data_store, stand_id, scenario_id, substance="K")
+fig_k = plots.nutrient_balance(data=data, substance="K")
 st.pyplot(fig_k)
 plt.close(fig_k)
