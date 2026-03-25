@@ -55,6 +55,7 @@ class AbstractFertilization(ABC):
         if self.is_active(years_since):
             return self._compute_active_effect(years_since)
 
+        # else, if not active:
         return FertilizationEffect(
             is_active=False,
             pH_increment=0.0,
@@ -155,13 +156,10 @@ class AshFertilization(AbstractFertilization):
             fpara: AshFertilizationParameters
         """
 
-        dt = 1  # Yearly timestep. Must be the same as SUSI.
+        dt = 1  # Yearly timestep. Must be =1 to be the same as SUSI.
         t = np.arange(0, n_years_to_simulate_since_fertilization, dt)
 
         # Result table initialization
-        mass = np.zeros_like(t)
-        mass_release = np.zeros_like(t)
-        ash_surface_area = np.zeros_like(t)
         K_release = np.zeros_like(t)
         P_release = np.zeros_like(t)
         pH_history = np.zeros_like(t)
@@ -213,14 +211,9 @@ class AshFertilization(AbstractFertilization):
             # 6.lasketaan pHn nousu
             dissolved_ash = fpara.fertilizer_dose - current_fertilizer_mass
             # this is cumulative increment from the begiining of the simulation
+            # TODO: set the value 2.5/15000 as a constant in fpara
             pH_increment = dissolved_ash * (2.5 / 15000)
 
-            # Tallennus
-            mass[i] = current_fertilizer_mass
-            mass_release[i] = dm / dt
-            ash_surface_area[i] = A_total
-
-            mass_release[i] = dm / dt
             pH_history[i] = pH_increment
 
             # Päivitys seuraavalle kierrokselle
