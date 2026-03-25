@@ -95,17 +95,7 @@ PARAMETERS = SusiParams(
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
-        fertilization=StandardNPKFertilizationParameters(
-            application_year=3004,
-            N=NutrientFertilizationParameters(
-                dose=0.0,
-                decay_k=0.5,
-                eff=1.0,
-            ),  # fertilization dose in kg ha-1, decay_k in yr-1
-            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.1, eff=1.0),  # 45
-            K=NutrientFertilizationParameters(dose=120.0, decay_k=0.1, eff=1.0),  # 100
-            pH_increment=0.5,
-        ),
+        fertilization=None,
         peat_temperature=PeatTemperatureParams(),
     ),
 )
