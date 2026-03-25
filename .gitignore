@@ -59,9 +59,12 @@ tests/golden_file_test/golden_file_new_experiment
 site/
 src/analysis/.ipynb_checkpoints
 .hypothesis/constants
-xmltomotti_no_thinning
-xmltomotti_yes_thinning
 devlog/
 
 # streamlit
 .streamlit/
+
+# Output from simulations and other stuff
+xmltomotti_no_thinning
+xmltomotti_yes_thinning
+xmltoallometry_with_areas
