@@ -73,13 +73,19 @@ def product_of_elements_in_list(list_of_numbers: Sequence[int | float]) -> int |
     return product
 
 
-scenarios_cardinality: tuple[int, ...] = tuple(
-    [len(scenarios) for stand, scenarios in data_store.scenarios.items()]
-)
+def compute_scenarios_cardinality(
+    scenarios_per_stand: dict[StandID, list[ScenarioID]],
+) -> tuple[int, ...]:
+    return tuple([len(scenarios) for stand, scenarios in scenarios_per_stand.items()])
+
+
+scenarios_cardinality = compute_scenarios_cardinality(data_store.scenarios)
 n_total_combinations = product_of_elements_in_list(scenarios_cardinality)
 
 print("\nNumber of scenarios for each stand:")
 print(scenarios_cardinality)
+print("\nTotal number of scenarios (sum):")
+print(sum(scenarios_cardinality))
 print(f"\nNumber of total combinations: {n_total_combinations:.2e}")
 
 # %% interesting_variables by stand
@@ -141,25 +147,25 @@ class TargetVariableArrays:
     # Each stand has a different area. This is weighted in the optimization.
     stand_areas: dict[StandID, float]
 
-    data: list[np.ndarray]
+    data_weighted_by_area: list[np.ndarray]
 
     def validate(self):
         # 1st level corresponds to stands
-        if len(self.data) != len(self.stands):
+        if len(self.data_weighted_by_area) != len(self.stands):
             raise ValueError(
                 "TargetVariableArray not initialized properly. First dimension must be stands."
             )
         # rows correspond to scenarios; columns to target variables
         for n_stand, scenarios in enumerate(self.scenarios.values()):
-            if self.data[n_stand].shape[0] != len(scenarios):
+            if self.data_weighted_by_area[n_stand].shape[0] != len(scenarios):
                 raise ValueError(
                     f"TargetVariableArray not initialized properly. Rows must correspond to scenarios. Found mismatch in stand number {n_stand}"
                 )
-            if self.data[n_stand].shape[1] != len(self.variables):
+            if self.data_weighted_by_area[n_stand].shape[1] != len(self.variables):
                 raise ValueError(
                     f"TargetVariableArray not initialized properly. Columns must correspond to variables. Found mismatch in stand number {n_stand}"
                 )
-            if self.data[n_stand].ndim != 2:
+            if self.data_weighted_by_area[n_stand].ndim != 2:
                 raise ValueError("Arrays must be 2-D.")
 
 
@@ -210,7 +216,7 @@ def build_optimization_array(
         variables=variables,
         variables_properties=variables_properties,
         stand_areas=stand_areas,
-        data=data,
+        data_weighted_by_area=data,
     )
     target_var_arrays.validate()
     return target_var_arrays
@@ -238,10 +244,59 @@ stand_areas_ha: dict[StandID, float] = {
     for stand_id in data_store.stands
 }
 
+# %% Build target arrays
 target_var_arrays = build_optimization_array(
     data_store=data_store,
     optimization_variables=PROPERTIES_OF_TARGET_VARIABLES,
     stand_areas=stand_areas_ha,
+)
+
+# %% Pre-prune Pareto-dominated scenarios
+from analysis.optimization.prepruning import preprune_pareto_dominated_scenarios
+
+pruned_scenarios: dict[StandID, list[ScenarioID]] = {}
+pruned_data: list[np.ndarray] = []
+
+for (stand_name, scenario_names), stand_array in zip(
+    target_var_arrays.scenarios.items(), target_var_arrays.data_weighted_by_area
+):
+    non_dominated_scenarios_index = preprune_pareto_dominated_scenarios(stand_array)
+    pruned_scenarios[StandID(stand_name)] = [
+        ScenarioID(scenario_names[i]) for i in non_dominated_scenarios_index
+    ]
+
+    pruned_data.append(stand_array[non_dominated_scenarios_index])
+
+pruned_target_var_arrays = TargetVariableArrays(
+    stands=target_var_arrays.stands,
+    scenarios=pruned_scenarios,
+    variables=target_var_arrays.variables,
+    variables_properties=target_var_arrays.variables_properties,
+    stand_areas=target_var_arrays.stand_areas,
+    data_weighted_by_area=pruned_data,
+)
+
+pruned_scenarios_cardinality = compute_scenarios_cardinality(
+    pruned_target_var_arrays.scenarios
+)
+
+n_total_combinations = product_of_elements_in_list(scenarios_cardinality)
+
+print(f"\nTotal number of scenarios before pre-pruning:{sum(scenarios_cardinality)}")
+print(
+    "Total number of scenarios after  pre-pruning:{sum(pruned_scenarios_cardinality)}"
+)
+print(
+    f"Number of pre-pruned scenarios: {sum(scenarios_cardinality) - sum(pruned_scenarios_cardinality)}"
+)
+print(
+    f"\nNumber of possible combinations before pre-pruning: {n_total_combinations:.2e}"
+)
+print(
+    f"Number of possible combinations after  pre-pruning: {product_of_elements_in_list(pruned_scenarios_cardinality):.2e}"
+)
+print(
+    f"Number of combinations pruned: {n_total_combinations - product_of_elements_in_list(pruned_scenarios_cardinality):.2e}"
 )
 
 
@@ -318,34 +373,36 @@ def target_function_for_population(
 
 number_of_target_variables = len(VARS_OF_INTEREST)
 
-random_organism = create_random_organism(scenarios_cardinality)
-random_population = create_random_population(scenarios_cardinality, n_organisms=10)
+random_organism = create_random_organism(pruned_scenarios_cardinality)
+random_population = create_random_population(
+    pruned_scenarios_cardinality, n_organisms=10
+)
 
 random_organism_fitness = target_function_for_single_organism(
     configuration=random_organism,
-    arrays_of_vars_of_interest=target_var_arrays.data,
+    arrays_of_vars_of_interest=pruned_target_var_arrays.data_weighted_by_area,
     number_of_target_variables=number_of_target_variables,
 )
 random_population_fitness = target_function_for_population(
     configurations=random_population,
-    arrays_of_vars_of_interest=target_var_arrays.data,
+    arrays_of_vars_of_interest=pruned_target_var_arrays.data_weighted_by_area,
     number_of_target_variables=number_of_target_variables,
 )
 
 # %% number of total candidates that can be evaluated per second
 # This helps to choose the right optimization algorithm
-N_STANDS = len(target_var_arrays.stands)
+N_STANDS = len(pruned_target_var_arrays.stands)
 
 start = time.time()
 
 N_ITER_TO_EVALUATE = int(1e4)
 
 for i in range(N_ITER_TO_EVALUATE):
-    random_organism = create_random_organism(scenarios_cardinality)
+    random_organism = create_random_organism(pruned_scenarios_cardinality)
 
     random_organism_fitness = target_function_for_single_organism(
         configuration=random_organism,
-        arrays_of_vars_of_interest=target_var_arrays.data,
+        arrays_of_vars_of_interest=pruned_target_var_arrays.data_weighted_by_area,
         number_of_target_variables=number_of_target_variables,
     )
 end = time.time()
@@ -357,10 +414,10 @@ print(
 
 # Numba time.
 # Run once to JIT function
-random_organism = create_random_organism(scenarios_cardinality)
+random_organism = create_random_organism(pruned_scenarios_cardinality)
 
 target_numba_function = make_target_function_numba_version(
-    arrays_of_vars_of_interest=target_var_arrays.data,
+    arrays_of_vars_of_interest=pruned_target_var_arrays.data_weighted_by_area,
     number_of_target_variables=number_of_target_variables,
     n_stands=N_STANDS,
 )
@@ -371,7 +428,7 @@ _ = target_numba_function(configuration=random_organism)
 start = time.time()
 
 for i in range(N_ITER_TO_EVALUATE):
-    random_organism = create_random_organism(scenarios_cardinality)
+    random_organism = create_random_organism(pruned_scenarios_cardinality)
 
     random_organism_fitness = target_numba_function(configuration=random_organism)
 end = time.time()
@@ -413,10 +470,10 @@ class MyProblem(Problem):
 
 
 problem = MyProblem(
-    arrays_of_vars_of_interest=target_var_arrays.data,
+    arrays_of_vars_of_interest=pruned_target_var_arrays.data_weighted_by_area,
     n_target_variables=number_of_target_variables,
     scenarios_cardinality=[
-        c - 1 for c in scenarios_cardinality
+        c - 1 for c in pruned_scenarios_cardinality
     ],  # In pymoo, upper limits are inclusive. We need [0,4), not [0,4] for array indices
 )
 
@@ -456,13 +513,17 @@ def compute_single_variable_maxima(arrays: list[np.ndarray]) -> np.ndarray:
 single_var_minima = np.stack(
     [
         target_numba_function(m)
-        for m in compute_single_variable_minima(target_var_arrays.data)
+        for m in compute_single_variable_minima(
+            pruned_target_var_arrays.data_weighted_by_area
+        )
     ]
 )
 single_var_maxima = np.stack(
     [
         target_numba_function(m)
-        for m in compute_single_variable_maxima(target_var_arrays.data)
+        for m in compute_single_variable_maxima(
+            pruned_target_var_arrays.data_weighted_by_area
+        )
     ]
 )
 
@@ -471,7 +532,7 @@ random_points = np.stack(
     [
         target_numba_function(config)
         for config in create_random_population(
-            scenarios_cardinality=scenarios_cardinality, n_organisms=1000
+            scenarios_cardinality=pruned_scenarios_cardinality, n_organisms=1000
         )
     ]
 )
@@ -481,6 +542,6 @@ random_points = np.stack(
 plot = Scatter(tight_layout=True, labels=variable_labels, plot_3d=False, legend=True)
 plot.add(res.F, label="Pareto", color="blue")
 plot.add(single_var_minima, label="single_var_minima", color="red")
-plot.add(single_var_maxima, label="single_var_maxima", color="green")
+# plot.add(single_var_maxima, label="single_var_maxima", color="green")
 plot.add(random_points, label="random", color="orange")
 plot.show()
