@@ -22,6 +22,7 @@ from susi.io.load_output_data import (
     ScenarioID,
     OutputDataStore,
 )
+from tqdm import tqdm
 
 # %%
 RANDOM_SEED = 42
@@ -496,7 +497,7 @@ res = minimize(
     verbose=True,
 )
 
-# %% Visualize solutions
+# %% Visualize Pymoo solutions
 
 variable_labels = [var_path.split("/")[-1] for var_path in VARS_OF_INTEREST]
 
@@ -545,3 +546,72 @@ plot.add(single_var_minima, label="single_var_minima", color="red")
 # plot.add(single_var_maxima, label="single_var_maxima", color="green")
 plot.add(random_points, label="random", color="orange")
 plot.show()
+
+# %% Dynamic Programming
+from analysis.optimization.dynamic_programming import (
+    PartialParetoPoint,
+    assign_bucket_to_point,
+    shift_points_to_positive_values,
+    undo_shift_to_positive_values,
+    get_minimum_values_per_variable,
+)
+
+# Shift all values to positive so that there are no problems with negative log() below.
+# At the end, will have to undo everything to report results back
+data_table_arrays = pruned_target_var_arrays.data_weighted_by_area
+minimum_values_per_variable = get_minimum_values_per_variable(data_table_arrays)
+shifted = shift_points_to_positive_values(
+    data=data_table_arrays, minimum_values_per_variable=minimum_values_per_variable
+)
+
+# Here I switch from numpy-centric to Python native.
+# Because later I will probably want to write this algo in a compiled language.
+data_table = tuple(tuple(map(tuple, arr.tolist())) for arr in shifted)
+n_stands = len(data_table)
+
+
+# Initialize the partial Pareto  fronts with
+# the scenarios in the first stand
+first_stand_vectors = data_table[0]
+pareto_front: tuple[PartialParetoPoint, ...] = tuple(
+    PartialParetoPoint(
+        objective_vector=vector,
+        parent_point=None,
+        current_scenario_choice=scenario_number,
+        stand_index=0,
+    )
+    for scenario_number, vector in enumerate(first_stand_vectors)
+)
+
+# CONTINUE HERE!
+# THis is cGPT's algorithm: https://chatgpt.com/c/69df4829-4814-8327-a82e-c963777a786d
+assign_bucket_to_point(pareto_front[0], epsilon=1e-3)
+
+# def epsilon_pareto_prune(points:list[PartialParetoPoint], epsilon:float)->tuple[PartialParetoPoint,...]:
+#     for point in points:
+
+
+# Remove stand 0 from loop: already considered in the initialization
+for stand_ix in tqdm(range(1, n_stands)):
+    pareto_front_new: list[PartialParetoPoint] = []
+
+    for pareto_point in pareto_front:
+        for scenario_ix in range(len(data_table[stand_ix])):
+            new_point = (
+                pareto_point.objective_vector + data_table[stand_ix][scenario_ix]
+            )
+            pareto_front_new.append(
+                PartialParetoPoint(
+                    objective_vector=new_point,
+                    parent_point=pareto_point,
+                    current_scenario_choice=scenario_ix,
+                    stand_index=stand_ix,
+                )
+            )
+
+    # pareto_front = tuple(pareto_front_new)
+
+# TODO: fix this: move the data.
+pareto_front_unshifted = undo_shift_to_positive_values(
+    data=pareto_front, minimum_values_per_variable=minimum_values_per_variable
+)
