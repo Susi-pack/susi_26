@@ -1,10 +1,11 @@
 from __future__ import annotations
+from typing import Any, Sequence
 from dataclasses import dataclass
 import numpy as np
 
 
 @dataclass
-class PartialParetoPoint:
+class PartialParetoPoint(frozen=True):
     """
     Info about any point considered in the algorithm.
     """
@@ -56,8 +57,62 @@ def shift_points_to_positive_values(
     return [arr - minimum_values_per_variable + DELTA for arr in data]
 
 
-def undo_shift_to_positive_values(
-    data: list[np.ndarray], minimum_values_per_variable: np.ndarray
-) -> list[np.ndarray]:
+def undo_shift_single_point_to_positive_value(
+    point: Sequence[float], min_values_per_variable: Sequence[float]
+) -> tuple[float, ...]:
     DELTA = 1e-6  # to avoid zeroes
-    return [arr + minimum_values_per_variable - DELTA for arr in data]
+    return tuple(
+        coord + min_value - DELTA
+        for coord, min_value in zip(point, min_values_per_variable)
+    )
+
+
+def undo_shift_to_positive_values(
+    data: Sequence[Sequence[float]], minimum_values_per_variable: Sequence[float]
+) -> tuple[tuple[float, ...], ...]:
+    return tuple(
+        undo_shift_single_point_to_positive_value(
+            point=point, min_values_per_variable=minimum_values_per_variable
+        )
+        for point in data
+    )
+
+
+def from_numpy_arrays_to_nested_tuples(
+    arrays: Sequence[np.ndarray],
+) -> tuple[tuple[Any, ...], ...]:
+    return tuple(tuple(map(tuple, arr.tolist())) for arr in arrays)
+
+
+def from_nested_tuples_to_numpy_arrays(
+    nested_tuples: tuple[tuple[float, ...], ...],
+) -> tuple[np.ndarray, ...]:
+    return tuple(np.array(t) for t in nested_tuples)
+
+
+def does_p_dominate_q(p: PartialParetoPoint, q: PartialParetoPoint) -> bool:
+    """
+    Check Pareto dominance
+    """
+
+    return all(
+        p_k <= q_k for p_k, q_k in zip(p.objective_vector, q.objective_vector)
+    ) and any(p_k < q_k for p_k, q_k in zip(p.objective_vector, q.objective_vector))
+
+
+def pareto_epsilon_prune(
+    points: list[PartialParetoPoint], epsilon: float
+) -> tuple[PartialParetoPoint, ...]:
+    buckets: dict[tuple[int, ...], PartialParetoPoint] = {}
+    for point in points:
+        bucket_key = assign_bucket_to_point(point, epsilon=epsilon)
+
+        if bucket_key not in buckets.keys():
+            buckets[bucket_key] = point
+        else:
+            # If bucket already full, check if current
+            # point is a better choice
+            if does_p_dominate_q(p=point, q=buckets[bucket_key]):
+                buckets[bucket_key] = point
+
+    return tuple(buckets.values())

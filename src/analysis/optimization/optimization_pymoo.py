@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numba import jit
 import time
+import matplotlib.pyplot as plt
 from pymoo.optimize import minimize
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -554,6 +555,9 @@ from analysis.optimization.dynamic_programming import (
     shift_points_to_positive_values,
     undo_shift_to_positive_values,
     get_minimum_values_per_variable,
+    from_nested_tuples_to_numpy_arrays,
+    from_numpy_arrays_to_nested_tuples,
+    pareto_epsilon_prune,
 )
 
 # Shift all values to positive so that there are no problems with negative log() below.
@@ -566,7 +570,7 @@ shifted = shift_points_to_positive_values(
 
 # Here I switch from numpy-centric to Python native.
 # Because later I will probably want to write this algo in a compiled language.
-data_table = tuple(tuple(map(tuple, arr.tolist())) for arr in shifted)
+data_table = from_numpy_arrays_to_nested_tuples(shifted)
 n_stands = len(data_table)
 
 
@@ -583,13 +587,6 @@ pareto_front: tuple[PartialParetoPoint, ...] = tuple(
     for scenario_number, vector in enumerate(first_stand_vectors)
 )
 
-# CONTINUE HERE!
-# THis is cGPT's algorithm: https://chatgpt.com/c/69df4829-4814-8327-a82e-c963777a786d
-assign_bucket_to_point(pareto_front[0], epsilon=1e-3)
-
-# def epsilon_pareto_prune(points:list[PartialParetoPoint], epsilon:float)->tuple[PartialParetoPoint,...]:
-#     for point in points:
-
 
 # Remove stand 0 from loop: already considered in the initialization
 for stand_ix in tqdm(range(1, n_stands)):
@@ -597,8 +594,11 @@ for stand_ix in tqdm(range(1, n_stands)):
 
     for pareto_point in pareto_front:
         for scenario_ix in range(len(data_table[stand_ix])):
-            new_point = (
-                pareto_point.objective_vector + data_table[stand_ix][scenario_ix]
+            new_point = tuple(
+                previous + new
+                for previous, new in zip(
+                    pareto_point.objective_vector, data_table[stand_ix][scenario_ix]
+                )
             )
             pareto_front_new.append(
                 PartialParetoPoint(
@@ -609,9 +609,25 @@ for stand_ix in tqdm(range(1, n_stands)):
                 )
             )
 
-    # pareto_front = tuple(pareto_front_new)
+    pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=0.001)
 
-# TODO: fix this: move the data.
-pareto_front_unshifted = undo_shift_to_positive_values(
-    data=pareto_front, minimum_values_per_variable=minimum_values_per_variable
+# Undo positive shifting of values
+pareto_front_arrays = from_nested_tuples_to_numpy_arrays(
+    tuple(point.objective_vector for point in pareto_front)
 )
+pareto_front_unshifted = undo_shift_to_positive_values(
+    data=pareto_front_arrays, minimum_values_per_variable=minimum_values_per_variable
+)
+
+# %% visualize dynamic programming
+pareto_front_objectives = [point.objective_vector for point in pareto_front]
+
+pareto_front_objectives_array = np.array(pareto_front_objectives)
+
+plt.figure()
+plt.scatter(
+    pareto_front_objectives_array[:, 0],
+    pareto_front_objectives_array[:, 1],
+    linewidth=0,
+)
+plt.show()
