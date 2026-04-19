@@ -23,7 +23,6 @@ from susi.io.load_output_data import (
     ScenarioID,
     OutputDataStore,
 )
-from tqdm import tqdm
 
 # %%
 RANDOM_SEED = 42
@@ -550,14 +549,12 @@ plot.show()
 
 # %% Dynamic Programming
 from analysis.optimization.dynamic_programming import (
-    PartialParetoPoint,
-    assign_bucket_to_point,
     shift_points_to_positive_values,
     undo_shift_to_positive_values,
     get_minimum_values_per_variable,
     from_nested_tuples_to_numpy_arrays,
     from_numpy_arrays_to_nested_tuples,
-    pareto_epsilon_prune,
+    find_pareto_front,
 )
 
 # Shift all values to positive so that there are no problems with negative log() below.
@@ -571,45 +568,8 @@ shifted = shift_points_to_positive_values(
 # Here I switch from numpy-centric to Python native.
 # Because later I will probably want to write this algo in a compiled language.
 data_table = from_numpy_arrays_to_nested_tuples(shifted)
-n_stands = len(data_table)
 
-
-# Initialize the partial Pareto  fronts with
-# the scenarios in the first stand
-first_stand_vectors = data_table[0]
-pareto_front: tuple[PartialParetoPoint, ...] = tuple(
-    PartialParetoPoint(
-        objective_vector=vector,
-        parent_point=None,
-        current_scenario_choice=scenario_number,
-        stand_index=0,
-    )
-    for scenario_number, vector in enumerate(first_stand_vectors)
-)
-
-
-# Remove stand 0 from loop: already considered in the initialization
-for stand_ix in tqdm(range(1, n_stands)):
-    pareto_front_new: list[PartialParetoPoint] = []
-
-    for pareto_point in pareto_front:
-        for scenario_ix in range(len(data_table[stand_ix])):
-            new_point = tuple(
-                previous + new
-                for previous, new in zip(
-                    pareto_point.objective_vector, data_table[stand_ix][scenario_ix]
-                )
-            )
-            pareto_front_new.append(
-                PartialParetoPoint(
-                    objective_vector=new_point,
-                    parent_point=pareto_point,
-                    current_scenario_choice=scenario_ix,
-                    stand_index=stand_ix,
-                )
-            )
-
-    pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=0.001)
+pareto_front = find_pareto_front(data_table)
 
 # Undo positive shifting of values
 pareto_front_arrays = from_nested_tuples_to_numpy_arrays(

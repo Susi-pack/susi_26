@@ -2,10 +2,11 @@ from __future__ import annotations
 from typing import Any, Sequence
 from dataclasses import dataclass
 import numpy as np
+from tqdm import tqdm
 
 
-@dataclass
-class PartialParetoPoint(frozen=True):
+@dataclass(frozen=True)
+class PartialParetoPoint:
     """
     Info about any point considered in the algorithm.
     """
@@ -90,7 +91,7 @@ def from_nested_tuples_to_numpy_arrays(
     return tuple(np.array(t) for t in nested_tuples)
 
 
-def does_p_dominate_q(p: PartialParetoPoint, q: PartialParetoPoint) -> bool:
+def p_dominates_q(p: PartialParetoPoint, q: PartialParetoPoint) -> bool:
     """
     Check Pareto dominance
     """
@@ -100,7 +101,7 @@ def does_p_dominate_q(p: PartialParetoPoint, q: PartialParetoPoint) -> bool:
     ) and any(p_k < q_k for p_k, q_k in zip(p.objective_vector, q.objective_vector))
 
 
-def pareto_epsilon_prune(
+def compress_into_buckets(
     points: list[PartialParetoPoint], epsilon: float
 ) -> tuple[PartialParetoPoint, ...]:
     buckets: dict[tuple[int, ...], PartialParetoPoint] = {}
@@ -112,7 +113,81 @@ def pareto_epsilon_prune(
         else:
             # If bucket already full, check if current
             # point is a better choice
-            if does_p_dominate_q(p=point, q=buckets[bucket_key]):
+            if p_dominates_q(p=point, q=buckets[bucket_key]):
                 buckets[bucket_key] = point
 
     return tuple(buckets.values())
+
+
+def pareto_prune(points: tuple[PartialParetoPoint, ...]):
+
+    pareto = []
+
+    for point in points:
+        new_pareto = pareto.copy()
+        keep_point = True
+        for q in pareto:
+            if p_dominates_q(p=q, q=point):
+                keep_point = False
+                break
+            elif p_dominates_q(p=point, q=q):
+                new_pareto.remove(q)
+
+        if keep_point:
+            new_pareto.append(point)
+
+        pareto = new_pareto
+
+    return pareto
+
+
+def pareto_epsilon_prune(
+    points: list[PartialParetoPoint], epsilon: float
+) -> tuple[PartialParetoPoint, ...]:
+    compressed_points = compress_into_buckets(points=points, epsilon=epsilon)
+    return pareto_prune(compressed_points)
+
+
+def find_pareto_front(
+    data_table: tuple[tuple[Any, ...], ...],
+) -> tuple[PartialParetoPoint, ...]:
+
+    n_stands = len(data_table)
+
+    # Initialize the partial Pareto  fronts with
+    # the scenarios in the first stand
+    first_stand_vectors = data_table[0]
+    pareto_front: tuple[PartialParetoPoint, ...] = tuple(
+        PartialParetoPoint(
+            objective_vector=vector,
+            parent_point=None,
+            current_scenario_choice=scenario_number,
+            stand_index=0,
+        )
+        for scenario_number, vector in enumerate(first_stand_vectors)
+    )
+
+    # Remove stand 0 from loop: already considered in the initialization
+    for stand_ix in tqdm(range(1, n_stands)):
+        pareto_front_new: list[PartialParetoPoint] = []
+
+        for pareto_point in pareto_front:
+            for scenario_ix in range(len(data_table[stand_ix])):
+                new_point = tuple(
+                    previous + new
+                    for previous, new in zip(
+                        pareto_point.objective_vector, data_table[stand_ix][scenario_ix]
+                    )
+                )
+                pareto_front_new.append(
+                    PartialParetoPoint(
+                        objective_vector=new_point,
+                        parent_point=pareto_point,
+                        current_scenario_choice=scenario_ix,
+                        stand_index=stand_ix,
+                    )
+                )
+
+        pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=1e-7)
+
+    return pareto_front
