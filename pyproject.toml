@@ -23,7 +23,12 @@ dependencies = [
     "tqdm>=4.67.3",
 ]
 [dependency-groups]
-dev = ["hypothesis>=6.151.9", "pytest>=9.0.2", "xmltodict>=1.0.4"]
+dev = [
+    "hypothesis>=6.151.9",
+    "pytest>=9.0.2",
+    "xmltodict>=1.0.4",
+    "zensical>=0.0.33",
+]
 
 
 [build-system]
