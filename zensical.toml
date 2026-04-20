@@ -36,7 +36,8 @@ nav = [
     { "Get started" = "index.md" },
     { "Parameters" = "simulation_config.md" },
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
-    { "Paroninkorpi optimization" = "optimization_pymoo.md" },
+    { "A posteriori optimization" = "optimization_pymoo.md" },
+    { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
     { "XML --> allometry file" = "xml_to_allometry.md" },
     { "Get started with zensical" = "zensical_index.md" },
 ]
@@ -58,6 +59,21 @@ nav = [
 #
 # Read more: https://zensical.org/docs/customization/#additional-javascript
 #extra_javascript = ["javascripts/extra.js"]
+
+# Add KATEX math engine to render equations
+extra_javascript = [
+    "javascripts/katex.js",
+    "https://unpkg.com/katex@0/dist/katex.min.js",
+    "https://unpkg.com/katex@0/dist/contrib/auto-render.min.js",
+]
+
+extra_css = ["https://unpkg.com/katex@0/dist/katex.min.css"]
+
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+
+# Add footnotes capability
+[project.markdown_extensions.footnotes]
 
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
@@ -102,8 +118,6 @@ nav = [
 #
 language = "en"
 
-# Zensical provides a number of feature toggles that change the behavior
-# of the documentation site.
 features = [
     # Zensical includes an announcement bar. This feature allows users to
     # dismiss it when they have read the announcement.
@@ -238,7 +252,13 @@ features = [
     # always rendered as part of the navigation sidebar on the left.
     # https://zensical.org/docs/setup/navigation/#navigation-integration
     #"toc.integrate",
+
+
+    # Improves footnotes
+    "content.footnote.tooltips",
 ]
+# Zensical provides a number of feature toggles that change the behavior
+# of the documentation site.
 
 # ----------------------------------------------------------------------------
 # In the "palette" subsection you can configure options for the color scheme.
