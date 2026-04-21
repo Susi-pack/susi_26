@@ -1,4 +1,5 @@
 from __future__ import annotations
+from hypothesis.internal.conjecture.pareto import ParetoFront
 from typing import Any, Sequence
 from dataclasses import dataclass
 import numpy as np
@@ -27,6 +28,16 @@ class PartialParetoPoint:
     stand_index: int
 
 
+@dataclass(frozen=True)
+class SolutionParetoPoint:
+    """
+    Solution of the optimization algorithm
+    """
+
+    design_vector: tuple[int, ...]
+    target_vector: tuple[float, ...]
+
+
 def assign_bucket_to_point(
     point: PartialParetoPoint, epsilon: float
 ) -> tuple[int, ...]:
@@ -44,39 +55,18 @@ def assign_bucket_to_point(
     )
 
 
-def get_minimum_values_per_variable(data: list[np.ndarray]) -> np.ndarray:
-    return np.concatenate(data).min(axis=0)
+def get_minimum_values_per_variable(data: list[np.ndarray]) -> tuple[float, ...]:
+    return tuple(np.concatenate(data).min(axis=0).tolist())
 
 
 def shift_points_to_positive_values(
-    data: list[np.ndarray], minimum_values_per_variable: np.ndarray
+    data: list[np.ndarray], minimum_values_per_variable: tuple[float, ...]
 ) -> list[np.ndarray]:
     """
     Do a translation of the coordinate system so that all values of the variables are positive.
     """
     DELTA = 1e-6  # to avoid zeroes
     return [arr - minimum_values_per_variable + DELTA for arr in data]
-
-
-def undo_shift_single_point_to_positive_value(
-    point: Sequence[float], min_values_per_variable: Sequence[float]
-) -> tuple[float, ...]:
-    DELTA = 1e-6  # to avoid zeroes
-    return tuple(
-        coord + min_value - DELTA
-        for coord, min_value in zip(point, min_values_per_variable)
-    )
-
-
-def undo_shift_to_positive_values(
-    data: Sequence[Sequence[float]], minimum_values_per_variable: Sequence[float]
-) -> tuple[tuple[float, ...], ...]:
-    return tuple(
-        undo_shift_single_point_to_positive_value(
-            point=point, min_values_per_variable=minimum_values_per_variable
-        )
-        for point in data
-    )
 
 
 def from_numpy_arrays_to_nested_tuples(
@@ -193,11 +183,50 @@ def find_pareto_front(
     return pareto_front
 
 
-def recover_scenario_choices(point: PartialParetoPoint) -> list[int]:
+def recover_scenario_choices(point: PartialParetoPoint) -> tuple[int, ...]:
     choices = []
     current = point
     while current is not None:
         choices.append(current.current_scenario_choice)
         current = current.parent_point
     choices.reverse()
-    return choices
+    return tuple(choices)
+
+
+def compute_objective(
+    design_vector: tuple[int, ...],
+    data_table: tuple[tuple[Any, ...], ...],
+) -> tuple[float, ...]:
+    assert len(design_vector) == len(data_table)
+
+    n_variables = len(data_table[0][0])
+    objective = [0] * n_variables
+
+    for stand_ix, scenario_ix in enumerate(design_vector):
+        for var in range(n_variables):
+            objective[var] += data_table[stand_ix][scenario_ix][var]
+
+    return tuple(objective)
+
+
+def reconstruct_solution_pareto_front(
+    pareto_front: tuple[PartialParetoPoint, ...],
+    data_table: tuple[tuple[Any, ...], ...],
+) -> tuple[SolutionParetoPoint, ...]:
+    """
+    - Recovers scenario choices from nested structure
+    - Shifts the target vectors back from positive space
+    """
+    solution = []
+    for point in pareto_front:
+        design_vector = recover_scenario_choices(point)
+        solution.append(
+            SolutionParetoPoint(
+                design_vector=design_vector,
+                target_vector=compute_objective(
+                    design_vector=design_vector, data_table=data_table
+                ),
+            )
+        )
+
+    return tuple(solution)

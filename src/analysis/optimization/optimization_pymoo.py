@@ -550,12 +550,10 @@ plot.show()
 # %% Dynamic Programming
 from analysis.optimization.dynamic_programming import (
     shift_points_to_positive_values,
-    undo_shift_to_positive_values,
     get_minimum_values_per_variable,
-    from_nested_tuples_to_numpy_arrays,
     from_numpy_arrays_to_nested_tuples,
     find_pareto_front,
-    recover_scenario_choices,
+    reconstruct_solution_pareto_front,
 )
 
 # Shift all values to positive so that there are no problems with negative log() below.
@@ -568,20 +566,17 @@ shifted = shift_points_to_positive_values(
 
 # Here I switch from numpy-centric to Python native.
 # Because later I will probably want to write this algo in a compiled language.
-data_table = from_numpy_arrays_to_nested_tuples(shifted)
+shifted_data_table = from_numpy_arrays_to_nested_tuples(shifted)
 
-pareto_front = find_pareto_front(data_table)
+pareto_front = find_pareto_front(shifted_data_table)
 
-# Undo positive shifting of values
-pareto_front_arrays = from_nested_tuples_to_numpy_arrays(
-    tuple(point.objective_vector for point in pareto_front)
-)
-pareto_front_unshifted = undo_shift_to_positive_values(
-    data=pareto_front_arrays, minimum_values_per_variable=minimum_values_per_variable
+pareto_front_solution = reconstruct_solution_pareto_front(
+    pareto_front=pareto_front,
+    data_table=from_numpy_arrays_to_nested_tuples(data_table_arrays),
 )
 
 # %% visualize dynamic programming
-pareto_front_objectives = [point.objective_vector for point in pareto_front]
+pareto_front_objectives = [point.target_vector for point in pareto_front_solution]
 
 pareto_front_objectives_array = np.array(pareto_front_objectives)
 
@@ -592,7 +587,3 @@ plt.scatter(
     linewidth=0,
 )
 plt.show()
-
-
-# %% Recover scenario choices that led to each ParetoParentPoint
-recover_scenario_choices(pareto_front[0])
