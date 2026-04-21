@@ -20,9 +20,15 @@ dependencies = [
     "seaborn>=0.13.2",
     "streamlit>=1.19.0",
     "streamlit-tree-select>=0.0.5",
+    "tqdm>=4.67.3",
 ]
 [dependency-groups]
-dev = ["hypothesis>=6.151.9", "pytest>=9.0.2", "xmltodict>=1.0.4"]
+dev = [
+    "hypothesis>=6.151.9",
+    "pytest>=9.0.2",
+    "xmltodict>=1.0.4",
+    "zensical>=0.0.33",
+]
 
 
 [build-system]

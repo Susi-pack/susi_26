@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numba import jit
 import time
+import matplotlib.pyplot as plt
 from pymoo.optimize import minimize
 from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2 import NSGA2
@@ -53,14 +54,49 @@ all_variables: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableIn
 )
 
 # %% Read variables
-VARS_OF_INTEREST = (
-    NetcdfVariablePath("/stand/volume"),
-    NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"),
-)
+
+TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
+
+
+@dataclass
+class TargetVariableProperties:
+    aggregation_method: Literal["mean_all", "mean_last_timestep"]
+    invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
+
+
+def aggregate_time_series_to_float(
+    array: load_output.NetcdfVariableArray,
+    target_variable_properties: TargetVariableProperties,
+) -> float:
+    inverter: int = -1 if target_variable_properties.invert_optimization else 1
+
+    match target_variable_properties.aggregation_method:
+        case "mean_all":
+            return inverter * array.mean_of_all_values()
+        case "mean_last_timestep":
+            return inverter * array.spatial_mean_at_last_timestep()
+        case _:
+            assert_never()
+
+
+TARGET_VARIABLES = {
+    NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
+        aggregation_method="mean_last_timestep",
+        invert_optimization=True,
+    ),
+    NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"): TargetVariableProperties(
+        aggregation_method="mean_all",
+        invert_optimization=True,
+    ),
+    NetcdfVariablePath("/balance/N/to_water"): TargetVariableProperties(
+        aggregation_method="mean_all", invert_optimization=False
+    ),
+}
 
 data_store: load_output.OutputDataStore = (
     load_output.read_netcdf_files_for_selected_variables(
-        selected_variables=VARS_OF_INTEREST, metadata_by_stand=metadata_by_stand
+        selected_variables=list(TARGET_VARIABLES.keys()),
+        metadata_by_stand=metadata_by_stand,
     )
 )
 
@@ -87,45 +123,6 @@ print(scenarios_cardinality)
 print("\nTotal number of scenarios (sum):")
 print(sum(scenarios_cardinality))
 print(f"\nNumber of total combinations: {n_total_combinations:.2e}")
-
-# %% interesting_variables by stand
-
-TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
-
-
-@dataclass
-class TargetVariableProperties:
-    aggregation_method: Literal["mean_all", "mean_last_timestep"]
-    invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
-
-
-def aggregate_time_series_to_float(
-    array: load_output.NetcdfVariableArray,
-    target_variable_properties: TargetVariableProperties,
-) -> float:
-    inverter: int = -1 if target_variable_properties.invert_optimization else 1
-
-    match target_variable_properties.aggregation_method:
-        case "mean_all":
-            return inverter * array.mean_of_all_values()
-        case "mean_last_timestep":
-            return inverter * array.spatial_mean_at_last_timestep()
-        case _:
-            assert_never()
-
-
-PROPERTIES_OF_TARGET_VARIABLES = {
-    load_output.NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
-        aggregation_method="mean_last_timestep",
-        invert_optimization=True,
-    ),
-    load_output.NetcdfVariablePath(
-        "/balance/C/soil_c_balance_co2eq"
-    ): TargetVariableProperties(
-        aggregation_method="mean_all",
-        invert_optimization=True,
-    ),
-}
 
 
 # %% Transform data representation from data_store to optimization array
@@ -247,7 +244,7 @@ stand_areas_ha: dict[StandID, float] = {
 # %% Build target arrays
 target_var_arrays = build_optimization_array(
     data_store=data_store,
-    optimization_variables=PROPERTIES_OF_TARGET_VARIABLES,
+    optimization_variables=TARGET_VARIABLES,
     stand_areas=stand_areas_ha,
 )
 
@@ -371,7 +368,7 @@ def target_function_for_population(
     )
 
 
-number_of_target_variables = len(VARS_OF_INTEREST)
+number_of_target_variables = len(target_var_arrays.variables)
 
 random_organism = create_random_organism(pruned_scenarios_cardinality)
 random_population = create_random_population(
@@ -496,9 +493,9 @@ res = minimize(
     verbose=True,
 )
 
-# %% Visualize solutions
+# %% Visualize Pymoo solutions
 
-variable_labels = [var_path.split("/")[-1] for var_path in VARS_OF_INTEREST]
+variable_labels = [var_path.split("/")[-1] for var_path in target_var_arrays.variables]
 
 
 def compute_single_variable_minima(arrays: list[np.ndarray]) -> np.ndarray:
@@ -545,3 +542,61 @@ plot.add(single_var_minima, label="single_var_minima", color="red")
 # plot.add(single_var_maxima, label="single_var_maxima", color="green")
 plot.add(random_points, label="random", color="orange")
 plot.show()
+
+# %% Dynamic Programming
+from analysis.optimization.dynamic_programming import (
+    shift_points_to_positive_values,
+    get_minimum_values_per_variable,
+    from_numpy_arrays_to_nested_tuples,
+    find_pareto_front,
+    reconstruct_solution_pareto_front,
+    compute_objective,
+)
+
+# Shift all values to positive so that there are no problems with negative log() below.
+# At the end, will have to undo everything to report results back
+data_table_arrays = pruned_target_var_arrays.data_weighted_by_area
+minimum_values_per_variable = get_minimum_values_per_variable(data_table_arrays)
+shifted = shift_points_to_positive_values(
+    data=data_table_arrays, minimum_values_per_variable=minimum_values_per_variable
+)
+
+# Here I switch from numpy-centric to Python native.
+# Because later I will probably want to write this algo in a compiled language.
+shifted_data_table = from_numpy_arrays_to_nested_tuples(shifted)
+
+pareto_front = find_pareto_front(shifted_data_table)
+
+pareto_front_solution = reconstruct_solution_pareto_front(
+    pareto_front=pareto_front,
+    data_table=from_numpy_arrays_to_nested_tuples(data_table_arrays),
+)
+
+# %% create random points
+random_design_vectors = create_random_population(
+    scenarios_cardinality=pruned_scenarios_cardinality, n_organisms=10000
+)
+random_target_vectors = [
+    compute_objective(
+        design_vector=vec,
+        data_table=from_numpy_arrays_to_nested_tuples(data_table_arrays),
+    )
+    for vec in random_design_vectors
+]
+
+
+# %% visualize dynamic programming
+from analysis.optimization.pareto_corner_plot import pareto_corner_plot
+
+pareto_front_objectives = [point.target_vector for point in pareto_front_solution]
+
+pareto_front_objectives_array = np.array(pareto_front_objectives)
+
+
+fig = pareto_corner_plot(
+    data=pareto_front_objectives_array,
+    random_points=np.array(random_target_vectors),
+    labels=list(target_var_arrays.variables),
+    show_diagonal=False,
+)
+plt.show()

@@ -14,7 +14,7 @@ def preprune_pareto_dominated_scenarios(A: np.ndarray, eps: float = 1e-9) -> lis
         The set of values to minimize for each stand.
 
     eps : float
-        Numerical tolerance.
+        Added to handle numerical tolerance issues in inequality checks.
 
     Returns
     -------
