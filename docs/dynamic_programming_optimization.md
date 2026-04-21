@@ -82,7 +82,7 @@ We define a partial Pareto front which stores all the non-dominated points that 
 $$
 P_i
 $$
-is the set of non-dominated objective vectors using groups (1,\dots,i).
+is the set of non-dominated objective vectors using groups $(1,\dots,i)$.
 
 So we initialize $P_i$ as $P_1$.
 
@@ -93,6 +93,7 @@ We proceed to prune all those Pareto-dominated points.
 Thus we have created $P_2$.
 
 We repeat this process for all $n$ stands. At each step $i$:
+
 1. We compute all the combinations from joining points in $P_{i-1}$ with the choices for stand $i$.
 2. We prune the dominated ones. This leaves us with the partial Pareto frontier at step $i$, $P_i$.
 
@@ -108,9 +109,10 @@ does the new point dominate the existing point even if we add $\epsilon$ to it?
 
 That is: a vector $q$ $\epsilon$-dominates $p$ if:
 $$
-q_k \le (1+\varepsilon) p_k \quad \forall k
+q_k \le (1+\epsilon) p_k \quad \forall k
 $$
-Note that in the case $epsilon=0$ the exact domination criterion is recovered.
+Note that in the case $\epsilon=0$ the exact domination criterion is recovered.
+
 
 This has a nice geometrical interpretation.
 For each point $p$ in target space, we draw a box of size $\epsilon$ times the value of the coordinate of $p$[^1].
@@ -118,162 +120,61 @@ If the point $q$ is inside that box, it never dominates $p$.
 That is: instead of using perfect resolution (exact dominance) of the target space, we are voluntarily creating a coarser resolution so that we do not have to store so many points in the partial Pareto fronts.
 The thickness  of the "pixels" is governed by $\epsilon$.
 
-[^1]: This fact, by the way, is useful because it automatically accounts for different scales in the variables. If the box size would be just $\epsilon$ and the dominance criterion $q_k \le p_k + \epsilon$, we would run into trouble with variables of different scales. One solution would be to create one epsilon per dimension $\epsilon_k$, but the chosen approach leads to simpler interface: just choose a single value to tune the algorithm's behaviour.
+[^1]: This fact, by the way, is useful because it automatically accounts for different scales in the variables. If the box size would be just $\epsilon$ and the dominance criterion $q_k \le p_k + \epsilon$, we would run into trouble with variables of different scales. One solution would be to create one $\epsilon$ per dimension $\epsilon_k$, but the chosen approach leads to simpler interface: just choose a single value to tune the algorithm's behaviour.
 
 Still, at the end of the day, we hope to retain a good approximation of the Pareto front.
 And we can always get a finer resolution by choosing a smaller $\epsilon$.
 This allows controlled approximation of the Pareto frontier.
 
+## The algorithm
+We already know everything we need to understand the implementation in `analysis/optimization/dynamic_programming.py`. The algorithm entry point is `find_pareto_front()`, and the structure is something like this (pseudocode):
 
-CONTINUE HERE!
 
-## 8. $\epsilon$-Pruning via Grid Discretization
+```
+pareto_front = partial_pareto_front(of stand #1)
 
-To efficiently prune, we discretize objective space.
+for i in 1..n:
+    pareto_front_new = []
+    
+    for p in pareto_front:
+        for j in 1..m_i:
+            P_new.append(p + a[i][j])
+    
+    pareto_front = pareto_epsilon_prune(pareto_front_new)
+```
 
-### Bucket Mapping
+The meat of the algorithm is swept under the rug of `pareto_epsilon_prune()`. But that is a really simple function:
 
-For each vector ( p ), define:
-[
-b_k = \left\lfloor \frac{\log(p_k)}{\log(1+\varepsilon)} \right\rfloor
-]
+```python
+def pareto_epsilon_prune(
+    points: list[PartialParetoPoint], epsilon: float
+) -> tuple[PartialParetoPoint, ...]:
+    compressed_points = compress_into_buckets(points=points, epsilon=epsilon)
+    return pareto_prune(compressed_points)
+```
 
-* Each vector maps to a grid cell
-* Only one representative is kept per cell
+The misterious-looking `compress_into_buckets()`, does the following.
+It discretizes objective space into "buckets" or "pixels" of size controlled by $\epsilon$.
+And then maps each input point to one of those buckets.
+This is doing the $\epsilon$ part of the algorithm.
 
-### Effect
+The output of that is passed to `pareto_prune()`, which implements a normal Pareto pruning algorithm.
 
-* Reduces number of stored solutions
-* Guarantees $\epsilon$-approximation of Pareto frontier
+This is the whole algorithm.
 
----
+## A few more implementation details
 
-## 9. Preprocessing Optimization (Critical)
+### `PartialParetoPoint` data structure
+The algorithm as we have described only stores the solution in target space.
+If we want to retain the desing vectors that give rise to that vector, we need to explicitly do so.
+We could naively store all intermediate partial Pareto vectors, but that is a huge waste of space, since the vector at step $i$ contains the vector at step $i-1$.
+That is why we created a tree structure in `PartialParetoPoint`.
+Each point has a `parent_point` (a pointer to the `PartialParetoPoint` from which it originated) and the `current_scenario_choice`.
+With that we can reconstruct the tree all the way back to recover the design vector of any `PartialParetoPoint`.
 
-Before running the DP:
+### Shift to strictly positive targets
+The putting in to buckets function has a $\log$ in it.
+In order for this to work, we need that all the target variables have positive values.
+Since the optimization problem is invariant to translations, we first shift the values to be all positive, and then run the optimization.
+To recover the original values back, we need to shift them back.
 
-### Remove Dominated Choices Per Group
-
-For each group ( i ), remove any ( a_{i,j} ) such that:
-[
-a_{i,j} \text{ is dominated by another } a_{i,j'}
-]
-
-### Impact
-
-* Reduces ( m_i )
-* Significantly lowers computational cost
-* Improves pruning effectiveness downstream
-
----
-
-## 10. Complexity Behavior
-
-### Worst Case
-
-* Still exponential (theoretical)
-
-### Practical Case
-
-* Controlled by $\epsilon$
-* Typically:
-
-  * Hundreds to a few thousand points in frontier
-  * Runtime: seconds to minutes
-
----
-
-## 11. Advantages of This Approach
-
-### Deterministic
-
-* Same input → same output
-
-### Structure-Exploiting
-
-* Fully leverages additivity and separability
-
-### Scalable
-
-* Handles large ( n ) effectively
-
-### General-Purpose
-
-* Works across all ( (n, m_i, v) ) without redesign
-
-### Tunable
-
-* Single parameter ( \varepsilon ) controls:
-
-  * accuracy
-  * runtime
-  * memory
-
----
-
-## 12. Choosing $\epsilon$
-
-Typical values:
-
-| $\epsilon$         | Effect                         |
-| --------- | ------------------------------ |
-| 0.01      | High accuracy, larger frontier |
-| 0.03–0.05 | Good balance                   |
-| 0.1       | Aggressive pruning, fast       |
-
----
-
-## 13. Optional Enhancements
-
-### Scalarization Sampling
-
-* Solve weighted sums:
-  [
-  \min_x \sum_k w_k F_k(x)
-  ]
-* Very fast due to separability
-* Helps fill convex regions of the frontier
-
-### Hybrid Approach
-
-* Combine scalarization + $\epsilon$-DP
-* Improves coverage
-
----
-
-## 14. Limitations
-
-* Approximate (controlled by $\epsilon$)
-* Performance depends on:
-
-  * correlation between objectives
-  * effectiveness of pruning
-
----
-
-## 15. Summary
-
-This approach transforms an intractable combinatorial problem into a **manageable incremental construction of an approximate Pareto frontier**.
-
-The key enablers are:
-
-* additive structure
-* independence across groups
-* $\epsilon$-dominance pruning
-
-### Final Takeaway
-
-> $\epsilon$-dominance dynamic programming provides a robust, scalable, and general solution for multi-objective multiple-choice optimization problems with additive structure.
-
----
-
-## 16. Implementation Notes
-
-* Use efficient data structures for pruning (hash maps for buckets)
-* Normalize objectives if scales differ significantly
-* Monitor frontier size to detect pathological cases
-* Consider logging intermediate frontier sizes for diagnostics
-
----
-
-End of document.
