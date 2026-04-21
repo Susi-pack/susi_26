@@ -4,7 +4,6 @@ import pytest
 from analysis.optimization.dynamic_programming import (
     get_minimum_values_per_variable,
     shift_points_to_positive_values,
-    undo_shift_to_positive_values,
     PartialParetoPoint,
     recover_scenario_choices,
 )
@@ -69,39 +68,6 @@ def large_variable_data():
 # --- Tests ---
 
 
-@pytest.mark.parametrize(
-    "fixture_name",
-    [
-        "original_data",
-        "simple_data",
-        "negative_data",
-        "single_array_data",
-        "large_variable_data",
-    ],
-)
-def test_roundtrip_identity(fixture_name, request):
-    arrays = request.getfixturevalue(fixture_name)
-    min_vals = get_minimum_values_per_variable(arrays)
-    shifted = shift_points_to_positive_values(arrays, min_vals)
-    restored = undo_shift_to_positive_values(shifted, min_vals)
-    assert_arrays_equal(arrays, restored)
-
-
-def test_structure_preserved(original_data):
-    min_vals = get_minimum_values_per_variable(original_data)
-    shifted = shift_points_to_positive_values(original_data, min_vals)
-    restored = undo_shift_to_positive_values(shifted, min_vals)
-    assert [arr.shape for arr in restored] == [arr.shape for arr in original_data]
-
-
-def test_single_point_array():
-    arrays = [np.array([[5.0, 10.0]]), np.array([[3.0, 7.0], [8.0, 2.0]])]
-    min_vals = get_minimum_values_per_variable(arrays)
-    shifted = shift_points_to_positive_values(arrays, min_vals)
-    restored = undo_shift_to_positive_values(shifted, min_vals)
-    assert_arrays_equal(arrays, restored)
-
-
 def test_recover_scenario_choices():
     # Single point (no parent)
     p0 = PartialParetoPoint(
@@ -110,7 +76,7 @@ def test_recover_scenario_choices():
         current_scenario_choice=3,
         stand_index=0,
     )
-    assert recover_scenario_choices(p0) == [3]
+    assert recover_scenario_choices(p0) == (3,)
 
     # Linear chain: p0 -> p1 -> p2
     p1 = PartialParetoPoint(
@@ -125,10 +91,10 @@ def test_recover_scenario_choices():
         current_scenario_choice=1,
         stand_index=2,
     )
-    assert recover_scenario_choices(p2) == [3, 7, 1]
+    assert recover_scenario_choices(p2) == (3, 7, 1)
 
     # Intermediate node returns only its own ancestry
-    assert recover_scenario_choices(p1) == [3, 7]
+    assert recover_scenario_choices(p1) == (3, 7)
 
     # Chain with repeated choice values
     p3 = PartialParetoPoint(
@@ -137,7 +103,7 @@ def test_recover_scenario_choices():
         current_scenario_choice=3,  # same as p0
         stand_index=3,
     )
-    assert recover_scenario_choices(p3) == [3, 7, 1, 3]
+    assert recover_scenario_choices(p3) == (3, 7, 1, 3)
 
     # Choice of zero is valid
     p_zero = PartialParetoPoint(
@@ -146,7 +112,7 @@ def test_recover_scenario_choices():
         current_scenario_choice=0,
         stand_index=0,
     )
-    assert recover_scenario_choices(p_zero) == [0]
+    assert recover_scenario_choices(p_zero) == (0,)
 
     print("All tests passed.")
 
