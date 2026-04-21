@@ -555,6 +555,7 @@ from analysis.optimization.dynamic_programming import (
     from_nested_tuples_to_numpy_arrays,
     from_numpy_arrays_to_nested_tuples,
     find_pareto_front,
+    recover_scenario_choices,
 )
 
 # Shift all values to positive so that there are no problems with negative log() below.
@@ -591,3 +592,7 @@ plt.scatter(
     linewidth=0,
 )
 plt.show()
+
+
+# %% Recover scenario choices that led to each ParetoParentPoint
+recover_scenario_choices(pareto_front[0])

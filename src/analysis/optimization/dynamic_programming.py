@@ -191,3 +191,13 @@ def find_pareto_front(
         pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=1e-7)
 
     return pareto_front
+
+
+def recover_scenario_choices(point: PartialParetoPoint) -> list[int]:
+    choices = []
+    current = point
+    while current is not None:
+        choices.append(current.current_scenario_choice)
+        current = current.parent_point
+    choices.reverse()
+    return choices
