@@ -2,70 +2,30 @@ import numpy as np
 import pytest
 
 from analysis.optimization.dynamic_programming import (
-    get_minimum_values_per_variable,
-    shift_points_to_positive_values,
     PartialParetoPoint,
     recover_scenario_choices,
+    get_minimum_values_per_variable,
+    shift_points_to_positive_values,
 )
 
 
-def assert_arrays_equal(original, restored):
-    assert len(original) == len(restored)
-    for orig, rest in zip(original, restored):
-        np.testing.assert_allclose(orig, rest, rtol=1e-5, atol=1e-8)
-
-
-# --- Fixtures ---
-
-
-@pytest.fixture
-def original_data():
-    return [
-        np.array([[-642.92734375, 9517.09333333], [-646.17617188, 12541.13333333]]),
-        np.array([[-83.98195553, 26035.66388889], [-141.52484245, 36018.57972222]]),
-        np.array([[-1626.45367432, 18815.07913194], [-1689.78857727, 29029.22809028]]),
-        np.array(
-            [
-                [-1991.18133545, 50868.14583333],
-                [-2370.94451904, 65349.98611111],
-                [-3229.86724854, 71108.22222222],
-                [-3262.39379883, 89875.22222222],
-            ]
-        ),
-        np.array([[-347.32382202, 15556.54722222], [-369.33560181, 18892.81666667]]),
+def test_get_minimum_values_per_variable():
+    data = [
+        np.array([[1, 2, 3], [2, 3, 4]]),
+        np.array([[0, 2, 3], [2, 3, 4], [-1, 3, 0]]),
     ]
+    assert get_minimum_values_per_variable(data) == (-1, 2, 0)
 
 
-@pytest.fixture
-def simple_data():
-    return [
-        np.array([[0.0, 0.0], [1.0, 1.0]]),
-        np.array([[2.0, 3.0], [4.0, 5.0], [6.0, 7.0]]),
+def test_shift_points_to_positive_values():
+    data = [
+        np.array([[1, 2, 3], [2, 3, 4]]),
+        np.array([[0, 2, 3], [2, 3, 4], [-1, 3, 0]]),
     ]
-
-
-@pytest.fixture
-def negative_data():
-    return [
-        np.array([[-1000.0, -500.0], [-200.0, -100.0], [-50.0, -10.0]]),
-        np.array([[1000.0, 500.0]]),
-    ]
-
-
-@pytest.fixture
-def single_array_data():
-    return [
-        np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
-    ]
-
-
-@pytest.fixture
-def large_variable_data():
-    rng = np.random.default_rng(42)
-    return [rng.uniform(-1e4, 1e4, size=(rng.integers(1, 10), 2)) for _ in range(20)]
-
-
-# --- Tests ---
+    for arr in shift_points_to_positive_values(
+        data, minimum_values_per_variable=get_minimum_values_per_variable(data)
+    ):
+        assert np.all(arr) > 0
 
 
 def test_recover_scenario_choices():

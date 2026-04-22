@@ -553,13 +553,26 @@ from analysis.optimization.dynamic_programming import (
     compute_objective,
 )
 
-# Shift all values to positive so that there are no problems with negative log() below.
-# At the end, will have to undo everything to report results back
-data_table_arrays = pruned_target_var_arrays.data_weighted_by_area
-minimum_values_per_variable = get_minimum_values_per_variable(data_table_arrays)
-shifted = shift_points_to_positive_values(
-    data=data_table_arrays, minimum_values_per_variable=minimum_values_per_variable
+
+def shift_table_of_objectives_to_positive_values(
+    table_of_objectives: list[np.ndarray],
+) -> list[np.ndarray]:
+    minimum_values_per_variable = get_minimum_values_per_variable(table_of_objectives)
+    assert len(minimum_values_per_variable) == table_of_objectives[0].shape[1]
+    return shift_points_to_positive_values(
+        data=table_of_objectives,
+        minimum_values_per_variable=minimum_values_per_variable,
+    )
+
+
+# Shift all values to positive so that there are no problems with negative logs() later.
+# At the end, will have to undo everything to report results in the original scale.
+# Finding the Pareto front (or optimizing in general) is invariant agains additive shifts,
+# or linear transformations. That's why we can do it.
+shifted = shift_table_of_objectives_to_positive_values(
+    pruned_target_var_arrays.data_weighted_by_area
 )
+
 
 # Here I switch from numpy-centric to Python native.
 # Because later I will probably want to write this algo in a compiled language.
@@ -569,7 +582,9 @@ pareto_front = find_pareto_front(shifted_data_table)
 
 pareto_front_solution = reconstruct_solution_pareto_front(
     pareto_front=pareto_front,
-    data_table=from_numpy_arrays_to_nested_tuples(data_table_arrays),
+    data_table=from_numpy_arrays_to_nested_tuples(
+        pruned_target_var_arrays.data_weighted_by_area
+    ),
 )
 
 # %% create random points
@@ -587,6 +602,7 @@ random_target_vectors = [
 
 # %% visualize dynamic programming
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
+
 
 pareto_front_objectives = [point.target_vector for point in pareto_front_solution]
 
