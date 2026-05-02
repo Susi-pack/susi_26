@@ -548,6 +548,7 @@ from analysis.optimization.dynamic_programming import (
     shift_points_to_positive_values,
     get_minimum_values_per_variable,
     from_numpy_arrays_to_nested_tuples,
+    from_numpy_arrays_to_nested_lists,
     find_pareto_front,
     reconstruct_solution_pareto_front,
     compute_objective,
@@ -565,20 +566,23 @@ def shift_table_of_objectives_to_positive_values(
     )
 
 
+data_table_arrays = pruned_target_var_arrays.data_weighted_by_area
+
 # Shift all values to positive so that there are no problems with negative logs() later.
 # At the end, will have to undo everything to report results in the original scale.
-# Finding the Pareto front (or optimizing in general) is invariant agains additive shifts,
+
 # or linear transformations. That's why we can do it.
-shifted = shift_table_of_objectives_to_positive_values(
-    pruned_target_var_arrays.data_weighted_by_area
-)
+shifted = shift_table_of_objectives_to_positive_values(data_table_arrays)
 
 
 # Here I switch from numpy-centric to Python native.
 # Because later I will probably want to write this algo in a compiled language.
 shifted_data_table = from_numpy_arrays_to_nested_tuples(shifted)
 
-pareto_front = find_pareto_front(shifted_data_table)
+import time
+
+t0 = time.perf_counter()
+pareto_front = find_pareto_front(shifted_data_table, epsilon=1e-7)
 
 pareto_front_solution = reconstruct_solution_pareto_front(
     pareto_front=pareto_front,
@@ -586,6 +590,21 @@ pareto_front_solution = reconstruct_solution_pareto_front(
         pruned_target_var_arrays.data_weighted_by_area
     ),
 )
+t1 = time.perf_counter()
+print(f"Python: {t1 - t0:.4f}s")
+
+# %% Dynamic programming Rust
+import pareto_dp
+
+data_table_list = from_numpy_arrays_to_nested_lists(shifted)
+
+t2 = time.perf_counter()
+rust_front = pareto_dp.find_pareto_front(data=data_table_list, epsilon=1e-7)
+t3 = time.perf_counter()
+
+print(f"Rust:   {t3 - t2:.4f}s")
+
+print(f"Speedup Rust vs Python: {(t1 - t0) / (t3 - t2):.1f}x")
 
 # %% create random points
 random_design_vectors = create_random_population(
@@ -611,6 +630,21 @@ pareto_front_objectives_array = np.array(pareto_front_objectives)
 
 fig = pareto_corner_plot(
     data=pareto_front_objectives_array,
+    random_points=np.array(random_target_vectors),
+    labels=list(target_var_arrays.variables),
+    show_diagonal=False,
+)
+plt.show()
+
+# %% Visualize Rust Pareto front
+
+rust_front_objectives = [point.target_vector for point in rust_front]
+
+rust_front_objectives_array = np.array(rust_front_objectives)
+
+
+fig = pareto_corner_plot(
+    data=rust_front_objectives_array,
     random_points=np.array(random_target_vectors),
     labels=list(target_var_arrays.variables),
     show_diagonal=False,

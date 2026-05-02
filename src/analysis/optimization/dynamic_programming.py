@@ -84,6 +84,12 @@ def from_numpy_arrays_to_nested_tuples(
     return tuple(tuple(map(tuple, arr.tolist())) for arr in arrays)
 
 
+def from_numpy_arrays_to_nested_lists(
+    arrays: Sequence[np.ndarray],
+) -> list[list[Any]]:
+    return list(list(arr.tolist()) for arr in arrays)
+
+
 def from_nested_tuples_to_numpy_arrays(
     nested_tuples: tuple[tuple[float, ...], ...],
 ) -> tuple[np.ndarray, ...]:
@@ -148,7 +154,7 @@ def pareto_epsilon_prune(
 
 
 def find_pareto_front(
-    data_table: tuple[tuple[Any, ...], ...],
+    data_table: tuple[tuple[Any, ...], ...], epsilon: float
 ) -> tuple[PartialParetoPoint, ...]:
 
     n_stands = len(data_table)
@@ -187,7 +193,7 @@ def find_pareto_front(
                     )
                 )
 
-        pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=1e-7)
+        pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=epsilon)
 
     return pareto_front
 
