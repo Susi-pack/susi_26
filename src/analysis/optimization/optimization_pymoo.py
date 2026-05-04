@@ -596,7 +596,7 @@ print(f"Python: {t1 - t0:.4f}s")
 # %% Dynamic programming Rust
 import pareto_dp
 
-data_table_list = from_numpy_arrays_to_nested_lists(shifted)
+data_table_list = from_numpy_arrays_to_nested_lists(data_table_arrays)
 
 t2 = time.perf_counter()
 rust_front = pareto_dp.find_pareto_front(data=data_table_list, epsilon=1e-7)
