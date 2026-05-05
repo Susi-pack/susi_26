@@ -1237,6 +1237,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pareto-dp"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3e/38/c758109b8e4c6e7648c167c067fe6680b5c963b4ea4bebe5a31498b587f2/pareto_dp-0.1.0.tar.gz", hash = "sha256:8975c5b9995af6720f47a062126a4bb385488699940d06789dfeedb91fbfa25b", size = 8710, upload-time = "2026-05-05T09:02:09.404Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9b/5a/072364657404ff30c83718463acc1b83158454206bade076f09854612c36/pareto_dp-0.1.0-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:b3a228aa312c8b8a30517a756dd7ec102446d13207f2978362d489c33f055d06", size = 252470, upload-time = "2026-05-05T09:02:07.397Z" },
+]
+
+[[package]]
 name = "parso"
 version = "0.8.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2106,6 +2115,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "pareto-dp" },
     { name = "pydantic" },
     { name = "pyproj" },
     { name = "scipy" },
@@ -2132,6 +2142,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.3" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.3.0" },
+    { name = "pareto-dp", specifier = ">=0.1.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pyproj", specifier = ">=3.7.2" },
     { name = "scipy", specifier = ">=1.17.1" },
