@@ -2,7 +2,7 @@ import streamlit as st
 
 import pandas as pd
 
-from analysis.gui.components import folder_selection
+from analysis.gui.components import folder_selection, netcdf_reader
 import susi.io.load_output_data as load_output
 
 st.header("Project summary")
@@ -18,55 +18,56 @@ metadata_by_stand = load_output.load_all_metadatas_from_stands(
 )
 
 
-sample_netcdf_filepath = metadata_by_stand[
-    load_output.StandID(stand_folderpaths[0].name)
-].iloc[0]["netcdf_output_filepath"]
+mean = load_output.NetcdfVariableArray.mean_of_all_values
+end = load_output.NetcdfVariableArray.spatial_mean_at_last_timestep
+sum = load_output.NetcdfVariableArray.mean_over_space_sum_over_time
+initial = load_output.NetcdfVariableArray.spatial_mean_at_initial_timestep
 
-
-# all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 CHOSEN_VARIABLES = (
-    [load_output.NetcdfVariablePath("/strip/dwtyr_growingseason"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/strip/dwtyr_latesummer"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/stand/volumegrowth"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/stand/volume"), "end"],  # end
-    [load_output.NetcdfVariablePath("/stand/volume"), "initial"],  # end
-    [load_output.NetcdfVariablePath("/stand/logvolume"), "end"],  # end
-    [load_output.NetcdfVariablePath("/stand/pulpvolume"), "end"],  # end
-    [load_output.NetcdfVariablePath("/stand/harvested_volume"), "sum"],  # sum
-    [load_output.NetcdfVariablePath("/stand/harvested_log_volume"), "sum"],  # sum
-    [load_output.NetcdfVariablePath("/stand/harvested_pulp_volume"), "sum"],  # sum
-    [load_output.NetcdfVariablePath("/export/hmwtoditch"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/export/lmwtoditch"), "mean"],  # mean
-    [
-        load_output.NetcdfVariablePath("/balance/C/stand_c_balance_co2eq"),
-        "mean",
-    ],  # mean
-    [load_output.NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/N/balance_root_lyr"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/P/balance_root_lyr"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/K/balance_root_lyr"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/N/to_water"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/P/to_water"), "mean"],  # mean
-    [load_output.NetcdfVariablePath("/balance/K/to_water"), "mean"],  # mean
+    netcdf_reader.aggregate_var("strip/dwtyr_growingseason", mean),
+    netcdf_reader.aggregate_var("/strip/dwtyr_latesummer", mean),
+    netcdf_reader.aggregate_var("/stand/volumegrowth", mean),
+    netcdf_reader.aggregate_var("/stand/volume", end, label="/stand/volume END"),
+    netcdf_reader.aggregate_var(
+        "/stand/volume", initial, label="/stand/volume INITIAL"
+    ),
+    netcdf_reader.aggregate_var("/stand/logvolume", end),
+    netcdf_reader.aggregate_var("/stand/pulpvolume", end),
+    netcdf_reader.aggregate_var("/stand/harvested_volume", sum),
+    netcdf_reader.aggregate_var("/stand/harvested_log_volume", sum),
+    netcdf_reader.aggregate_var("/stand/harvested_pulp_volume", sum),
+    netcdf_reader.aggregate_var("/export/hmwtoditch", mean),
+    netcdf_reader.aggregate_var("/export/lmwtoditch", mean),
+    netcdf_reader.aggregate_var("/balance/C/stand_c_balance_co2eq", mean),
+    netcdf_reader.aggregate_var("/balance/C/soil_c_balance_co2eq", mean),
+    netcdf_reader.aggregate_var("/balance/N/balance_root_lyr", mean),
+    netcdf_reader.aggregate_var("/balance/P/balance_root_lyr", mean),
+    netcdf_reader.aggregate_var("/balance/K/balance_root_lyr", mean),
+    netcdf_reader.aggregate_var("/balance/N/to_water", mean),
+    netcdf_reader.aggregate_var("/balance/P/to_water", mean),
+    netcdf_reader.aggregate_var("/balance/K/to_water", mean),
 )
 
+# We don't use the function
+# read_netcdf_files_for_selected_variables_from_metadatas()
+# here because I want to cache to make UI faster
+scenarios_by_stand = {}
+netcdf_filepaths_by_stand = {}
 
-# TODO: (Later) Try to cache this
-# cached_read_of_all_variables = lru_cache(
-#     nc_utils.read_chosen_variables_from_netcdf_by_stands_and_scenarios
-# )
-# chosen_variables_by_stand_and_scenario = cached_read_of_all_variables(
-#     chosen_vars=tuple(chosen_vars), metadata_by_stand=tuple(metadata_by_stand)
-# )
-# The issue with the approach above is that the dataframe object of metadata_by_stand is not cacheable.
-# Maybe we can cache it with Streamlit directly?
+for stand_id, metadata_df in metadata_by_stand.items():
+    # We rely on pandas dataframe ordering for the two orders from
+    # scenarios and netcdf_filepaths to match
+    scenarios = load_output.get_scenarios_for_stand(metadata_df)
+    netcdf_filepaths = load_output.get_netcdf_filepaths_for_stand(metadata_df)
 
-data_store: load_output.OutputDataStore = (
-    load_output.read_netcdf_files_for_selected_variables(
-        selected_variables=[var[0] for var in CHOSEN_VARIABLES],
-        metadata_by_stand=metadata_by_stand,
-    )
+    scenarios_by_stand[load_output.StandID(stand_id)] = scenarios
+    netcdf_filepaths_by_stand[load_output.StandID(stand_id)] = netcdf_filepaths
+
+data_store: load_output.OutputDataStore = netcdf_reader.cached_read_netcdf_files(
+    selected_variables=CHOSEN_VARIABLES,
+    scenarios_by_stand=scenarios_by_stand,
+    netcdf_filepaths_by_stand=netcdf_filepaths_by_stand,
 )
 
 rows = []
@@ -76,25 +77,21 @@ for stand_id in data_store.stands:
             "stand": str(stand_id),
             "scenario": str(scenario_id),
         }
-        for var_path, method_name in CHOSEN_VARIABLES:
+        for agg_netcdf_var in CHOSEN_VARIABLES:
             var_array = data_store.get_variable_value_for_scenario_and_stand(
-                var_path, stand_id, scenario_id
+                agg_netcdf_var.netcdf_path, stand_id, scenario_id
             )
-            if method_name == "mean":
-                row[str(var_path)] = var_array.mean_of_all_values()
-            elif method_name == "end":
-                row[str(var_path)] = var_array.spatial_mean_at_last_timestep()
-            elif method_name == "sum":
-                row[str(var_path)] = var_array.mean_over_space_sum_over_time()
-            elif method_name == "initial":
-                row[str(var_path + "initial")] = (
-                    var_array.spatial_mean_at_initial_timestep()
-                )
+            label = (
+                agg_netcdf_var.display_label
+                if agg_netcdf_var.display_label is not None
+                else str(agg_netcdf_var.netcdf_path)
+            )
+            row[label] = agg_netcdf_var.aggregation_method(var_array)
 
         rows.append(row)
 
-df_means = pd.DataFrame(rows)
+df_agg = pd.DataFrame(rows)
 
-df_means = df_means.sort_values(by=["stand", "scenario"])
+df_agg = df_agg.sort_values(by=["stand", "scenario"])
 
-st.dataframe(df_means, height=800)
+st.dataframe(df_agg)

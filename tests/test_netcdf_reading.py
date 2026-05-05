@@ -22,7 +22,7 @@ from susi.io.load_output_data import (
     StandID,
     TargetVariableDict,
     OutputDataStore,
-    read_netcdf_files_for_selected_variables,
+    read_netcdf_files_for_selected_variables_from_metadatas,
 )
 
 from susi.io.load_output_data import NetcdfVariableArray
@@ -354,7 +354,7 @@ class TestOutputDataStore:
                 }
             )
         }
-        return read_netcdf_files_for_selected_variables(
+        return read_netcdf_files_for_selected_variables_from_metadatas(
             selected_variables=selected_vars,
             metadata_by_stand=metadata_by_stand,
         )
@@ -401,7 +401,7 @@ class TestOutputDataStore:
                 }
             ),
         }
-        store = read_netcdf_files_for_selected_variables(
+        store = read_netcdf_files_for_selected_variables_from_metadatas(
             selected_variables=selected_vars,
             metadata_by_stand=metadata_by_stand,
         )
