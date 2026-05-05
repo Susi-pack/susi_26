@@ -1,7 +1,7 @@
 # Read netcdf files and load variables into and OutputDataStore
 from functools import cached_property
 
-from typing import NewType, Sequence
+from typing import NewType, Sequence, Callable
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -154,6 +154,10 @@ class NetcdfVariableArray:
         return float(self.processed.mean())
 
 
+# New type for calling the methods in other parts of the code
+NetcdfAggregationFn = Callable[[NetcdfVariableArray], float]
+
+
 @dataclass
 class OutputDataStore:
     """
@@ -162,7 +166,9 @@ class OutputDataStore:
     """
 
     stands: list[StandID]  # ["stand_A", "stand_B", ...]
-    scenarios: dict[StandID, list[ScenarioID]]  # {"stand_A": ["scen_1", "scen_2"], ...}
+    scenarios: dict[
+        StandID, Sequence[ScenarioID]
+    ]  # {"stand_A": ["scen_1", "scen_2"], ...}
     variables: Sequence[NetcdfVariablePath]
 
     # Core data structure: Struct of Arrays, keyed by variable
@@ -357,35 +363,30 @@ def read_value_several_variables_from_single_file(
 #
 
 
-def _get_scenarios_for_stand(metadata_df: pd.DataFrame) -> list[ScenarioID]:
-    return list(metadata_df["scenario_id"])
+def get_scenarios_for_stand(metadata_df: pd.DataFrame) -> list[ScenarioID]:
+    return [ScenarioID(scen) for scen in metadata_df["scenario_id"]]
 
 
-def _get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:
-    return list(metadata_df["netcdf_output_filepath"])
+def get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:
+    return [Path(p) for p in metadata_df["netcdf_output_filepath"]]
 
 
 def read_netcdf_files_for_selected_variables(
     selected_variables: Sequence[NetcdfVariablePath],
-    metadata_by_stand: dict[StandID, pd.DataFrame],
+    scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
+    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
 ) -> OutputDataStore:
     stands: list[StandID] = []
-    scenarios_by_stand: dict[StandID, list[ScenarioID]] = {}
     data: dict[
         NetcdfVariablePath, dict[tuple[StandID, ScenarioID], NetcdfVariableArray]
     ] = {var_path: {} for var_path in selected_variables}
 
-    for stand_id, metadata_df in metadata_by_stand.items():
+    for stand_id, scenarios in scenarios_by_stand.items():
         stands.append(stand_id)
 
-        # We rely on pandas dataframe ordering for the two orders from
-        # scenarios and netcdf_filepaths to match
-        scenarios = _get_scenarios_for_stand(metadata_df)
-        netcdf_filepaths = _get_netcdf_filepaths_for_stand(metadata_df)
-
-        scenarios_by_stand[stand_id] = scenarios
-
-        for scenario_id, netcdf_filepath in zip(scenarios, netcdf_filepaths):
+        for scenario_id, netcdf_filepath in zip(
+            scenarios, netcdf_filepaths_by_stand[stand_id]
+        ):
             variable_values = read_value_several_variables_from_single_file(
                 netcdf_filepath=netcdf_filepath, variable_paths=selected_variables
             )
@@ -397,6 +398,34 @@ def read_netcdf_files_for_selected_variables(
         scenarios=scenarios_by_stand,
         variables=selected_variables,
         data=data,
+    )
+
+
+def read_netcdf_files_for_selected_variables_from_metadatas(
+    selected_variables: Sequence[NetcdfVariablePath],
+    metadata_by_stand: dict[StandID, pd.DataFrame],
+) -> OutputDataStore:
+    """
+    A simpler API for the previous function
+    if we have metadata_by_stand
+    """
+
+    scenarios_by_stand = {}
+    netcdf_filepaths_by_stand = {}
+
+    for stand_id, metadata_df in metadata_by_stand.items():
+        # We rely on pandas dataframe ordering for the two orders from
+        # scenarios and netcdf_filepaths to match
+        scenarios = get_scenarios_for_stand(metadata_df)
+        netcdf_filepaths = get_netcdf_filepaths_for_stand(metadata_df)
+
+        scenarios_by_stand[StandID(stand_id)] = scenarios
+        netcdf_filepaths_by_stand[StandID(stand_id)] = netcdf_filepaths
+
+    return read_netcdf_files_for_selected_variables(
+        selected_variables=selected_variables,
+        scenarios_by_stand=scenarios_by_stand,
+        netcdf_filepaths_by_stand=netcdf_filepaths_by_stand,
     )
 
 

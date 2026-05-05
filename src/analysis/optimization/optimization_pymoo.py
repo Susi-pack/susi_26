@@ -55,46 +55,40 @@ all_variables: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableIn
 
 # %% Read variables
 
-TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
-
 
 @dataclass
 class TargetVariableProperties:
-    aggregation_method: Literal["mean_all", "mean_last_timestep"]
+    aggregation_function: load_output.NetcdfAggregationFn
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
 def aggregate_time_series_to_float(
-    array: load_output.NetcdfVariableArray,
     target_variable_properties: TargetVariableProperties,
+    array: load_output.NetcdfVariableArray,
 ) -> float:
     inverter: int = -1 if target_variable_properties.invert_optimization else 1
 
-    match target_variable_properties.aggregation_method:
-        case "mean_all":
-            return inverter * array.mean_of_all_values()
-        case "mean_last_timestep":
-            return inverter * array.spatial_mean_at_last_timestep()
-        case _:
-            assert_never()
+    return inverter * target_variable_properties.aggregation_function(array)
 
 
 TARGET_VARIABLES = {
     NetcdfVariablePath("/stand/volume"): TargetVariableProperties(
-        aggregation_method="mean_last_timestep",
+        aggregation_function=load_output.NetcdfVariableArray.spatial_mean_at_last_timestep,
         invert_optimization=True,
     ),
     NetcdfVariablePath("/balance/C/soil_c_balance_co2eq"): TargetVariableProperties(
-        aggregation_method="mean_all",
+        aggregation_function=load_output.NetcdfVariableArray.mean_of_all_values,
         invert_optimization=True,
     ),
     NetcdfVariablePath("/balance/N/to_water"): TargetVariableProperties(
-        aggregation_method="mean_all", invert_optimization=False
+        aggregation_function=load_output.NetcdfVariableArray.mean_of_all_values,
+        invert_optimization=False,
     ),
 }
 
+
 data_store: load_output.OutputDataStore = (
-    load_output.read_netcdf_files_for_selected_variables(
+    load_output.read_netcdf_files_for_selected_variables_from_metadatas(
         selected_variables=list(TARGET_VARIABLES.keys()),
         metadata_by_stand=metadata_by_stand,
     )
