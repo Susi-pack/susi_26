@@ -5,6 +5,9 @@ from dataclasses import dataclass
 import numpy as np
 from tqdm import tqdm
 
+# Delta used to avoid log(0) errors
+_DELTA = 1e-9
+
 
 @dataclass(frozen=True)
 class PartialParetoPoint:
@@ -42,15 +45,22 @@ def assign_bucket_to_point(
     point: PartialParetoPoint, epsilon: float
 ) -> tuple[int, ...]:
     """
+    Assign a point to a bucket in the coarse-grained space.
+
     A bucket is the v-dimensional pixel where the Pareto point falls
-    when the space is coarse-grained
+    when the space is coarse-grained using logarithmic binning.
+
+    Args:
+        point: The Pareto point to assign to a bucket
+        epsilon: The binning parameter controlling bucket size
+
+    Returns:
+        A tuple of integers representing the bucket coordinates
     """
-    # Delta used to avoid log(0) errors
-    DELTA = 1e-9
     base = np.log(1 + epsilon)
 
     return tuple(
-        int(np.floor(np.log(point_coordinate + DELTA) / base))
+        int(np.floor(np.log(point_coordinate + _DELTA) / base))
         for point_coordinate in point.objective_vector
     )
 
@@ -65,14 +75,19 @@ def shift_points_to_positive_values(
     """
     Do a translation of the coordinate system so that all values of the variables are positive.
     """
-    DELTA = 1e-6  # to avoid zeroes
-    return [arr - minimum_values_per_variable + DELTA for arr in data]
+    return [arr - minimum_values_per_variable + _DELTA for arr in data]
 
 
 def from_numpy_arrays_to_nested_tuples(
     arrays: Sequence[np.ndarray],
 ) -> tuple[tuple[Any, ...], ...]:
     return tuple(tuple(map(tuple, arr.tolist())) for arr in arrays)
+
+
+def from_numpy_arrays_to_nested_lists(
+    arrays: Sequence[np.ndarray],
+) -> list[list[Any]]:
+    return list(list(arr.tolist()) for arr in arrays)
 
 
 def from_nested_tuples_to_numpy_arrays(
@@ -109,7 +124,7 @@ def compress_into_buckets(
     return tuple(buckets.values())
 
 
-def pareto_prune(points: tuple[PartialParetoPoint, ...]):
+def pareto_prune(points: tuple[PartialParetoPoint, ...]) -> tuple[PartialParetoPoint]:
 
     pareto = []
 
@@ -128,7 +143,7 @@ def pareto_prune(points: tuple[PartialParetoPoint, ...]):
 
         pareto = new_pareto
 
-    return pareto
+    return tuple(pareto)
 
 
 def pareto_epsilon_prune(
@@ -139,7 +154,7 @@ def pareto_epsilon_prune(
 
 
 def find_pareto_front(
-    data_table: tuple[tuple[Any, ...], ...],
+    data_table: tuple[tuple[Any, ...], ...], epsilon: float
 ) -> tuple[PartialParetoPoint, ...]:
 
     n_stands = len(data_table)
@@ -178,7 +193,7 @@ def find_pareto_front(
                     )
                 )
 
-        pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=1e-7)
+        pareto_front = pareto_epsilon_prune(points=pareto_front_new, epsilon=epsilon)
 
     return pareto_front
 
