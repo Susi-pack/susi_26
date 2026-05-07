@@ -42,11 +42,11 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 
 # %% Metadata expander
-metadata, susi_params = load_output.read_json_metadatas(
+params = load_output.read_params_from_jsons(
     experiment_folderpath=chosen_scenario_folder
 )
 
-metadata_expander.build(metadata=metadata, susi_params=susi_params)
+metadata_expander.build(metadata=params.metadata, susi_params=params.susi_params)
 
 # %% Show summary table
 st.markdown("---")
@@ -62,7 +62,7 @@ sample_netcdf_filepath = (
 all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 # Actual netcdf file path for reading values (not only structure of the file)
-chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
+chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])
 
 chosen_netcdf_variables = netcdf_variable_explorer.build(netcdf_variables=all_variables)
 

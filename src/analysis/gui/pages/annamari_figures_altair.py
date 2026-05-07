@@ -16,7 +16,7 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     label="scenario",
 )
 
-metadata, susi_params = nc_utils.read_json_metadatas(
+metadata, susi_params = nc_utils.read_params_from_jsons(
     experiment_folderpath=chosen_scenario_folder
 )
 
