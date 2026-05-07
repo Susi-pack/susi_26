@@ -19,7 +19,7 @@ def pick_folder_popup() -> Path:
 
 
 def build_folder_selection_widget(dir_path: Path, label: str) -> Path:
-    subdirs = load_output.list_subdirectories(dir_path)
+    subdirs = sorted(load_output.list_subdirectories(dir_path))
     dir_names = [dir.name for dir in subdirs]
 
     selected_dir_name = st.selectbox(

@@ -155,18 +155,12 @@ class TestFindUniqueParams:
         result = find_unique_params(StandID("stand_01"), mock_output_dir)
         # ditch_depth_east is identical across scenarios (-0.2)
         assert ParamName("site_parameters/ditch_depth_east") in result
+        assert result[ParamName("site_parameters/ditch_depth_east")] == (-0.2,)
         # weather_parameters/temp is identical (20)
         assert ParamName("weather_parameters/temp") in result
+        assert result[ParamName("weather_parameters/temp")] == 20
         # ditch_depth_west differs, should not be present
         assert ParamName("site_parameters/ditch_depth_west") not in result
-
-    def test_maps_unique_value_to_all_scenarios(self, mock_output_dir):
-        result = find_unique_params(StandID("stand_01"), mock_output_dir)
-        param = ParamName("site_parameters/ditch_depth_east")
-        assert result[param][(-0.2,)] == [
-            ScenarioID("scenario_a"),
-            ScenarioID("scenario_b"),
-        ]
 
     def test_returns_empty_when_all_params_differ(self):
         with TemporaryDirectory() as tmp:
@@ -220,10 +214,6 @@ class TestFindUniqueParams:
             result = find_unique_params(StandID("stand_01"), output_dir)
             # temp is unique (20) across all 3 scenarios
             assert ParamName("weather_parameters/temp") in result
-            assert result[ParamName("weather_parameters/temp")][20] == [
-                ScenarioID("scenario_a"),
-                ScenarioID("scenario_b"),
-                ScenarioID("scenario_c"),
-            ]
+            assert result[ParamName("weather_parameters/temp")] == 20
             # ditch_depth_west differs, should not be present
             assert ParamName("site_parameters/ditch_depth_west") not in result

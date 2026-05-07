@@ -76,9 +76,7 @@ def _get_flat_params_per_scenario(
     return scenario_flat_params
 
 
-def _collect_all_param_paths(
-    flat_params: dict[ScenarioID, dict[str, Any]]
-) -> set[str]:
+def _collect_all_param_paths(flat_params: dict[ScenarioID, dict[str, Any]]) -> set[str]:
     """
     Returns set of all unique parameter paths across all scenarios.
     """
@@ -89,8 +87,7 @@ def _collect_all_param_paths(
 
 
 def _build_param_value_mapping(
-    flat_params: dict[ScenarioID, dict[str, Any]],
-    all_param_paths: set[str]
+    flat_params: dict[ScenarioID, dict[str, Any]], all_param_paths: set[str]
 ) -> dict[str, dict[Any, list[ScenarioID]]]:
     """
     Builds complete mapping: {param_path: {value: [ScenarioIDs with that value]}}.
@@ -111,8 +108,7 @@ def _build_param_value_mapping(
 
         # Sort scenario IDs for deterministic output
         result[param_path] = {
-            k: sorted(v, key=lambda x: x)
-            for k, v in value_to_scenarios.items()
+            k: sorted(v, key=lambda x: x) for k, v in value_to_scenarios.items()
         }
 
     return result
@@ -141,12 +137,10 @@ def find_differing_params(
     }
 
 
-def find_unique_params(
-    stand_id: StandID, output_dir: Path
-) -> dict[ParamName, dict[Any, list[ScenarioID]]]:
+def find_unique_params(stand_id: StandID, output_dir: Path) -> dict[ParamName, Any]:
     """
     Detect parameters that have identical values across all scenarios for a stand.
-    Returns dict mapping parameter names to dict of {param_value: [all ScenarioIDs for the stand]}.
+    Returns dict mapping parameter names to their unique value.
     Only includes parameters that have the same value in all scenarios.
     """
     flat_params = _get_flat_params_per_scenario(stand_id, output_dir)
@@ -157,8 +151,9 @@ def find_unique_params(
     value_mapping = _build_param_value_mapping(flat_params, all_param_paths)
 
     # Only include parameters with exactly one unique value
-    return {
-        ParamName(param_path): scen_ids
-        for param_path, scen_ids in value_mapping.items()
-        if len(scen_ids) == 1
-    }
+    result: dict[ParamName, Any] = {}
+    for param_path, scen_ids in value_mapping.items():
+        if len(scen_ids) == 1:
+            unique_value = next(iter(scen_ids.keys()))
+            result[ParamName(param_path)] = unique_value
+    return result
