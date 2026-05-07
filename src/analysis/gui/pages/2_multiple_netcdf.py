@@ -22,15 +22,15 @@ chosen_susi_folders = st.multiselect(
 )
 
 if len(chosen_susi_folders) == 2:
-    metadata_0, susi_params_0 = load_output.read_json_metadatas(
+    params_0 = load_output.read_params_from_jsons(
         experiment_folderpath=chosen_susi_folders[0]
     )
-    metadata_1, susi_params_1 = load_output.read_json_metadatas(
+    params_1 = load_output.read_params_from_jsons(
         experiment_folderpath=chosen_susi_folders[1]
     )
 
-    chosen_netcdf_filepath_0 = Path(metadata_0["netcdf_output_filepath"])
-    chosen_netcdf_filepath_1 = Path(metadata_1["netcdf_output_filepath"])
+    chosen_netcdf_filepath_0 = Path(params_0.metadata["netcdf_output_filepath"])
+    chosen_netcdf_filepath_1 = Path(params_1.metadata["netcdf_output_filepath"])
 
     VARIABLE_PATHS = (
         NetcdfVariablePath("/strip/dwtyr"),

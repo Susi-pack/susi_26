@@ -24,6 +24,9 @@ pages = [
     st.Page("pages/project_summary.py", title="Project summary"),
     st.Page("pages/1_single_netcdf.py", title="Single"),
     st.Page("pages/2_multiple_netcdf.py", title="Multiple"),
+    st.Page(
+        "pages/compare_scenarios_for_stand.py", title="Compare scenarios single stand"
+    ),
     st.Page("pages/annamari_figures.py", title="Annamari"),
     st.Page("pages/annamari_figures_altair.py", title="Annamari (Altair)"),
     st.Page("pages/9_settings.py", title="Settings"),

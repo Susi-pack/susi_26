@@ -21,6 +21,12 @@ ScenarioID = NewType("ScenarioID", str)  # same as scenario folder name
 TargetVariableDict = NewType("TargetVariableDict", dict[NetcdfVariablePath, float])
 
 
+@dataclass
+class SimulationParamsFromJSON:
+    susi_params: dict
+    metadata: dict
+
+
 @dataclass(frozen=True)
 class NetcdfVariableInfo:
     """
@@ -196,30 +202,18 @@ def list_subdirectories(path: Path) -> list[Path]:
     return [x for x in path.iterdir() if x.is_dir()]
 
 
-# def list_variable_absolute_paths(group: netCDF4.Dataset, path: str = "/") -> list[str]:
-#     vars_with_paths = []
-#     for v in group.variables:
-#         vars_with_paths.append(f"{path}/{v}".replace("//", "/"))
-#
-#     for name, subgroup in group.groups.items():
-#         subpath = f"{path}/{name}".replace("//", "/")
-#         vars_with_paths.extend(list_variable_absolute_paths(subgroup, subpath))
-#
-#     return vars_with_paths
-#
-#
-def read_json_metadatas(
+def read_params_from_jsons(
     experiment_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
-) -> tuple[dict, dict]:
+) -> SimulationParamsFromJSON:
     metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
     params_filepath = experiment_folderpath.joinpath(params_filename)
 
     metadata, params = map(
         io_utils.read_json_file, [metadata_filepath, params_filepath]
     )
-    return metadata, params
+    return SimulationParamsFromJSON(metadata=metadata, susi_params=params)
 
 
 def _load_single_experiment_metadatas(
@@ -231,11 +225,11 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata, params = read_json_metadatas(
+    params_from_json = read_params_from_jsons(
         experiment_folderpath, metadata_filename, params_filename
     )
 
-    return pd.json_normalize(metadata | params)
+    return pd.json_normalize(params_from_json.metadata | params_from_json.susi_params)
 
 
 def coerce_datetime_format(df: pd.DataFrame) -> pd.DataFrame:
@@ -427,65 +421,3 @@ def read_netcdf_files_for_selected_variables_from_metadatas(
         scenarios_by_stand=scenarios_by_stand,
         netcdf_filepaths_by_stand=netcdf_filepaths_by_stand,
     )
-
-
-# def transform_list_of_scenarios_to_optimization_array_structure(
-#     vars_of_interest_by_stand: list[dict[ScenarioID, TargetVariableDict]],
-#     n_stands: int,
-#     target_variable_paths: Sequence[NetcdfVariablePath],
-# ) -> ScenarioArrayData:
-#     target_variable_arrays: list[np.ndarray] = []
-#
-#     scenario_names: list[list[ScenarioID]] = []
-#
-#     n_target_variables = len(target_variable_paths)
-#
-#     for n_stand in range(n_stands):
-#         vars_of_interest_single_stand = vars_of_interest_by_stand[n_stand]
-#         number_of_scenarios = len(vars_of_interest_single_stand)
-#
-#         # Initialize the array that holds the variables' values
-#         target_var = np.ones((number_of_scenarios, n_target_variables)) * np.nan
-#         names_for_stand = []
-#
-#         for row, (scenario_name, target_variable_dict) in enumerate(
-#             vars_of_interest_single_stand.items()
-#         ):
-#             names_for_stand.append(scenario_name)
-#
-#             for col, var_path in enumerate(target_variable_paths):
-#                 target_var[row, col] = target_variable_dict[var_path]
-#
-#         # Check no field without filling
-#         # assert not np.isnan(target_var).any()
-#
-#         target_variable_arrays.append(target_var)
-#         scenario_names.append(names_for_stand)
-#
-#     return ScenarioArrayData(
-#         arrays=target_variable_arrays, scenario_names=scenario_names
-#     )
-#
-#
-# def transform_array_data_to_list_of_scenarios(
-#     array_data: ScenarioArrayData,
-#     n_stands: int,
-#     target_variable_paths: Sequence[NetcdfVariablePath],
-# ) -> list[dict[ScenarioID, TargetVariableDict]]:
-#     vars_of_interest_by_stand: list[dict[ScenarioID, TargetVariableDict]] = []
-#
-#     for n_stand in range(n_stands):
-#         scenarios_for_stand = {}
-#
-#         for row_idx, scenarios_data in enumerate(array_data.arrays[n_stand]):
-#             scenario_name = array_data.scenario_names[n_stand][row_idx]
-#             target_variable_values = {
-#                 target_var_path: scenarios_data[col_idx]
-#                 for (col_idx, target_var_path) in enumerate(target_variable_paths)
-#             }
-#
-#             scenarios_for_stand[scenario_name] = target_variable_values
-#
-#         vars_of_interest_by_stand.append(scenarios_for_stand)
-#
-#     return vars_of_interest_by_stand
