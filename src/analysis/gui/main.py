@@ -29,6 +29,7 @@ pages = [
     ),
     st.Page("pages/annamari_figures.py", title="Annamari"),
     st.Page("pages/annamari_figures_altair.py", title="Annamari (Altair)"),
+    st.Page("pages/optimization.py", title="Optimization"),
     st.Page("pages/9_settings.py", title="Settings"),
 ]
 
