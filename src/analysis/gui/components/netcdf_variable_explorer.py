@@ -62,6 +62,7 @@ def build_tree_nodes(variables: dict[NetcdfVariablePath, NetcdfVariableInfo]):
 
 def build(
     netcdf_variables: dict[NetcdfVariablePath, NetcdfVariableInfo],
+    preselected: list | None = None,
 ) -> dict[NetcdfVariablePath, NetcdfVariableInfo]:
     """
     Displays the netcdf variable tree and returns selected variables
@@ -79,6 +80,7 @@ def build(
             tree_result = tree_select(
                 tree_nodes,
                 check_model="leaf",
+                checked=preselected,
                 show_expand_all=True,
             )
 

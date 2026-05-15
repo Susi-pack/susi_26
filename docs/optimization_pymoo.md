@@ -1,6 +1,6 @@
 # Optimization with PyMOO
 
-This document explains the data structures and computational representations used in `analysis/optimization_pymoo.py`, which performs multi-objective optimization (NSGA-II) across 21 forest stands.
+This document explains the data structures and computational representations used in `analysis/optimization/core.py`, which performs multi-objective optimization (NSGA-II) across 21 forest stands.
 
 ## Two computational representations
 There are two representations for the same data. One is analogous to the underlying Netcdf file structure, and it is useful understand it in a humna-readable way; the other is useful for the optimization algorighm 
