@@ -22,6 +22,7 @@ dependencies = [
     "streamlit>=1.19.0",
     "streamlit-tree-select>=0.0.5",
     "tqdm>=4.67.3",
+    "xlrd>=2.0.2",
 ]
 [dependency-groups]
 dev = [
