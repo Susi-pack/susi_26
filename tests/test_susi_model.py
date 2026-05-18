@@ -52,6 +52,7 @@ def valid_susi_params(test_data_path):
         ),
         site_parameters=SiteParams(
             L=10.0,
+            n=5,
             initial_dominant_stand_age_years=70.0,
             initial_subdominant_stand_age_years=70.0,
             initial_understorey_age_years=70.0,
@@ -138,6 +139,7 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
         ),
         site_parameters=SiteParams(
             L=10.0,
+            n=5,
             initial_dominant_stand_age_years=70.0,
             initial_subdominant_stand_age_years=70.0,
             initial_understorey_age_years=70.0,
@@ -228,6 +230,7 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=70.0,
                 initial_subdominant_stand_age_years=70.0,
                 initial_understorey_age_years=70.0,
@@ -323,6 +326,7 @@ def test_initial_dominant_age_below_minimum(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=1.0,
                 initial_subdominant_stand_age_years=20.0,
                 initial_understorey_age_years=10.0,
@@ -410,6 +414,7 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=80.0,
                 initial_subdominant_stand_age_years=20.0,
                 initial_understorey_age_years=10.0,
@@ -497,6 +502,7 @@ def test_subdominant_layer_validation(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=40.0,
                 initial_subdominant_stand_age_years=1.0,
                 initial_understorey_age_years=10.0,
@@ -584,6 +590,7 @@ def test_under_layer_validation(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=40.0,
                 initial_subdominant_stand_age_years=20.0,
                 initial_understorey_age_years=1.0,
@@ -670,6 +677,7 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
         ),
         site_parameters=SiteParams(
             L=10.0,
+            n=5,
             initial_dominant_stand_age_years=70.0,
             initial_subdominant_stand_age_years=70.0,
             initial_understorey_age_years=70.0,
@@ -760,6 +768,7 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=70.0,
                 initial_subdominant_stand_age_years=70.0,
                 initial_understorey_age_years=70.0,

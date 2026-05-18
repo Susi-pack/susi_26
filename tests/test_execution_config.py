@@ -55,6 +55,7 @@ def valid_susi_params(test_data_path):
         ),
         site_parameters=SiteParams(
             L=10.0,
+            n=5,
             initial_dominant_stand_age_years=70.0,
             initial_subdominant_stand_age_years=70.0,
             initial_understorey_age_years=70.0,
@@ -141,6 +142,7 @@ def another_valid_susi_params(test_data_path):
         ),
         site_parameters=SiteParams(
             L=10.0,
+            n=5,
             initial_dominant_stand_age_years=70.0,
             initial_subdominant_stand_age_years=70.0,
             initial_understorey_age_years=70.0,

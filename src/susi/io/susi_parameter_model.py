@@ -1,3 +1,4 @@
+from numba.scripts.generate_lower_listing import description
 from scipy.stats import describe
 from functools import lru_cache
 import datetime
@@ -631,6 +632,10 @@ class SiteParams(StrictFrozenModel):
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
+    n: NonNegativeInt = Field(
+        description="Number of computation nodes, a.k.a. number of soil columns. It is usually `int(L/2)`."
+    )
+
     site_fertility_class: PositiveInt = Field(
         description="Site fertility class. This is set to all nodes in the strip."
     )
@@ -643,7 +648,6 @@ class SiteParams(StrictFrozenModel):
     smc: str
     nLyrs: int
     dzLyr: float
-    L: float = Field(description="Strip width, i.e., distance between ditches, m")
     ditch_depth_west: list[NonPositiveFloat] = Field(
         description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
     )
@@ -694,12 +698,6 @@ class SiteParams(StrictFrozenModel):
         description="Use None for no fertilization.", default=None
     )
     peat_temperature: PeatTemperatureParams
-
-    @computed_field
-    @property
-    def n(self) -> int:
-        """Number of computation nodes (which correspond to soil columns) in the strip, 2-m width of node"""
-        return int(self.L / 2)
 
     @property
     def age(self) -> SkipValidation[dict[str, np.ndarray]]:
