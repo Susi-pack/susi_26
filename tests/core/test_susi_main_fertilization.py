@@ -86,6 +86,7 @@ class TestSusiMainFertilizationIntegration:
             ),
             site_parameters=SiteParams(
                 L=10.0,
+                n=5,
                 initial_dominant_stand_age_years=70.0,
                 initial_subdominant_stand_age_years=70.0,
                 initial_understorey_age_years=70.0,
