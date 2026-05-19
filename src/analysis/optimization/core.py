@@ -1,5 +1,6 @@
 # %%
 from typing import Sequence
+from numpy.typing import NDArray
 from dataclasses import dataclass
 import numpy as np
 from pathlib import Path
@@ -18,19 +19,37 @@ from susi.io.load_output_data import (
 
 
 # INPUT API
-@dataclass
+@dataclass(frozen=True)
 class TargetVariableProperties:
     aggregation_function: load_output.NetcdfAggregationFn
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
 # OUTPUT API
-@dataclass
+@dataclass(frozen=True)
+class DesignAndTargetVectors:
+    design_vectors: NDArray[np.float64]  # shape: (n_pareto_solutions, n_vars)
+    target_vectors: NDArray[np.float64]  # shape: (n_pareto_solutions, n_vars)
+
+
+@dataclass(frozen=True)
 class OptimizationResults:
-    pareto_front: list[pareto_dp.ParetoFrontSolution]
-    random_solutions: list[pareto_dp.ParetoFrontSolution]
+    """
+    Results of the optimization run.
+
+    random_points is included here (rather than computed separately) because
+    both it and pareto_front require a database read — co-locating them avoids
+    reading the data twice.
+
+    Each field is a DesignAndTarget where the array fields are 2D matrices,
+    with one row per point.
+    """
+
+    pareto_front: DesignAndTargetVectors
+    random_points: DesignAndTargetVectors
 
 
+# INTERNAL DATA STRUCTURES
 @dataclass
 class _TargetVariableArrays:
     """
@@ -249,10 +268,60 @@ def find_pareto_front(
     return pareto_dp.find_pareto_front(data=data_table_list, epsilon=1e-7)
 
 
+def _convert_list_of_points_to_array(
+    list_of_points: list[pareto_dp.ParetoFrontSolution],
+) -> DesignAndTargetVectors:
+
+    return DesignAndTargetVectors(
+        target_vectors=np.array([point.target_vector for point in list_of_points]),
+        design_vectors=np.array([point.design_vector for point in list_of_points]),
+    )
+
+
+def _flip_inverted_variables_sign(
+    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
+    vectors: DesignAndTargetVectors,
+) -> DesignAndTargetVectors:
+    """Reverses the sign flip applied to inverted target variables.
+
+    During optimization, variables with ``invert_optimization=True`` are
+    multiplied by -1 to convert maximization problems into minimization.
+    This function restores their original sign in the output.
+
+    Only ``target_vectors`` are modified; ``design_vectors`` are passed
+    through unchanged.
+
+    Example:
+        >>> import numpy as np
+        >>> var_info = {
+        ...     NetcdfVariablePath("var_a"): TargetVariableProperties(aggregation_function=None, invert_optimization=False),
+        ...     NetcdfVariablePath("var_b"): TargetVariableProperties(aggregation_function=None, invert_optimization=True),
+        ... }
+        >>> vectors = DesignAndTargetVectors(
+        ...     design_vectors=np.array([[0.5, 0.5]]),
+        ...     target_vectors=np.array([[10.0, -20.0]]),
+        ... )
+        >>> result = _flip_inverted_variables_sign(var_info, vectors)
+        >>> result.target_vectors
+        array([[10., 20.]])
+        >>> result.design_vectors
+        array([[0.5, 0.5]])
+    """
+    target_vectors = vectors.target_vectors.copy()
+    for var_i, var_properties in enumerate(variable_info.values()):
+        if var_properties.invert_optimization:
+            target_vectors[:, var_i] *= -1
+    return DesignAndTargetVectors(
+        target_vectors=target_vectors,
+        design_vectors=vectors.design_vectors,
+    )
+
+
 def run_optimization(
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
     project_dirpath: Path,
     stand_areas: dict[StandID, float],
+    epsilon: float,
     n_random_points: int = 10000,
 ) -> OptimizationResults:
 
@@ -275,14 +344,20 @@ def run_optimization(
     data_table_list = from_numpy_arrays_to_nested_lists(prepruned.data_weighted_by_area)
 
     print("optimization - Finding Pareto front...")
-    pareto_front = pareto_dp.find_pareto_front(data=data_table_list, epsilon=1e-7)
+    pareto_front = pareto_dp.find_pareto_front(data=data_table_list, epsilon=epsilon)
 
     print("optimization - Generating random solutions...")
-    random_solutions = pareto_dp.create_random_points(
+    random_points = pareto_dp.create_random_points(
         data=data_table_list, n_points=n_random_points
     )
 
     return OptimizationResults(
-        pareto_front=pareto_front,
-        random_solutions=random_solutions,
+        pareto_front=_flip_inverted_variables_sign(
+            variable_info=variable_info,
+            vectors=_convert_list_of_points_to_array(pareto_front),
+        ),
+        random_points=_flip_inverted_variables_sign(
+            variable_info=variable_info,
+            vectors=_convert_list_of_points_to_array(random_points),
+        ),
     )
