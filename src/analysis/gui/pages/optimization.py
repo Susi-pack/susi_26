@@ -126,17 +126,24 @@ if submitted:
             n_random_points=10000,
         )
         st.session_state["optimization_results"] = results
+        st.session_state["optimization_var_paths"] = list(chosen_var_properties.keys())
+    st.success("Optimization complete")
 
 # %% Visualize solutions
 
 if "optimization_results" in st.session_state:
-    results: opti_core.OptimizationResults = st.session_state["optimization_results"]
+    if st.button("Plot Results", type="secondary"):
+        results: opti_core.OptimizationResults = st.session_state[
+            "optimization_results"
+        ]
+        var_paths = st.session_state.get("optimization_var_paths", [])
 
-    fig = pareto_corner_plot(
-        data=results.pareto_front.target_vectors,
-        random_points=results.random_points.target_vectors,
-        labels=list(chosen_var_properties.keys()),
-        show_diagonal=False,
-    )
+        fig = pareto_corner_plot(
+            data=results.pareto_front.target_vectors,
+            random_points=results.random_points.target_vectors,
+            labels=var_paths,
+            show_diagonal=False,
+            label_fontsize=8,
+        )
 
-    st.pyplot(fig)
+        st.pyplot(fig, width="content")
