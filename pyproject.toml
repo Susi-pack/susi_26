@@ -80,4 +80,7 @@ testpaths = ["tests"]
 
 # Ignore the golden file test by default.
 # Run with pytest tests/golden_file_test/test_golden_file.py
-addopts = ["--ignore=tests/golden_file_test/test_golden_file.py"]
+addopts = [
+    "--doctest-modules",
+    "--ignore=tests/golden_file_test/test_golden_file.py",
+]
