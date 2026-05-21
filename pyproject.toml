@@ -28,7 +28,7 @@ dependencies = [
 ]
 [dependency-groups]
 dev = [
-    "hypothesis>=6.151.9",
+    "hypothesis>=6.152.9",
     "pytest>=9.0.2",
     "xmltodict>=1.0.4",
     "zensical>=0.0.33",
