@@ -5,6 +5,8 @@ Created on Fri Jun 28 16:03:26 2019
 @author: alauren
 """
 
+from typing import NewType
+
 import site
 
 from dataclasses import dataclass
@@ -59,8 +61,19 @@ class VaryingSusiParams:
     depoK: float
 
 
+SiteLabel = NewType("SiteLabel", str)
+
+
+def get_stand_label_from_site_label(site_label: SiteLabel) -> str:
+    return str(site_label)[:-2]
+
+
+def get_scenario_label_from_site_label(site_label: SiteLabel) -> str:
+    return str(site_label)[-2:]
+
+
 PARAMS_PER_SITE = {
-    "ansa21": VaryingSusiParams(
+    SiteLabel("ansa21"): VaryingSusiParams(
         ntubes=6,
         file="DWTansa21Interp.csv",
         wfile="muhos_weather.csv",  # drained 1967 -1982 -> 1968
@@ -84,7 +97,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "ansa26": VaryingSusiParams(
+    SiteLabel("ansa26"): VaryingSusiParams(
         ntubes=3,
         file="DWTansa26Interp.csv",
         wfile="muhos_weather.csv",
@@ -108,7 +121,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.55,
     ),
-    "jaakkoin61": VaryingSusiParams(
+    SiteLabel("jaakkoin61"): VaryingSusiParams(
         ntubes=6,
         file="DWTjaakkoin61Interp.csv",
         wfile="jaakkoinsuo_weather.csv",  # drained 1908
@@ -132,7 +145,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.95,
     ),
-    "jaakkoin62": VaryingSusiParams(
+    SiteLabel("jaakkoin62"): VaryingSusiParams(
         ntubes=8,
         file="DWTjaakkoin62Interp.csv",
         wfile="jaakkoinsuo_weather.csv",
@@ -156,7 +169,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.95,
     ),
-    "koira11": VaryingSusiParams(
+    SiteLabel("koira11"): VaryingSusiParams(
         ntubes=3,
         file="DWTkoira11Interp.csv",
         wfile="koirasuo_weather.csv",
@@ -180,7 +193,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "koira12": VaryingSusiParams(
+    SiteLabel("koira12"): VaryingSusiParams(
         ntubes=3,
         file="DWTkoira12Interp.csv",
         wfile="koirasuo_weather.csv",
@@ -204,7 +217,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "koira21": VaryingSusiParams(
+    SiteLabel("koira21"): VaryingSusiParams(
         ntubes=3,
         file="DWTkoira21Interp.csv",
         wfile="koirasuo_weather.csv",
@@ -228,7 +241,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "koira22": VaryingSusiParams(
+    SiteLabel("koira22"): VaryingSusiParams(
         ntubes=3,
         file="DWTkoira22Interp.csv",
         wfile="koirasuo_weather.csv",
@@ -252,7 +265,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.95,
     ),
-    "neva11": VaryingSusiParams(
+    SiteLabel("neva11"): VaryingSusiParams(
         ntubes=6,
         file="DWTneva11Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -276,7 +289,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "neva14": VaryingSusiParams(
+    SiteLabel("neva14"): VaryingSusiParams(
         ntubes=6,
         file="DWTneva14Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -300,7 +313,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "neva21": VaryingSusiParams(
+    SiteLabel("neva21"): VaryingSusiParams(
         ntubes=7,
         file="DWTneva21Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -324,7 +337,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "neva24": VaryingSusiParams(
+    SiteLabel("neva24"): VaryingSusiParams(
         ntubes=6,
         file="DWTneva24Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -348,7 +361,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "neva31": VaryingSusiParams(
+    SiteLabel("neva31"): VaryingSusiParams(
         ntubes=10,
         file="DWTneva31Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -372,7 +385,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "neva34": VaryingSusiParams(
+    SiteLabel("neva34"): VaryingSusiParams(
         ntubes=10,
         file="DWTneva34Interp.csv",
         wfile="nevajarvi_weather.csv",
@@ -396,7 +409,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.65,
     ),
-    "parkano11": VaryingSusiParams(
+    SiteLabel("parkano11"): VaryingSusiParams(
         ntubes=12,
         file="DWTparkano11Interp.csv",
         wfile="parkano_weather.csv",
@@ -420,7 +433,7 @@ PARAMS_PER_SITE = {
         depoP=0.1,
         depoK=0.95,
     ),
-    "parkano12": VaryingSusiParams(
+    SiteLabel("parkano12"): VaryingSusiParams(
         ntubes=14,
         file="DWTparkano12Interp.csv",
         wfile="parkano_weather.csv",
@@ -461,7 +474,7 @@ def _rho_mor_from_sfc(sfc: int) -> float:
     return rho_mor
 
 
-def assign_susi_params_for_site(site_label: str) -> SusiParams:
+def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
     data_folder = _app_settings.project_root_path / "inputs/susi_2021"
     site_params = PARAMS_PER_SITE[site_label]
 
@@ -502,7 +515,7 @@ def assign_susi_params_for_site(site_label: str) -> SusiParams:
             species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
-            vol=None,
+            vol=site_params.vol,
             smc="Peatland",
             nLyrs=50,
             dzLyr=0.05,

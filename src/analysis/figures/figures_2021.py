@@ -6,17 +6,14 @@ Created on Thu Aug 13 18:04:05 2020
 """
 
 from pathlib import Path
-from typing import NewType
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
 from scipy import stats
 
-# from dwts_para import para
 from netCDF4 import Dataset
 
-# from sklearn.metrics import r2_score
 import seaborn as sns
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
@@ -91,7 +88,7 @@ MEASUREMENTS_FOLDER = (
 
 PROJECT_FOLDER = _app_settings.output_folder / "susi_2021"
 
-# params = para(period="start-end")
+BIO_FILEPATH = _app_settings.project_root_path / "inputs/susi_2021/gr_bio.xlsx"
 
 WT_MEASUREMENT_INFO: dict[SiteLabel, WTMeasurementInfo] = {
     SiteLabel("ansa21"): WTMeasurementInfo(
@@ -311,7 +308,7 @@ for site_label in SITES:
     dfmeas = dfmeas.drop(columns=[col for col in dfmeas if col not in tubes])
     dfmeas = dfmeas / 100.0 * -1
 
-    ff = (
+    file_meas = (
         r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
         + site_label
         + ".nc"
@@ -410,8 +407,7 @@ needed:
 """
 
 
-fbio = r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/gr_bio.xlsx"
-dfbio = pd.read_excel(fbio, index_col="site")
+dfbio = pd.read_excel(BIO_FILEPATH, index_col="site")
 
 obs = []
 pred = []
@@ -419,15 +415,24 @@ dfvols["grobs"] = dfvols["grsim"] * 0.0
 dfvols["yrs"] = dfvols["grsim"] * 0.0
 dfvols["bioobs"] = dfvols["grsim"] * 0.0
 
-for s, i in zip(sites, names):
+for site in SITES:
+    site_params = assign_susi_params_to_site(site_label)
     print(
-        s, np.round(params[s]["vol"][1] - params[s]["vol"][0]), dfvols.loc[s]["grsim"]
+        site,
+        np.round(
+            site_params.site_parameters.vol[1] - site_params.site_parameters.vol[0]
+        ),
+        dfvols.loc[site]["grsim"],
     )
-    dfvols.at[s, "grobs"] = params[s]["vol"][1] - params[s]["vol"][0]
-    dfvols.at[s, "yrs"] = (
-        params[s]["end_date"].year - params[s]["start_date"].year + 1.0
+    dfvols.at[site, "grobs"] = (
+        site_params.site_parameters.vol[1] - site_params.site_parameters.vol[0]
     )
-    dfvols.at[s, "bioobs"] = dfbio.at[s, "gr_bio"]
+    dfvols.at[site, "yrs"] = (
+        site_params.simulation_config.end_date.year
+        - site_params.simulation_config.start_date.year
+        + 1.0
+    )
+    dfvols.at[site, "bioobs"] = dfbio.at[site, "gr_bio"]
 
 fs = 16
 nsites = 11
@@ -439,8 +444,9 @@ gs = gridspec.GridSpec(ncols=2, nrows=2, figure=fig, wspace=0.25, hspace=0.25)
 
 
 colors = plt.cm.jet(np.linspace(0, 1, nsites))
+
 # -----------WT figure ------------------------------------------------
-# ax0 = fig.add_axes([0.08, 0.15, 0.25, 0.75]) #left, bottom, width, height)
+
 ax0 = fig.add_subplot(gs[0, 0])
 
 mval = 0.0
@@ -449,11 +455,12 @@ col2 = "grey"
 plt.fill_between([-1.0, mval], [mval, mval], [-1.0, mval], color=col1, alpha=0.3)
 plt.fill_between([-1.0, mval], [-1.0, 0.0], [-1.0, -1.0], color=col2, alpha=0.3)
 
-colors = plt.cm.jet(np.linspace(0, 1, len(sites)))
+colors = plt.cm.jet(np.linspace(0, 1, len(SITES)))
 si = []
 ob = []
 c = 0
-for site_label, i in zip(sites, names):
+for site_label in SITES:
+    site_name = WT_MEASUREMENT_INFO[site_label].name
     data = out[site_label]
     obs = np.array(data["meanmeas"])
     ob.extend(obs)
@@ -461,7 +468,7 @@ for site_label, i in zip(sites, names):
     pre = np.array(data["meansim"])
     si.extend(pre)
     preerr = np.array(data["stdsim"])
-    plt.plot(obs, pre, "o", markersize=10, label=i, color=colors[c])
+    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
     plt.errorbar(obs, pre, preerr * 2, obserr * 2, "none", color=colors[c], capsize=4)
     c += 1
 # plt.legend(loc='lower right', ncol=3)
@@ -517,13 +524,13 @@ mval = 10000.0
 plt.fill_between([0.0, mval], [mval, mval], [0.0, mval], color=col1, alpha=0.3)
 plt.fill_between([0.0, mval], [0.0, mval], [0.0, 0.0], color=col2, alpha=0.3)
 
-# dfvols.to_excel(folder_out+'dfvols.xlsx')
 c = 0
-for s, i in zip(sites, names):
-    obs = dfvols.loc[s]["bioobs"]
-    pre = dfvols.loc[s]["bmgr"]
-    plt.plot(obs, pre, "o", markersize=10, label=i, color=colors[c])
-    preerr = dfvols.loc[s]["bmgrsd"]
+for site_label in SITES:
+    site_name = WT_MEASUREMENT_INFO[site_label].name
+    obs = dfvols.loc[site_label]["bioobs"]
+    pre = dfvols.loc[site_label]["bmgr"]
+    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
+    preerr = dfvols.loc[site]["bmgrsd"]
     plt.errorbar(obs, pre, preerr * 2, 0, "none", color=colors[c], capsize=4)
 
     c += 1
@@ -571,12 +578,20 @@ c = 0
 obsvols = []
 prevols = []
 
-for s, i in zip(sites, names):
-    yrs = params[s]["end_date"].year - params[s]["start_date"].year + 1.0
-    obs = dfvols.loc[s]["grobs"] / yrs
-    pre = dfvols.loc[s]["grsim"]
-    plt.plot(obs, pre, "o", markersize=10, label=i, color=colors[c])
-    preerr = dfvols.loc[s]["grsd"]
+for site_label in SITES:
+    site_name = WT_MEASUREMENT_INFO[site_label].name
+
+    site_params = assign_susi_params_to_site(site_label)
+
+    yrs = (
+        site_params.simulation_config.end_date.year
+        - site_params.simulation_config.start_date.year
+        + 1.0
+    )
+    obs = dfvols.loc[site]["grobs"] / yrs
+    pre = dfvols.loc[site]["grsim"]
+    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
+    preerr = dfvols.loc[site]["grsd"]
     plt.errorbar(obs, pre, preerr * 2, 0, "none", color=colors[c], capsize=4)
     obsvols.append(obs)
     prevols.append(pre)
@@ -634,17 +649,20 @@ plt.fill_between([0.0, mval], [0.0, mval], [0.0, 0.0], color=col2, alpha=0.3)
 esarr = np.empty(0)
 emps = np.empty(0)
 c = 0
-for site_label in sites:
-    ff = (
-        r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
-        + site_label
-        + ".nc"
+for site_label in SITES:
+    site_name = WT_MEASUREMENT_INFO[site_label].name
+
+    site_params = assign_susi_params_to_site(site_label)
+
+    sday = site_params.simulation_config.start_date
+    end_date = site_params.simulation_config.end_date
+    sfc = site_params.site_parameters.site_fertility_class
+    ncf = Dataset(
+        get_netcdf_path_from_site_label(
+            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
+        ),
+        mode="r",
     )
-    params = para(period="start-end")
-    sday = params[site_label]["start_date"]
-    end_date = params[site_label]["end_date"]
-    sfc = params[site_label]["sfc"]
-    ncf = Dataset(ff, mode="r")  # water netCDF, open in reading mode
     vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
     yrs, COLS = np.shape(vol)
     dfvol = pd.DataFrame(vol, columns=range(COLS))
@@ -734,7 +752,7 @@ ax3.text(
 
 
 for i, site_label in enumerate(SITES[:1]):
-    ff = (
+    file_meas = (
         r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
         + site_label
         + ".nc"
