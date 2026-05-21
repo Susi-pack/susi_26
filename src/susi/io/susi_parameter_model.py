@@ -641,7 +641,7 @@ class SiteParams(StrictFrozenModel):
     species: TreeSpecies
     sfc_specification: float
     hdom: float | None
-    vol: float | None
+    vol: list[float] | None
     smc: str
     nLyrs: int
     dzLyr: float
