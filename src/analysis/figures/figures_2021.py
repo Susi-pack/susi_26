@@ -105,13 +105,14 @@ def load_stand_growth(
     with open_susi_netcdf(site_label) as ncf:
         growth = np.array(ncf["stand"]["volumegrowth"][0, :, 1:-1])
         print(site_label, growth)
-        dfgrowth = pd.DataFrame(growth, columns=range(COLS))
+        _, ncols = np.shape(growth)
+        dfgrowth = pd.DataFrame(growth, columns=range(ncols))
 
         bm_growth = np.array(
             ncf["stand"]["dominant"]["NPP"][0, :, 1:-1]
             * ncf["stand"]["stems"][0, :, 1:-1]
         )
-        dfbm = pd.DataFrame(bm_growth, columns=range(COLS))
+        dfbm = pd.DataFrame(bm_growth, columns=range(ncols))
 
     gro = np.mean(dfgrowth.mean(axis=0).values)
     grosd = np.std(dfgrowth.mean(axis=0).values)
