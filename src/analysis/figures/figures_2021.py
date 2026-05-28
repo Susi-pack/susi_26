@@ -5,12 +5,14 @@ Created on Thu Aug 13 18:04:05 2020
 @author: alauren, modified by iurzainki
 """
 
+from datetime import datetime
+
 from pathlib import Path
 from dataclasses import dataclass
+from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
-from scipy import stats
 
 from netCDF4 import Dataset
 
@@ -28,6 +30,20 @@ from inputs.parameters.para_2021 import (
 
 
 sns.set()
+
+# Constants
+SUBPANEL_FONTSIZE = 18
+AXIS_LABEL_FONTSIZE = 16
+TICK_FONTSIZE = 11.0
+SHADE_COLOR1 = "yellow"
+SHADE_COLOR2 = "grey"
+SHADE_ALPHA = 0.3
+REGRESSION_LINESTYLE = "k--"
+REGRESSION_LINEWIDTH = 2
+ERRORBAR_CAPSIZE = 4
+SCATTER_MARKERSIZE = 10
+SITE_FERTILITY_CLASSES = (2, 2, 3, 3, 3, 3, 3, 3, 5, 5, 5)
+
 # %%
 
 
@@ -52,6 +68,91 @@ def get_netcdf_path_from_site_label(
     scenario_label = get_scenario_label_from_site_label(site_label)
 
     return project_folderpath / stand_label / scenario_label / "susi.nc"
+
+
+@contextmanager
+def open_susi_netcdf(site_label: SiteLabel):
+    ncf = Dataset(
+        get_netcdf_path_from_site_label(
+            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
+        ),
+        mode="r",
+    )
+    try:
+        yield ncf
+    finally:
+        ncf.close()
+
+
+def load_simulation_wt(
+    site_label: SiteLabel,
+) -> tuple[pd.DataFrame, datetime, datetime]:
+    site_params = assign_susi_params_to_site(site_label)
+    start_date = site_params.simulation_config.start_date
+    end_date = site_params.simulation_config.end_date
+    with open_susi_netcdf(site_label) as ncf:
+        dwt = ncf["strip"]["dwt"][0, :, 1:-1]
+        days, cols = np.shape(dwt)
+        dfsim = pd.DataFrame(
+            dwt, columns=range(cols), index=pd.date_range(start_date, periods=days)
+        )
+    return dfsim, start_date, end_date
+
+
+def load_stand_growth(
+    site_label: SiteLabel,
+) -> tuple[float, float, float, float]:
+    with open_susi_netcdf(site_label) as ncf:
+        growth = np.array(ncf["stand"]["volumegrowth"][0, :, 1:-1])
+        print(site_label, growth)
+        dfgrowth = pd.DataFrame(growth, columns=range(COLS))
+
+        bm_growth = np.array(
+            ncf["stand"]["dominant"]["NPP"][0, :, 1:-1]
+            * ncf["stand"]["stems"][0, :, 1:-1]
+        )
+        dfbm = pd.DataFrame(bm_growth, columns=range(COLS))
+
+    gro = np.mean(dfgrowth.mean(axis=0).values)
+    grosd = np.std(dfgrowth.mean(axis=0).values)
+    bm_gr = np.mean(dfbm.mean(axis=0).values)
+    bm_gr_sd = np.std(dfbm.mean(axis=0).values)
+    return gro, grosd, bm_gr, bm_gr_sd
+
+
+def load_co2_data(
+    site_label: SiteLabel,
+) -> tuple[
+    float, int, pd.DataFrame, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray
+]:
+    site_params = assign_susi_params_to_site(site_label)
+    sday = site_params.simulation_config.start_date
+    end_date = site_params.simulation_config.end_date
+    sfc = site_params.site_parameters.site_fertility_class
+    with open_susi_netcdf(site_label) as ncf:
+        vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
+        _, COLS = np.shape(vol)
+        dfvol = pd.DataFrame(vol, columns=range(COLS))
+
+        dwt = ncf["strip"]["dwtyr_growingseason"][0, :, 1:-1]
+        yrs, COLS = np.shape(dwt)
+        dfwt = pd.DataFrame(dwt, columns=range(COLS))
+
+        peat_t = ncf["temperature"]["T"][0, :, 3]
+        days = np.shape(peat_t)[0]
+        dft = pd.DataFrame(
+            peat_t, columns=["T"], index=pd.date_range(sday, periods=days)
+        )
+
+        esom_co2 = ncf["esom"]["Mass"]["co2"][0, :, 1:-1] / 10.0
+
+    empirical = np.zeros(np.shape(dwt))
+    for i, yr in enumerate(range(sday.year, end_date.year + 1)):
+        t_peat_yr = np.ravel(dft.loc[str(yr)].values)
+        rhet = ojanen_2010(sfc, vol[i + 1], t_peat_yr, dfwt.loc[i + 1].values * -100.0)
+        empirical[i + 1, :] = rhet
+
+    return vol, yrs, dfvol, dfwt, dft, esom_co2, empirical
 
 
 def ojanen_2010(sfc, stand_v, t_peat, gs_wt):
@@ -80,6 +181,69 @@ def ojanen_2010(sfc, stand_v, t_peat, gs_wt):
     ]
     Rhet = np.array(Rhet).T
     return np.sum(Rhet, axis=0)
+
+
+def load_wt_measurements(site_label: SiteLabel) -> pd.DataFrame:
+    file_meas = WT_MEASUREMENT_INFO[site_label].file
+    tubes = WT_MEASUREMENT_INFO[site_label].tubes
+    dfmeas = pd.read_excel(MEASUREMENTS_FOLDER / file_meas, sheet_name="CSV")
+    dfmeas["date"] = pd.to_datetime(
+        dict(year=dfmeas.vuosi, month=dfmeas.kk, day=dfmeas.pv)
+    )
+    dfmeas = dfmeas.set_index("date")
+    dfmeas = dfmeas.drop(["vuosi", "kk", "pv"], axis=1)
+    dfmeas = dfmeas.drop(columns=[col for col in dfmeas if col not in tubes])
+    dfmeas = dfmeas / 100.0 * -1
+    return dfmeas
+
+
+def add_quadrant_shading(x0: float, x1: float) -> None:
+    plt.fill_between(
+        [x0, x1], [x1, x1], [x0, x1], color=SHADE_COLOR1, alpha=SHADE_ALPHA
+    )
+    plt.fill_between(
+        [x0, x1], [x0, x1], [x0, x0], color=SHADE_COLOR2, alpha=SHADE_ALPHA
+    )
+
+
+def add_subplot_label(ax, label: str) -> None:
+    ax.text(
+        0.04,
+        0.95,
+        label,
+        horizontalalignment="left",
+        verticalalignment="top",
+        fontsize=SUBPANEL_FONTSIZE,
+        transform=ax.transAxes,
+        fontweight="bold",
+    )
+
+
+def fit_regression(obs: np.ndarray, sim: np.ndarray) -> tuple[float, str]:
+    a, _, _, _ = np.linalg.lstsq(obs[:, np.newaxis], sim, rcond=None)
+    eq = "y = " + str(np.round(a[0], 3)) + "x"
+    return a[0], eq
+
+
+def plot_regression_line(x_range: np.ndarray, a: float) -> None:
+    plt.plot(x_range, a * x_range, REGRESSION_LINESTYLE, linewidth=REGRESSION_LINEWIDTH)
+
+
+def plot_scatter_site(
+    x: float,
+    y: float,
+    yerr: float,
+    xerr: float | None = None,
+    label: str = "",
+    color: str | None = None,
+    capsize: int = ERRORBAR_CAPSIZE,
+    markersize: int = SCATTER_MARKERSIZE,
+) -> None:
+    plt.plot(x, y, "o", markersize=markersize, label=label, color=color)
+    if xerr is not None:
+        plt.errorbar(x, y, yerr * 2, xerr * 2, "none", color=color, capsize=capsize)
+    else:
+        plt.errorbar(x, y, yerr * 2, 0, "none", color=color, capsize=capsize)
 
 
 # %%
@@ -281,40 +445,15 @@ coordinates = [
 
 abc = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"]
 
-# sites =['neva11']
-i = 0
 assert len(SITES) == len(abc)
 assert len(SITES) == len(coordinates)
 
-for crd, site_label, tx in zip(coordinates, SITES, abc):
+for i, (crd, site_label, tx) in enumerate(zip(coordinates, SITES, abc)):
     print(crd, site_label)
 
-    file_meas = WT_MEASUREMENT_INFO[site_label].file
-    tubes = WT_MEASUREMENT_INFO[site_label].tubes
-    dfmeas = pd.read_excel(MEASUREMENTS_FOLDER / file_meas, sheet_name="CSV")
-    dfmeas["date"] = pd.to_datetime(
-        dict(year=dfmeas.vuosi, month=dfmeas.kk, day=dfmeas.pv)
-    )
-    dfmeas = dfmeas.set_index("date")
-    dfmeas = dfmeas.drop(["vuosi", "kk", "pv"], axis=1)
-    dfmeas = dfmeas.drop(columns=[col for col in dfmeas if col not in tubes])
-    dfmeas = dfmeas / 100.0 * -1
+    dfmeas = load_wt_measurements(site_label)
 
-    site_params = assign_susi_params_to_site(site_label)
-    sday = site_params.simulation_config.start_date
-    end_date = site_params.simulation_config.end_date
-    ncf = Dataset(
-        get_netcdf_path_from_site_label(
-            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
-        ),
-        mode="r",
-    )
-    dwt = ncf["strip"]["dwt"][0, :, 1:-1]
-    days, COLS = np.shape(dwt)
-    dfsim = pd.DataFrame(
-        dwt, columns=range(COLS), index=pd.date_range(sday, periods=days)
-    )
-    ncf.close()
+    dfsim, sday, end_date = load_simulation_wt(site_label)
 
     fs = 8
     wt_max = np.max(dfsim, axis=1)
@@ -340,7 +479,7 @@ for crd, site_label, tx in zip(coordinates, SITES, abc):
     )
 
     for xlabel_i in ax.get_xticklabels():
-        xlabel_i.set_fontsize(11.0)
+        xlabel_i.set_fontsize(TICK_FONTSIZE)
         xlabel_i.set_y(-0.01)
 
     if i in [1, 3, 5, 7, 9]:
@@ -349,14 +488,13 @@ for crd, site_label, tx in zip(coordinates, SITES, abc):
             ylabel_i.set_visible(False)
     else:
         for ylabel_i in ax.get_yticklabels():
-            ylabel_i.set_fontsize(11.0)
+            ylabel_i.set_fontsize(TICK_FONTSIZE)
             ylabel_i.set_x(-0.025)
 
         ax.set_ylabel("WT, m", fontsize=14)
 
     if i in [9, 10]:
         ax.set_xlabel("Time", fontsize=14)
-    i += 1
 plt.tight_layout(h_pad=1.5)
 plt.show()
 
@@ -365,38 +503,14 @@ plt.show()
 
 out = {}
 for site_label in SITES:
-    file_meas = WT_MEASUREMENT_INFO[site_label].file
-    tubes = WT_MEASUREMENT_INFO[site_label].tubes
-    dfmeas = pd.read_excel(MEASUREMENTS_FOLDER / file_meas, sheet_name="CSV")
-    dfmeas["date"] = pd.to_datetime(
-        dict(year=dfmeas.vuosi, month=dfmeas.kk, day=dfmeas.pv)
-    )
-    dfmeas = dfmeas.set_index("date")
-    dfmeas = dfmeas.drop(["vuosi", "kk", "pv"], axis=1)
-    dfmeas = dfmeas.drop(columns=[col for col in dfmeas if col not in tubes])
-    dfmeas = dfmeas / 100.0 * -1
+    dfmeas = load_wt_measurements(site_label)
 
     file_meas = (
         r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
         + site_label
         + ".nc"
     )
-    site_params = assign_susi_params_to_site(site_label)
-    start_date = site_params.simulation_config.start_date
-    end_date = site_params.simulation_config.end_date
-
-    ncf = Dataset(
-        get_netcdf_path_from_site_label(
-            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
-        ),
-        mode="r",
-    )
-    dwt = ncf["strip"]["dwt"][0, :, 1:-1]
-    days, COLS = np.shape(dwt)
-    dfsim = pd.DataFrame(
-        dwt, columns=range(COLS), index=pd.date_range(start_date, periods=days)
-    )
-    ncf.close()
+    dfsim, start_date, end_date = load_simulation_wt(site_label)
 
     print(site_label, start_date, end_date)
     dfmeas = dfmeas.sort_index()[str(dfsim.index[0]) : str(dfsim.index[-1])]
@@ -432,32 +546,7 @@ bm_gr = np.zeros(len(SITES))
 bm_gr_sd = np.zeros(len(SITES))
 
 for i, site_label in enumerate(SITES):
-    site_params = assign_susi_params_to_site(site_label)
-    sday = site_params.simulation_config.start_date
-    end_date = site_params.simulation_config.end_date
-    ncf = Dataset(
-        get_netcdf_path_from_site_label(
-            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
-        ),
-        mode="r",
-    )
-    vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
-    growth = np.array(ncf["stand"]["volumegrowth"][0, :, 1:-1])
-    print(site_label, growth)
-    # growth = np.diff(vol, axis=0)
-    yrs, COLS = np.shape(growth)
-    dfgrowth = pd.DataFrame(growth, columns=range(COLS))
-
-    bm_growth = np.array(
-        ncf["stand"]["dominant"]["NPP"][0, :, 1:-1] * ncf["stand"]["stems"][0, :, 1:-1]
-    )
-    dfbm = pd.DataFrame(bm_growth, columns=range(COLS))
-
-    ncf.close()
-    gro[i] = np.mean(dfgrowth.mean(axis=0).values)
-    grosd[i] = np.std(dfgrowth.mean(axis=0).values)
-    bm_gr[i] = np.mean(dfbm.mean(axis=0).values)
-    bm_gr_sd[i] = np.std(dfbm.mean(axis=0).values)
+    gro[i], grosd[i], bm_gr[i], bm_gr_sd[i] = load_stand_growth(site_label)
 
 
 dvol = {"sites": SITES, "grsim": gro, "grsd": grosd, "bmgr": bm_gr, "bmgrsd": bm_gr_sd}
@@ -484,7 +573,7 @@ dfvols["yrs"] = dfvols["grsim"] * 0.0
 dfvols["bioobs"] = dfvols["grsim"] * 0.0
 
 for site in SITES:
-    site_params = assign_susi_params_to_site(site_label)
+    site_params = assign_susi_params_to_site(site)
     print(
         site,
         np.round(
@@ -502,12 +591,10 @@ for site in SITES:
     )
     dfvols.at[site, "bioobs"] = dfbio.at[site, "gr_bio"]
 
-fs = 16
-nsites = 11
+fs = AXIS_LABEL_FONTSIZE
+nsites = len(SITES)
 figsi = (10, 10)
-fig = plt.figure(num="growth", figsize=figsi)  # Figsize(w,h), tuple inches
-col1 = "yellow"
-col2 = "grey"
+fig = plt.figure(num="growth", figsize=figsi)
 gs = gridspec.GridSpec(ncols=2, nrows=2, figure=fig, wspace=0.25, hspace=0.25)
 
 
@@ -517,17 +604,10 @@ colors = plt.cm.jet(np.linspace(0, 1, nsites))
 
 ax0 = fig.add_subplot(gs[0, 0])
 
-mval = 0.0
-col1 = "yellow"
-col2 = "grey"
-plt.fill_between([-1.0, mval], [mval, mval], [-1.0, mval], color=col1, alpha=0.3)
-plt.fill_between([-1.0, mval], [-1.0, 0.0], [-1.0, -1.0], color=col2, alpha=0.3)
-
-colors = plt.cm.jet(np.linspace(0, 1, len(SITES)))
+add_quadrant_shading(-1.0, 0.0)
 si = []
 ob = []
-c = 0
-for site_label in SITES:
+for c, site_label in enumerate(SITES):
     site_name = WT_MEASUREMENT_INFO[site_label].name
     data = out[site_label]
     obs = np.array(data["meanmeas"])
@@ -536,10 +616,7 @@ for site_label in SITES:
     pre = np.array(data["meansim"])
     si.extend(pre)
     preerr = np.array(data["stdsim"])
-    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
-    plt.errorbar(obs, pre, preerr * 2, obserr * 2, "none", color=colors[c], capsize=4)
-    c += 1
-# plt.legend(loc='lower right', ncol=3)
+    plot_scatter_site(obs, pre, preerr, xerr=obserr, label=site_name, color=colors[c])
 si = np.array(si)
 ob = np.array(ob)
 
@@ -550,103 +627,66 @@ rmse = np.round(np.sqrt(np.square(diff).mean()), 3)
 data = {"meas": ob, "sim": si}
 dfdata = pd.DataFrame.from_dict(data)
 dfdata = dfdata.dropna()
-# slope, intercept, r_value, p_value, std_err = stats.linregress(dfdata['meas'].values, dfdata['sim'].values)
+# DEAD: slope, intercept, r_value, p_value, std_err = stats.linregress(dfdata['meas'].values, dfdata['sim'].values)
 
-fs = 16
-
-obs_wt = dfdata["meas"].values[:, np.newaxis]
-sim_wt = dfdata["sim"].values
-a, _, _, _ = np.linalg.lstsq(obs_wt, sim_wt, rcond=None)
-eq = "y = " + str(np.round(a[0], 3)) + "x"
-x = np.arange(-0.9, -0.03, 0.05)
-plt.plot(x, a * x, "k--", linewidth=2)
+a_wt, eq_wt = fit_regression(dfdata["meas"].values, dfdata["sim"].values)
+x_wt = np.arange(-0.9, -0.03, 0.05)
+plot_regression_line(x_wt, a_wt)
 
 
 plt.xlim([-1.0, 0.0])
 plt.ylim([-1.0, 0.0])
-plt.text(-0.9, -0.1, eq, fontsize=fs - 1)
-plt.text(-0.9, -0.15, "RMSE " + str(rmse), fontsize=fs - 1)
-plt.xlabel("Observed $\it{WT}$, m", fontsize=fs)
-plt.ylabel("Predicted $\it{WT}$, m", fontsize=fs)
+plt.text(-0.9, -0.1, eq_wt, fontsize=AXIS_LABEL_FONTSIZE - 1)
+plt.text(-0.9, -0.15, "RMSE " + str(rmse), fontsize=AXIS_LABEL_FONTSIZE - 1)
+plt.xlabel("Observed $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
+plt.ylabel("Predicted $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
 
-# for tick in ax0.xaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
-# for tick in ax0.yaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
-
-ax0.text(
-    0.04,
-    0.95,
-    "a",
-    horizontalalignment="left",
-    verticalalignment="top",
-    fontsize=18,
-    transform=ax0.transAxes,
-    fontweight="bold",
-)
+add_subplot_label(ax0, "a")
 
 # ----------BM figure ---------------------------------------------------
 ax1 = fig.add_subplot(gs[0, 1])
 
 mval = 10000.0
-plt.fill_between([0.0, mval], [mval, mval], [0.0, mval], color=col1, alpha=0.3)
-plt.fill_between([0.0, mval], [0.0, mval], [0.0, 0.0], color=col2, alpha=0.3)
+add_quadrant_shading(0.0, mval)
 
-c = 0
-for site_label in SITES:
+for c, site_label in enumerate(SITES):
     site_name = WT_MEASUREMENT_INFO[site_label].name
     obs = dfvols.loc[site_label]["bioobs"]
     pre = dfvols.loc[site_label]["bmgr"]
-    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
-    preerr = dfvols.loc[site]["bmgrsd"]
-    plt.errorbar(obs, pre, preerr * 2, 0, "none", color=colors[c], capsize=4)
-
-    c += 1
-plt.xlabel("Observed bm growth, $kg \ ha^{-1} yr^{-1}$ ", fontsize=fs)
-plt.ylabel("Predicted bm growth, $kg \ ha^{-1} yr^{-1}$ ", fontsize=fs, labelpad=-7.5)
+    preerr = dfvols.loc[site_label]["bmgrsd"]
+    plot_scatter_site(obs, pre, preerr, label=site_name, color=colors[c])
+plt.xlabel("Observed bm growth, $kg \ ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE)
+plt.ylabel(
+    "Predicted bm growth, $kg \ ha^{-1} yr^{-1}$ ",
+    fontsize=AXIS_LABEL_FONTSIZE,
+    labelpad=-7.5,
+)
 plt.xlim([0, mval])
 plt.ylim([0, mval])
-obs_growths = dfvols["bioobs"].values[:, np.newaxis]
-sim_growths = dfvols["bmgr"].values
-
-rmse = np.round(np.sqrt(np.square(obs_growths - sim_growths).mean()), 0)
-a, _, _, _ = np.linalg.lstsq(obs_growths, sim_growths, rcond=None)
-eq = "y = " + str(np.round(a[0], 3)) + "x"
-x = np.arange(1000.0, 9000.0, 100)
-plt.plot(x, a * x, "k--", linewidth=2)
-plt.text(5000, 8300, "RMSE " + str(rmse), fontsize=fs - 1)
-
-
-plt.text(5000, 8900, eq, fontsize=fs - 1)
-
-
-ax1.text(
-    0.04,
-    0.95,
-    "b",
-    horizontalalignment="left",
-    verticalalignment="top",
-    fontsize=18,
-    transform=ax1.transAxes,
-    fontweight="bold",
+rmse = np.round(
+    np.sqrt(
+        np.square(dfvols["bioobs"].values[:, np.newaxis] - dfvols["bmgr"].values).mean()
+    ),
+    0,
 )
+a_bm, eq_bm = fit_regression(dfvols["bioobs"].values, dfvols["bmgr"].values)
+x_bm = np.arange(1000.0, 9000.0, 100)
+plot_regression_line(x_bm, a_bm)
+plt.text(5000, 8300, "RMSE " + str(rmse), fontsize=AXIS_LABEL_FONTSIZE - 1)
+plt.text(5000, 8900, eq_bm, fontsize=AXIS_LABEL_FONTSIZE - 1)
 
-# for tick in ax1.xaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
-# for tick in ax1.yaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
+
+add_subplot_label(ax1, "b")
 
 # -------------------Vol figure ------------------
 ax2 = fig.add_subplot(gs[1, 0])
 
 mval = 12.0
-plt.fill_between([0.0, mval], [mval, mval], [0.0, mval], color=col1, alpha=0.3)
-plt.fill_between([0.0, mval], [0.0, mval], [0.0, 0.0], color=col2, alpha=0.3)
-c = 0
+add_quadrant_shading(0.0, mval)
 obsvols = []
 prevols = []
 
-for site_label in SITES:
+for c, site_label in enumerate(SITES):
     site_name = WT_MEASUREMENT_INFO[site_label].name
 
     site_params = assign_susi_params_to_site(site_label)
@@ -656,120 +696,72 @@ for site_label in SITES:
         - site_params.simulation_config.start_date.year
         + 1.0
     )
-    obs = dfvols.loc[site]["grobs"] / yrs
-    pre = dfvols.loc[site]["grsim"]
-    plt.plot(obs, pre, "o", markersize=10, label=site_name, color=colors[c])
-    preerr = dfvols.loc[site]["grsd"]
-    plt.errorbar(obs, pre, preerr * 2, 0, "none", color=colors[c], capsize=4)
+    obs = dfvols.loc[site_label]["grobs"] / yrs
+    pre = dfvols.loc[site_label]["grsim"]
+    preerr = dfvols.loc[site_label]["grsd"]
+    plot_scatter_site(obs, pre, preerr, label=site_name, color=colors[c])
     obsvols.append(obs)
     prevols.append(pre)
-    c += 1
 
-ax1.legend(loc="upper center", bbox_to_anchor=(-0.15, 1.3), ncol=4, fontsize=fs - 3)
-# ax1.legend(loc='lower left', ncol=1, fontsize=fs-3)
+ax1.legend(
+    loc="upper center",
+    bbox_to_anchor=(-0.15, 1.3),
+    ncol=4,
+    fontsize=AXIS_LABEL_FONTSIZE - 3,
+)
 plt.xlim([0, mval])
 plt.ylim([0, mval])
 
-plt.xlabel("Observed $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=fs)
-plt.ylabel("Predicted $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=fs)
+plt.xlabel(
+    "Observed $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
+)
+plt.ylabel(
+    "Predicted $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
+)
 
 obs_growths = dfvols["grobs"].values / dfvols["yrs"].values
 sim_growths = dfvols["grsim"].values
-slope, intercept, r_value, p_value, std_err = stats.linregress(obs_growths, sim_growths)
+# DEAD: slope, intercept, r_value, p_value, std_err = stats.linregress(obs_growths, sim_growths)
 
-diffv = dfvols["grobs"].values / dfvols["yrs"].values - dfvols["grsim"].values
+diffv = obs_growths - sim_growths
 rmse = np.round(np.sqrt(np.square(diffv).mean()), 3)
-obs_growths = obs_growths[:, np.newaxis]
-a, _, _, _ = np.linalg.lstsq(obs_growths, sim_growths, rcond=None)
+a_v, eq_v = fit_regression(obs_growths, sim_growths)
 
+x_v = np.arange(1.0, 8.0, 0.5)
+plt.text(6, 8.3, "RMSE " + str(rmse), fontsize=AXIS_LABEL_FONTSIZE - 1)
+plot_regression_line(x_v, a_v)
+predicted_v = np.ravel(a_v * obs_growths)
+plt.text(6, 9, eq_v, fontsize=AXIS_LABEL_FONTSIZE - 1)
 
-eq = "y = " + str(np.round(a[0], 3)) + "x"
-x = np.arange(1.0, 8.0, 0.5)
-plt.text(6, 8.3, "RMSE " + str(rmse), fontsize=fs - 1)
-
-plt.plot(x, a * x, "k--", linewidth=2)
-predicted = np.ravel(a[0] * obs_growths)
-
-plt.text(6, 9, eq, fontsize=fs - 1)
-
-ax2.text(
-    0.04,
-    0.95,
-    "c",
-    horizontalalignment="left",
-    verticalalignment="top",
-    fontsize=18,
-    transform=ax2.transAxes,
-    fontweight="bold",
-)
-
-# for tick in ax2.xaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
-# for tick in ax2.yaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
+add_subplot_label(ax2, "c")
 
 # -------------------CO2 figure ------------------
 ax3 = fig.add_subplot(gs[1, 1])
 
 mval = 3000.0
-plt.fill_between([0.0, mval], [mval, mval], [0.0, mval], color=col1, alpha=0.3)
-plt.fill_between([0.0, mval], [0.0, mval], [0.0, 0.0], color=col2, alpha=0.3)
+add_quadrant_shading(0.0, mval)
 esarr = np.empty(0)
 emps = np.empty(0)
-c = 0
-for site_label in SITES:
+for c, site_label in enumerate(SITES):
     site_name = WT_MEASUREMENT_INFO[site_label].name
 
-    site_params = assign_susi_params_to_site(site_label)
+    vol, yrs, dfvol, dfwt, dft, esom_co2, empirical = load_co2_data(site_label)
 
-    sday = site_params.simulation_config.start_date
-    end_date = site_params.simulation_config.end_date
-    sfc = site_params.site_parameters.site_fertility_class
-    ncf = Dataset(
-        get_netcdf_path_from_site_label(
-            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
-        ),
-        mode="r",
-    )
-    vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
-    yrs, COLS = np.shape(vol)
-    dfvol = pd.DataFrame(vol, columns=range(COLS))
-
-    dwt = ncf["strip"]["dwtyr_growingseason"][0, :, 1:-1]
-    yrs, COLS = np.shape(dwt)
-    dfwt = pd.DataFrame(dwt, columns=range(COLS))
-
-    peat_t = ncf["temperature"]["T"][0, :, 3]
-    days = np.shape(peat_t)[0]
-    dft = pd.DataFrame(peat_t, columns=["T"], index=pd.date_range(sday, periods=days))
-
-    esom_co2 = (
-        ncf["esom"]["Mass"]["co2"][0, :, 1:-1] / 10.0
-    )  # kg ha-1 yr-1 ->g m-2 yr-1
-
-    ojanen_2019 = np.mean(ncf["ojanen"]["soil_co2_balance"][0, :, 1:-1])
-    soil_bal = (
-        np.mean(
-            ncf["balance"]["C"]["stand_litter_in"][0, :, 1:-1]
-            + ncf["balance"]["C"]["gv_litter_in"][0, :, 1:-1]
-            - ncf["balance"]["C"]["co2c_release"][0, :, 1:-1]
+    with open_susi_netcdf(site_label) as ncf:
+        ojanen_2019 = np.mean(ncf["ojanen"]["soil_co2_balance"][0, :, 1:-1])
+        soil_bal = (
+            np.mean(
+                ncf["balance"]["C"]["stand_litter_in"][0, :, 1:-1]
+                + ncf["balance"]["C"]["gv_litter_in"][0, :, 1:-1]
+                - ncf["balance"]["C"]["co2c_release"][0, :, 1:-1]
+            )
+            * 44
+            / 12
         )
-        * 44
-        / 12
-    )
 
-    print(site_label, ojanen_2019, soil_bal)
-
-    ncf.close()
-    empirical = np.zeros(np.shape(dwt))
-    for i, yr in enumerate(range(sday.year, end_date.year + 1)):
-        t_peat_yr = np.ravel(dft.loc[str(yr)].values)
-        rhet = ojanen_2010(sfc, vol[i + 1], t_peat_yr, dfwt.loc[i + 1].values * -100.0)
-        empirical[i + 1, :] = rhet
+        print(site_label, ojanen_2019, soil_bal)
     for m in range(1, yrs):
         plt.plot(empirical[m, :], esom_co2[m, :], color=colors[c])
-
-    c += 1
 
     esarr = np.append(esarr, np.ravel(esom_co2[1:, :]))
     emps = np.append(emps, np.ravel(empirical[1:, :]))
@@ -777,94 +769,35 @@ for site_label in SITES:
 plt.xlim([0, mval])
 plt.ylim([0, mval])
 
-plt.xlabel("Empirical $CO_2$, $g m^{-2} yr^{-1}$ ", fontsize=fs)
-plt.ylabel("Esom $CO_2$, $g m^{-3} yr^{-2}$ ", fontsize=fs, labelpad=-5.0)
-
-obs_growths = emps
-sim_growths = esarr
-slope, intercept, r_value, p_value, std_err = stats.linregress(obs_growths, sim_growths)
-
-# diffv = dfvols['grobs'].values/dfvols['yrs'].values - dfvols['grsim'].values
-# rmse = np.round(np.sqrt(np.square(diffv).mean()),3)
-obs_growths = obs_growths[:, np.newaxis]
-a, _, _, _ = np.linalg.lstsq(obs_growths, sim_growths, rcond=None)
-
-
-eq = "y = " + str(np.round(a[0], 3)) + "x"
-x = np.arange(200.0, 2000.0, 0.5)
-# plt.text(5, 8.5, 'RMSE ' + str(rmse), fontsize=fs-1)
-
-plt.plot(x, a * x, "k--", linewidth=2)
-predicted = np.ravel(a[0] * obs_growths)
-
-plt.text(2000, 2000, eq, fontsize=fs - 1)
-
-ax3.text(
-    1.3,
-    0.95,
-    "d",
-    horizontalalignment="left",
-    verticalalignment="top",
-    fontsize=18,
-    transform=ax2.transAxes,
-    fontweight="bold",
+plt.xlabel("Empirical $CO_2$, $g m^{-2} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE)
+plt.ylabel(
+    "Esom $CO_2$, $g m^{-3} yr^{-2}$ ", fontsize=AXIS_LABEL_FONTSIZE, labelpad=-5.0
 )
 
-# for tick in ax3.xaxis.get_major_ticks():
-#   tick.label.set_fontsize(14)
-# for tick in ax3.yaxis.get_major_ticks():
-#    tick.label.set_fontsize(14)
+# DEAD: slope, intercept, r_value, p_value, std_err = stats.linregress(emps, esarr)
+
+a_c, eq_c = fit_regression(emps, esarr)
+x_c = np.arange(200.0, 2000.0, 0.5)
+plot_regression_line(x_c, a_c)
+predicted_c = np.ravel(a_c * emps)
+plt.text(2000, 2000, eq_c, fontsize=AXIS_LABEL_FONTSIZE - 1)
+
+add_subplot_label(ax3, "d")
 
 plt.show()
 
 # %%
 
 
-for i, site_label in enumerate(SITES[:1]):
-    file_meas = (
-        r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
-        + site_label
-        + ".nc"
-    )
-    site_params = assign_susi_params_to_site(site_label)
-    sday = site_params.simulation_config.start_date
-    end_date = site_params.simulation_config.end_date
-    sfc = site_params.site_parameters.site_fertility_class
-    ncf = Dataset(
-        get_netcdf_path_from_site_label(
-            site_label=SiteLabel(site_label), project_folderpath=PROJECT_FOLDER
-        ),
-        mode="r",
-    )
-    vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
-    yrs, COLS = np.shape(vol)
-    dfvol = pd.DataFrame(vol, columns=range(COLS))
-
-    dwt = ncf["strip"]["dwtyr_growingseason"][0, :, 1:-1]
-    yrs, COLS = np.shape(dwt)
-    dfwt = pd.DataFrame(dwt, columns=range(COLS))
-
-    peat_t = ncf["temperature"]["T"][0, :, 3]
-    days = np.shape(peat_t)[0]
-    dft = pd.DataFrame(peat_t, columns=["T"], index=pd.date_range(sday, periods=days))
-
-    esom_co2 = (
-        ncf["esom"]["Mass"]["co2"][0, :, 1:-1] / 10.0
-    )  # kg ha-1 yr-1 ->g m-2 yr-1
-
-    ncf.close()
-    empirical = np.zeros(np.shape(dwt))
-    for i, yr in enumerate(range(sday.year, end_date.year + 1)):
-        t_peat_yr = np.ravel(dft.loc[str(yr)].values)
-        rhet = ojanen_2010(sfc, vol[i + 1], t_peat_yr, dfwt.loc[i + 1].values * -100.0)
-        empirical[i + 1, :] = rhet
+for site_label in SITES[:1]:
+    _, _, _, _, _, esom_co2, empirical = load_co2_data(site_label)
 
 dfesom = pd.DataFrame(data=esom_co2)
 dfempirical = pd.DataFrame(data=empirical)
 # %%
 
 site_names = [WT_MEASUREMENT_INFO[site_label].name for site_label in SITES]
-sfcs = [2, 2, 3, 3, 3, 3, 3, 3, 5, 5, 5]
+sfcs = list(SITE_FERTILITY_CLASSES)
 print("***********************")
 dfresid = pd.DataFrame(
     list(zip(site_names, sfcs, obsvols, prevols)), columns=["name", "sfc", "obs", "pre"]
