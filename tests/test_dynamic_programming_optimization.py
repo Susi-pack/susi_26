@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from analysis.optimization.dynamic_programming import (
     PartialParetoPoint,

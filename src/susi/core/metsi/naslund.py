@@ -1,8 +1,8 @@
 """
 Source: https://github.com/lukefi/metsi/blob/main/lukefi/metsi/forestry/preprocessing/naslund.py
+Module contains forestry domain spesific model functions
 """
 
-""" Module contains forestry domain spesific model functions """
 from typing import Optional
 
 

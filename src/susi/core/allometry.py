@@ -205,7 +205,6 @@ class Allometry:
         }
 
         retrans = {"N": 0.69, "P": 0.73, "K": 0.8}  # Nieminen Helmisaari 1996 Tree Phys
-        rho = {"Pine": 400.0, "Spruce": 380.0, "Birch": 480.0}  # wood density kg/m3
         sla = {
             "Pine": 6.8,
             "Spruce": 7.25,
@@ -335,7 +334,7 @@ class Allometry:
             fill_value=(df["hdom"].values[0], df["hdom"].values[-1]),
             bounds_error=True,
         )
-        ageToLAI = interp1d(
+        interp1d(
             df["age"].values,
             df["leafarea"].values,
             fill_value=(df["leafarea"].values[0], df["leafarea"].values[-1]),

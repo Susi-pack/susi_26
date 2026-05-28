@@ -16,11 +16,9 @@ from susi.io.load_output_data import (
     _load_single_experiment_metadatas,
     _load_all_metadatas_from_single_stand,
     load_all_metadatas_from_stands,
-    NetcdfVariableInfo,
     NetcdfVariablePath,
     ScenarioID,
     StandID,
-    TargetVariableDict,
     OutputDataStore,
     read_netcdf_files_for_selected_variables_from_metadatas,
 )

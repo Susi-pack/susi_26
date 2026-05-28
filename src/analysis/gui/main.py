@@ -7,7 +7,7 @@ from susi.io.app_settings import AppSettings
 def load_default_settings_into_session_state() -> None:
     # guard ensuring initialization only happens once, not on every rerender
     if "settings" not in st.session_state:
-        st.session_state.settings: Path = {
+        st.session_state.settings: dict["str", Path] = {
             "data_folder": AppSettings().output_folder,
         }
 

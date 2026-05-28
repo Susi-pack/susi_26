@@ -1,11 +1,10 @@
 import streamlit as st
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 import susi.io.load_output_data as load_output
 from susi.io.load_output_data import NetcdfVariablePath
 
-from analysis.gui.components import plots, folder_selection
+from analysis.gui.components import folder_selection
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(
@@ -60,9 +59,11 @@ if len(chosen_susi_folders) == 2:
     )
 
     st.markdown("## Comparison")
-    fig = plots.compare_runs(variables_values_0, variables_values_1)
-    st.pyplot(fig)
-    plt.close(fig)
+    raise NotImplementedError("This is not implemented yet")
+    # TODO: implement
+    # fig = plots.compare_runs(variables_values_0, variables_values_1)
+    # st.pyplot(fig)
+    # plt.close(fig)
 elif len(chosen_susi_folders) == 1:
     st.info("Please select one more folder to compare.")
 else:

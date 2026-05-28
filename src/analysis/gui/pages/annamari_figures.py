@@ -3,7 +3,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 import susi.io.load_output_data as load_output
-from susi.io.app_settings import AppSettings
 
 from analysis.gui.components import plots, folder_selection
 
@@ -36,11 +35,11 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 )
 
 
-metadata, susi_params = load_output.read_params_from_jsons(
+params = load_output.read_params_from_jsons(
     experiment_folderpath=chosen_scenario_folder
 )
 
-chosen_netcdf_filepath = Path(metadata["netcdf_output_filepath"])
+chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])
 all_variables = load_output.list_all_netcdf_variables(chosen_netcdf_filepath)
 
 VARIABLE_PATHS = (

@@ -666,7 +666,7 @@ class Esom:
                     peat_w3,
                     H_w,
                 )
-            except:
+            except Exception:
                 print("fail in rates, esom run_yr")
 
             if n == 243:  # n is day of the year
