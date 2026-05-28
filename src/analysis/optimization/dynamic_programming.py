@@ -1,5 +1,4 @@
 from __future__ import annotations
-from hypothesis.internal.conjecture.pareto import ParetoFront
 from typing import Any, Sequence
 from dataclasses import dataclass
 import numpy as np

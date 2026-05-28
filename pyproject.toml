@@ -17,8 +17,10 @@ dependencies = [
     "pareto-dp>=0.1.7",
     "pydantic>=2.12.5",
     "pyproj>=3.7.2",
+    "rasterio>=1.4.4",
     "scipy>=1.17.1",
     "seaborn>=0.13.2",
+    "shapely>=2.1.2",
     "streamlit>=1.19.0",
     "streamlit-tree-select>=0.0.5",
     "tqdm>=4.67.3",
@@ -72,7 +74,7 @@ exclude = [
 ]
 
 [tool.ruff]
-exclude = ["src/analysis/figures.py"]
+exclude = ["src/analysis/figures.py", "src/analysis/scrapbook.py"]
 
 [tool.pytest]
 # Name of the folders in which to look for tests.

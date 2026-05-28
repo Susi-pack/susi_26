@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from susi.core.fertilization import (
     StandardNPKFertilization,
@@ -80,7 +79,7 @@ class TestNoFertilization:
         effect = fert.compute_effect(year=2020)  # Any year
 
         # Assert
-        assert effect.is_active == False
+        assert not effect.is_active
         assert effect.pH_increment == 0.0
         assert isinstance(effect.nutrient_release, dict)
         assert effect.nutrient_release["N"].shape == (3,)

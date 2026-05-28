@@ -100,7 +100,7 @@ def lidar_ditch_depth(ditch_depth_raster, coords, buffer_m=10):
 
     # Open raster and mask
     with rasterio.open(ditch_depth_raster) as src:
-        out_image, out_transform = mask(src, geojson_polygon, crop=True)
+        out_image, _out_transform = mask(src, geojson_polygon, crop=True)
         data = out_image[0].astype(float).flatten()
 
         # Replace nodata with NaN
@@ -560,7 +560,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
             TreeStratum = TreeStandData["ts:TreeStandDataDate"]["tst:TreeStrata"][
                 "tst:TreeStratum"
             ]
-        except:
+        except Exception:
             continue
 
         # Extract stratum attributes

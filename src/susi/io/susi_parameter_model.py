@@ -1,4 +1,3 @@
-from scipy.stats import describe
 from functools import lru_cache
 import datetime
 from enum import Enum

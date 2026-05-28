@@ -58,7 +58,7 @@ def pareto_corner_plot(
     -------
     fig : matplotlib.figure.Figure
     """
-    n, v = data.shape
+    _n, v = data.shape
 
     if labels is None:
         labels = [f"x{i}" for i in range(v)]
@@ -67,11 +67,11 @@ def pareto_corner_plot(
     if figsize is None:
         figsize = (1.8 * v, 1.8 * v)
 
-    df = pd.DataFrame(data, columns=labels)
+    df = pd.DataFrame(data, columns=pd.Index(labels))
 
     if random_points is not None:
         df["source"] = "Pareto"
-        df_rand = pd.DataFrame(random_points, columns=labels)
+        df_rand = pd.DataFrame(random_points, columns=pd.Index(labels))
         df_rand["source"] = "Random"
         df = pd.concat([df, df_rand], ignore_index=True)
         hue = "source"

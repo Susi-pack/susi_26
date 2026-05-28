@@ -4,7 +4,6 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import pandas as pd
 
-import susi.io.load_output_data as load_output
 from susi.io.load_output_data import NetcdfVariablePath, NetcdfVariableArray
 
 
@@ -133,7 +132,7 @@ def spatial_bars(data: np.ndarray) -> matplotlib.figure.Figure:
 
 
 def temporal_stats(data: np.ndarray) -> matplotlib.figure.Figure:
-    n_time, n_space = data.shape
+    n_time, _n_space = data.shape
     fig, ax = plt.subplots(figsize=(8, 5))
 
     # Aggregate over space
@@ -561,7 +560,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :4])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         wt,
         wtmin,
@@ -577,7 +576,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     )
 
     ax = fig.add_subplot(gs[10:, 4:8])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         wtgs,
         wtmin,
@@ -593,7 +592,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     )
 
     ax = fig.add_subplot(gs[10:, 8:])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         wtls,
         wtmin,
@@ -619,7 +618,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
         axwtts.plot(range(days), dwt[:, c], alpha=0.2)
 
     axwtts.tick_params(axis="y", labelsize=fs)
-    axwtts.set_ylim([wtmin, 0])
+    axwtts.set_ylim(bottom=wtmin, top=0)
     axwtts.set_ylabel("WT m", fontsize=fs)
     axwtts.legend(loc="upper left")
     axwtts.grid(visible=False)
@@ -630,7 +629,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     ulimruno = max(runoff) * 1.1 * 1000.0
     axruno = fig.add_subplot(gs[7, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="blue", label="total runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim(bottom=0.0, top=ulimruno)
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="blue", alpha=0.3
     )
@@ -645,7 +644,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     runoff = np.cumsum(roffwest)
     axruno = fig.add_subplot(gs[6, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="green", label="west runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim(bottom=0.0, top=ulimruno)
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="green", alpha=0.3
     )
@@ -660,7 +659,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     runoff = np.cumsum(roffeast)
     axruno = fig.add_subplot(gs[5, :])
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="red", label="east runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim(bottom=0.0, top=ulimruno)
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="red", alpha=0.3
     )
@@ -677,7 +676,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     axruno.plot(
         range(len(runoff)), runoff * 1000.0, color="orange", label="surface runoff"
     )
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim(bottom=0.0, top=ulimruno)
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="orange", alpha=0.3
     )
@@ -692,7 +691,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     dfdeltas = pd.DataFrame(data=deltas, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, :4])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         dfdeltas,
         cols,
@@ -708,14 +707,14 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     dfET = pd.DataFrame(data=ET, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[2:4, 4:8])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax, dfET, cols, "green", "ET", "", fs, facecolor, zero=False, hidex=True
     )
 
     transpi = _get_var(data, "/cpy/transpi_yr").processed[1:, :] * 1000.0
     dftranspi = pd.DataFrame(data=transpi, columns=np.arange(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         dftranspi,
         cols,
@@ -732,7 +731,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     dfefloor = pd.DataFrame(data=efloor, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, :4])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         dfefloor,
         cols,
@@ -749,7 +748,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     dfswe = pd.DataFrame(data=swe, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 4:8])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         dfswe,
         cols,
@@ -766,7 +765,7 @@ def hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     dfinterc = pd.DataFrame(data=interc, columns=np.arange(cols))
 
     ax = fig.add_subplot(gs[:2, 8:])
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         dfinterc,
         cols,
@@ -803,7 +802,7 @@ def mass(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     ax.hlines(y=-0.35, xmin=0, xmax=cols, color="red", linestyles="--")
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
-    ax.set_ylim([wtmin, 0])
+    ax.set_ylim(bottom=wtmin, top=0)
     ax.set_ylabel("WT m", fontsize=fs)
     ax.legend()
     ax.grid(visible=False)
@@ -892,7 +891,7 @@ def mass(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     )
 
     ax.set_title("Organic soil mass, kg $m^{-2}$")
-    ax.set_ylim([minval * 0.95, maxval * 1.025])
+    ax.set_ylim(bottom=minval * 0.95, top=maxval * 1.025)
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
@@ -1188,35 +1187,35 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     fig = plt.figure(figsize=(15, 18))
     fig.suptitle("Carbon balance components", fontsize=fs + 2)
     gs = gridspec.GridSpec(ncols=12, nrows=14, figure=fig, wspace=0.5, hspace=0.5)
-    mass_to_c = 0.5
+    # mass_to_c = 0.5
+    #
+    # ds_litterfall = (
+    #     _get_var(data, "/groundvegetation/ds_litterfall").processed / 10000.0
+    # )
+    # h_litterfall = _get_var(data, "/groundvegetation/h_litterfall").processed / 10000.0
+    # s_litterfall = _get_var(data, "/groundvegetation/s_litterfall").processed / 10000.0
+    # nonwoodylitter = _get_var(data, "/stand/nonwoodylitter").processed / 10000.0
+    # woodylitter = _get_var(data, "/stand/woodylitter").processed / 10000.0
 
-    ds_litterfall = (
-        _get_var(data, "/groundvegetation/ds_litterfall").processed / 10000.0
-    )
-    h_litterfall = _get_var(data, "/groundvegetation/h_litterfall").processed / 10000.0
-    s_litterfall = _get_var(data, "/groundvegetation/s_litterfall").processed / 10000.0
-    nonwoodylitter = _get_var(data, "/stand/nonwoodylitter").processed / 10000.0
-    woodylitter = _get_var(data, "/stand/woodylitter").processed / 10000.0
-
-    litter = (
-        ds_litterfall + h_litterfall + s_litterfall + nonwoodylitter + woodylitter
-    ) * mass_to_c
-
-    esom_mass_out = (
-        _get_var(data, "/esom/Mass/out").processed / 10000.0 * -1 * mass_to_c
-    )
-    soil = esom_mass_out + litter
-    out = esom_mass_out
+    # litter = (
+    #     ds_litterfall + h_litterfall + s_litterfall + nonwoodylitter + woodylitter
+    # ) * mass_to_c
+    #
+    # esom_mass_out = (
+    #     _get_var(data, "/esom/Mass/out").processed / 10000.0 * -1 * mass_to_c
+    # )
+    # soil = esom_mass_out + litter
+    # out = esom_mass_out
 
     wt = _get_var(data, "/strip/dwtyr").mean_over_time()
     cols = np.shape(wt)[0]
     sd = np.std(_get_var(data, "/strip/dwtyr").processed, axis=0)
     wtls = _get_var(data, "/strip/dwtyr_latesummer").mean_over_time()
-    sdls = np.std(_get_var(data, "/strip/dwtyr_latesummer").processed, axis=0)
+    # sdls = np.std(_get_var(data, "/strip/dwtyr_latesummer").processed, axis=0)
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[12:, :6])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         wt,
         wtmin,
@@ -1237,7 +1236,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     h = elevation + wtls
 
     ax = fig.add_subplot(gs[12:, 6:])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         h,
         wtmin,
@@ -1256,7 +1255,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     lmwtoditch = _get_var(data, "/balance/C/LMWdoc_to_water").processed * -1
     ax = fig.add_subplot(gs[10:12, :6])
     df = pd.DataFrame(data=lmwtoditch, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1271,7 +1270,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     hmwtoditch = _get_var(data, "/balance/C/HMW_to_water").processed * -1
     ax = fig.add_subplot(gs[10:12, 6:])
     df = pd.DataFrame(data=hmwtoditch, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1286,7 +1285,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     lmwtoatm = _get_var(data, "/balance/C/LMWdoc_to_atm").processed * -1
     ax = fig.add_subplot(gs[8:10, :6])
     df = pd.DataFrame(data=lmwtoatm, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1301,7 +1300,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     hmwtoatm = _get_var(data, "/balance/C/HMW_to_atm").processed * -1
     ax = fig.add_subplot(gs[8:10, 6:])
     df = pd.DataFrame(data=hmwtoatm, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1316,7 +1315,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     co2 = _get_var(data, "/balance/C/co2c_release").processed * -1
     ax = fig.add_subplot(gs[6:8, :6])
     df = pd.DataFrame(data=co2, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1331,7 +1330,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     co2 = _get_var(data, "/balance/C/ch4c_release").processed * -1
     ax = fig.add_subplot(gs[6:8, 6:])
     df = pd.DataFrame(data=co2, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1346,7 +1345,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     standl = _get_var(data, "/balance/C/stand_litter_in").processed
     ax = fig.add_subplot(gs[4:6, :6])
     df = pd.DataFrame(data=standl, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1361,7 +1360,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     gvl = _get_var(data, "/balance/C/gv_litter_in").processed
     ax = fig.add_subplot(gs[4:6, 6:])
     df = pd.DataFrame(data=gvl, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1376,7 +1375,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     soilc = _get_var(data, "/balance/C/soil_c_balance_c").processed
     ax = fig.add_subplot(gs[2:4, :6])
     df = pd.DataFrame(data=soilc, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1391,7 +1390,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     soilco2 = _get_var(data, "/balance/C/soil_c_balance_co2eq").processed
     ax = fig.add_subplot(gs[2:4, 6:])
     df = pd.DataFrame(data=soilco2, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1406,7 +1405,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     standc = _get_var(data, "/balance/C/stand_c_balance_c").processed
     ax = fig.add_subplot(gs[:2, :6])
     df = pd.DataFrame(data=standc, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1421,7 +1420,7 @@ def carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]):
     standco2 = _get_var(data, "/balance/C/stand_c_balance_co2eq").processed
     ax = fig.add_subplot(gs[:2, 6:])
     df = pd.DataFrame(data=standco2, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1450,11 +1449,11 @@ def nutrient_balance(
     cols = np.shape(wt)[0]
     sd = np.std(_get_var(data, "/strip/dwtyr").processed, axis=0)
     wtls = _get_var(data, "/strip/dwtyr_latesummer").mean_over_time()
-    sdls = np.std(_get_var(data, "/strip/dwtyr_latesummer").processed, axis=0)
+    # sdls = np.std(_get_var(data, "/strip/dwtyr_latesummer").processed, axis=0)
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :6])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         wt,
         wtmin,
@@ -1475,7 +1474,7 @@ def nutrient_balance(
     h = elevation + wtls
 
     ax = fig.add_subplot(gs[10:, 6:])
-    ax = _create_profile_line(
+    _ax = _create_profile_line(
         ax,
         h,
         wtmin,
@@ -1494,7 +1493,7 @@ def nutrient_balance(
     towater = _get_var(data, f"/balance/{substance}/to_water").processed
     ax = fig.add_subplot(gs[8:10, :6])
     df = pd.DataFrame(data=towater, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1509,7 +1508,7 @@ def nutrient_balance(
     brl = _get_var(data, f"/balance/{substance}/decomposition_below_root_lyr").processed
     ax = fig.add_subplot(gs[8:10, 6:])
     df = pd.DataFrame(data=brl, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1524,7 +1523,7 @@ def nutrient_balance(
     de = _get_var(data, f"/balance/{substance}/decomposition_tot").processed
     ax = fig.add_subplot(gs[6:8, :6])
     df = pd.DataFrame(data=de, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1539,7 +1538,7 @@ def nutrient_balance(
     dert = _get_var(data, f"/balance/{substance}/decomposition_root_lyr").processed
     ax = fig.add_subplot(gs[6:8, 6:])
     df = pd.DataFrame(data=dert, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1562,7 +1561,7 @@ def nutrient_balance(
 
     ax = fig.add_subplot(gs[4:6, :6])
     df = pd.DataFrame(data=supply, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1577,7 +1576,7 @@ def nutrient_balance(
     fert = _get_var(data, f"/balance/{substance}/fertilization_release").processed
     ax = fig.add_subplot(gs[4:6, 6:])
     df = pd.DataFrame(data=fert, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1592,7 +1591,7 @@ def nutrient_balance(
     dem = _get_var(data, f"/balance/{substance}/stand_demand").processed
     ax = fig.add_subplot(gs[2:4, :6])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1607,7 +1606,7 @@ def nutrient_balance(
     dem = _get_var(data, f"/balance/{substance}/gv_demand").processed
     ax = fig.add_subplot(gs[2:4, 6:])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1622,7 +1621,7 @@ def nutrient_balance(
     dem = _get_var(data, f"/balance/{substance}/balance_root_lyr").processed
     ax = fig.add_subplot(gs[:2, :6])
     df = pd.DataFrame(data=dem, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1637,7 +1636,7 @@ def nutrient_balance(
     vg = _get_var(data, "/stand/volumegrowth").processed
     ax = fig.add_subplot(gs[:2, 6:])
     df = pd.DataFrame(data=vg, columns=np.arange(cols))
-    ax = _create_profile_boxplot(
+    _ax = _create_profile_boxplot(
         ax,
         df,
         cols,

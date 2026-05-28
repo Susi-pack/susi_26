@@ -251,7 +251,7 @@ class StripHydrology:
         )
         n = len(Htmp1)
 
-        if DrIrr == False:
+        if not DrIrr:
             hs[0] = Htmp1[1] if Htmp1[0] > Htmp1[1] else min(ele[0] + h0_west, Htmp1[1])
             hs[n - 1] = (
                 Htmp1[n - 2]

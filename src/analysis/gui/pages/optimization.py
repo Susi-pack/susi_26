@@ -1,5 +1,4 @@
 import streamlit as st
-import numpy as np
 
 from analysis.gui.components import (
     folder_selection,
