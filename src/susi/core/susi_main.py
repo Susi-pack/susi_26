@@ -412,7 +412,7 @@ class Susi:
                     )  # strip/peat hydrology
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
-                    peat_temperature = temperature.step(
+                    state_peat_T = temperature.step(
                         params=peat_T_params,
                         static_inputs=static_inputs_peat_T,
                         dynamic_inputs=temperature.DynamicInputs(
@@ -420,7 +420,9 @@ class Susi:
                         ),
                         state=state_peat_T,
                     )
-                    peat_temperatures[n_ditch_scen, d, :] = peat_temperature.T_soil
+                    peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
+                        : peat_T_params.n_layers_hydro
+                    ]
 
                     swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
                     d += 1

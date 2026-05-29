@@ -52,6 +52,7 @@ def compute_static_inputs(params: Params, T_air_mean: float) -> StaticInputs:
         heat_capacity=3860000.0 * params.dz,
         n_layers=n_layers,
         A=_create_linear_system_matrix(
+            timestep=params.timestep,
             n_subtimesteps=params.n_subtimesteps,
             dz=params.dz,
             D=params.D,
@@ -86,19 +87,20 @@ def step(
         T_air = dynamic_inputs.T_air + T_cool
 
     u = np.zeros(static_inputs.n_layers + 1)
+    T_soil = state.T_soil.copy()
     for _ in range(0, params.n_subtimesteps):
-        b = state.T_soil.copy()
+        b = T_soil.copy()
         b[0] = T_air  # top boundary condition
         b[-1] = static_inputs.T_air_mean  # bottom boundary condition
         u[:] = linalg.solve(static_inputs.A, b, assume_a="tridiagonal")
-    return State(T_soil=u[: params.n_layers_hydro])
+        T_soil = u
+    return State(T_soil=u)
 
 
 def _create_linear_system_matrix(
-    n_subtimesteps: int, dz: float, D: float, n_layers: int
+    timestep: float, n_subtimesteps: int, dz: float, D: float, n_layers: int
 ):
-    T = n_subtimesteps * 3600  # total simulation time in seconds
-    t = np.linspace(0, T, n_subtimesteps + 1)  # mesh points in time
+    t = np.linspace(0, timestep, n_subtimesteps + 1)  # mesh points in time
     dt = t[1] - t[0]  # timestep in seconds, s
 
     F = D * dt / dz**2
