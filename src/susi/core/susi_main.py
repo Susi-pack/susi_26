@@ -5,6 +5,8 @@ Created on Mon May 21 18:38:10 2018
 @author: lauren
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 import datetime
@@ -30,8 +32,13 @@ from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
-from supersusi.core import methane
-from supersusi.core import temperature
+from supersusi.core import methane, temperature
+
+
+@dataclass(frozen=True)
+class ModuleParams:
+    methane: methane.Params
+    temperature: temperature.Params
 
 
 class Susi:
@@ -49,15 +56,8 @@ class Susi:
     def run(
         self,
     ):
+        params = _build_params(self.parameters)
 
-        peat_T_params = temperature.Params(
-            n_layers_hydro=self.parameters.site_parameters.nLyrs,
-            dz=self.parameters.site_parameters.dzLyr,
-            timestep=self.parameters.site_parameters.peat_temperature.timestep,
-            n_subtimesteps=self.parameters.site_parameters.peat_temperature.n_subtimesteps,
-            D=self.parameters.site_parameters.peat_temperature.D,
-            heat_of_vaporization=self.parameters.site_parameters.peat_temperature.heat_of_vaporization,
-        )
         print(
             "******** Susi-peatland simulator v.12 (2026) c Annamari Laurén *********************"
         )
@@ -222,7 +222,7 @@ class Susi:
         out.initialize_strip(stp)  # outputs for soil hydrology
 
         static_inputs_peat_T = temperature.compute_static_inputs(
-            params=peat_T_params,
+            params=params.temperature,
             T_air_mean=self.weather_forcing["T"].mean(),
         )
         state_peat_T = temperature.compute_initial_state(
@@ -412,8 +412,8 @@ class Susi:
                     )  # strip/peat hydrology
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
-                    state_peat_T = temperature.step(
-                        params=peat_T_params,
+                    state_peat_T = temperature.run_timestep(
+                        params=params.temperature,
                         static_inputs=static_inputs_peat_T,
                         dynamic_inputs=temperature.DynamicInputs(
                             T_air=ta, swe=np.mean(SWE), efloor=np.mean(efloor)
@@ -421,7 +421,7 @@ class Susi:
                         state=state_peat_T,
                     )
                     peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
-                        : peat_T_params.n_layers_hydro
+                        : params.temperature.n_layers_hydro
                     ]
 
                     swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
@@ -654,7 +654,7 @@ class Susi:
                 # stand.assimilate(self.weather_forcing.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)])
                 # stand.update()
 
-                ch4_state = methane.step(
+                ch4_state = methane.run_timestep(
                     dynamic_inputs=methane.DynamicInputs(year=calendar_year, dfwt=dfwt)
                 )
                 out.write_methane(n_ditch_scen, simulation_year, ch4_state)
@@ -738,3 +738,22 @@ class Susi:
             filepath=self.metadata.parameter_output_filepath
         )
         return None
+
+
+def _build_params(susi_params: SusiParams) -> ModuleParams:
+    """
+    Takes params coming from the user-facing Pydantic model,
+    converts them into classes to pass to the modules.
+    """
+
+    return ModuleParams(
+        methane=methane.Params(),
+        temperature=temperature.Params(
+            n_layers_hydro=susi_params.site_parameters.nLyrs,
+            dz=susi_params.site_parameters.dzLyr,
+            timestep=susi_params.site_parameters.peat_temperature.timestep,
+            n_subtimesteps=susi_params.site_parameters.peat_temperature.n_subtimesteps,
+            D=susi_params.site_parameters.peat_temperature.D,
+            heat_of_vaporization=susi_params.site_parameters.peat_temperature.heat_of_vaporization,
+        ),
+    )

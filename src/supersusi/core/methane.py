@@ -32,7 +32,7 @@ def initialize(n_cols: int) -> State:
     return State(ch4=jnp.zeros(shape=n_cols), ch4_as_co2eq=jnp.zeros(shape=n_cols))
 
 
-def step(dynamic_inputs: DynamicInputs) -> State:
+def run_timestep(dynamic_inputs: DynamicInputs) -> State:
 
     # convert to cm positive down
     wt = (

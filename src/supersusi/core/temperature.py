@@ -66,7 +66,7 @@ def compute_initial_state(static_inputs: StaticInputs) -> State:
     return State(T_soil=np.ones(static_inputs.n_layers + 1) * static_inputs.T_air_mean)
 
 
-def step(
+def run_timestep(
     params: Params,
     static_inputs: StaticInputs,
     dynamic_inputs=DynamicInputs,
