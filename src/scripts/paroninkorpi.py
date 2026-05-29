@@ -347,6 +347,7 @@ def prepare_susi_params(
             ),
             site_parameters=SiteParams(
                 L=40.0,
+                n=20,
                 initial_dominant_stand_age_years=read_initial_dominant_stand_age_from_allometry_file(
                     stand_number=stand_number,
                     allometry_files_folder=allometry_files_directory_path,

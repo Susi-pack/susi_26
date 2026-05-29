@@ -51,6 +51,7 @@ PARAMETERS = SusiParams(
     ),
     site_parameters=SiteParams(
         L=40.0,
+        n=20,
         initial_dominant_stand_age_years=60.0,
         initial_subdominant_stand_age_years=0.0,
         initial_understorey_age_years=0.0,
