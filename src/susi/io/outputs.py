@@ -9,7 +9,7 @@ from netCDF4 import Dataset
 from datetime import datetime
 import numpy as np
 
-from supersusi.core.methane import api as methane
+from supersusi.core import methane
 
 
 class Outputs:

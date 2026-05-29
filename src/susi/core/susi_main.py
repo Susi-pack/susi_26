@@ -31,7 +31,7 @@ from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
-import supersusi.core.methane.api as methane
+from supersusi.core import methane
 
 
 class Susi:

@@ -49,4 +49,10 @@ def step(dynamic_inputs: MethaneDynamicInputs) -> MethaneState:
     # Ojanen et al. 2010, Fig. 6, convert to kg CH4 /ha/year
     ch4 = (-0.378 + 12.3 * jnp.exp(-0.121 * wt)) * 10.0
 
-    return MethaneState(ch4=ch4, ch4_as_co2eq=ch4 * 27.0)
+    return MethaneState(ch4=ch4, ch4_as_co2eq=_methane_to_co2eq(ch4))
+
+
+def _methane_to_co2eq(ch4):
+    # convert to kg CH4 to kg CO2-eq.
+    # Reference: SGWP100 coefficient https://ghgprotocol.org/sites/default/files/2024-08/Global-Warming-Potential-Values%20%28August%202024%29.pdf
+    return ch4 * 27.0
