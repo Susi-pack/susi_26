@@ -5,12 +5,8 @@ Created on Fri Jun 28 16:03:26 2019
 @author: alauren
 """
 
-from typing import NewType
-
-import site
-
 from dataclasses import dataclass
-
+from typing import NewType
 import datetime
 
 from susi.io.app_settings import AppSettings
@@ -555,70 +551,3 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             peat_temperature=PeatTemperatureParams(),
         ),
     )
-
-
-def get_photo_para(site):
-
-    photopara = {
-        "All data": {
-            "beta": 0.513,
-            "gamma": 0.0196,
-            "kappa": -0.389,
-            "tau": 7.2,
-            "X0": -4.0,
-            "Smax": 17.3,
-            "alfa": 1.0,
-            "nu": 5.0,
-        },
-        "Sodankyla": {
-            "beta": 0.831,
-            "gamma": 0.065,
-            "kappa": -0.150,
-            "tau": 10.2,
-            "X0": -0.9,
-            "Smax": 16.4,
-            "alfa": 1.0,
-            "nu": 5.0,
-        },
-        "Hyytiala": {
-            "beta": 0.504,
-            "gamma": 0.0303,
-            "kappa": -0.235,
-            "tau": 11.1,
-            "X0": -3.1,
-            "Smax": 17.3,
-            "alfa": 1.0,
-            "nu": 5.0,
-        },
-        "Norunda": {
-            "beta": 0.500,
-            "gamma": 0.0220,
-            "kappa": -0.391,
-            "tau": 5.7,
-            "X0": -4.0,
-            "Smax": 17.6,
-            "alfa": 1.062,
-            "nu": 11.27,
-        },
-        "Tharandt": {
-            "beta": 0.742,
-            "gamma": 0.0267,
-            "kappa": -0.512,
-            "tau": 1.8,
-            "X0": -5.2,
-            "Smax": 18.5,
-            "alfa": 1.002,
-            "nu": 442.0,
-        },
-        "Bray": {
-            "beta": 0.459,
-            "gamma": -0.000669,
-            "kappa": -0.560,
-            "tau": 2.6,
-            "X0": -17.6,
-            "Smax": 45.0,
-            "alfa": 0.843,
-            "nu": 2.756,
-        },
-    }
-    return photopara[site]
