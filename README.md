@@ -1,4 +1,15 @@
-Peatland simulator SUSI version used in Saari et al. (nimi) 2025 and Niemi et al. (2025) (nimi)
+This is a long-lived branch developed in parallel to the `main`.
+In time, it will contain a hand-crafted, functional, type-safe, JAX-compatible rewrite of the core algorithms.
+
+It should be compatible with the `main` branch at all steps of the rewrite.
+
+First I will do the functional rewrite.
+
+Then, I will rewrite that in a JAX compatible way.
+
+Readme info from the original repo follows.
+
+---
 
 # Installation
 Clone this repo.
