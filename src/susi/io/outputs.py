@@ -2541,7 +2541,7 @@ class Outputs:
         self.ncf["doc"]["HMW"][scen, year, :] = HMW
         self.ncf["doc"]["LMW"][scen, year, :] = DOC - HMW
 
-    def write_methane(self, scen, year, ch4_state: methane.MethaneState):
+    def write_methane(self, scen, year, ch4_state: methane.State):
         self.ncf["methane"]["ch4"][scen, year, :] = ch4_state.ch4
         self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4_state.ch4_as_co2eq
 
@@ -2613,7 +2613,7 @@ class Outputs:
         stand,
         groundvegetation,
         esmass,
-        ch4_state: methane.MethaneState,
+        ch4_state: methane.State,
     ):
         bm_to_c = 0.5
         c_to_co2 = 44 / 12.0

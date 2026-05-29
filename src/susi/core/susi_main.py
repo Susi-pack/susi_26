@@ -634,9 +634,7 @@ class Susi:
                 # stand.update()
 
                 ch4_state = methane.step(
-                    dynamic_inputs=methane.MethaneDynamicInputs(
-                        year=calendar_year, dfwt=dfwt
-                    )
+                    dynamic_inputs=methane.DynamicInputs(year=calendar_year, dfwt=dfwt)
                 )
                 out.write_methane(n_ditch_scen, simulation_year, ch4_state)
 

@@ -5,7 +5,7 @@ from jaxtyping import Array, Float
 
 
 @dataclass(frozen=True)
-class MethaneState:
+class State:
     ch4: Float[Array, " n_cols"] = field(doc="Annual node-wise kg CH4 ha-1 year-1")
     ch4_as_co2eq: Float[Array, " n_cols"] = field(
         doc="Annual CH4 kg  ha-1 year-1 in CO2-eq"
@@ -13,28 +13,26 @@ class MethaneState:
 
 
 @dataclass(frozen=True)
-class MethaneDynamicInputs:
+class DynamicInputs:
     year: int = field(doc="Simulation year")
     dfwt: pd.DataFrame = field(doc="Daily WT dataframe")
 
 
 @dataclass(frozen=True)
-class MethaneStaticInputs:
+class StaticInputs:
     None
 
 
 @dataclass(frozen=True)
-class MethaneParams:
+class Params:
     None
 
 
-def initialize(n_cols: int) -> MethaneState:
-    return MethaneState(
-        ch4=jnp.zeros(shape=n_cols), ch4_as_co2eq=jnp.zeros(shape=n_cols)
-    )
+def initialize(n_cols: int) -> State:
+    return State(ch4=jnp.zeros(shape=n_cols), ch4_as_co2eq=jnp.zeros(shape=n_cols))
 
 
-def step(dynamic_inputs: MethaneDynamicInputs) -> MethaneState:
+def step(dynamic_inputs: DynamicInputs) -> State:
 
     # convert to cm positive down
     wt = (
@@ -49,7 +47,7 @@ def step(dynamic_inputs: MethaneDynamicInputs) -> MethaneState:
     # Ojanen et al. 2010, Fig. 6, convert to kg CH4 /ha/year
     ch4 = (-0.378 + 12.3 * jnp.exp(-0.121 * wt)) * 10.0
 
-    return MethaneState(ch4=ch4, ch4_as_co2eq=_methane_to_co2eq(ch4))
+    return State(ch4=ch4, ch4_as_co2eq=_methane_to_co2eq(ch4))
 
 
 def _methane_to_co2eq(ch4):
