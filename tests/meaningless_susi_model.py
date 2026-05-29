@@ -7,8 +7,6 @@ from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
     TreeSpecies,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
     SiteParams,
     WeatherParams,
     SimulationConfig,
