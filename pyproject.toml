@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Your Name", email = "your.email@example.com" }]
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "altair[all]>=6.0.0",
+    "jax>=0.10.1",
+    "jaxtyping>=0.3.10",
     "matplotlib>=3.10.8",
     "netcdf4>=1.7.4",
     "numba>=0.64.0",
@@ -74,9 +76,11 @@ exclude = [
     "src/analysis/figures.py",
 ]
 
-[tool.ruff]
-exclude = ["src/analysis/figures.py", "src/analysis/scrapbook.py"]
+# Supresses annoying errors with jaxtyping
+[tool.ruff.lint]
+ignore = ["F722"]
 
+exclude = ["src/analysis/figures.py", "src/analysis/scrapbook.py"]
 [tool.pytest]
 # Name of the folders in which to look for tests.
 testpaths = ["tests"]

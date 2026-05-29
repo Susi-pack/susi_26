@@ -9,6 +9,8 @@ from netCDF4 import Dataset
 from datetime import datetime
 import numpy as np
 
+from supersusi.core.methane import api as methane
+
 
 class Outputs:
     def __init__(self, n_scenarios, n_cols, n_days, n_years, n_layers, fname):
@@ -2539,9 +2541,9 @@ class Outputs:
         self.ncf["doc"]["HMW"][scen, year, :] = HMW
         self.ncf["doc"]["LMW"][scen, year, :] = DOC - HMW
 
-    def write_methane(self, scen, year, ch4):
-        self.ncf["methane"]["ch4"][scen, year, :] = ch4
-        self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4 * 27.0
+    def write_methane(self, scen, year, ch4_state: methane.MethaneState):
+        self.ncf["methane"]["ch4"][scen, year, :] = ch4_state.ch4
+        self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4_state.ch4_as_co2eq
 
     def write_fertilization(self, scen, year, fertilization_effect):
         self.ncf["fertilization"]["n_release"][scen, year, :] = (
@@ -2604,9 +2606,18 @@ class Outputs:
         # + \
         # ferti + depo * np.ones(self.ncols)- stand_up  - groundvegetation_up))
 
-    def write_carbon_balance(self, scen, year, stand, groundvegetation, esmass, ch4):
+    def write_carbon_balance(
+        self,
+        scen,
+        year,
+        stand,
+        groundvegetation,
+        esmass,
+        ch4_state: methane.MethaneState,
+    ):
         bm_to_c = 0.5
         c_to_co2 = 44 / 12.0
+        c_in_ch4 = ch4_state.ch4 * 12.0 / 16.0
         self.ncf["balance"]["C"]["stand_litter_in"][scen, year, :] = (
             stand.nonwoodylitter
             + stand.nonwoody_lresid
@@ -2625,7 +2636,7 @@ class Outputs:
             groundvegetation.gv_change * bm_to_c
         )
         self.ncf["balance"]["C"]["co2c_release"][scen, year, :] = esmass.out * bm_to_c
-        self.ncf["balance"]["C"]["ch4c_release"][scen, year, :] = ch4 * (12 / 16.0)
+        self.ncf["balance"]["C"]["ch4c_release"][scen, year, :] = c_in_ch4
         self.ncf["balance"]["C"]["LMWdoc_to_water"][scen, year, :] = esmass.lmwtoditch
         self.ncf["balance"]["C"]["LMWdoc_to_atm"][scen, year, :] = (
             esmass.lmw - esmass.lmwtoditch
@@ -2671,16 +2682,14 @@ class Outputs:
         )
 
         self.ncf["balance"]["C"]["stand_c_balance_c"][scen, year, :] = (
-            standbal - ch4 * (12 / 16.0)
+            standbal - c_in_ch4
         )
-        self.ncf["balance"]["C"]["soil_c_balance_c"][scen, year, :] = soilbal - ch4 * (
-            12 / 16.0
-        )
+        self.ncf["balance"]["C"]["soil_c_balance_c"][scen, year, :] = soilbal - c_in_ch4
         self.ncf["balance"]["C"]["stand_c_balance_co2eq"][scen, year, :] = (
-            standbal * c_to_co2 - ch4 * 27.0
+            standbal * c_to_co2 - ch4_state.ch4_as_co2eq
         )
         self.ncf["balance"]["C"]["soil_c_balance_co2eq"][scen, year, :] = (
-            soilbal * c_to_co2 - ch4 * 27.0
+            soilbal * c_to_co2 - ch4_state.ch4_as_co2eq
         )
 
     def write_ojanen(self, scen, year, Rhet, soil_co2_balance):
