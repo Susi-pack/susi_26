@@ -644,7 +644,7 @@ class SiteParams(StrictFrozenModel):
     vol: list[float] | None
     smc: str
     nLyrs: int
-    dzLyr: float
+    dzLyr: float = Field(description="Vertical layer thickness, m.")
     ditch_depth_west: list[NonPositiveFloat] = Field(
         description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
     )

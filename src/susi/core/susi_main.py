@@ -19,7 +19,6 @@ from susi.io.susi_parameter_model import (
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
 from susi.core.strip import StripHydrology, drain_depth_development
-from susi.core.temperature import PeatTemperature
 from susi.core.gvegetation import Gvegetation
 from susi.core.esom import Esom
 from susi.core.stand import Stand
@@ -32,6 +31,7 @@ import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
 from supersusi.core import methane
+from supersusi.core import temperature
 
 
 class Susi:
@@ -49,6 +49,15 @@ class Susi:
     def run(
         self,
     ):
+
+        peat_T_params = temperature.Params(
+            n_layers_hydro=self.parameters.site_parameters.nLyrs,
+            dz=self.parameters.site_parameters.dzLyr,
+            timestep=self.parameters.site_parameters.peat_temperature.timestep,
+            n_subtimesteps=self.parameters.site_parameters.peat_temperature.n_subtimesteps,
+            D=self.parameters.site_parameters.peat_temperature.D,
+            heat_of_vaporization=self.parameters.site_parameters.peat_temperature.heat_of_vaporization,
+        )
         print(
             "******** Susi-peatland simulator v.12 (2026) c Annamari Laurén *********************"
         )
@@ -212,9 +221,13 @@ class Susi:
         )  # initialize soil hydrology model
         out.initialize_strip(stp)  # outputs for soil hydrology
 
-        pt = PeatTemperature(
-            self.parameters.site_parameters, self.weather_forcing["T"].mean()
-        )  # initialize peat temperature model
+        static_inputs_peat_T = temperature.compute_static_inputs(
+            params=peat_T_params,
+            T_air_mean=self.weather_forcing["T"].mean(),
+        )
+        state_peat_T = temperature.compute_initial_state(
+            static_inputs=static_inputs_peat_T
+        )
         out.initialize_temperature()
 
         _ = methane.initialize(n_cols=self.parameters.site_parameters.n)
@@ -238,9 +251,11 @@ class Susi:
         stpout = stp.create_outarrays(
             rounds, n_simulation_days, self.parameters.site_parameters.n
         )  # create output variables for WT, afp, runoff etc.
-        peat_temperatures = pt.create_outarrays(
-            rounds, n_simulation_days, self.parameters.site_parameters.nLyrs
+
+        peat_temperatures = np.zeros(
+            (rounds, n_simulation_days, self.parameters.site_parameters.nLyrs)
         )  # daily peat temperature profiles
+
         intercs, evaps, ETs, transpis, efloors, swes = cpy.create_outarrays(
             rounds, n_simulation_days, self.parameters.site_parameters.n
         )  # outputs for canopy hydrology model
@@ -310,7 +325,6 @@ class Susi:
             out.write_esom(n_ditch_scen, 0, "K", esK, inivals=True)
 
             stp.reset_domain(initial_h=self.parameters.site_parameters.initial_h)
-            pt.reset_domain()
 
             d = 0  # day index
             start = 0  # day counter in annual loop
@@ -398,10 +412,15 @@ class Susi:
                     )  # strip/peat hydrology
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
-                    z, peat_temperature = pt.run_timestep(
-                        ta, np.mean(SWE), np.mean(efloor)
-                    )  # peat temperature in different depths
-                    peat_temperatures[n_ditch_scen, d, :] = peat_temperature
+                    peat_temperature = temperature.step(
+                        params=peat_T_params,
+                        static_inputs=static_inputs_peat_T,
+                        dynamic_inputs=temperature.DynamicInputs(
+                            T_air=ta, swe=np.mean(SWE), efloor=np.mean(efloor)
+                        ),
+                        state=state_peat_T,
+                    )
+                    peat_temperatures[n_ditch_scen, d, :] = peat_temperature.T_soil
 
                     swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
                     d += 1
