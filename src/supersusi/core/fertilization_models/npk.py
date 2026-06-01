@@ -9,7 +9,6 @@ from supersusi.core.fertilization_models.no_fertilization import unfertilized_st
 @dataclass(frozen=True)
 class Params:
     n_cols: int
-    simulation_end_year: int
     fpara: StandardNPKFertilizationParameters
 
 

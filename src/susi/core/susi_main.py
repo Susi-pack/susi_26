@@ -764,7 +764,6 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
         case StandardNPKFertilizationParameters():
             fertilization_params = npk.Params(
                 n_cols=susi_params.site_parameters.n,
-                simulation_end_year=susi_params.simulation_config.end_date.year,
                 fpara=susi_params.site_parameters.fertilization,
             )
         case None:
