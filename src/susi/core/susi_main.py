@@ -5,6 +5,8 @@ Created on Mon May 21 18:38:10 2018
 @author: lauren
 """
 
+from typing import assert_never
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -17,6 +19,8 @@ from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
+    AshFertilizationParameters,
+    StandardNPKFertilizationParameters,
 )
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
@@ -24,7 +28,6 @@ from susi.core.strip import StripHydrology, drain_depth_development
 from susi.core.gvegetation import Gvegetation
 from susi.core.esom import Esom
 from susi.core.stand import Stand
-from susi.core.fertilization import initialize_fertilization
 from susi.core.susi_utils import rew_drylimit
 from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, ojanen_2019
 import susi.io.susi_io as susi_io
@@ -32,13 +35,15 @@ from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
-from supersusi.core import methane, temperature
+from supersusi.core import methane, temperature, fertilization
+from supersusi.core.fertilization_models import ash, npk, no_fertilization
 
 
 @dataclass(frozen=True)
 class ModuleParams:
     methane: methane.Params
     temperature: temperature.Params
+    fertilization: fertilization.Params
 
 
 class Susi:
@@ -56,7 +61,7 @@ class Susi:
     def run(
         self,
     ):
-        params = _build_params(self.parameters)
+        module_params = _build_params(self.parameters)
 
         print(
             "******** Susi-peatland simulator v.12 (2026) c Annamari Laurén *********************"
@@ -176,10 +181,8 @@ class Susi:
             substance="K",
         )  # initializing organic matter decomposition instace for K
 
-        ferti = initialize_fertilization(
-            fertilization_params=self.parameters.site_parameters.fertilization,
-            n_cols=self.parameters.site_parameters.n,
-            simulation_end_year=self.parameters.simulation_config.end_date.year,
+        fertilization_static_inputs = fertilization.compute_static_inputs(
+            module_params.fertilization
         )
 
         out.initialize_esom("Mass")  # creating output variables for organic matter
@@ -222,7 +225,7 @@ class Susi:
         out.initialize_strip(stp)  # outputs for soil hydrology
 
         static_inputs_peat_T = temperature.compute_static_inputs(
-            params=params.temperature,
+            params=module_params.temperature,
             T_air_mean=self.weather_forcing["T"].mean(),
         )
         state_peat_T = temperature.compute_initial_state(
@@ -413,7 +416,7 @@ class Susi:
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
                     state_peat_T = temperature.run_timestep(
-                        params=params.temperature,
+                        params=module_params.temperature,
                         static_inputs=static_inputs_peat_T,
                         dynamic_inputs=temperature.DynamicInputs(
                             T_air=ta, swe=np.mean(SWE), efloor=np.mean(efloor)
@@ -421,7 +424,7 @@ class Susi:
                         state=state_peat_T,
                     )
                     peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
-                        : params.temperature.n_layers_hydro
+                        : module_params.temperature.n_layers_hydro
                     ]
 
                     swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
@@ -536,13 +539,18 @@ class Susi:
 
                 # ---------------- Fertilization --------------------------------
 
-                fertilization_effect = ferti.compute_effect(year=calendar_year)
-                if fertilization_effect.is_active:
-                    for es in (esmass, esN, esP, esK):
-                        es.update_soil_pH(fertilization_effect.pH_increment)
+                fertilization_state = fertilization.run_timestep(
+                    params=module_params.fertilization,
+                    static_inputs=fertilization_static_inputs,
+                    dynamic_inputs=fertilization.compute_dynamic_inputs(
+                        params=module_params.fertilization, calendar_year=calendar_year
+                    ),
+                )
+                for es in (esmass, esN, esP, esK):
+                    es.update_soil_pH(fertilization_state.pH_increment)
 
                 out.write_fertilization(
-                    n_ditch_scen, simulation_year, fertilization_effect
+                    n_ditch_scen, simulation_year, fertilization_state
                 )
 
                 """
@@ -641,13 +649,13 @@ class Susi:
                     groundvegetation,
                     esN.out_root_lyr
                     + self.parameters.site_parameters.depoN
-                    + fertilization_effect.nutrient_release["N"],
+                    + fertilization_state.nutrient_release["N"],
                     esP.out_root_lyr
                     + self.parameters.site_parameters.depoP
-                    + fertilization_effect.nutrient_release["P"],
+                    + fertilization_state.nutrient_release["P"],
                     esK.out_root_lyr
                     + self.parameters.site_parameters.depoK
-                    + fertilization_effect.nutrient_release["K"],
+                    + fertilization_state.nutrient_release["K"],
                 )
 
                 # move stand.assimilate here, if first year, take foliage litter from 'table growth (interpolation functions)'
@@ -680,7 +688,7 @@ class Susi:
                     "N",
                     esN,
                     self.parameters.site_parameters.depoN,
-                    fertilization_effect.nutrient_release["N"],
+                    fertilization_state.nutrient_release["N"],
                     stand.n_demand + stand.n_leaf_demand,
                     groundvegetation.nup,
                 )
@@ -690,7 +698,7 @@ class Susi:
                     "P",
                     esP,
                     self.parameters.site_parameters.depoP,
-                    fertilization_effect.nutrient_release["P"],
+                    fertilization_state.nutrient_release["P"],
                     stand.p_demand + stand.p_leaf_demand,
                     groundvegetation.pup,
                 )
@@ -700,7 +708,7 @@ class Susi:
                     "K",
                     esK,
                     self.parameters.site_parameters.depoK,
-                    fertilization_effect.nutrient_release["K"],
+                    fertilization_state.nutrient_release["K"],
                     stand.k_demand + stand.k_leaf_demand,
                     groundvegetation.kup,
                 )
@@ -746,6 +754,24 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
     converts them into classes to pass to the modules.
     """
 
+    match susi_params.site_parameters.fertilization:
+        case AshFertilizationParameters():
+            fertilization_params = ash.Params(
+                n_cols=susi_params.site_parameters.n,
+                simulation_end_year=susi_params.simulation_config.end_date.year,
+                fpara=susi_params.site_parameters.fertilization,
+            )
+        case StandardNPKFertilizationParameters():
+            fertilization_params = npk.Params(
+                n_cols=susi_params.site_parameters.n,
+                simulation_end_year=susi_params.simulation_config.end_date.year,
+                fpara=susi_params.site_parameters.fertilization,
+            )
+        case None:
+            fertilization_params = no_fertilization.Params(
+                n_cols=susi_params.site_parameters.n
+            )
+
     return ModuleParams(
         methane=methane.Params(),
         temperature=temperature.Params(
@@ -756,4 +782,5 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
             D=susi_params.site_parameters.peat_temperature.D,
             heat_of_vaporization=susi_params.site_parameters.peat_temperature.heat_of_vaporization,
         ),
+        fertilization=fertilization_params,
     )

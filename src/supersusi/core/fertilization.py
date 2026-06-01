@@ -1,0 +1,60 @@
+from typing import assert_never
+
+from supersusi.core import fertilization_types
+from supersusi.core.fertilization_models import npk, ash, no_fertilization
+
+StaticInputs = ash.StaticInputs | None
+Params = ash.Params | npk.Params | no_fertilization.Params
+
+
+def compute_static_inputs(
+    params: Params,
+) -> StaticInputs:
+    match params:
+        case ash.Params():
+            return ash.compute_static_inputs(params)
+        case npk.Params():
+            return None
+        case no_fertilization.Params():
+            return None
+
+
+def compute_dynamic_inputs(
+    params: Params, calendar_year: int
+) -> fertilization_types.DynamicInputs:
+    match params:
+        case ash.Params() | npk.Params():
+            # Temporal reference system translation:
+            # If fertilization is started on the calendar year 2005,
+            # and current calendar year is 2006,
+            # this is the 1st year since fertilization started.
+            years_since_fertilization = calendar_year - params.fpara.application_year
+
+            return fertilization_types.DynamicInputs(
+                years_since_fertilization=years_since_fertilization,
+            )
+        case no_fertilization.Params():
+            # Any value here will have no effect, due to no_fertilization.py
+            return fertilization_types.DynamicInputs(years_since_fertilization=0)
+
+
+def run_timestep(
+    params: Params,
+    static_inputs: StaticInputs,
+    dynamic_inputs: fertilization_types.DynamicInputs,
+) -> fertilization_types.State:
+    match params:
+        case ash.Params():
+            assert static_inputs is not None
+            return ash.run_timestep(
+                params=params,
+                static_inputs=static_inputs,
+                dynamic_inputs=dynamic_inputs,
+            )
+        case npk.Params():
+            return npk.run_timestep(params=params, dynamic_inputs=dynamic_inputs)
+        case no_fertilization.Params():
+            # This returns zero fertilization effects
+            return no_fertilization.run_timestep(
+                params=params, dynamic_inputs=dynamic_inputs
+            )
