@@ -39,6 +39,7 @@ nav = [
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
     { "XML --> allometry file" = "xml_to_allometry.md" },
+    { "gvegetation.py" = "gvegetation.md" },
     { "Get started with zensical" = "zensical_index.md" },
 ]
 
