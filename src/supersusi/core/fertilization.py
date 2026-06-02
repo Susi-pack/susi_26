@@ -1,15 +1,13 @@
-from typing import assert_never
-
 from supersusi.core import fertilization_types
 from supersusi.core.fertilization_models import npk, ash, no_fertilization
 
-StaticInputs = ash.StaticInputs | None
+ComputedConstants = ash.ComputedConstants | None
 Params = ash.Params | npk.Params | no_fertilization.Params
 
 
 def compute_static_inputs(
     params: Params,
-) -> StaticInputs:
+) -> ComputedConstants:
     match params:
         case ash.Params():
             return ash.compute_static_inputs(params)
@@ -21,7 +19,7 @@ def compute_static_inputs(
 
 def compute_dynamic_inputs(
     params: Params, calendar_year: int
-) -> fertilization_types.DynamicInputs:
+) -> fertilization_types.Inputs:
     match params:
         case ash.Params() | npk.Params():
             # Temporal reference system translation:
@@ -30,31 +28,29 @@ def compute_dynamic_inputs(
             # this is the 1st year since fertilization started.
             years_since_fertilization = calendar_year - params.fpara.application_year
 
-            return fertilization_types.DynamicInputs(
+            return fertilization_types.Inputs(
                 years_since_fertilization=years_since_fertilization,
             )
         case no_fertilization.Params():
             # Any value here will have no effect, due to no_fertilization.py
-            return fertilization_types.DynamicInputs(years_since_fertilization=0)
+            return fertilization_types.Inputs(years_since_fertilization=0)
 
 
 def run_timestep(
     params: Params,
-    static_inputs: StaticInputs,
-    dynamic_inputs: fertilization_types.DynamicInputs,
+    computed_constants: ComputedConstants,
+    inputs: fertilization_types.Inputs,
 ) -> fertilization_types.State:
     match params:
         case ash.Params():
-            assert static_inputs is not None
+            assert computed_constants is not None
             return ash.run_timestep(
                 params=params,
-                static_inputs=static_inputs,
-                dynamic_inputs=dynamic_inputs,
+                computed_constants=computed_constants,
+                inputs=inputs,
             )
         case npk.Params():
-            return npk.run_timestep(params=params, dynamic_inputs=dynamic_inputs)
+            return npk.run_timestep(params=params, inputs=inputs)
         case no_fertilization.Params():
             # This returns zero fertilization effects
-            return no_fertilization.run_timestep(
-                params=params, dynamic_inputs=dynamic_inputs
-            )
+            return no_fertilization.run_timestep(params=params, inputs=inputs)

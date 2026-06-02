@@ -5,17 +5,8 @@ from jaxtyping import Array, Float
 
 
 @dataclass(frozen=True)
-class State:
-    ch4: Float[Array, " n_cols"] = field(doc="Annual node-wise kg CH4 ha-1 year-1")
-    ch4_as_co2eq: Float[Array, " n_cols"] = field(
-        doc="Annual CH4 kg  ha-1 year-1 in CO2-eq"
-    )
-
-
-@dataclass(frozen=True)
-class DynamicInputs:
-    year: int = field(doc="Simulation year")
-    dfwt: pd.DataFrame = field(doc="Daily WT dataframe")
+class Params:
+    None
 
 
 @dataclass(frozen=True)
@@ -24,21 +15,28 @@ class StaticInputs:
 
 
 @dataclass(frozen=True)
-class Params:
-    None
+class State:
+    ch4: Float[Array, " n_cols"] = field(doc="Annual node-wise kg CH4 ha-1 year-1")
+    ch4_as_co2eq: Float[Array, " n_cols"] = field(
+        doc="Annual CH4 kg  ha-1 year-1 in CO2-eq"
+    )
 
 
-def initialize(n_cols: int) -> State:
+@dataclass(frozen=True)
+class Inputs:
+    year: int = field(doc="Simulation year")
+    dfwt: pd.DataFrame = field(doc="Daily WT dataframe")
+
+
+def initial_state(n_cols: int) -> State:
     return State(ch4=jnp.zeros(shape=n_cols), ch4_as_co2eq=jnp.zeros(shape=n_cols))
 
 
-def run_timestep(dynamic_inputs: DynamicInputs) -> State:
+def run_timestep(inputs: Inputs) -> State:
 
     # convert to cm positive down
     wt = (
-        dynamic_inputs.dfwt[
-            str(dynamic_inputs.year) + "-05-01" : str(dynamic_inputs.year) + "-10-31"
-        ]
+        inputs.dfwt[str(inputs.year) + "-05-01" : str(inputs.year) + "-10-31"]
         .mean()
         .values
         * -100.0

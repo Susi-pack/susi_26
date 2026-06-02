@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import numpy as np
 
-from supersusi.core.fertilization_types import State, DynamicInputs
+from supersusi.core.fertilization_types import State, Inputs
 
 
 @dataclass(frozen=True)
@@ -18,5 +18,5 @@ def unfertilized_state(n_cols: int) -> State:
     )
 
 
-def run_timestep(params: Params, dynamic_inputs: DynamicInputs) -> State:
+def run_timestep(params: Params, inputs: Inputs) -> State:
     return unfertilized_state(params.n_cols)

@@ -12,5 +12,5 @@ class State:
 
 
 @dataclass(frozen=True)
-class DynamicInputs:
+class Inputs:
     years_since_fertilization: int

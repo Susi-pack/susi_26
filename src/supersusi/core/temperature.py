@@ -16,21 +16,7 @@ class Params:
 
 
 @dataclass(frozen=True)
-class State:
-    T_soil: np.ndarray = field(
-        doc="Peat temperature at different depths [deg C]. Dimensions: (nscenarios, ndays, nLyrs)"
-    )
-
-
-@dataclass(frozen=True)
-class DynamicInputs:
-    T_air: float = field(doc="Air temperature [deg C]")
-    swe: float = field(doc="Snow water equivalent [m]")
-    efloor: float = field(doc="Evaporation from surface layer [m]")
-
-
-@dataclass(frozen=True)
-class StaticInputs:
+class ComputedConstants:
     z: Float[np.ndarray, " n_layers"] = field(
         doc="depth of the layers' central point [m]"
     )
@@ -44,10 +30,24 @@ class StaticInputs:
     )
 
 
-def compute_static_inputs(params: Params, T_air_mean: float) -> StaticInputs:
+@dataclass(frozen=True)
+class State:
+    T_soil: np.ndarray = field(
+        doc="Peat temperature at different depths [deg C]. Dimensions: (nscenarios, ndays, nLyrs)"
+    )
+
+
+@dataclass(frozen=True)
+class Inputs:
+    T_air: float = field(doc="Air temperature [deg C]")
+    swe: float = field(doc="Snow water equivalent [m]")
+    efloor: float = field(doc="Evaporation from surface layer [m]")
+
+
+def compute_static_inputs(params: Params, T_air_mean: float) -> ComputedConstants:
     n_layers = params.n_layers_hydro + 30
 
-    return StaticInputs(
+    return ComputedConstants(
         z=np.cumsum(np.ones(n_layers) * params.dz) - params.dz / 2.0,
         heat_capacity=3860000.0 * params.dz,
         n_layers=n_layers,
@@ -62,37 +62,36 @@ def compute_static_inputs(params: Params, T_air_mean: float) -> StaticInputs:
     )
 
 
-def compute_initial_state(static_inputs: StaticInputs) -> State:
-    return State(T_soil=np.ones(static_inputs.n_layers + 1) * static_inputs.T_air_mean)
+def compute_initial_state(computed_constants: ComputedConstants) -> State:
+    return State(
+        T_soil=np.ones(computed_constants.n_layers + 1) * computed_constants.T_air_mean
+    )
 
 
 def run_timestep(
     params: Params,
-    static_inputs: StaticInputs,
-    dynamic_inputs=DynamicInputs,
+    computed_constants: ComputedConstants,
+    inputs=Inputs,
     state=State,
 ) -> State:
 
     # Cooling by evaporation
     e_consumed = (
-        dynamic_inputs.efloor
-        * 1000
-        * params.heat_of_vaporization
-        / params.n_subtimesteps
+        inputs.efloor * 1000 * params.heat_of_vaporization / params.n_subtimesteps
     )
-    T_cool = -e_consumed / static_inputs.heat_capacity
-    if dynamic_inputs.swe > 0.01:
-        T_air = max(-5.0, dynamic_inputs.T_air)
+    T_cool = -e_consumed / computed_constants.heat_capacity
+    if inputs.swe > 0.01:
+        T_air = max(-5.0, inputs.T_air)
     else:
-        T_air = dynamic_inputs.T_air + T_cool
+        T_air = inputs.T_air + T_cool
 
-    u = np.zeros(static_inputs.n_layers + 1)
+    u = np.zeros(computed_constants.n_layers + 1)
     T_soil = state.T_soil.copy()
     for _ in range(0, params.n_subtimesteps):
         b = T_soil.copy()
         b[0] = T_air  # top boundary condition
-        b[-1] = static_inputs.T_air_mean  # bottom boundary condition
-        u[:] = linalg.solve(static_inputs.A, b, assume_a="tridiagonal")
+        b[-1] = computed_constants.T_air_mean  # bottom boundary condition
+        u[:] = linalg.solve(computed_constants.A, b, assume_a="tridiagonal")
         T_soil = u
     return State(T_soil=u)
 

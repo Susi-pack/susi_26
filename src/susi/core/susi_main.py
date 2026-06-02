@@ -229,11 +229,11 @@ class Susi:
             T_air_mean=self.weather_forcing["T"].mean(),
         )
         state_peat_T = temperature.compute_initial_state(
-            static_inputs=static_inputs_peat_T
+            computed_constants=static_inputs_peat_T
         )
         out.initialize_temperature()
 
-        _ = methane.initialize(n_cols=self.parameters.site_parameters.n)
+        _ = methane.initial_state(n_cols=self.parameters.site_parameters.n)
         out.initialize_methane()
 
         out.initialize_export()  # create output variables for DOC components, east and west ditch
@@ -417,8 +417,8 @@ class Susi:
 
                     state_peat_T = temperature.run_timestep(
                         params=module_params.temperature,
-                        static_inputs=static_inputs_peat_T,
-                        dynamic_inputs=temperature.DynamicInputs(
+                        computed_constants=static_inputs_peat_T,
+                        inputs=temperature.Inputs(
                             T_air=ta, swe=np.mean(SWE), efloor=np.mean(efloor)
                         ),
                         state=state_peat_T,
@@ -541,8 +541,8 @@ class Susi:
 
                 fertilization_state = fertilization.run_timestep(
                     params=module_params.fertilization,
-                    static_inputs=fertilization_static_inputs,
-                    dynamic_inputs=fertilization.compute_dynamic_inputs(
+                    computed_constants=fertilization_static_inputs,
+                    inputs=fertilization.compute_dynamic_inputs(
                         params=module_params.fertilization, calendar_year=calendar_year
                     ),
                 )
@@ -663,7 +663,7 @@ class Susi:
                 # stand.update()
 
                 ch4_state = methane.run_timestep(
-                    dynamic_inputs=methane.DynamicInputs(year=calendar_year, dfwt=dfwt)
+                    inputs=methane.Inputs(year=calendar_year, dfwt=dfwt)
                 )
                 out.write_methane(n_ditch_scen, simulation_year, ch4_state)
 

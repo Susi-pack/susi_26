@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import numpy as np
 
-from supersusi.core.fertilization_types import State, DynamicInputs
+from supersusi.core.fertilization_types import State, Inputs
 from supersusi.core.fertilization_models.no_fertilization import unfertilized_state
 from susi.io.susi_parameter_model import AshFertilizationParameters
 
@@ -14,13 +14,13 @@ class Params:
 
 
 @dataclass(frozen=True)
-class StaticInputs:
+class ComputedConstants:
     pH_history: np.ndarray
     K_release_history: np.ndarray
     P_release_history: np.ndarray
 
 
-def compute_static_inputs(params: Params) -> StaticInputs:
+def compute_static_inputs(params: Params) -> ComputedConstants:
     """
     Calculates the disintegration of ash grains and the release of P and K from ash and the ewffect on soil pH
     """
@@ -93,7 +93,7 @@ def compute_static_inputs(params: Params) -> StaticInputs:
         # Päivitys seuraavalle kierrokselle
         current_fertilizer_mass -= dm
 
-    return StaticInputs(
+    return ComputedConstants(
         pH_history=pH_history,
         K_release_history=K_release_history,
         P_release_history=P_release_history,
@@ -101,21 +101,17 @@ def compute_static_inputs(params: Params) -> StaticInputs:
 
 
 def run_timestep(
-    params: Params, static_inputs: StaticInputs, dynamic_inputs: DynamicInputs
+    params: Params, computed_constants: ComputedConstants, inputs: Inputs
 ) -> State:
-    if dynamic_inputs.years_since_fertilization < 0:
+    if inputs.years_since_fertilization < 0:
         return unfertilized_state(n_cols=params.n_cols)
     return State(
-        pH_increment=static_inputs.pH_history[dynamic_inputs.years_since_fertilization],
+        pH_increment=computed_constants.pH_history[inputs.years_since_fertilization],
         nutrient_release={
             "N": np.zeros(params.n_cols),
-            "P": static_inputs.P_release_history[
-                dynamic_inputs.years_since_fertilization
-            ]
+            "P": computed_constants.P_release_history[inputs.years_since_fertilization]
             * np.ones(params.n_cols),
-            "K": static_inputs.K_release_history[
-                dynamic_inputs.years_since_fertilization
-            ]
+            "K": computed_constants.K_release_history[inputs.years_since_fertilization]
             * np.ones(params.n_cols),
         },
     )
