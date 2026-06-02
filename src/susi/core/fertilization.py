@@ -160,9 +160,9 @@ class AshFertilization(AbstractFertilization):
         t = np.arange(0, n_years_to_simulate_since_fertilization, dt)
 
         # Result table initialization
-        K_release = np.zeros_like(t)
-        P_release = np.zeros_like(t)
-        pH_history = np.zeros_like(t)
+        K_release = np.zeros(len(t))
+        P_release = np.zeros(len(t))
+        pH_history = np.zeros(len(t))
 
         # initial storages in ash (kg)
         K_storage = fpara.K_in_ash
