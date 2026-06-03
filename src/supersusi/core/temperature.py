@@ -38,13 +38,23 @@ class State:
 
 
 @dataclass(frozen=True)
+class Outputs:
+    pass
+
+
+@dataclass(frozen=True)
 class Inputs:
     T_air: float = field(doc="Air temperature [deg C]")
     swe: float = field(doc="Snow water equivalent [m]")
     efloor: float = field(doc="Evaporation from surface layer [m]")
 
 
-def compute_static_inputs(params: Params, T_air_mean: float) -> ComputedConstants:
+def assemble_inputs(T_air: float, swe: np.ndarray, efloor: np.ndarray) -> Inputs:
+
+    return Inputs(T_air=T_air, swe=np.mean(swe), efloor=np.mean(efloor))
+
+
+def compute_constants(params: Params, T_air_mean: float) -> ComputedConstants:
     n_layers = params.n_layers_hydro + 30
 
     return ComputedConstants(
@@ -71,9 +81,9 @@ def compute_initial_state(computed_constants: ComputedConstants) -> State:
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
-    inputs=Inputs,
-    state=State,
-) -> State:
+    inputs: Inputs,
+    state: State,
+) -> tuple[State, Outputs]:
 
     # Cooling by evaporation
     e_consumed = (
@@ -93,7 +103,7 @@ def run_timestep(
         b[-1] = computed_constants.T_air_mean  # bottom boundary condition
         u[:] = linalg.solve(computed_constants.A, b, assume_a="tridiagonal")
         T_soil = u
-    return State(T_soil=u)
+    return State(T_soil=u), Outputs()
 
 
 def _create_linear_system_matrix(

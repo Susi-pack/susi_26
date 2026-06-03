@@ -225,7 +225,7 @@ class Susi:
         )  # initialize soil hydrology model
         out.initialize_strip(stp)  # outputs for soil hydrology
 
-        static_inputs_peat_T = temperature.compute_static_inputs(
+        static_inputs_peat_T = temperature.compute_constants(
             params=module_params.temperature,
             T_air_mean=self.weather_forcing["T"].mean(),
         )
@@ -416,11 +416,11 @@ class Susi:
                     )  # strip/peat hydrology
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
-                    state_peat_T = temperature.run_timestep(
+                    state_peat_T, _ = temperature.run_timestep(
                         params=module_params.temperature,
                         computed_constants=static_inputs_peat_T,
-                        inputs=temperature.Inputs(
-                            T_air=ta, swe=np.mean(SWE), efloor=np.mean(efloor)
+                        inputs=temperature.assemble_inputs(
+                            T_air=ta, swe=SWE, efloor=efloor
                         ),
                         state=state_peat_T,
                     )

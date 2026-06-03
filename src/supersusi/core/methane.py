@@ -8,17 +8,17 @@ from jaxtyping import Array, Float
 
 @dataclass(frozen=True)
 class Params:
-    None
+    pass
 
 
 @dataclass(frozen=True)
 class ComputedConstants:
-    None
+    pass
 
 
 @dataclass(frozen=True)
 class State:
-    None
+    pass
 
 
 @dataclass(frozen=True)
