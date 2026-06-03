@@ -76,12 +76,12 @@ class TestFertilizationDispatcher:
     def test_compute_static_inputs_npk_returns_none(self) -> None:
         """NPK has no static inputs."""
         params = npk_module.Params(n_cols=2, fpara=_make_npk_params())
-        assert fertilization_dispatcher.compute_static_inputs(params) is None
+        assert fertilization_dispatcher.compute_constants(params) is None
 
     def test_compute_static_inputs_no_fertilization_returns_none(self) -> None:
         """No-fertilization has no static inputs."""
         params = no_fertilization.Params(n_cols=2)
-        assert fertilization_dispatcher.compute_static_inputs(params) is None
+        assert fertilization_dispatcher.compute_constants(params) is None
 
     def test_compute_static_inputs_ash_returns_static_inputs(self) -> None:
         """Ash precomputes a `StaticInputs` instance of the right shape."""
@@ -90,7 +90,7 @@ class TestFertilizationDispatcher:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = fertilization_dispatcher.compute_static_inputs(params)
+        static = fertilization_dispatcher.compute_constants(params)
         assert static is not None
         assert isinstance(static, ash_module.ComputedConstants)
         assert static.pH_history.shape == (5,)
@@ -115,7 +115,7 @@ class TestFertilizationDispatcher:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        dynamic = fertilization_dispatcher.compute_dynamic_inputs(
+        dynamic = fertilization_dispatcher.assemble_inputs(
             params, calendar_year=calendar_year
         )
         assert dynamic.years_since_fertilization == expected
@@ -133,7 +133,7 @@ class TestFertilizationDispatcher:
     ) -> None:
         """For NPK, `years_since_fertilization = calendar_year - application_year`."""
         params = npk_module.Params(n_cols=2, fpara=_make_npk_params())
-        dynamic = fertilization_dispatcher.compute_dynamic_inputs(
+        dynamic = fertilization_dispatcher.assemble_inputs(
             params, calendar_year=calendar_year
         )
         assert dynamic.years_since_fertilization == expected
@@ -141,9 +141,7 @@ class TestFertilizationDispatcher:
     def test_compute_dynamic_inputs_no_fertilization_returns_zero(self) -> None:
         """For no-fertilization, the offset is irrelevant; we just need a value."""
         params = no_fertilization.Params(n_cols=2)
-        dynamic = fertilization_dispatcher.compute_dynamic_inputs(
-            params, calendar_year=2020
-        )
+        dynamic = fertilization_dispatcher.assemble_inputs(params, calendar_year=2020)
         assert dynamic.years_since_fertilization == 0
 
     def test_run_timestep_dispatches_to_npk(self) -> None:

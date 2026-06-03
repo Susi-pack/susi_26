@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 
-from supersusi.core.fertilization_types import State, Inputs
-from supersusi.core.fertilization_models.no_fertilization import unfertilized_state
+from supersusi.core.fertilization_types import State, Inputs, Outputs
+from supersusi.core.fertilization_models.no_fertilization import unfertilized_output
 from susi.io.susi_parameter_model import AshFertilizationParameters
 
 
@@ -102,10 +102,10 @@ def compute_constants(params: Params) -> ComputedConstants:
 
 def run_timestep(
     params: Params, computed_constants: ComputedConstants, inputs: Inputs
-) -> State:
+) -> tuple[State, Outputs]:
     if inputs.years_since_fertilization < 0:
-        return unfertilized_state(n_cols=params.n_cols)
-    return State(
+        return State(), unfertilized_output(n_cols=params.n_cols)
+    return State(), Outputs(
         pH_increment=computed_constants.pH_history[inputs.years_since_fertilization],
         nutrient_release={
             "N": np.zeros(params.n_cols),

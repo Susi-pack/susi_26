@@ -182,7 +182,7 @@ class Susi:
             substance="K",
         )  # initializing organic matter decomposition instace for K
 
-        fertilization_static_inputs = fertilization.compute_static_inputs(
+        fertilization_static_inputs = fertilization.compute_constants(
             module_params.fertilization
         )
 
@@ -542,18 +542,18 @@ class Susi:
 
                 # ---------------- Fertilization --------------------------------
 
-                fertilization_state = fertilization.run_timestep(
+                _, fertilization_outputs = fertilization.run_timestep(
                     params=module_params.fertilization,
                     computed_constants=fertilization_static_inputs,
-                    inputs=fertilization.compute_dynamic_inputs(
+                    inputs=fertilization.assemble_inputs(
                         params=module_params.fertilization, calendar_year=calendar_year
                     ),
                 )
                 for es in (esmass, esN, esP, esK):
-                    es.update_soil_pH(fertilization_state.pH_increment)
+                    es.update_soil_pH(fertilization_outputs.pH_increment)
 
                 out.write_fertilization(
-                    n_ditch_scen, simulation_year, fertilization_state
+                    n_ditch_scen, simulation_year, fertilization_outputs
                 )
 
                 """
@@ -652,13 +652,13 @@ class Susi:
                     gv_state,
                     esN.out_root_lyr
                     + self.parameters.site_parameters.depoN
-                    + fertilization_state.nutrient_release["N"],
+                    + fertilization_outputs.nutrient_release["N"],
                     esP.out_root_lyr
                     + self.parameters.site_parameters.depoP
-                    + fertilization_state.nutrient_release["P"],
+                    + fertilization_outputs.nutrient_release["P"],
                     esK.out_root_lyr
                     + self.parameters.site_parameters.depoK
-                    + fertilization_state.nutrient_release["K"],
+                    + fertilization_outputs.nutrient_release["K"],
                 )
 
                 # move stand.assimilate here, if first year, take foliage litter from 'table growth (interpolation functions)'
@@ -689,7 +689,7 @@ class Susi:
                     "N",
                     esN,
                     self.parameters.site_parameters.depoN,
-                    fertilization_state.nutrient_release["N"],
+                    fertilization_outputs.nutrient_release["N"],
                     stand.n_demand + stand.n_leaf_demand,
                     gv_state.nup,
                 )
@@ -699,7 +699,7 @@ class Susi:
                     "P",
                     esP,
                     self.parameters.site_parameters.depoP,
-                    fertilization_state.nutrient_release["P"],
+                    fertilization_outputs.nutrient_release["P"],
                     stand.p_demand + stand.p_leaf_demand,
                     gv_state.pup,
                 )
@@ -709,7 +709,7 @@ class Susi:
                     "K",
                     esK,
                     self.parameters.site_parameters.depoK,
-                    fertilization_state.nutrient_release["K"],
+                    fertilization_outputs.nutrient_release["K"],
                     stand.k_demand + stand.k_leaf_demand,
                     gv_state.kup,
                 )

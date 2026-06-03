@@ -1,6 +1,6 @@
 ---
 date created: Wednesday, January 10th 2024, 1:09:48 pm
-date modified: Wednesday, June 3rd 2026, 8:45:25 am
+date modified: Wednesday, June 3rd 2026, 9:50:40 am
 ---
 See also: [[SuperSUSI rewrite working notes]]
 # Overview
@@ -149,6 +149,7 @@ Non-persistent evolving variables owned by the module. Properties:
 - They may be used by other modules downstream in the same timestep. For that reason, they might appear in the `Inputs` API (see below).
 
 
+
 ## Additional non-data category: Inputs.
 `Inputs` are not a data category, but rather a bundle of other categories, which is convenient to describe the input API for each module. Note that the input API can have values from 
 ```python
@@ -156,13 +157,17 @@ def run_hydrology(params:Params, computed_constants:ComputedConstants, input: hy
 ```
 In order to be explicit about what each module's inputs are and to be able to draw a relationship graph, it's best for each module to have a `assemble_inputs()` function as follows:
 ```python
-def assemble_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
+def assemble_inputs(previous_state: AllState, hydro_state: hydrology.State, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
     return Inputs(
-        sst=all_state.ocean.sst,
+        sst=previous_state.ocean.sst,
         flux=a_outputs.flux,
         precip=forcings.precip,
+		...
     )
 ```
+Note: we distinguish between the state from the previous timestep and the updated state from the current one in the function signature.
+
+Idea:
 The only requirement for this to enable the Susi coupling graph is that there can be no conditional logic built inside `make_inputs()`.
 This could be enforced by `ast` during CI.
 
@@ -211,7 +216,7 @@ def compute_initial_state(params: Params, constants: ComputedConstants, forcings
     ...
 
 
-def make_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
+def assemble_inputs(all_state: AllState, hydro_state:hydrology.State, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
     return Inputs(
 	...
     )
@@ -240,8 +245,14 @@ hydro_state = hydro.compute_initial_state()
 
 state = AllStates(hydro_state, etc.)
 
-for year in years:
+for year in years: # or the equivalent jax.lax.scan call.
+	state, output = do_tiemestep(previous_state=state, xs=(constants, forcings))
+	# write_output
+
+def do_timestep(previous_state:AllState, xs):
 	# Inside time loop
+	xs = constants, forcings
+	
 	hydro_inputs = hydro.make_inputs(wtd=state.hydro.wtd, rainfall=forcing.rainfall, transpiration=state.vegetation.trans)
 	hydro_state = hydro.run_timestep(
 	    params=params.hydro,

@@ -2,8 +2,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from susi.io.susi_parameter_model import StandardNPKFertilizationParameters
-from supersusi.core.fertilization_types import State, Inputs, Nutrient
-from supersusi.core.fertilization_models.no_fertilization import unfertilized_state
+from supersusi.core.fertilization_types import State, Inputs, Nutrient, Outputs
+from supersusi.core.fertilization_models.no_fertilization import unfertilized_output
 
 
 @dataclass(frozen=True)
@@ -12,10 +12,10 @@ class Params:
     fpara: StandardNPKFertilizationParameters
 
 
-def run_timestep(params: Params, inputs: Inputs) -> State:
+def run_timestep(params: Params, inputs: Inputs) -> tuple[State, Outputs]:
     if inputs.years_since_fertilization < 0:
-        return unfertilized_state(n_cols=params.n_cols)
-    return State(
+        return State(), unfertilized_output(n_cols=params.n_cols)
+    return State(), Outputs(
         pH_increment=_compute_ph_effect(
             pH_increment_param=params.fpara.pH_increment,
             years_since_fertilization=inputs.years_since_fertilization,

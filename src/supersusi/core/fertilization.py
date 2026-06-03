@@ -5,7 +5,7 @@ ComputedConstants = ash.ComputedConstants | None
 Params = ash.Params | npk.Params | no_fertilization.Params
 
 
-def compute_static_inputs(
+def compute_constants(
     params: Params,
 ) -> ComputedConstants:
     match params:
@@ -17,9 +17,7 @@ def compute_static_inputs(
             return None
 
 
-def compute_dynamic_inputs(
-    params: Params, calendar_year: int
-) -> fertilization_types.Inputs:
+def assemble_inputs(params: Params, calendar_year: int) -> fertilization_types.Inputs:
     match params:
         case ash.Params() | npk.Params():
             # Temporal reference system translation:
@@ -32,7 +30,7 @@ def compute_dynamic_inputs(
                 years_since_fertilization=years_since_fertilization,
             )
         case no_fertilization.Params():
-            # Any value here will have no effect, due to no_fertilization.py
+            # Any value for years_since_fertilization will have no effect, due to no_fertilization.py
             return fertilization_types.Inputs(years_since_fertilization=0)
 
 
@@ -40,7 +38,7 @@ def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
     inputs: fertilization_types.Inputs,
-) -> fertilization_types.State:
+) -> tuple[fertilization_types.State, fertilization_types.Outputs]:
     match params:
         case ash.Params():
             assert computed_constants is not None
