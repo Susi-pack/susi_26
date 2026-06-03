@@ -7,7 +7,10 @@ Created on Sat Apr  2 17:37:43 2022
 
 import numpy as np
 from scipy.interpolate import interp1d
-from susi.core.allometry import Allometry
+from supersusi.core.allometry import (
+    Params as AllometryParams,
+    build_allometry_interpolation_functions,
+)
 from susi.core.susi_utils import assimilation_yr
 
 
@@ -59,18 +62,17 @@ class Canopylayer:
             nlyrs
         ):  # numner of different allometric files along the strip in this canopy layer
             if ncanopy > 0:  # zero indicates no tree in the layer
-                self.sfc = int(
+                per_layer_sfc = int(
                     np.median(self.sfc[self.ixs[ncanopy]])
                 )  # site fertility class
-                # allometry instance to the dictionary
-                self.allodic[ncanopy] = Allometry()
-                # run the allometry; interpolation functions in the instance
-                self.allodic[ncanopy].allometry_development(
-                    df=allometry_df_dict[ncanopy],
-                    sp=species_id_dict[ncanopy],
-                    sfc=self.sfc,
+                self.allodic[ncanopy] = build_allometry_interpolation_functions(
+                    AllometryParams(
+                        species=species_id_dict[ncanopy],
+                        site_fertility_class=per_layer_sfc,
+                    ),
+                    allometry_df_dict[ncanopy],
                 )
-                self.tree_species[self.ixs[ncanopy]] = int(self.allodic[ncanopy].sp)
+                self.tree_species[self.ixs[ncanopy]] = species_id_dict[ncanopy]
         self.initialize_domain(
             agearr, nut_stat
         )  # create variables and set initial values
@@ -271,47 +273,47 @@ class Canopylayer:
         # ---------- Initial values from age -------------------------------------------------------
         for m in nlyrs:
             if m > 0:
-                self.biomass[ixs[m]] = self.allodic[m].allometry_f["ageToBm"](
+                self.biomass[ixs[m]] = self.allodic[m].age_based.bm(
                     self.agearr[ixs[m]]
                 )  # stem biomass from age kg/tree
                 self.stems[ixs[m]] = (
-                    self.allodic[m].allometry_f["bmToStems"](self.biomass[ixs[m]])
+                    self.allodic[m].biomass_to_stand.stems(self.biomass[ixs[m]])
                     * self.remaining_share[ixs[m]]
                 )  # number of stems /ha from the biomass of tree
 
-                self.basalarea[ixs[m]] = self.allodic[m].allometry_f["ageToBa"](
+                self.basalarea[ixs[m]] = self.allodic[m].age_based.ba(
                     self.agearr[ixs[m]]
                 )  # stem basal area from age m2/tree
-                self.hdom[ixs[m]] = self.allodic[m].allometry_f["ageToHdom"](
+                self.hdom[ixs[m]] = self.allodic[m].age_based.hdom(
                     self.agearr[ixs[m]]
                 )  # dominant height m
-                self.Dg[ixs[m]] = self.allodic[m].allometry_f["bmToDg"](
+                self.Dg[ixs[m]] = self.allodic[m].biomass_to_stand.dg(
                     self.biomass[ixs[m]]
                 )  # mean diameter height m
 
                 self.leafarea[ixs[m]] = (
-                    self.allodic[m].allometry_f["bmToLAI"](self.biomass[ixs[m]])
+                    self.allodic[m].biomass_to_stand.lai(self.biomass[ixs[m]])
                     * nut_stat[ixs[m]]
                 )  # one sided LAI from the stem biomass M2/m2/tree
                 self.leafmass[ixs[m]] = (
-                    self.allodic[m].allometry_f["ageToLeaves"](self.agearr[ixs[m]])
+                    self.allodic[m].age_based.leaves(self.agearr[ixs[m]])
                     * nut_stat[ixs[m]]
                 )
-                self.species[ixs[m]] = self.allodic[m].sp
-                # self.volume[ixs[m]] = self.allodic[m].allometry_f['ageToVol'](self.agearr[ixs[m]])         # stem volume m3/tree
-                self.volume[ixs[m]] = self.allodic[m].allometry_f["bmToVol"](
+                self.species[ixs[m]] = self.tree_species[ixs[m]]
+                # self.volume[ixs[m]] = self.allodic[m].age_based.vol(self.agearr[ixs[m]])         # stem volume m3/tree
+                self.volume[ixs[m]] = self.allodic[m].biomass_to_stand.vol(
                     self.biomass[ixs[m]]
                 )  # stem volume m3/tree
 
-                self.basNdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNLeafDemand"
-                ](self.biomass[ixs[m]])
-                self.basPdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPLeafDemand"
-                ](self.biomass[ixs[m]])
-                self.basKdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKLeafDemand"
-                ](self.biomass[ixs[m]])
+                self.basNdemand[ixs[m]] = self.allodic[m].nutrient_demand.n_leaf_demand(
+                    self.biomass[ixs[m]]
+                )
+                self.basPdemand[ixs[m]] = self.allodic[m].nutrient_demand.p_leaf_demand(
+                    self.biomass[ixs[m]]
+                )
+                self.basKdemand[ixs[m]] = self.allodic[m].nutrient_demand.k_leaf_demand(
+                    self.biomass[ixs[m]]
+                )
 
     def update(self, bm):
         # bm in kg in a mean stem
@@ -330,49 +332,45 @@ class Canopylayer:
                 # print ('**********************')
 
                 self.stems[ixs[m]] = (
-                    self.allodic[m].allometry_f["bmToStems"](bm[ixs[m]])
+                    self.allodic[m].biomass_to_stand.stems(bm[ixs[m]])
                     * self.remaining_share[ixs[m]]
                 )
 
-                self.basalarea[ixs[m]] = self.allodic[m].allometry_f["bmToBa"](
-                    bm[ixs[m]]
-                )
+                self.basalarea[ixs[m]] = self.allodic[m].biomass_to_stand.ba(bm[ixs[m]])
                 self.biomass[ixs[m]] = bm[ixs[m]]
-                self.hdom[ixs[m]] = self.allodic[m].allometry_f["bmToHdom"](bm[ixs[m]])
-                self.Dg[ixs[m]] = self.allodic[m].allometry_f["bmToDg"](bm[ixs[m]])
+                self.hdom[ixs[m]] = self.allodic[m].biomass_to_stand.hdom(bm[ixs[m]])
+                self.Dg[ixs[m]] = self.allodic[m].biomass_to_stand.dg(bm[ixs[m]])
 
-                self.leafarea[ixs[m]] = self.allodic[m].allometry_f["bmToLAI"](
+                self.leafarea[ixs[m]] = self.allodic[m].biomass_to_stand.lai(bm[ixs[m]])
+                self.leafmass[ixs[m]] = self.allodic[m].biomass_to_stand.leaf_mass(
                     bm[ixs[m]]
                 )
-                self.leafmass[ixs[m]] = self.allodic[m].allometry_f["bmToLeafMass"](
+                # self.volume[ixs[m]] = self.allodic[m].biomass_to_stand.yi(bm[ixs[m]])
+                self.volume[ixs[m]] = self.allodic[m].biomass_to_stand.vol(bm[ixs[m]])
+                self.n_demand[ixs[m]] = self.allodic[m].nutrient_demand.n_demand(
                     bm[ixs[m]]
                 )
-                # self.volume[ixs[m]] = self.allodic[m].allometry_f['bmToYi'](bm[ixs[m]])
-                self.volume[ixs[m]] = self.allodic[m].allometry_f["bmToVol"](bm[ixs[m]])
-                self.n_demand[ixs[m]] = self.allodic[m].allometry_f["bmToNdemand"](
+                self.p_demand[ixs[m]] = self.allodic[m].nutrient_demand.p_demand(
                     bm[ixs[m]]
                 )
-                self.p_demand[ixs[m]] = self.allodic[m].allometry_f["bmToPdemand"](
+                self.k_demand[ixs[m]] = self.allodic[m].nutrient_demand.k_demand(
                     bm[ixs[m]]
                 )
-                self.k_demand[ixs[m]] = self.allodic[m].allometry_f["bmToKdemand"](
-                    bm[ixs[m]]
-                )
-                self.logvolume[ixs[m]] = self.allodic[m].allometry_f["volToLogs"](
+                self.logvolume[ixs[m]] = self.allodic[m].yield_volume.vol_to_logs(
                     self.volume[ixs[m]]
                 )
-                self.finerootlitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToFinerootLitter"
-                ](bm[ixs[m]])
-                self.n_finerootlitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNFineRootLitter"
-                ](bm[ixs[m]])
-                self.p_finerootlitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPFineRootLitter"
-                ](bm[ixs[m]])
-                self.k_finerootlitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKFineRootLitter"
-                ](bm[ixs[m]])
+                self.finerootlitter[ixs[m]] = self.allodic[
+                    m
+                ].litter_mass.fine_root_litter(bm[ixs[m]])
+                self.n_finerootlitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.n_fine_root_litter(bm[ixs[m]])
+                self.p_finerootlitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.p_fine_root_litter(bm[ixs[m]])
+                self.k_finerootlitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.k_fine_root_litter(bm[ixs[m]])
 
                 self.nonwoodylitter[ixs[m]] = (
                     self.finerootlitter[ixs[m]] + self.leaf_litter[ixs[m]]
@@ -387,63 +385,63 @@ class Canopylayer:
                     self.k_finerootlitter[ixs[m]] + self.Kleaf_litter[ixs[m]]
                 )  # K in nonwoody litter kg/tree/yr
 
-                self.pulpvolume[ixs[m]] = self.allodic[m].allometry_f["volToPulp"](
+                self.pulpvolume[ixs[m]] = self.allodic[m].yield_volume.vol_to_pulp(
                     self.volume[ixs[m]]
                 )
-                self.woodylitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToWoodyLitter"
-                ](bm[ixs[m]])
-                self.n_woodylitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNWoodyLitter"
-                ](bm[ixs[m]])
-                self.p_woodylitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPWoodyLitter"
-                ](bm[ixs[m]])
-                self.k_woodylitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKWoodyLitter"
-                ](bm[ixs[m]])
+                self.woodylitter[ixs[m]] = self.allodic[m].litter_mass.woody_litter(
+                    bm[ixs[m]]
+                )
+                self.n_woodylitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.n_woody_litter(bm[ixs[m]])
+                self.p_woodylitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.p_woody_litter(bm[ixs[m]])
+                self.k_woodylitter[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_litter.k_woody_litter(bm[ixs[m]])
 
-                self.woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToMortalityWoody"
-                ](bm[ixs[m]])
-                self.n_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNMortalityWoody"
-                ](bm[ixs[m]])
-                self.p_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPMortalityWoody"
-                ](bm[ixs[m]])
-                self.k_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKMortalityWoody"
-                ](bm[ixs[m]])
+                self.woody_litter_mort[ixs[m]] = self.allodic[m].mortality_mass.woody(
+                    bm[ixs[m]]
+                )
+                self.n_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.n_mortality_woody(bm[ixs[m]])
+                self.p_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.p_mortality_woody(bm[ixs[m]])
+                self.k_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.k_mortality_woody(bm[ixs[m]])
 
-                self.non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToMortalityFineRoot"
-                ](bm[ixs[m]])
-                +self.allodic[m].allometry_f["bmToMortalityLeaves"](bm[ixs[m]])
-                self.n_non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNMortalityFineRoot"
-                ](bm[ixs[m]])
-                +self.allodic[m].allometry_f["bmToNMortalityLeaves"](bm[ixs[m]])
-                self.p_non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPMortalityFineRoot"
-                ](bm[ixs[m]])
-                +self.allodic[m].allometry_f["bmToPMortalityLeaves"](bm[ixs[m]])
-                self.k_non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKMortalityFineRoot"
-                ](bm[ixs[m]])
-                +self.allodic[m].allometry_f["bmToKMortalityLeaves"](bm[ixs[m]])
+                self.non_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].mortality_mass.fine_root(bm[ixs[m]])
+                +self.allodic[m].mortality_mass.leaves(bm[ixs[m]])
+                self.n_non_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.n_mortality_fine_root(bm[ixs[m]])
+                +self.allodic[m].nutrient_mortality.n_mortality_leaves(bm[ixs[m]])
+                self.p_non_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.p_mortality_fine_root(bm[ixs[m]])
+                +self.allodic[m].nutrient_mortality.p_mortality_leaves(bm[ixs[m]])
+                self.k_non_woody_litter_mort[ixs[m]] = self.allodic[
+                    m
+                ].nutrient_mortality.k_mortality_fine_root(bm[ixs[m]])
+                +self.allodic[m].nutrient_mortality.k_mortality_leaves(bm[ixs[m]])
 
-                self.yi[ixs[m]] = self.allodic[m].allometry_f["bmToYi"](bm[ixs[m]])
+                self.yi[ixs[m]] = self.allodic[m].biomass_to_stand.yi(bm[ixs[m]])
 
-                self.basNdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNLeafDemand"
-                ](bm[ixs[m]])
-                self.basPdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPLeafDemand"
-                ](bm[ixs[m]])
-                self.basKdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKLeafDemand"
-                ](bm[ixs[m]])
+                self.basNdemand[ixs[m]] = self.allodic[m].nutrient_demand.n_leaf_demand(
+                    bm[ixs[m]]
+                )
+                self.basPdemand[ixs[m]] = self.allodic[m].nutrient_demand.p_leaf_demand(
+                    bm[ixs[m]]
+                )
+                self.basKdemand[ixs[m]] = self.allodic[m].nutrient_demand.k_leaf_demand(
+                    bm[ixs[m]]
+                )
                 self.agearr[ixs[m]] = self.agearr[ixs[m]] + 1
                 # print ('vol')
                 # print (self.volume)
@@ -548,17 +546,17 @@ class Canopylayer:
                     previous_nut_stat[ixs[m]],
                     nut_stat[ixs[m]],
                     self.agearr[ixs[m]],
-                    self.allodic[m].allometry_f,
+                    self.allodic[m],
                     self.species[ixs[m]],
                     printOpt=False,
                 )
 
-                self.finerootlitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToFinerootLitter"
-                ](bm[ixs[m]])
-                self.woodylitter[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToWoodyLitter"
-                ](bm[ixs[m]])
+                self.finerootlitter[ixs[m]] = self.allodic[
+                    m
+                ].litter_mass.fine_root_litter(bm[ixs[m]])
+                self.woodylitter[ixs[m]] = self.allodic[m].litter_mass.woody_litter(
+                    bm[ixs[m]]
+                )
         """
         if self.name=='dominant':
             print ('ooooooooooooooooooooooooo')
@@ -603,7 +601,7 @@ class Canopylayer:
         previous_nut_stat,
         nut_stat,
         agenow,
-        allometry_f,
+        allometry_funcs,
         species,
         printOpt=False,
     ):
@@ -666,10 +664,10 @@ class Canopylayer:
         n = len(nut_stat)
         # ************ Biomass and litter**************
         """ Change units to /tree here"""
-        leafbase0 = allometry_f["bmToLeafMass"](
+        leafbase0 = allometry_funcs.biomass_to_stand.leaf_mass(
             bm
         )  # table growth leaf mass in the beginning of timestep
-        leafbase1 = allometry_f["bmToLeafMass"](
+        leafbase1 = allometry_funcs.biomass_to_stand.leaf_mass(
             bm + bm_increment
         )  # table growth leaf mass in the end of timestep
         leafmass = leafbase1 * nut_stat  # actual leaf mass
@@ -799,43 +797,35 @@ class Canopylayer:
                 if m > 0:
                     self.nonwoody_lresid[ixs[m]] = (
                         self.new_lmass[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToFineRoots"](self.biomass)
+                        + self.allodic[m].fine_roots.fine_roots(self.biomass)
                     ) * self.stems
                     self.n_nonwoody_lresid[ixs[m]] = (
                         self.N_leaf
-                        + self.allodic[m].allometry_f["bmToNFineRoots"](self.biomass)
+                        + self.allodic[m].fine_roots.n_fine_roots(self.biomass)
                     ) * self.stems
                     self.p_nonwoody_lresid[ixs[m]] = (
                         self.P_leaf
-                        + self.allodic[m].allometry_f["bmToPFineRoots"](self.biomass)
+                        + self.allodic[m].fine_roots.p_fine_roots(self.biomass)
                     ) * self.stems
                     self.k_nonwoody_lresid[ixs[m]] = (
                         self.K_leaf
-                        + self.allodic[m].allometry_f["bmToKFineRoots"](self.biomass)
+                        + self.allodic[m].fine_roots.k_fine_roots(self.biomass)
                     ) * self.stems
 
                     self.woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToWoodyLoggingResidues"](
-                            self.biomass
-                        )
+                        self.allodic[m].logging_residues.woody(self.biomass)
                         * self.stems
                     )
                     self.n_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToNWoodyLoggingResidues"](
-                            self.biomass
-                        )
+                        self.allodic[m].logging_residues.n_woody(self.biomass)
                         * self.stems
                     )
                     self.p_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPWoodyLoggingResidues"](
-                            self.biomass
-                        )
+                        self.allodic[m].logging_residues.p_woody(self.biomass)
                         * self.stems
                     )
                     self.k_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToKWoodyLoggingResidues"](
-                            self.biomass
-                        )
+                        self.allodic[m].logging_residues.k_woody(self.biomass)
                         * self.stems
                     )
 
@@ -865,7 +855,7 @@ class Canopylayer:
                     print("Harvested volume ", np.mean(self.volume * cut_stems))
 
                     self.remaining_share = to_ba / (
-                        self.allodic[m].allometry_f["bmToBa"](self.biomass) * self.stems
+                        self.allodic[m].biomass_to_stand.ba(self.biomass) * self.stems
                     )  # shate of stems remaining
 
                     print("remaining share")
@@ -879,63 +869,45 @@ class Canopylayer:
                     )  # leaf logging residues
                     print(
                         np.mean(
-                            self.allodic[m].allometry_f["bmToFineRoots"](
-                                self.biomass[ixs[m]]
-                            )
+                            self.allodic[m].fine_roots.fine_roots(self.biomass[ixs[m]])
                             * cut_stems[ixs[m]]
                         )
                     )  # fine root logging residues
 
                     self.nonwoody_lresid[ixs[m]] = (
                         self.new_lmass[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
+                        + self.allodic[m].fine_roots.fine_roots(self.biomass[ixs[m]])
                     ) * cut_stems[
                         ixs[m]
                     ]  # stemwise fineroot biomass multipled by number of cut stems
 
                     self.n_nonwoody_lresid[ixs[m]] = (
                         self.N_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToNFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
+                        + self.allodic[m].fine_roots.n_fine_roots(self.biomass[ixs[m]])
                     ) * cut_stems[ixs[m]]
                     self.p_nonwoody_lresid[ixs[m]] = (
                         self.P_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToPFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
+                        + self.allodic[m].fine_roots.p_fine_roots(self.biomass[ixs[m]])
                     ) * cut_stems[ixs[m]]
                     self.k_nonwoody_lresid[ixs[m]] = (
                         self.K_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToKFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
+                        + self.allodic[m].fine_roots.k_fine_roots(self.biomass[ixs[m]])
                     ) * cut_stems[ixs[m]]
 
                     self.woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
+                        self.allodic[m].logging_residues.woody(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )
                     self.n_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToNWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
+                        self.allodic[m].logging_residues.n_woody(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )
                     self.p_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
+                        self.allodic[m].logging_residues.p_woody(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )
                     self.k_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToKWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
+                        self.allodic[m].logging_residues.k_woody(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )
 
@@ -946,23 +918,23 @@ class Canopylayer:
                     print(np.mean(self.woody_lresid))
 
                     self.harvested_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToVol"](self.biomass[ixs[m]])
+                        self.allodic[m].biomass_to_stand.vol(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )  # harvested volume m3/tree
                     self.harvested_log_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToLogVol"](self.biomass[ixs[m]])
+                        self.allodic[m].biomass_to_stand.log_vol(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )  # harvested saw log volume m3/tree
                     self.harvested_pulp_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPulpVol"](self.biomass[ixs[m]])
+                        self.allodic[m].biomass_to_stand.pulp_vol(self.biomass[ixs[m]])
                         * cut_stems[ixs[m]]
                     )  # harvsted pulp volume m3/tree
                     self.harvested_biomass[ixs[m]] = (
                         (
-                            self.allodic[m].allometry_f["bmToLogVol"](
+                            self.allodic[m].biomass_to_stand.log_vol(
                                 self.biomass[ixs[m]]
                             )
-                            + self.allodic[m].allometry_f["bmToPulpVol"](
+                            + self.allodic[m].biomass_to_stand.pulp_vol(
                                 self.biomass[ixs[m]]
                             )
                         )
