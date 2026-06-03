@@ -2541,9 +2541,9 @@ class Outputs:
         self.ncf["doc"]["HMW"][scen, year, :] = HMW
         self.ncf["doc"]["LMW"][scen, year, :] = DOC - HMW
 
-    def write_methane(self, scen, year, ch4_state: methane.State):
-        self.ncf["methane"]["ch4"][scen, year, :] = ch4_state.ch4
-        self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4_state.ch4_as_co2eq
+    def write_methane(self, scen, year, ch4_outputs: methane.Outputs):
+        self.ncf["methane"]["ch4"][scen, year, :] = ch4_outputs.ch4
+        self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4_outputs.ch4_as_co2eq
 
     def write_fertilization(self, scen, year, fertilization_effect):
         self.ncf["fertilization"]["n_release"][scen, year, :] = (
@@ -2613,11 +2613,11 @@ class Outputs:
         stand,
         groundvegetation,
         esmass,
-        ch4_state: methane.State,
+        ch4_outputs: methane.Outputs,
     ):
         bm_to_c = 0.5
         c_to_co2 = 44 / 12.0
-        c_in_ch4 = ch4_state.ch4 * 12.0 / 16.0
+        c_in_ch4 = ch4_outputs.ch4 * 12.0 / 16.0
         self.ncf["balance"]["C"]["stand_litter_in"][scen, year, :] = (
             stand.nonwoodylitter
             + stand.nonwoody_lresid
@@ -2686,10 +2686,10 @@ class Outputs:
         )
         self.ncf["balance"]["C"]["soil_c_balance_c"][scen, year, :] = soilbal - c_in_ch4
         self.ncf["balance"]["C"]["stand_c_balance_co2eq"][scen, year, :] = (
-            standbal * c_to_co2 - ch4_state.ch4_as_co2eq
+            standbal * c_to_co2 - ch4_outputs.ch4_as_co2eq
         )
         self.ncf["balance"]["C"]["soil_c_balance_co2eq"][scen, year, :] = (
-            soilbal * c_to_co2 - ch4_state.ch4_as_co2eq
+            soilbal * c_to_co2 - ch4_outputs.ch4_as_co2eq
         )
 
     def write_ojanen(self, scen, year, Rhet, soil_co2_balance):

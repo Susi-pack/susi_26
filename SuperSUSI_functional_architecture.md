@@ -1,6 +1,6 @@
 ---
 date created: Wednesday, January 10th 2024, 1:09:48 pm
-date modified: Wednesday, June 3rd 2026, 8:22:22 am
+date modified: Wednesday, June 3rd 2026, 8:45:25 am
 ---
 See also: [[SuperSUSI rewrite working notes]]
 # Overview
@@ -154,9 +154,9 @@ Non-persistent evolving variables owned by the module. Properties:
 ```python
 def run_hydrology(params:Params, computed_constants:ComputedConstants, input: hydrology.Inputs)->hydrology.State:
 ```
-In order to be explicit about what each module's inputs are and to be able to draw a relationship graph, it's best for each module to have a `make_inputs()` function as follows:
+In order to be explicit about what each module's inputs are and to be able to draw a relationship graph, it's best for each module to have a `assemble_inputs()` function as follows:
 ```python
-def make_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
+def assemble_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
     return Inputs(
         sst=all_state.ocean.sst,
         flux=a_outputs.flux,
@@ -195,11 +195,11 @@ class State:
     ...
 	
 @dataclass(frozen=True)
-class Output:
+class Outputs:
     ...
 	
 @dataclass(frozen=True)
-class Input:
+class Inputs:
     wtd : float
     rainfall : np.ndarray
     transpiration: float
@@ -219,8 +219,8 @@ def make_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings:
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
-    input: Input
-) -> State:
+    input: Inputs
+) -> tuple[State, Outputs]:
     ...
 ```
 ---

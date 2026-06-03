@@ -5,8 +5,6 @@ Created on Mon May 21 18:38:10 2018
 @author: lauren
 """
 
-from typing import assert_never
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -236,7 +234,7 @@ class Susi:
         )
         out.initialize_temperature()
 
-        _ = methane.initial_state(n_cols=self.parameters.site_parameters.n)
+        _ = methane.initial_state()
         out.initialize_methane()
 
         out.initialize_export()  # create output variables for DOC components, east and west ditch
@@ -506,7 +504,9 @@ class Susi:
                     ba=stand.basalarea,
                     age=self.parameters.site_parameters.age["dominant"],
                 )
-                gv_state = gvegetation.run_timestep(gv_params, gv_cc, gv_input, gv_state)
+                gv_state = gvegetation.run_timestep(
+                    gv_params, gv_cc, gv_input, gv_state
+                )
 
                 stand.assimilate(
                     self.parameters.photo_parameters,
@@ -665,10 +665,10 @@ class Susi:
                 # stand.assimilate(self.weather_forcing.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)])
                 # stand.update()
 
-                ch4_state = methane.run_timestep(
-                    inputs=methane.Inputs(year=calendar_year, dfwt=dfwt)
+                _, ch4_outputs = methane.run_timestep(
+                    inputs=methane.assemble_inputs(year=calendar_year, dfwt=dfwt),
                 )
-                out.write_methane(n_ditch_scen, simulation_year, ch4_state)
+                out.write_methane(n_ditch_scen, simulation_year, ch4_outputs)
 
                 out.write_stand(n_ditch_scen, simulation_year, stand)
                 out.write_canopy_layer(
@@ -680,9 +680,7 @@ class Susi:
                 out.write_canopy_layer(
                     n_ditch_scen, simulation_year, "under", stand.under
                 )
-                out.write_groundvegetation(
-                    n_ditch_scen, simulation_year, gv_state
-                )
+                out.write_groundvegetation(n_ditch_scen, simulation_year, gv_state)
                 out.write_export(n_ditch_scen, simulation_year, esmass)
 
                 out.write_nutrient_balance(
@@ -722,7 +720,7 @@ class Susi:
                     stand,
                     gv_state,
                     esmass,
-                    ch4_state,
+                    ch4_outputs,
                 )
 
                 stand.reset_logging()  # reset logging in general
