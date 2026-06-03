@@ -391,16 +391,17 @@ class Susi:
                         n_ditch_scen, d, interc, evap, ET, transpi, efloor, SWE
                     )
 
-                    moss_state, moss_int_out = mosslayer.run_interception(
+                    moss_state, moss_interception_outputs = mosslayer.run_interception(
                         moss_constants,
                         mosslayer.assemble_interception_inputs(
                             potinf=potinf, evap=efloor
                         ),
                         moss_state,
                     )
+                    # TODO: This should go to some module!
                     potinf, efloor = (
-                        moss_int_out.potinf,
-                        moss_int_out.evap,
+                        moss_interception_outputs.potinf,
+                        moss_interception_outputs.evap,
                     )
                     stpout["deltas"][n_ditch_scen, d, :] = (
                         potinf - transpi
@@ -431,7 +432,7 @@ class Susi:
                         moss_constants,
                         mosslayer.assemble_returnflow_inputs(
                             rflow=exfil,
-                            interception_mbe=moss_int_out.mbe,
+                            interception_mbe=moss_interception_outputs.mbe,
                         ),
                         moss_state,
                     )
