@@ -147,14 +147,18 @@ class Susi:
         )
         gv_cc = gvegetation.compute_constants(gv_params)
         gv_state = gvegetation.compute_initial_state(gv_params, gv_cc)
-        gv_input = gvegetation.Input(
-            ts=temperature_sun_days_degree,
-            vol=stand.volume,
-            stems=stand.stems,
-            ba=stand.basalarea,
-            age=self.parameters.site_parameters.age["dominant"],
+        _, _ = gvegetation.run_timestep(
+            gv_params,
+            gv_cc,
+            gvegetation.assemble_inputs(
+                ts=temperature_sun_days_degree,
+                vol=stand.volume,
+                stems=stand.stems,
+                ba=stand.basalarea,
+                age=self.parameters.site_parameters.age["dominant"],
+            ),
+            gv_state,
         )
-        gv_state = gvegetation.run_timestep(gv_params, gv_cc, gv_input, gv_state)
         out.initialize_gv()  # output variables to netCDF
 
         esmass = Esom(
@@ -308,15 +312,19 @@ class Susi:
             out.write_canopy_layer(n_ditch_scen, 0, "under", stand.under)
 
             gv_state = gvegetation.compute_initial_state(gv_params, gv_cc)
-            gv_input = gvegetation.Input(
-                ts=temperature_sun_days_degree,
-                vol=stand.volume,
-                stems=stand.stems,
-                ba=stand.basalarea,
-                age=self.parameters.site_parameters.age["dominant"],
+            gv_state, gv_outputs = gvegetation.run_timestep(
+                gv_params,
+                gv_cc,
+                gvegetation.assemble_inputs(
+                    ts=temperature_sun_days_degree,
+                    vol=stand.volume,
+                    stems=stand.stems,
+                    ba=stand.basalarea,
+                    age=self.parameters.site_parameters.age["dominant"],
+                ),
+                gv_state,
             )
-            gv_state = gvegetation.run_timestep(gv_params, gv_cc, gv_input, gv_state)
-            out.write_groundvegetation(n_ditch_scen, 0, gv_state)
+            out.write_groundvegetation(n_ditch_scen, 0, gv_state, gv_outputs)
 
             esmass.reset_storages()
             esN.reset_storages()
@@ -497,15 +505,17 @@ class Susi:
                         n_ditch_scen, simulation_year, Rhet, soil_co2_balance
                     )
 
-                gv_input = gvegetation.Input(
-                    ts=temperature_sun_days_degree,
-                    vol=stand.volume,
-                    stems=stand.stems,
-                    ba=stand.basalarea,
-                    age=self.parameters.site_parameters.age["dominant"],
-                )
-                gv_state = gvegetation.run_timestep(
-                    gv_params, gv_cc, gv_input, gv_state
+                gv_state, gv_outputs = gvegetation.run_timestep(
+                    gv_params,
+                    gv_cc,
+                    gvegetation.assemble_inputs(
+                        ts=temperature_sun_days_degree,
+                        vol=stand.volume,
+                        stems=stand.stems,
+                        ba=stand.basalarea,
+                        age=self.parameters.site_parameters.age["dominant"],
+                    ),
+                    gv_state,
                 )
 
                 stand.assimilate(
@@ -566,13 +576,13 @@ class Susi:
                     stand.nonwoodylitter
                     + stand.nonwoody_lresid
                     + stand.non_woody_litter_mort
-                    + gv_state.nonwoodylitter
+                    + gv_outputs.nonwoodylitter
                 ) / 10000.0  # conversion kg/ha/yr -> kg/m2/yr
                 woodylitter = (
                     stand.woodylitter
                     + stand.woody_lresid
                     + stand.woody_litter_mort
-                    + gv_state.woodylitter
+                    + gv_outputs.woodylitter
                 ) / 10000.0
                 esmass.run_yr(
                     self.weather_forcing.loc[str(calendar_year)],
@@ -588,14 +598,14 @@ class Susi:
                     stand.n_nonwoodylitter
                     + stand.n_nonwoody_lresid
                     + stand.n_non_woody_litter_mort
-                    + gv_state.n_litter_nw
+                    + gv_outputs.n_litter_nw
                 ) / 10000.0
                 n_woodylitter = (
                     stand.n_woodylitter
                     + stand.n_woody_lresid
                     + stand.n_woody_litter_mort
                     + stand.n_woody_litter_mort
-                    + gv_state.n_litter_w
+                    + gv_outputs.n_litter_w
                 ) / 10000.0
                 esN.run_yr(
                     self.weather_forcing.loc[str(calendar_year)],
@@ -610,13 +620,13 @@ class Susi:
                     stand.p_nonwoodylitter
                     + stand.p_nonwoody_lresid
                     + stand.p_non_woody_litter_mort
-                    + gv_state.p_litter_nw
+                    + gv_outputs.p_litter_nw
                 ) / 10000.0
                 p_woodylitter = (
                     stand.p_woodylitter
                     + stand.p_woody_lresid
                     + stand.p_woody_litter_mort
-                    + gv_state.p_litter_w
+                    + gv_outputs.p_litter_w
                 ) / 10000.0
                 esP.run_yr(
                     self.weather_forcing.loc[str(calendar_year)],
@@ -631,13 +641,13 @@ class Susi:
                     stand.k_nonwoodylitter
                     + stand.k_nonwoody_lresid
                     + stand.k_non_woody_litter_mort
-                    + gv_state.k_litter_nw
+                    + gv_outputs.k_litter_nw
                 ) / 10000.0
                 k_woodylitter = (
                     stand.k_woodylitter
                     + stand.k_woody_lresid
                     + stand.k_woody_litter_mort
-                    + gv_state.k_litter_w
+                    + gv_outputs.k_litter_w
                 ) / 10000.0
                 esK.run_yr(
                     self.weather_forcing.loc[str(calendar_year)],
@@ -649,7 +659,7 @@ class Susi:
                 out.write_esom(n_ditch_scen, simulation_year, "K", esK)
 
                 stand.update_nutrient_status(
-                    gv_state,
+                    gv_outputs,
                     esN.out_root_lyr
                     + self.parameters.site_parameters.depoN
                     + fertilization_outputs.nutrient_release["N"],
@@ -680,7 +690,9 @@ class Susi:
                 out.write_canopy_layer(
                     n_ditch_scen, simulation_year, "under", stand.under
                 )
-                out.write_groundvegetation(n_ditch_scen, simulation_year, gv_state)
+                out.write_groundvegetation(
+                    n_ditch_scen, simulation_year, gv_state, gv_outputs
+                )
                 out.write_export(n_ditch_scen, simulation_year, esmass)
 
                 out.write_nutrient_balance(
@@ -691,7 +703,7 @@ class Susi:
                     self.parameters.site_parameters.depoN,
                     fertilization_outputs.nutrient_release["N"],
                     stand.n_demand + stand.n_leaf_demand,
-                    gv_state.nup,
+                    gv_outputs.nup,
                 )
                 out.write_nutrient_balance(
                     n_ditch_scen,
@@ -701,7 +713,7 @@ class Susi:
                     self.parameters.site_parameters.depoP,
                     fertilization_outputs.nutrient_release["P"],
                     stand.p_demand + stand.p_leaf_demand,
-                    gv_state.pup,
+                    gv_outputs.pup,
                 )
                 out.write_nutrient_balance(
                     n_ditch_scen,
@@ -711,14 +723,14 @@ class Susi:
                     self.parameters.site_parameters.depoK,
                     fertilization_outputs.nutrient_release["K"],
                     stand.k_demand + stand.k_leaf_demand,
-                    gv_state.kup,
+                    gv_outputs.kup,
                 )
 
                 out.write_carbon_balance(
                     n_ditch_scen,
                     simulation_year,
                     stand,
-                    gv_state,
+                    gv_outputs,
                     esmass,
                     ch4_outputs,
                 )

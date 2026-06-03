@@ -2412,29 +2412,49 @@ class Outputs:
         self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = layer.Kleafdemand
         self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = layer.Kleaf_litter
 
-    def write_groundvegetation(self, scen, year, gv):
-        self.ncf["groundvegetation"]["gv_tot"][scen, year, :] = gv.gv_tot
-        self.ncf["groundvegetation"]["gv_field"][scen, year, :] = gv.gv_field
-        self.ncf["groundvegetation"]["gv_bot"][scen, year, :] = gv.gv_bot
-        self.ncf["groundvegetation"]["gv_leafmass"][scen, year, :] = gv.gv_leafmass
-        self.ncf["groundvegetation"]["ds_litterfall"][scen, year, :] = gv.ds_litterfall
-        self.ncf["groundvegetation"]["h_litterfall"][scen, year, :] = gv.h_litterfall
-        self.ncf["groundvegetation"]["s_litterfall"][scen, year, :] = gv.s_litterfall
+    def write_groundvegetation(self, scen, year, gv_state, gv_outputs):
+        self.ncf["groundvegetation"]["gv_tot"][scen, year, :] = gv_state.gv_tot
+        self.ncf["groundvegetation"]["gv_field"][scen, year, :] = gv_outputs.gv_field
+        self.ncf["groundvegetation"]["gv_bot"][scen, year, :] = gv_outputs.gv_bot
+        self.ncf["groundvegetation"]["gv_leafmass"][scen, year, :] = (
+            gv_outputs.gv_leafmass
+        )
+        self.ncf["groundvegetation"]["ds_litterfall"][scen, year, :] = (
+            gv_outputs.ds_litterfall
+        )
+        self.ncf["groundvegetation"]["h_litterfall"][scen, year, :] = (
+            gv_outputs.h_litterfall
+        )
+        self.ncf["groundvegetation"]["s_litterfall"][scen, year, :] = (
+            gv_outputs.s_litterfall
+        )
 
-        self.ncf["groundvegetation"]["n_litter_nw"][scen, year, :] = gv.n_litter_nw
-        self.ncf["groundvegetation"]["p_litter_nw"][scen, year, :] = gv.p_litter_nw
-        self.ncf["groundvegetation"]["k_litter_nw"][scen, year, :] = gv.k_litter_nw
+        self.ncf["groundvegetation"]["n_litter_nw"][scen, year, :] = (
+            gv_outputs.n_litter_nw
+        )
+        self.ncf["groundvegetation"]["p_litter_nw"][scen, year, :] = (
+            gv_outputs.p_litter_nw
+        )
+        self.ncf["groundvegetation"]["k_litter_nw"][scen, year, :] = (
+            gv_outputs.k_litter_nw
+        )
 
-        self.ncf["groundvegetation"]["n_litter_w"][scen, year, :] = gv.n_litter_w
-        self.ncf["groundvegetation"]["p_litter_w"][scen, year, :] = gv.p_litter_w
-        self.ncf["groundvegetation"]["k_litter_w"][scen, year, :] = gv.k_litter_w
+        self.ncf["groundvegetation"]["n_litter_w"][scen, year, :] = (
+            gv_outputs.n_litter_w
+        )
+        self.ncf["groundvegetation"]["p_litter_w"][scen, year, :] = (
+            gv_outputs.p_litter_w
+        )
+        self.ncf["groundvegetation"]["k_litter_w"][scen, year, :] = (
+            gv_outputs.k_litter_w
+        )
 
-        self.ncf["groundvegetation"]["n_gv"][scen, year, :] = gv.n_gv
-        self.ncf["groundvegetation"]["p_gv"][scen, year, :] = gv.p_gv
-        self.ncf["groundvegetation"]["k_gv"][scen, year, :] = gv.k_gv
-        self.ncf["groundvegetation"]["nup"][scen, year, :] = gv.nup
-        self.ncf["groundvegetation"]["pup"][scen, year, :] = gv.pup
-        self.ncf["groundvegetation"]["kup"][scen, year, :] = gv.kup
+        self.ncf["groundvegetation"]["n_gv"][scen, year, :] = gv_state.n_gv
+        self.ncf["groundvegetation"]["p_gv"][scen, year, :] = gv_state.p_gv
+        self.ncf["groundvegetation"]["k_gv"][scen, year, :] = gv_state.k_gv
+        self.ncf["groundvegetation"]["nup"][scen, year, :] = gv_outputs.nup
+        self.ncf["groundvegetation"]["pup"][scen, year, :] = gv_outputs.pup
+        self.ncf["groundvegetation"]["kup"][scen, year, :] = gv_outputs.kup
 
     def write_esom(self, scen, year, substance, esom, inivals=False):
         if inivals:

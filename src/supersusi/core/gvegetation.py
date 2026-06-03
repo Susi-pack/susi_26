@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -30,7 +32,9 @@ class Params:
     tree_species: Float[np.ndarray, " n"] = field(
         doc="Dominant tree species (1=pine, 2=spruce, 3=birch, 4=open peat)"
     )
-    site_fertility_class: Float[np.ndarray, " n"] = field(doc="Site fertility class (1-5)")
+    site_fertility_class: Float[np.ndarray, " n"] = field(
+        doc="Site fertility class (1-5)"
+    )
     latitude: float = field(doc="Latitude in EPSG:3067 [m]")
     longitude: float = field(doc="Longitude in EPSG:3067 [m]")
     drainage_status: int = field(default=4, doc="Drainage status (1-4)")
@@ -42,7 +46,9 @@ class Params:
         default=1.9,
         doc="Multiplier: above-ground biomass -> total biomass",
     )
-    clearcut_reduction_factor: float = field(default=0.33, doc="Clear-cut reduction factor")
+    clearcut_reduction_factor: float = field(
+        default=0.33, doc="Clear-cut reduction factor"
+    )
 
     # Field layer shares per site type
     pine_upland_field_layer_share: FieldLayerShare = field(
@@ -85,16 +91,26 @@ class Params:
     )
 
     # Annual litterfall rates (fraction of living biomass lost as litter)
-    dwarf_shrub_litterfall_rate: float = field(default=0.33, doc="Dwarf shrub litterfall rate")
+    dwarf_shrub_litterfall_rate: float = field(
+        default=0.33, doc="Dwarf shrub litterfall rate"
+    )
     herb_litterfall_rate: float = field(default=1.0, doc="Herb litterfall rate")
-    upland_moss_litterfall_rate: float = field(default=0.3, doc="Upland moss litterfall rate")
+    upland_moss_litterfall_rate: float = field(
+        default=0.3, doc="Upland moss litterfall rate"
+    )
     sphagnum_litterfall_rate: float = field(default=0.3, doc="Sphagnum litterfall rate")
 
     # Green mass fraction of total biomass
-    dwarf_shrub_green_mass_fraction: float = field(default=0.2, doc="Dwarf shrub green mass fraction")
+    dwarf_shrub_green_mass_fraction: float = field(
+        default=0.2, doc="Dwarf shrub green mass fraction"
+    )
     herb_green_mass_fraction: float = field(default=0.5, doc="Herb green mass fraction")
-    upland_moss_green_mass_fraction: float = field(default=0.3, doc="Upland moss green mass fraction")
-    sphagnum_green_mass_fraction: float = field(default=0.3, doc="Sphagnum green mass fraction")
+    upland_moss_green_mass_fraction: float = field(
+        default=0.3, doc="Upland moss green mass fraction"
+    )
+    sphagnum_green_mass_fraction: float = field(
+        default=0.3, doc="Sphagnum green mass fraction"
+    )
 
     # Retranslocation fractions (nutrients retracted before litterfall), [kg/kg, dimensionless]
     dwarf_shrub_retranslocation: NPK = field(
@@ -132,13 +148,6 @@ class ComputedConstants:
 @dataclass(frozen=True)
 class State:
     gv_tot: Float[np.ndarray, " n"] = field(doc="Total ground vegetation mass [kg/ha]")
-    gv_change: Float[np.ndarray, " n"] = field(doc="Biomass change during timestep [kg/ha/yr]")
-    gv_field: Float[np.ndarray, " n"] = field(doc="Field layer vegetation mass [kg/ha]")
-    gv_bot: Float[np.ndarray, " n"] = field(doc="Bottom layer vegetation mass [kg/ha]")
-    gv_leafmass: Float[np.ndarray, " n"] = field(doc="Leaf mass in ground vegetation [kg/ha]")
-    ds_litterfall: Float[np.ndarray, " n"] = field(doc="Dwarf shrub litterfall [kg/ha/yr]")
-    h_litterfall: Float[np.ndarray, " n"] = field(doc="Herb litterfall [kg/ha/yr]")
-    s_litterfall: Float[np.ndarray, " n"] = field(doc="Sphagnum litterfall [kg/ha/yr]")
     n_gv: Float[np.ndarray, " n"] = field(
         doc="N in ground vegetation [kg/ha] — persisted for delta computation"
     )
@@ -148,6 +157,23 @@ class State:
     k_gv: Float[np.ndarray, " n"] = field(
         doc="K in ground vegetation [kg/ha] — persisted for delta computation"
     )
+
+
+@dataclass(frozen=True)
+class Outputs:
+    gv_change: Float[np.ndarray, " n"] = field(
+        doc="Biomass change during timestep [kg/ha/yr]"
+    )
+    gv_field: Float[np.ndarray, " n"] = field(doc="Field layer vegetation mass [kg/ha]")
+    gv_bot: Float[np.ndarray, " n"] = field(doc="Bottom layer vegetation mass [kg/ha]")
+    gv_leafmass: Float[np.ndarray, " n"] = field(
+        doc="Leaf mass in ground vegetation [kg/ha]"
+    )
+    ds_litterfall: Float[np.ndarray, " n"] = field(
+        doc="Dwarf shrub litterfall [kg/ha/yr]"
+    )
+    h_litterfall: Float[np.ndarray, " n"] = field(doc="Herb litterfall [kg/ha/yr]")
+    s_litterfall: Float[np.ndarray, " n"] = field(doc="Sphagnum litterfall [kg/ha/yr]")
     n_litter_nw: Float[np.ndarray, " n"] = field(doc="N in non-woody litter [kg/ha/yr]")
     p_litter_nw: Float[np.ndarray, " n"] = field(doc="P in non-woody litter [kg/ha/yr]")
     k_litter_nw: Float[np.ndarray, " n"] = field(doc="K in non-woody litter [kg/ha/yr]")
@@ -157,12 +183,14 @@ class State:
     nup: Float[np.ndarray, " n"] = field(doc="Total N uptake [kg/ha]")
     pup: Float[np.ndarray, " n"] = field(doc="Total P uptake [kg/ha]")
     kup: Float[np.ndarray, " n"] = field(doc="Total K uptake [kg/ha]")
-    nonwoodylitter: Float[np.ndarray, " n"] = field(doc="Non-woody litterfall [kg/ha/yr]")
+    nonwoodylitter: Float[np.ndarray, " n"] = field(
+        doc="Non-woody litterfall [kg/ha/yr]"
+    )
     woodylitter: Float[np.ndarray, " n"] = field(doc="Woody litterfall [kg/ha/yr]")
 
 
 @dataclass(frozen=True)
-class Input:
+class Inputs:
     ts: Float[np.ndarray, " n"] = field(doc="Temperature sum [degree days]")
     vol: Float[np.ndarray, " n"] = field(doc="Stem volume [m3/ha]")
     stems: Float[np.ndarray, " n"] = field(doc="Number of stems [stems/ha]")
@@ -190,33 +218,25 @@ def compute_constants(params: Params) -> ComputedConstants:
     )
 
 
+def assemble_inputs(
+    ts: Float[np.ndarray, " n"],
+    vol: Float[np.ndarray, " n"],
+    stems: Float[np.ndarray, " n"],
+    ba: Float[np.ndarray, " n"],
+    age: Float[np.ndarray, " n"],
+) -> Inputs:
+    return Inputs(ts=ts, vol=vol, stems=stems, ba=ba, age=age)
+
+
 def compute_initial_state(
     params: Params, computed_constants: ComputedConstants
 ) -> State:
     n = params.num_nodes
     return State(
         gv_tot=np.zeros(n),
-        gv_change=np.zeros(n),
-        gv_field=np.zeros(n),
-        gv_bot=np.zeros(n),
-        gv_leafmass=np.zeros(n),
-        ds_litterfall=np.zeros(n),
-        h_litterfall=np.zeros(n),
-        s_litterfall=np.zeros(n),
         n_gv=np.zeros(n),
         p_gv=np.zeros(n),
         k_gv=np.zeros(n),
-        n_litter_nw=np.zeros(n),
-        p_litter_nw=np.zeros(n),
-        k_litter_nw=np.zeros(n),
-        n_litter_w=np.zeros(n),
-        p_litter_w=np.zeros(n),
-        k_litter_w=np.zeros(n),
-        nup=np.zeros(n),
-        pup=np.zeros(n),
-        kup=np.zeros(n),
-        nonwoodylitter=np.zeros(n),
-        woodylitter=np.zeros(n),
     )
 
 
@@ -312,23 +332,17 @@ def _fill_site_nutrients(
         + s_lf * nut_s.K * 1e-3 * (1.0 - retrans_s.K)
     )
 
-    n_litter_w[ix] = (
-        ds_lf * nut_ds.N * 1e-3 * (1.0 - retrans_ds.N) * 0.75
-    )
-    p_litter_w[ix] = (
-        ds_lf * nut_ds.P * 1e-3 * (1.0 - retrans_ds.P) * 0.75
-    )
-    k_litter_w[ix] = (
-        ds_lf * nut_ds.K * 1e-3 * (1.0 - retrans_ds.K) * 0.75
-    )
+    n_litter_w[ix] = ds_lf * nut_ds.N * 1e-3 * (1.0 - retrans_ds.N) * 0.75
+    p_litter_w[ix] = ds_lf * nut_ds.P * 1e-3 * (1.0 - retrans_ds.P) * 0.75
+    k_litter_w[ix] = ds_lf * nut_ds.K * 1e-3 * (1.0 - retrans_ds.K) * 0.75
 
 
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
-    input: Input,
+    input: Inputs,
     state: State,
-) -> State:
+) -> tuple[State, Outputs]:
     n = params.num_nodes
     cc = computed_constants
 
@@ -525,6 +539,10 @@ def run_timestep(
 
     return State(
         gv_tot=gv_tot,
+        n_gv=n_gv,
+        p_gv=p_gv,
+        k_gv=k_gv,
+    ), Outputs(
         gv_change=gv_change,
         gv_field=gv_field,
         gv_bot=gv_bot,
@@ -532,9 +550,6 @@ def run_timestep(
         ds_litterfall=ds_litterfall,
         h_litterfall=h_litterfall,
         s_litterfall=s_litterfall,
-        n_gv=n_gv,
-        p_gv=p_gv,
-        k_gv=k_gv,
         n_litter_nw=n_litter_nw,
         p_litter_nw=p_litter_nw,
         k_litter_nw=k_litter_nw,
