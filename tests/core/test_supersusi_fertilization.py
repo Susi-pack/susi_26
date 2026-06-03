@@ -10,7 +10,7 @@ from supersusi.core.fertilization_models import (
     no_fertilization,
     npk as npk_module,
 )
-from supersusi.core.fertilization_types import Inputs, Nutrient, State
+from supersusi.core.fertilization_types import Inputs, Nutrient, Outputs, State
 from susi.io.susi_parameter_model import (
     AshFertilizationParameters,
     NutrientFertilizationParameters,
@@ -148,22 +148,22 @@ class TestFertilizationDispatcher:
         """Dispatcher delegates to `npk.run_timestep` for NPK params."""
         params = npk_module.Params(n_cols=2, fpara=_make_npk_params())
         dynamic = Inputs(years_since_fertilization=0)
-        state = fertilization_dispatcher.run_timestep(
+        _, outputs = fertilization_dispatcher.run_timestep(
             params=params, computed_constants=None, inputs=dynamic
         )
-        assert state.pH_increment == pytest.approx(1.5)
+        assert outputs.pH_increment == pytest.approx(1.5)
 
     def test_run_timestep_dispatches_to_no_fertilization(self) -> None:
         """Dispatcher delegates to `no_fertilization.run_timestep`."""
         params = no_fertilization.Params(n_cols=2)
         dynamic = Inputs(years_since_fertilization=999)
-        state = fertilization_dispatcher.run_timestep(
+        _, outputs = fertilization_dispatcher.run_timestep(
             params=params, computed_constants=None, inputs=dynamic
         )
-        assert state.pH_increment == 0.0
-        assert np.all(state.nutrient_release["N"] == 0.0)
-        assert np.all(state.nutrient_release["P"] == 0.0)
-        assert np.all(state.nutrient_release["K"] == 0.0)
+        assert outputs.pH_increment == 0.0
+        assert np.all(outputs.nutrient_release["N"] == 0.0)
+        assert np.all(outputs.nutrient_release["P"] == 0.0)
+        assert np.all(outputs.nutrient_release["K"] == 0.0)
 
     def test_run_timestep_dispatches_to_ash(self) -> None:
         """Dispatcher delegates to `ash.run_timestep` for ash params."""
@@ -174,37 +174,38 @@ class TestFertilizationDispatcher:
         )
         static = ash_module.compute_constants(params)
         dynamic = Inputs(years_since_fertilization=0)
-        state = fertilization_dispatcher.run_timestep(
+        _state, outputs = fertilization_dispatcher.run_timestep(
             params=params, computed_constants=static, inputs=dynamic
         )
-        assert isinstance(state, State)
-        assert np.all(state.nutrient_release["N"] == 0.0)
+        assert isinstance(_state, State)
+        assert isinstance(outputs, Outputs)
+        assert np.all(outputs.nutrient_release["N"] == 0.0)
 
 
 class TestNPK:
     """Tests for `supersusi.core.fertilization_models.npk`."""
 
     @pytest.mark.parametrize("n_cols", [1, 2, 7])
-    def test_inactive_year_returns_unfertilized_state(self, n_cols: int) -> None:
+    def test_inactive_year_returns_unfertilized_output(self, n_cols: int) -> None:
         """For `years_since_fertilization < 0`, pH is 0 and all releases are 0."""
         params = npk_module.Params(n_cols=n_cols, fpara=_make_npk_params())
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=-1),
         )
-        assert state.pH_increment == 0.0
+        assert outputs.pH_increment == 0.0
         for nutrient in ("N", "P", "K"):
-            assert state.nutrient_release[nutrient].shape == (n_cols,)
-            assert np.all(state.nutrient_release[nutrient] == 0.0)
+            assert outputs.nutrient_release[nutrient].shape == (n_cols,)
+            assert np.all(outputs.nutrient_release[nutrient] == 0.0)
 
     def test_application_year_pH_is_full(self) -> None:
         """At `t = 0` the pH effect is the full `pH_increment` parameter."""
         params = npk_module.Params(n_cols=1, fpara=_make_npk_params())
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=0),
         )
-        assert state.pH_increment == pytest.approx(1.5)
+        assert outputs.pH_increment == pytest.approx(1.5)
 
     def test_pH_decays_exponentially(self) -> None:
         """For `t > 0`, `pH_increment = pH_increment_param * exp(-0.1 * t)`."""
@@ -214,11 +215,11 @@ class TestNPK:
             (3, 1.5 * math.exp(-0.3)),
             (10, 1.5 * math.exp(-1.0)),
         ]:
-            state = npk_module.run_timestep(
+            _, outputs = npk_module.run_timestep(
                 params=params,
                 inputs=Inputs(years_since_fertilization=t),
             )
-            assert state.pH_increment == pytest.approx(expected, rel=1e-12)
+            assert outputs.pH_increment == pytest.approx(expected, rel=1e-12)
 
     @pytest.mark.parametrize("n_cols", [1, 2, 7])
     def test_application_year_nutrient_release_formula(self, n_cols: int) -> None:
@@ -227,13 +228,13 @@ class TestNPK:
             n_cols=n_cols,
             fpara=_make_npk_params(n_dose=100.0, p_dose=200.0, k_dose=300.0),
         )
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=0),
         )
         for nutrient, dose in [("N", 100.0), ("P", 200.0), ("K", 300.0)]:
             expected = dose * (1.0 - math.exp(-0.3)) * 1.0
-            assert state.nutrient_release[cast(Nutrient, nutrient)] == pytest.approx(
+            assert outputs.nutrient_release[cast(Nutrient, nutrient)] == pytest.approx(
                 np.full(n_cols, expected), rel=1e-12
             )
 
@@ -243,13 +244,13 @@ class TestNPK:
             n_cols=3,
             fpara=_make_npk_params(n_dose=10.0, p_dose=20.0, k_dose=40.0),
         )
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=1),
         )
         for nutrient, dose in [("N", 10.0), ("P", 20.0), ("K", 40.0)]:
             expected = dose * (math.exp(-0.3) - math.exp(-0.6))
-            assert state.nutrient_release[cast(Nutrient, nutrient)] == pytest.approx(
+            assert outputs.nutrient_release[cast(Nutrient, nutrient)] == pytest.approx(
                 np.full(3, expected), rel=1e-12
             )
 
@@ -269,33 +270,33 @@ class TestNPK:
                 k_eff=1.0,
             ),
         )
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=2),
         )
         expected_n = 10.0 * (math.exp(-0.2) - math.exp(-0.3)) * 0.5
         expected_p = 20.0 * (math.exp(-1.0) - math.exp(-1.5)) * 0.8
         expected_k = 40.0 * (math.exp(-2.0) - math.exp(-3.0)) * 1.0
-        assert state.nutrient_release["N"] == pytest.approx(
+        assert outputs.nutrient_release["N"] == pytest.approx(
             np.full(2, expected_n), rel=1e-12
         )
-        assert state.nutrient_release["P"] == pytest.approx(
+        assert outputs.nutrient_release["P"] == pytest.approx(
             np.full(2, expected_p), rel=1e-12
         )
-        assert state.nutrient_release["K"] == pytest.approx(
+        assert outputs.nutrient_release["K"] == pytest.approx(
             np.full(2, expected_k), rel=1e-12
         )
 
     def test_zero_pH_increment_is_honored(self) -> None:
         """`pH_increment = 0.0` (the field default) yields no pH effect."""
         params = npk_module.Params(n_cols=1, fpara=_make_npk_params(ph_increment=0.0))
-        state = npk_module.run_timestep(
+        _, outputs = npk_module.run_timestep(
             params=params,
             inputs=Inputs(years_since_fertilization=0),
         )
-        assert state.pH_increment == 0.0
+        assert outputs.pH_increment == 0.0
         # Nutrient release is unaffected by pH_increment.
-        assert state.nutrient_release["N"][0] == pytest.approx(
+        assert outputs.nutrient_release["N"][0] == pytest.approx(
             100.0 * (1.0 - math.exp(-0.3)), rel=1e-12
         )
 
@@ -445,53 +446,55 @@ class TestAshRunTimestep:
         return params, static
 
     @pytest.mark.parametrize("t", [-5, -1, -100])
-    def test_inactive_year_returns_unfertilized_state(self, t: int) -> None:
+    def test_inactive_year_returns_unfertilized_output(self, t: int) -> None:
         """For `t < 0`, pH is 0 and nutrient releases are zeros of the right shape."""
         params, static = self._setup()
-        state = ash_module.run_timestep(
+        _, outputs = ash_module.run_timestep(
             params=params,
             computed_constants=static,
             inputs=Inputs(years_since_fertilization=t),
         )
-        assert state.pH_increment == 0.0
+        assert outputs.pH_increment == 0.0
         for nutrient in ("N", "P", "K"):
-            assert state.nutrient_release[nutrient].shape == (3,)
-            assert np.all(state.nutrient_release[nutrient] == 0.0)
+            assert outputs.nutrient_release[nutrient].shape == (3,)
+            assert np.all(outputs.nutrient_release[nutrient] == 0.0)
 
     def test_active_year_nutrient_shapes(self) -> None:
         """At `t >= 0`, N is zeros, P and K are scalars broadcast to `n_cols`."""
         params, static = self._setup()
-        state = ash_module.run_timestep(
+        _, outputs = ash_module.run_timestep(
             params=params,
             computed_constants=static,
             inputs=Inputs(years_since_fertilization=0),
         )
-        assert state.nutrient_release["N"].shape == (3,)
-        assert np.all(state.nutrient_release["N"] == 0.0)
-        assert state.nutrient_release["P"].shape == (3,)
-        assert state.nutrient_release["K"].shape == (3,)
+        assert outputs.nutrient_release["N"].shape == (3,)
+        assert np.all(outputs.nutrient_release["N"] == 0.0)
+        assert outputs.nutrient_release["P"].shape == (3,)
+        assert outputs.nutrient_release["K"].shape == (3,)
 
     def test_active_year_pH_matches_precompute(self) -> None:
         """`pH_increment` at year `t` equals the precomputed `pH_history[t]`."""
         params, static = self._setup()
         for t in (0, 1, 2, 4):
-            state = ash_module.run_timestep(
+            _, outputs = ash_module.run_timestep(
                 params=params,
                 computed_constants=static,
                 inputs=Inputs(years_since_fertilization=t),
             )
-            assert state.pH_increment == pytest.approx(static.pH_history[t], rel=1e-12)
+            assert outputs.pH_increment == pytest.approx(
+                static.pH_history[t], rel=1e-12
+            )
 
     def test_active_year_K_release_matches_precompute(self) -> None:
         """`nutrient_release["K"]` equals `K_release_history[t] * ones`."""
         params, static = self._setup()
         for t in (0, 1, 3):
-            state = ash_module.run_timestep(
+            _, outputs = ash_module.run_timestep(
                 params=params,
                 computed_constants=static,
                 inputs=Inputs(years_since_fertilization=t),
             )
-            assert state.nutrient_release["K"] == pytest.approx(
+            assert outputs.nutrient_release["K"] == pytest.approx(
                 np.full(3, static.K_release_history[t]), rel=1e-12
             )
 
@@ -499,12 +502,12 @@ class TestAshRunTimestep:
         """`nutrient_release["P"]` equals `P_release_history[t] * ones`."""
         params, static = self._setup()
         for t in (0, 1, 3):
-            state = ash_module.run_timestep(
+            _, outputs = ash_module.run_timestep(
                 params=params,
                 computed_constants=static,
                 inputs=Inputs(years_since_fertilization=t),
             )
-            assert state.nutrient_release["P"] == pytest.approx(
+            assert outputs.nutrient_release["P"] == pytest.approx(
                 np.full(3, static.P_release_history[t]), rel=1e-12
             )
 
@@ -517,19 +520,19 @@ class TestNoFertilization:
     def test_run_timestep_always_returns_zeros(self, n_cols: int, t: int) -> None:
         """No fertilization: always `pH_increment=0` and zeros of the right shape."""
         params = no_fertilization.Params(n_cols=n_cols)
-        state = no_fertilization.run_timestep(
+        _, outputs = no_fertilization.run_timestep(
             params=params, inputs=Inputs(years_since_fertilization=t)
         )
-        assert state.pH_increment == 0.0
+        assert outputs.pH_increment == 0.0
         for nutrient in ("N", "P", "K"):
-            assert state.nutrient_release[nutrient].shape == (n_cols,)
-            assert np.all(state.nutrient_release[nutrient] == 0.0)
+            assert outputs.nutrient_release[nutrient].shape == (n_cols,)
+            assert np.all(outputs.nutrient_release[nutrient] == 0.0)
 
     @pytest.mark.parametrize("n_cols", [1, 2, 5])
-    def test_unfertilized_state_helper(self, n_cols: int) -> None:
+    def test_unfertilized_helper(self, n_cols: int) -> None:
         """`unfertilized_state` returns the same zero-filled `State`."""
-        state = no_fertilization.unfertilized_state(n_cols=n_cols)
-        assert state.pH_increment == 0.0
+        output = no_fertilization.unfertilized_output(n_cols=n_cols)
+        assert output.pH_increment == 0.0
         for nutrient in ("N", "P", "K"):
-            assert state.nutrient_release[nutrient].shape == (n_cols,)
-            assert np.all(state.nutrient_release[nutrient] == 0.0)
+            assert output.nutrient_release[nutrient].shape == (n_cols,)
+            assert np.all(output.nutrient_release[nutrient] == 0.0)
