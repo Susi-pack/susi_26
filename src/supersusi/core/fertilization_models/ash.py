@@ -20,7 +20,7 @@ class ComputedConstants:
     P_release_history: np.ndarray
 
 
-def compute_static_inputs(params: Params) -> ComputedConstants:
+def compute_constants(params: Params) -> ComputedConstants:
     """
     Calculates the disintegration of ash grains and the release of P and K from ash and the ewffect on soil pH
     """

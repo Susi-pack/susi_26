@@ -174,7 +174,7 @@ class TestFertilizationDispatcher:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         dynamic = Inputs(years_since_fertilization=0)
         state = fertilization_dispatcher.run_timestep(
             params=params, computed_constants=static, inputs=dynamic
@@ -312,7 +312,7 @@ class TestAshPrecompute:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.pH_history.shape == (5,)
         assert static.K_release_history.shape == (5,)
         assert static.P_release_history.shape == (5,)
@@ -324,7 +324,7 @@ class TestAshPrecompute:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.pH_history[0] == 0.0
 
     def test_first_year_release_values(self) -> None:
@@ -355,7 +355,7 @@ class TestAshPrecompute:
                 p_dissolution_rate=0.000045,
             ),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.K_release_history[0] == pytest.approx(0.0072, rel=1e-12)
         assert static.P_release_history[0] == pytest.approx(0.0027, rel=1e-12)
         # pH_history[0] is always 0 because dissolved_ash is 0 at t=0.
@@ -373,7 +373,7 @@ class TestAshPrecompute:
             simulation_end_year=2010,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.pH_history.dtype == np.float64
         assert static.K_release_history.dtype == np.float64
         assert static.P_release_history.dtype == np.float64
@@ -385,7 +385,7 @@ class TestAshPrecompute:
             simulation_end_year=2015,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         diffs = np.diff(static.pH_history)
         assert np.all(diffs >= -1e-15)
 
@@ -401,7 +401,7 @@ class TestAshPrecompute:
                 k_in_ash=k_in_ash,
             ),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.K_release_history.sum() <= k_in_ash + 1e-9
 
     def test_cumulative_P_release_capped_by_P_in_ash(self) -> None:
@@ -416,7 +416,7 @@ class TestAshPrecompute:
                 p_in_ash=p_in_ash,
             ),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.P_release_history.sum() <= p_in_ash + 1e-9
 
     def test_simulation_end_year_equal_application_year(self) -> None:
@@ -426,7 +426,7 @@ class TestAshPrecompute:
             simulation_end_year=2005,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         assert static.pH_history.shape == (0,)
         assert static.K_release_history.shape == (0,)
         assert static.P_release_history.shape == (0,)
@@ -443,7 +443,7 @@ class TestAshRunTimestep:
             simulation_end_year=end_year,
             fpara=_make_ash_params(application_year=2005),
         )
-        static = ash_module.compute_static_inputs(params)
+        static = ash_module.compute_constants(params)
         return params, static
 
     @pytest.mark.parametrize("t", [-5, -1, -100])

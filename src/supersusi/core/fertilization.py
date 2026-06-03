@@ -10,7 +10,7 @@ def compute_static_inputs(
 ) -> ComputedConstants:
     match params:
         case ash.Params():
-            return ash.compute_static_inputs(params)
+            return ash.compute_constants(params)
         case npk.Params():
             return None
         case no_fertilization.Params():
