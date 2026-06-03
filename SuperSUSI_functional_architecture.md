@@ -1,6 +1,6 @@
 ---
 date created: Wednesday, January 10th 2024, 1:09:48 pm
-date modified: Tuesday, June 2nd 2026, 11:52:23 am
+date modified: Wednesday, June 3rd 2026, 8:22:22 am
 ---
 See also: [[SuperSUSI rewrite working notes]]
 # Overview
@@ -137,23 +137,43 @@ Not owned by the module, but by weather.py, or whatever.
 
 ## `State`
 
-Persistent evolving variables owned by the module. The variables the module needs to "remember" from the previous step. Properties:
+Persistent evolving variables owned by the module. The variables that need to be "remembered" from the previous timestep.
+Properties:
 - They must be updated by the module during the timestep. Otherwise, they would belong in `ComputedConstants`.
+- They must be used in the following timestep. If they are only used by other modules in the current timestep, then they should be `Outputs`.
+- They may get written in the results netcdf file at the end of the computation, just like `Outputs`
 
-Note: If the value of a variable from the previous timestep is not needed, then  it is just an internal variable of the module, no need to persist it across timesteps!
+## `Outputs`
+Non-persistent evolving variables owned by the module. Properties:
+- They are not needed in the next timestep. Otherwise, they would be part of `State`.
+- They may be used by other modules downstream in the same timestep. For that reason, they might appear in the `Inputs` API (see below).
 
-For these properties, `State` must be both inputted and outputted in each module's `run()`.
-
-## Updatable in the future: do we need to separate State from Outputs?
-lax.scan allows returning carry and outputs from a function.
-Carry is what needs to be fed to the next timestep.
-Outputs do not need to be fed. In SUSI, this would be variables that get written into the netcdf file, but not used in the loop by any module (including itself in the next timestep).
 
 ## Additional non-data category: Inputs.
 `Inputs` are not a data category, but rather a bundle of other categories, which is convenient to describe the input API for each module. Note that the input API can have values from 
 ```python
 def run_hydrology(params:Params, computed_constants:ComputedConstants, input: hydrology.Inputs)->hydrology.State:
 ```
+In order to be explicit about what each module's inputs are and to be able to draw a relationship graph, it's best for each module to have a `make_inputs()` function as follows:
+```python
+def make_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
+    return Inputs(
+        sst=all_state.ocean.sst,
+        flux=a_outputs.flux,
+        precip=forcings.precip,
+    )
+```
+The only requirement for this to enable the Susi coupling graph is that there can be no conditional logic built inside `make_inputs()`.
+This could be enforced by `ast` during CI.
+
+--- 
+# JAX compatibility
+
+This data architecture is compatible with `jax.lax.scan`, and ensures that we can get all the benefits from it:
+- We could bundle `Params` and `ComputedConstants` together into a single `Constants`, but then we'd lose the option of taking autodiff gradients over the parameters alone.
+- `Forcings` need to be separated explicitly in `jax.lax.scan`.
+- `State` and `Outputs` mirror `(carry, ys)` explicitly.
+
 
 ---
 
@@ -175,6 +195,10 @@ class State:
     ...
 	
 @dataclass(frozen=True)
+class Output:
+    ...
+	
+@dataclass(frozen=True)
 class Input:
     wtd : float
     rainfall : np.ndarray
@@ -187,10 +211,15 @@ def compute_initial_state(params: Params, constants: ComputedConstants, forcings
     ...
 
 
+def make_inputs(all_state: AllState, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
+    return Inputs(
+	...
+    )
+
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
-    input: Input(wtd=state.hydro.wtd, rainfall=forcing.rainfall, transpiration=state.vegetation.transpiration)
+    input: Input
 ) -> State:
     ...
 ```
@@ -213,19 +242,24 @@ state = AllStates(hydro_state, etc.)
 
 for year in years:
 	# Inside time loop
+	hydro_inputs = hydro.make_inputs(wtd=state.hydro.wtd, rainfall=forcing.rainfall, transpiration=state.vegetation.trans)
 	hydro_state = hydro.run_timestep(
 	    params=params.hydro,
 	    constants=computed_constants.hydro,
-	    inputs= Inputs(wtd=state.hydro.wtd, rainfall=forcing.rainfall, transpiration=state.vegetation.trans)
+	    inputs= hydro_inputs
 	)
 	
 	# similar for vegetation and other modules
 	
-	state = AllStates(hydro_state, ...)
+	new_state = AllStates(hydro_state, ...)
+	output = AllOutput(...)
+	
+	return new_state, output
 ```
 
-The coupling structure is thus explicit.
+NOTE: careful here! AllState holds the state from the previous timestep, but `hydro_state` and `hydro_outputs` hold state from this timestep.
 
+---
 # JAX compatibility
 The architecture is designed to work well with:
 
