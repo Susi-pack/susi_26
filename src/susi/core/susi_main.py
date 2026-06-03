@@ -15,13 +15,11 @@ from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
-    OrganicLayerParamsArray,
     SusiParams,
     AshFertilizationParameters,
     StandardNPKFertilizationParameters,
 )
 from susi.core.canopygrid import CanopyGrid
-from susi.core.mosslayer import MossLayer
 from susi.core.strip import StripHydrology, drain_depth_development
 
 from susi.core.esom import Esom
@@ -33,13 +31,13 @@ from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
-from supersusi.core import methane, temperature, fertilization
+from supersusi.core import methane, temperature, fertilization, mosslayer, gvegetation
 from supersusi.core.fertilization_models import ash, npk, no_fertilization
-from supersusi.core import gvegetation
 
 
 @dataclass(frozen=True)
 class ModuleParams:
+    mosslayer: mosslayer.Params
     methane: methane.Params
     temperature: temperature.Params
     fertilization: fertilization.Params
@@ -216,11 +214,10 @@ class Susi:
         cpy.update_amax(stand.nut_stat)
         out.initialize_cpy()
 
-        org_para_array = OrganicLayerParamsArray(
-            organic_layer_parameters=self.parameters.organic_layer_parameters,
-            array_length=self.parameters.site_parameters.n,
+        moss_constants = mosslayer.compute_constants(module_params.mosslayer)
+        moss_state = mosslayer.compute_initial_state(
+            module_params.mosslayer, moss_constants
         )
-        moss = MossLayer(org_para_array=org_para_array, outputs=True)
         print("Canopy and moss layer hydrology initialized")
 
         # ******** Soil and strip parameterization *************************
@@ -386,7 +383,7 @@ class Susi:
                             hc=stand.hdom,
                             LAIconif=stand.leafarea,
                             Rew=reww,
-                            beta=moss.Ree,
+                            beta=moss_state.Ree,
                         )
                     )  # canopy hydrology computation
 
@@ -394,9 +391,17 @@ class Susi:
                         n_ditch_scen, d, interc, evap, ET, transpi, efloor, SWE
                     )
 
-                    potinf, efloor, MBE2 = moss.interception(
-                        potinf, efloor
-                    )  # ground vegetation and moss hydrology
+                    moss_state, moss_int_out = mosslayer.run_interception(
+                        moss_constants,
+                        mosslayer.assemble_interception_inputs(
+                            potinf=potinf, evap=efloor
+                        ),
+                        moss_state,
+                    )
+                    potinf, efloor = (
+                        moss_int_out.potinf,
+                        moss_int_out.evap,
+                    )
                     stpout["deltas"][n_ditch_scen, d, :] = (
                         potinf - transpi
                     )  # water flux thru soil surface
@@ -415,13 +420,31 @@ class Susi:
                         )
 
                     # --------Soil hydrology-----------------
-                    stp.run_timestep(
+                    exfil, S = stp.compute_exfil(
                         d,
                         h0ts_west[d],
                         h0ts_east[d],
                         stpout["deltas"][n_ditch_scen, d, :],
-                        moss,
-                    )  # strip/peat hydrology
+                    )  # how much water soil cannot store
+                    moss_state, moss_rf_out = mosslayer.run_returnflow(
+                        module_params.mosslayer,
+                        moss_constants,
+                        mosslayer.assemble_returnflow_inputs(
+                            rflow=exfil,
+                            interception_mbe=moss_int_out.mbe,
+                        ),
+                        moss_state,
+                    )
+                    stp.surface_runoff = moss_rf_out.surface_runoff
+                    stp.run_timestep(
+                        d,
+                        h0ts_west[d],
+                        h0ts_east[d],
+                        S,
+                    )  # strip/peat hydrology, using S (capped source/sink)
+                    stp.roff += np.mean(
+                        moss_rf_out.surface_runoff
+                    )  # complete roff with surface component
                     stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
 
                     state_peat_T, _ = temperature.run_timestep(
@@ -784,7 +807,19 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
                 n_cols=susi_params.site_parameters.n
             )
 
+    org = susi_params.organic_layer_parameters
+    n = susi_params.site_parameters.n
+
     return ModuleParams(
+        mosslayer=mosslayer.Params(
+            org_depth=np.ones(n) * org.org_depth,
+            org_poros=np.ones(n) * org.org_poros,
+            org_fc=np.ones(n) * org.org_fc,
+            org_rw=np.ones(n) * org.org_rw,
+            pond_storage_max=np.ones(n) * org.pond_storage_max,
+            org_sat=np.ones(n) * org.org_sat,
+            pond_storage_initial=np.ones(n) * org.pond_storage,
+        ),
         methane=methane.Params(),
         temperature=temperature.Params(
             n_layers_hydro=susi_params.site_parameters.nLyrs,

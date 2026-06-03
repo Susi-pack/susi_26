@@ -1,6 +1,6 @@
 ---
 date created: Wednesday, January 10th 2024, 1:09:48 pm
-date modified: Wednesday, June 3rd 2026, 9:50:40 am
+date modified: Wednesday, June 3rd 2026, 10:41:11 am
 ---
 See also: [[SuperSUSI rewrite working notes]]
 # Overview
@@ -205,21 +205,14 @@ class Outputs:
 	
 @dataclass(frozen=True)
 class Inputs:
-    wtd : float
-    rainfall : np.ndarray
-    transpiration: float
 	...
-```
 
-```python
 def compute_initial_state(params: Params, constants: ComputedConstants, forcings:Forcings) -> State:
     ...
 
 
-def assemble_inputs(all_state: AllState, hydro_state:hydrology.State, hydro_outputs: hydrology.Outputs, forcings: Forcings) -> Inputs:
-    return Inputs(
+def assemble_inputs() -> Inputs:
 	...
-    )
 
 def run_timestep(
     params: Params,
@@ -228,6 +221,12 @@ def run_timestep(
 ) -> tuple[State, Outputs]:
     ...
 ```
+Note: some modules might have more than one meaningful functions (example: `mosslayer.py`)
+This has 2 consequences:
+- `run_timestep()` should be split in as many functions as needed.
+- There would be as many `Inputs` and `Outputs` dataclasses as there are functions.
+
+
 ---
 
 # Main Timestep Loop
