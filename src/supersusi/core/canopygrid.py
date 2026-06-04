@@ -3,6 +3,8 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 from jaxtyping import Float
 
+from supersusi.io.forcing_weather import WeatherForcings
+
 eps = np.finfo(float).eps
 
 
@@ -121,22 +123,19 @@ def compute_initial_state(
 
 
 def assemble_inputs(
-    Ta: Float[np.ndarray, " n"],
-    Prec: Float[np.ndarray, " n"],
-    Rg: Float[np.ndarray, " n"],
-    Par: Float[np.ndarray, " n"],
-    VPD: Float[np.ndarray, " n"],
+    forcings: WeatherForcings,
     hc: Float[np.ndarray, " n"],
     LAIconif: Float[np.ndarray, " n"],
     Rew: Float[np.ndarray, " n"],
     beta: Float[np.ndarray, " n"],
 ) -> Inputs:
+    n = hc.shape[0]
     return Inputs(
-        Ta=Ta,
-        Prec=Prec,
-        Rg=Rg,
-        Par=Par,
-        VPD=VPD,
+        Ta=np.full(n, forcings.T),
+        Prec=np.full(n, forcings.Prec / 86400.0),  # mm/day → mm/s
+        Rg=np.full(n, forcings.Rg),
+        Par=np.full(n, forcings.Par),
+        VPD=np.full(n, forcings.VPD),
         hc=hc,
         LAIconif=LAIconif,
         Rew=Rew,

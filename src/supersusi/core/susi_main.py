@@ -31,7 +31,7 @@ from supersusi.core.susi_utils import (
 import supersusi.io.susi_io as susi_io
 from supersusi.io.outputs import Outputs
 import supersusi.io.utils as io_utils
-from supersusi.core.susi_utils import read_FMI_weather
+from supersusi.io.forcing_weather import read_FMI_weather, WeatherForcings
 
 from supersusi.core import (
     methane,
@@ -211,7 +211,6 @@ class Susi:
         if switches["Ojanen2010_2019"]:
             out.initialize_ojanen()
         # ********* Above ground hydrology initialization ***************
-        n = self.parameters.site_parameters.n
 
         canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
         canopy_state = canopygrid.update_amax(stand.nut_stat, canopy_state)
@@ -368,20 +367,16 @@ class Susi:
                     reww = rew_drylimit(
                         dwt
                     )  # for each column: moisture limitation from ground water level (Feddes-function)
-                    ta = self.weather_forcing.iloc[d, 4]  # air temperature deg C
-                    vpd = self.weather_forcing.iloc[d, 13]  # vapor pressure deficit
-                    rg = self.weather_forcing.iloc[d, 8]  # solar radiation
-                    par = self.weather_forcing.iloc[
-                        d, 10
-                    ]  # photosynthetically active radiation
-                    prec = self.weather_forcing.iloc[d, 7] / 86400.0  # precipitation
+                    forcings = WeatherForcings(
+                        T=self.weather_forcing.iloc[d, 4],
+                        Prec=self.weather_forcing.iloc[d, 7],
+                        Rg=self.weather_forcing.iloc[d, 8],
+                        Par=self.weather_forcing.iloc[d, 10],
+                        VPD=self.weather_forcing.iloc[d, 13],
+                    )
 
                     inputs = canopygrid.assemble_inputs(
-                        Ta=np.full(n, ta),
-                        Prec=np.full(n, prec),
-                        Rg=np.full(n, rg),
-                        Par=np.full(n, par),
-                        VPD=np.full(n, vpd),
+                        forcings,
                         hc=stand.hdom,
                         LAIconif=stand.leafarea,
                         Rew=reww,
@@ -465,7 +460,7 @@ class Susi:
                         params=module_params.temperature,
                         computed_constants=static_inputs_peat_T,
                         inputs=temperature.assemble_inputs(
-                            T_air=ta, swe=SWE, efloor=efloor
+                            T_air=forcings.T, swe=SWE, efloor=efloor
                         ),
                         state=state_peat_T,
                     )
