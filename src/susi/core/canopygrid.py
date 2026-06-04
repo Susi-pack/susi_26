@@ -25,13 +25,28 @@ eps = np.finfo(float).eps
 
 
 class CanopyGrid:
-    def __init__(self, cpara, state, outputs=False):
+    def __init__(
+        self,
+        cpara,
+        lai_conif,
+        lai_decid_max,
+        hc,
+        cf,
+        w,
+        swe,
+        outputs=False,
+    ):
         """
         initializes CanopyGrid -object
 
         Args:
-            cpara - parameter dict:
-            state - dict of initial state
+            cpara - parameter dict
+            lai_conif - conifer LAI [m2 m-2]
+            lai_decid_max - maximum deciduous LAI [m2 m-2]
+            hc - canopy height [m]
+            cf - canopy closure fraction [-]
+            w - initial canopy water storage [mm]
+            swe - initial snow water equivalent [mm]
             outputs - True saves output grids to list at each timestep
 
         Returns:
@@ -48,21 +63,21 @@ class CanopyGrid:
         self.amax = copy.deepcopy(cpara.physpara.amax_init)
 
         # canopy parameters and state
-        self.hc = state.hc + epsi
-        self.cf = state.cf + epsi
+        self.hc = hc + epsi
+        self.cf = cf + epsi
         # self.cf = 0.1939 * ba / (0.1939 * ba + 1.69) + epsi
         # canopy closure [-] as function of basal area ba m2ha-1;
         # fitted to Korhonen et al. 2007 Silva Fennica Fig.2
 
-        self._LAIconif = state.lai_conif + epsi  # m2m-2
-        self._LAIdecid = state.lai_decid_max
+        self._LAIconif = lai_conif + epsi  # m2m-2
+        self._LAIdecid = lai_decid_max
         self.LAI = self._LAIconif + self._LAIdecid
 
-        self._LAIdecid_max = state.lai_decid_max + epsi  # m2m-2
+        self._LAIdecid_max = lai_decid_max + epsi  # m2m-2
 
         # --- state variables
-        self.W = np.minimum(state.w, cpara.interception.wmax * self.LAI)
-        self.SWE = state.swe
+        self.W = np.minimum(w, cpara.interception.wmax * self.LAI)
+        self.SWE = swe
         self.SWEi = self.SWE
         self.SWEl = np.zeros(np.shape(self.SWE))
 

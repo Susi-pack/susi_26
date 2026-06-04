@@ -14,12 +14,10 @@ import datetime
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
-    CanopyStateParamsArray,
     SusiParams,
     AshFertilizationParameters,
     StandardNPKFertilizationParameters,
 )
-from susi.core.canopygrid import CanopyGrid
 from susi.core.strip import StripHydrology, drain_depth_development
 
 from susi.core.esom import Esom
@@ -31,12 +29,20 @@ from susi.io.outputs import Outputs
 import susi.io.utils as io_utils
 from susi.core.susi_utils import read_FMI_weather
 
-from supersusi.core import methane, temperature, fertilization, mosslayer, gvegetation
+from supersusi.core import (
+    methane,
+    temperature,
+    fertilization,
+    mosslayer,
+    gvegetation,
+    canopygrid,
+)
 from supersusi.core.fertilization_models import ash, npk, no_fertilization
 
 
 @dataclass(frozen=True)
 class ModuleParams:
+    canopygrid: canopygrid.Params
     mosslayer: mosslayer.Params
     methane: methane.Params
     temperature: temperature.Params
@@ -201,17 +207,10 @@ class Susi:
         if switches["Ojanen2010_2019"]:
             out.initialize_ojanen()
         # ********* Above ground hydrology initialization ***************
-        # cmask = np.ones(self.parameters.site_parameters.n)
-        canopy_state_parameters_array = CanopyStateParamsArray(
-            canopy_state_parameters=self.parameters.canopy_parameters.state,
-            array_length=self.parameters.site_parameters.n,
-        )
-        cpy = CanopyGrid(
-            cpara=self.parameters.canopy_parameters,
-            state=canopy_state_parameters_array,
-            outputs=False,
-        )  # initialize above ground vegetation hydrology model
-        cpy.update_amax(stand.nut_stat)
+        n = self.parameters.site_parameters.n
+
+        canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
+        canopy_state = canopygrid.update_amax(stand.nut_stat, canopy_state)
         out.initialize_cpy()
 
         moss_constants = mosslayer.compute_constants(module_params.mosslayer)
@@ -261,9 +260,12 @@ class Susi:
             (rounds, n_simulation_days, self.parameters.site_parameters.nLyrs)
         )  # daily peat temperature profiles
 
-        intercs, evaps, ETs, transpis, efloors, swes = cpy.create_outarrays(
-            rounds, n_simulation_days, self.parameters.site_parameters.n
-        )  # outputs for canopy hydrology model
+        intercs = np.zeros((rounds, n_simulation_days, self.parameters.site_parameters.n))
+        evaps = np.zeros_like(intercs)
+        ETs = np.zeros_like(intercs)
+        transpis = np.zeros_like(intercs)
+        efloors = np.zeros_like(intercs)
+        swes = np.zeros_like(intercs)
 
         # ***********Scenario loop ********************************************************
 
@@ -352,8 +354,7 @@ class Susi:
                     - datetime.datetime(calendar_year, 1, 1)
                 ).days + 1
 
-                # CHECK THIS AND TEST
-                cpy.update_amax(stand.nut_stat)
+                canopy_state = canopygrid.update_amax(stand.nut_stat, canopy_state)
 
                 # **********  Daily loop ************************************************************
                 for dd in range(days):  # day loop
@@ -361,7 +362,6 @@ class Susi:
                     reww = rew_drylimit(
                         dwt
                     )  # for each column: moisture limitation from ground water level (Feddes-function)
-                    doy = self.weather_forcing.iloc[d, 14]  # day of the year
                     ta = self.weather_forcing.iloc[d, 4]  # air temperature deg C
                     vpd = self.weather_forcing.iloc[d, 13]  # vapor pressure deficit
                     rg = self.weather_forcing.iloc[d, 8]  # solar radiation
@@ -370,26 +370,33 @@ class Susi:
                     ]  # photosynthetically active radiation
                     prec = self.weather_forcing.iloc[d, 7] / 86400.0  # precipitation
 
-                    potinf, trfall, interc, evap, ET, transpi, efloor, MBE, SWE = (
-                        cpy.run_timestep(
-                            self.parameters.canopy_parameters,
-                            doy,
-                            self.parameters.canopy_parameters.dt,
-                            ta,
-                            prec,
-                            rg,
-                            par,
-                            vpd,
-                            hc=stand.hdom,
-                            LAIconif=stand.leafarea,
-                            Rew=reww,
-                            beta=moss_state.Ree,
-                        )
-                    )  # canopy hydrology computation
-
-                    intercs, evaps, ETs, transpis, efloors, SWEs = cpy.update_outarrays(
-                        n_ditch_scen, d, interc, evap, ET, transpi, efloor, SWE
+                    inputs = canopygrid.assemble_inputs(
+                        Ta=np.full(n, ta),
+                        Prec=np.full(n, prec),
+                        Rg=np.full(n, rg),
+                        Par=np.full(n, par),
+                        VPD=np.full(n, vpd),
+                        hc=stand.hdom,
+                        LAIconif=stand.leafarea,
+                        Rew=reww,
+                        beta=moss_state.Ree,
                     )
+                    canopy_state, canopy_out = canopygrid.run_timestep(
+                        module_params.canopygrid, inputs, canopy_state
+                    )
+                    potinf = canopy_out.potinf
+                    interc = canopy_out.interc
+                    evap = canopy_out.evap
+                    ET = canopy_out.et
+                    transpi = canopy_out.transpi
+                    efloor = canopy_out.efloor
+                    SWE = canopy_out.swe
+
+                    intercs[n_ditch_scen, d, :] = interc
+                    evaps[n_ditch_scen, d, :] = evap
+                    ETs[n_ditch_scen, d, :] = ET
+                    transpis[n_ditch_scen, d, :] = transpi
+                    efloors[n_ditch_scen, d, :] = efloor
 
                     moss_state, moss_interception_outputs = mosslayer.run_interception(
                         moss_constants,
@@ -489,7 +496,7 @@ class Susi:
                     ETs[n_ditch_scen, start : start + days, :],
                     transpis[n_ditch_scen, start : start + days, :],
                     efloors[n_ditch_scen, start : start + days, :],
-                    SWEs[n_ditch_scen, start : start + days, :],
+                    swes[n_ditch_scen, start : start + days, :],
                 )
 
                 out.write_temperature(
@@ -811,7 +818,37 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
     org = susi_params.organic_layer_parameters
     n = susi_params.site_parameters.n
 
+    c = susi_params.canopy_parameters
+
     return ModuleParams(
+        canopygrid=canopygrid.Params(
+            dt=c.dt,
+            cf=np.ones(n) * c.state.cf,
+            lai_decid_max=np.ones(n) * c.state.lai_decid_max,
+            wmax=c.interception.wmax,
+            wmaxsnow=c.interception.wmaxsnow,
+            kmelt=c.snow.kmelt,
+            kfreeze=c.snow.kfreeze,
+            r=c.snow.r,
+            amax_init=c.physpara.amax_init,
+            g1_conif=c.physpara.g1_conif,
+            g1_decid=c.physpara.g1_decid,
+            kp=c.physpara.kp,
+            q50=c.physpara.q50,
+            gsoil=c.physpara.gsoil,
+            zmeas=c.flow.zmeas,
+            zground=c.flow.zground,
+            zo_ground=c.flow.zo_ground,
+            smax=c.phenology.smax,
+            tau=c.phenology.tau,
+            xo=c.phenology.xo,
+            fmin=c.phenology.fmin,
+            P=101300.0,
+            U=2.0,
+            CO2=380.0,
+            initial_W=np.ones(n) * c.state.w,
+            initial_SWE=np.ones(n) * c.state.swe,
+        ),
         mosslayer=mosslayer.Params(
             org_depth=np.ones(n) * org.org_depth,
             org_poros=np.ones(n) * org.org_poros,

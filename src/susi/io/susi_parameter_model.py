@@ -227,25 +227,6 @@ class CanopyStateParams(StrictFrozenModel):
     )
 
 
-class CanopyStateParamsArray:
-    """
-    Canopy and moss for each soil column (0, and n-1 are ditches)
-    Same as CanopyStateParameters, but with all array elements.
-    """
-
-    lai_conif: np.ndarray
-    lai_decid_max: np.ndarray
-    hc: np.ndarray
-    cf: np.ndarray
-    # initial state of canopy storage [mm] and snow water equivalent [mm]
-    w: np.ndarray
-    swe: np.ndarray
-
-    def __init__(self, canopy_state_parameters: CanopyStateParams, array_length: int):
-        for name, value in canopy_state_parameters.model_dump().items():
-            setattr(self, name, value * np.ones(array_length))
-
-
 class Flow(StrictFrozenModel):
     """
     Canopy flow field parameters
