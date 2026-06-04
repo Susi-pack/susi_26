@@ -9,6 +9,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.sparse import diags
 from supersusi.core.susi_utils import peat_hydrol_properties, wrc
+from supersusi.core.strip import ResidenceTimeOutput
 
 
 class Esom:
@@ -693,7 +694,7 @@ class Esom:
 
         # return self.out
 
-    def compose_export(self, stp, df_peat_temperatures):
+    def compose_export(self, diag: ResidenceTimeOutput, df_peat_temperatures):
         # To get total export, sum the left and right ditches
         # UPDATE THESE
         """
@@ -707,13 +708,13 @@ class Esom:
         #Until here
         self.hmw = hmw
         self.lmw = lmw
-        self.hmwtoditch = hmw*np.exp(-0.0004*stp.residence_time)                    # biodegradation parameters from Kalbiz et al 2003
-        self.lmwtoditch= lmw*np.exp(-0.15*stp.residence_time)
+        self.hmwtoditch = hmw*np.exp(-0.0004*diag.residence_time)                    # biodegradation parameters from Kalbiz et al 2003
+        self.lmwtoditch= lmw*np.exp(-0.15*diag.residence_time)
         #print (hmw)
-        self.hmw_to_west = len(np.ravel(stp.ixwest))/stp.n * np.mean(self.hmwtoditch[0, np.ravel(stp.ixwest)])
-        self.hmw_to_east = len(np.ravel(stp.ixeast))/stp.n * np.mean(self.hmwtoditch[0, np.ravel(stp.ixeast)])
-        self.lmw_to_west = len(np.ravel(stp.ixwest))/stp.n * np.mean(self.lmwtoditch[0, np.ravel(stp.ixwest)])
-        self.lmw_to_east = len(np.ravel(stp.ixeast))/stp.n * np.mean(self.lmwtoditch[0, np.ravel(stp.ixeast)])
+        self.hmw_to_west = len(np.ravel(diag.ixwest))/diag.n * np.mean(self.hmwtoditch[0, np.ravel(diag.ixwest)])
+        self.hmw_to_east = len(np.ravel(diag.ixeast))/diag.n * np.mean(self.hmwtoditch[0, np.ravel(diag.ixeast)])
+        self.lmw_to_west = len(np.ravel(diag.ixwest))/diag.n * np.mean(self.lmwtoditch[0, np.ravel(diag.ixwest)])
+        self.lmw_to_east = len(np.ravel(diag.ixeast))/diag.n * np.mean(self.lmwtoditch[0, np.ravel(diag.ixeast)])
         """
         mass_to_c = 0.5
         peat_T = df_peat_temperatures.iloc[:, 2].values
@@ -739,27 +740,27 @@ class Esom:
         self.hmw = hmw
         self.lmw = lmw
         self.hmwtoditch = self.hmw * np.exp(
-            -0.0004 * stp.residence_time
+            -0.0004 * diag.residence_time
         )  # biodegradation parameters from Kalbiz et al 2003
-        self.lmwtoditch = self.lmw * np.exp(-0.15 * stp.residence_time)
+        self.lmwtoditch = self.lmw * np.exp(-0.15 * diag.residence_time)
         # print (hmw)
         self.hmw_to_west = (
-            len(np.ravel(stp.ixwest))
-            / stp.n
-            * np.mean(self.hmwtoditch[0, np.ravel(stp.ixwest)])
+            len(np.ravel(diag.ixwest))
+            / diag.n
+            * np.mean(self.hmwtoditch[0, np.ravel(diag.ixwest)])
         )
         self.hmw_to_east = (
-            len(np.ravel(stp.ixeast))
-            / stp.n
-            * np.mean(self.hmwtoditch[0, np.ravel(stp.ixeast)])
+            len(np.ravel(diag.ixeast))
+            / diag.n
+            * np.mean(self.hmwtoditch[0, np.ravel(diag.ixeast)])
         )
         self.lmw_to_west = (
-            len(np.ravel(stp.ixwest))
-            / stp.n
-            * np.mean(self.lmwtoditch[0, np.ravel(stp.ixwest)])
+            len(np.ravel(diag.ixwest))
+            / diag.n
+            * np.mean(self.lmwtoditch[0, np.ravel(diag.ixwest)])
         )
         self.lmw_to_east = (
-            len(np.ravel(stp.ixeast))
-            / stp.n
-            * np.mean(self.lmwtoditch[0, np.ravel(stp.ixeast)])
+            len(np.ravel(diag.ixeast))
+            / diag.n
+            * np.mean(self.lmwtoditch[0, np.ravel(diag.ixeast)])
         )

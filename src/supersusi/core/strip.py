@@ -5,6 +5,7 @@ import numpy as np
 from jaxtyping import Float
 
 from supersusi.core.susi_utils import peat_hydrol_properties, CWTr
+from supersusi.core.mosslayer import ReturnflowOutputs
 
 
 @dataclass(frozen=True)
@@ -17,31 +18,27 @@ class Params:
     )
     vonP_bottom: int = field(doc="von Post humification at bottom layers")
     peat_type: list[str] = field(doc="Peat type per layer (e.g., 'A', 'S')")
-    peat_type_bottom: list[str] = field(
-        doc="Peat type for bottom layers (fallback)"
-    )
+    peat_type_bottom: list[str] = field(doc="Peat type for bottom layers (fallback)")
     bd_top: Float[np.ndarray, " n_top"] | None = field(
         default=None, doc="Bulk density at top [g cm-3]"
     )
     bd_bottom: float = field(default=0.0, doc="Bulk density at bottom [g cm-3]")
-    anisotropy: float = field(default=1.0, doc="Hydraulic conductivity anisotropy factor")
+    anisotropy: float = field(
+        default=1.0, doc="Hydraulic conductivity anisotropy factor"
+    )
     L: float = field(default=10.0, doc="Strip width / ditch distance [m]")
     n: int = field(default=10, doc="Number of computation nodes")
     slope: float = field(default=0.0, doc="Slope [%]")
     initial_h: float = field(default=0.0, doc="Initial water table depth [m]")
     dt: float = field(default=1.0, doc="Time step [days]")
-    implic: float = field(
-        default=1.0, doc="Implicit factor (0=FE, 1=BE, 0.5=CN)"
-    )
+    implic: float = field(default=1.0, doc="Implicit factor (0=FE, 1=BE, 0.5=CN)")
     DrIrr: bool = field(default=False, doc="Drainage/irrigation flag")
 
 
 @dataclass(frozen=True)
 class ComputedConstants:
     dz: Float[np.ndarray, " nLyrs"] = field(doc="Layer thickness [m]")
-    z: Float[np.ndarray, " nLyrs"] = field(
-        doc="Depth of layer center points [m]"
-    )
+    z: Float[np.ndarray, " nLyrs"] = field(doc="Depth of layer center points [m]")
     pF: Float[np.ndarray, " nLyrs 4"] = field(
         doc="van Genuchten parameters [ThetaS, ThetaR, alpha, n]"
     )
@@ -52,9 +49,7 @@ class ComputedConstants:
         doc="Ksat tiled across nodes (n, nLyrs) [m s-1]"
     )
     dy: float = field(doc="Node width [m]")
-    ele: Float[np.ndarray, " n"] = field(
-        doc="Surface elevation in y-direction [m]"
-    )
+    ele: Float[np.ndarray, " n"] = field(doc="Surface elevation in y-direction [m]")
     dwtToSto: Callable[[np.ndarray], np.ndarray] = field(
         doc="Water storage as function of water table depth"
     )
@@ -77,9 +72,7 @@ class ComputedConstants:
 
 @dataclass(frozen=True)
 class State:
-    H: Float[np.ndarray, " n"] = field(
-        doc="Hydraulic head relative to datum [m]"
-    )
+    H: Float[np.ndarray, " n"] = field(doc="Hydraulic head relative to datum [m]")
 
 
 @dataclass(frozen=True)
@@ -109,20 +102,126 @@ class TimestepOutputs:
     roff: float = field(doc="Total runoff [m]")
     roffwest: float = field(doc="Runoff from west ditch [m]")
     roffeast: float = field(doc="Runoff from east ditch [m]")
-    air_ratio: Float[np.ndarray, " n"] = field(
-        doc="Air-filled porosity ratio"
-    )
+    air_ratio: Float[np.ndarray, " n"] = field(doc="Air-filled porosity ratio")
     afp: Float[np.ndarray, " n"] = field(
         doc="Air-filled porosity in root zone [m3 m-3]"
     )
 
 
+@dataclass(frozen=True)
+class NumericalBuffer:
+    """Pre-allocated workspace for the strip solver's iterative timestep.
+
+    The solver functions (``run_timestep``, ``_amatrix``, ``_bound_const``)
+    mutate the *contents* of these arrays in-place each timestep.
+    Pre-allocating once per scenario avoids repeated ``np.zeros()`` calls
+    in the hot path (5114+ timesteps).
+
+    ``frozen=True`` prevents accidental rebinding of the array *references*
+    (e.g. ``buffer.A = something_else``).  Numpy array *contents* are
+    always mutable regardless of the frozen setting, which is the intended
+    usage — the arrays are zeroed and refilled every call.
+
+    Attributes
+    ----------
+    A  : np.ndarray, shape (n, n)
+        Coefficient matrix of the tridiagonal system.
+        Zero-filled at the start of each ``run_timestep`` call, then
+        written by ``_amatrix`` and ``_bound_const`` every solver iteration.
+    hs : np.ndarray, shape (n,)
+        Right-hand side vector.  Reserved for a future refactoring of
+        ``_right_side`` to write in-place, avoiding a per-call allocation.
+    """
+
+    A: Float[np.ndarray, " n n"]
+    hs: Float[np.ndarray, " n"]
+
+
+@dataclass(frozen=True)
+class ResidenceTimeOutput:
+    n: int = field(doc="Number of computation nodes")
+    residence_time: Float[np.ndarray, " n"] = field(
+        doc="Residence time of water from column to ditch [days]"
+    )
+    ixwest: tuple = field(doc="Indices of columns discharging to west ditch")
+    ixeast: tuple = field(doc="Indices of columns discharging to east ditch")
+
+
 def compute_constants(params: Params) -> ComputedConstants:
-    ...
+    dz = np.ones(params.nLyrs) * params.dzLyr
+    z = np.cumsum(dz) - dz / 2.0
+    if params.vonP:
+        lenvp = len(params.vonP_top)
+        vonP = np.ones(params.nLyrs) * params.vonP_bottom
+        vonP[:lenvp] = params.vonP_top
+        ptype = params.peat_type_bottom * params.nLyrs
+        lenpt = len(params.peat_type)
+        ptype[:lenpt] = params.peat_type
+        pF, Ksat = peat_hydrol_properties(vonP, var="H", ptype=ptype)
+    else:
+        assert params.bd_top is not None
+        lenbd = len(params.bd_top)
+        bd = np.ones(params.nLyrs) * params.bd_bottom
+        bd[:lenbd] = params.bd_top
+        ptype = params.peat_type_bottom * params.nLyrs
+        lenpt = len(params.peat_type)
+        ptype[:lenpt] = params.peat_type
+        pF, Ksat = peat_hydrol_properties(bd, var="bd", ptype=ptype)
+
+    for i in range(params.nLyrs):
+        if z[i] < 0.41:
+            Ksat[i] = Ksat[i] * params.anisotropy
+
+    (
+        dwtToSto,
+        stoToGwl,
+        dwtToTra,
+        C,
+        dwtToRat,
+        dwtToAfp,
+    ) = CWTr(params.nLyrs, z, dz, pF, Ksat, direction="negative")
+
+    dy = params.L / params.n
+    sl = params.slope
+    lev = 1.0
+    ele = np.linspace(0, params.L * sl / 100.0, params.n) + lev
+    Kmap = np.tile(Ksat, (params.n, 1))
+
+    return ComputedConstants(
+        dz=dz,
+        z=z,
+        pF=pF,
+        Ksat=Ksat,
+        Kmap=Kmap,
+        dy=float(dy),
+        ele=ele,
+        dwtToSto=dwtToSto,
+        stoToGwl=stoToGwl,
+        dwtToTra=dwtToTra,
+        C=C,
+        dwtToRat=dwtToRat,
+        dwtToAfp=dwtToAfp,
+    )
 
 
 def compute_initial_state(params: Params, constants: ComputedConstants) -> State:
-    ...
+    H = constants.ele + params.initial_h
+    return State(H=H)
+
+
+def assemble_timestep_inputs(
+    h0ts_west: float,
+    h0ts_east: float,
+    exfil_out: ExfilOutputs,
+    moss_rf_out: ReturnflowOutputs,
+) -> TimestepInputs:
+
+    return TimestepInputs(
+        h0ts_west=h0ts_west,
+        h0ts_east=h0ts_east,
+        S=exfil_out.S,
+        surface_runoff=moss_rf_out.surface_runoff,
+    )
 
 
 def compute_exfil(
@@ -132,7 +231,114 @@ def compute_exfil(
     h0ts_east: float,
     p: Float[np.ndarray, " n"],
 ) -> ExfilOutputs:
-    ...
+    n = len(state.H)
+    Htmp = state.H.copy()
+    dwt = Htmp - constants.ele
+    S = p.copy()
+    dwt[0] = h0ts_west
+    dwt[n - 1] = h0ts_east
+
+    airv = np.maximum(
+        constants.dwtToSto(np.zeros(n)) - constants.dwtToSto(dwt), np.zeros(n)
+    )
+    S = np.where(S > airv, airv, S)
+    exfil = p - S
+    return ExfilOutputs(exfil=exfil, S=S)
+
+
+def _gmean_tr(Tr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    n = len(Tr)
+    trwest = np.maximum(Tr[: n - 1] * Tr[1:], 0.0)
+    Trwest = np.sqrt(trwest)
+    Trwest = np.append(Trwest, 0.0)
+    treast = np.maximum(Tr[1:] * Tr[: n - 1], 0.0)
+    Treast = np.sqrt(treast)
+    Treast = np.insert(Treast, 0, 0.0)
+    return Trwest, Treast
+
+
+def _hadjacent(H: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    n = len(H)
+    Hwest = H[: n - 1]
+    Hwest = np.append(Hwest, 0.0)
+    Heast = H[1:]
+    Heast = np.insert(Heast, 0, 0.0)
+    return Hwest, Heast
+
+
+def _amatrix(
+    A: np.ndarray,
+    n: int,
+    implic: float,
+    Trwest: np.ndarray,
+    Treast: np.ndarray,
+    alfa: np.ndarray,
+) -> np.ndarray:
+    i, j = np.indices(A.shape)
+    A[i == j] = implic * (Trwest + Treast) + alfa
+    A[i == j + 1] = -implic * Trwest[: n - 1]
+    A[i == j - 1] = -implic * Treast[1:]
+    return A
+
+
+def _bound_const(A: np.ndarray, n: int) -> np.ndarray:
+    A[0, 0] = 1
+    A[0, 1] = 0.0
+    A[n - 1, n - 1] = 1.0
+    A[n - 1, n - 2] = 0.0
+    return A
+
+
+def _right_side(
+    S: np.ndarray,
+    dt: float,
+    dy: float,
+    implic: float,
+    alfa: np.ndarray,
+    H: np.ndarray,
+    Trminus0: np.ndarray,
+    Hminus: np.ndarray,
+    Trplus0: np.ndarray,
+    Hplus: np.ndarray,
+    DrIrr: bool,
+    Htmp1: np.ndarray,
+    ele: np.ndarray,
+    h0_west: float,
+    h0_east: float,
+) -> np.ndarray:
+    hs = (
+        S * dt * dy**2
+        + alfa * H
+        + (1 - implic) * (Trminus0 * Hminus)
+        - (1 - implic) * (Trminus0 + Trplus0) * H
+        + (1 - implic) * (Trplus0 * Hplus)
+    )
+    n = len(Htmp1)
+
+    if not DrIrr:
+        hs[0] = Htmp1[1] if Htmp1[0] > Htmp1[1] else min(ele[0] + h0_west, Htmp1[1])
+        hs[n - 1] = (
+            Htmp1[n - 2]
+            if Htmp1[n - 1] > Htmp1[n - 2]
+            else min(ele[n - 1] + h0_east, Htmp1[n - 2])
+        )
+    else:
+        hs[0] = ele[0] + h0_west
+        hs[n - 1] = ele[n - 1] + h0_east
+    return hs
+
+
+def _runoff(
+    H: np.ndarray,
+    Trminus: np.ndarray,
+    Trplus: np.ndarray,
+    dt: float,
+    dy: float,
+    L: float,
+) -> tuple[float, float]:
+    roffwest = ((H[1] - H[0]) / dy * Trminus[0] * dt) / L
+    roffeast = (H[-2] - H[-1]) / dy * Trplus[-1] * dt / L
+    return roffwest, roffeast
 
 
 def run_timestep(
@@ -140,358 +346,109 @@ def run_timestep(
     constants: ComputedConstants,
     state: State,
     inputs: TimestepInputs,
+    buffer: NumericalBuffer,
 ) -> tuple[State, TimestepOutputs]:
-    ...
+    n = params.n
+    Htmp = state.H.copy()
+    Htmp1 = state.H.copy()
+    dwt = Htmp - constants.ele
+    dwt[0] = inputs.h0ts_west
+    dwt[n - 1] = inputs.h0ts_east
 
+    Tr0 = constants.dwtToTra(dwt)
+    Trminus0, Trplus0 = _gmean_tr(Tr0)
+    Hminus, Hplus = _hadjacent(state.H)
 
-# Old code below — will be removed as functions are implemented
-class StripHydrology:
-    def __init__(self, spara):
-        self.nLyrs = spara.nLyrs  # number of soil layers
-        dz = np.ones(self.nLyrs) * spara.dzLyr  # thickness of layers, m
-        z = np.cumsum(dz) - dz / 2.0  # depth of the layer center point, m
-        if spara.vonP:
-            lenvp = len(spara.vonP_top)
-            vonP = np.ones(self.nLyrs) * spara.vonP_bottom
-            vonP[0:lenvp] = spara.vonP_top
-            ptype = spara.peat_type_bottom * spara.nLyrs
-            lenpt = len(spara.peat_type)
-            ptype[0:lenpt] = spara.peat_type
-            self.pF, self.Ksat = peat_hydrol_properties(
-                vonP, var="H", ptype=ptype
-            )  # peat hydraulic properties after Päivänen 1973
-        else:
-            lenbd = len(spara.bd_top)
-            bd = np.ones(self.nLyrs) * spara.bd_bottom
-            bd[0:lenbd] = spara.bd_top  # degree of  decomposition, von Post scale
-            ptype = spara.peat_type_bottom * spara.nLyrs
-            lenpt = len(spara.peat_type)
-            ptype[0:lenpt] = spara.peat_type
-            self.pF, self.Ksat = peat_hydrol_properties(
-                bd, var="bd", ptype=ptype
-            )  # peat hydraulic properties after Päivänen 1973
-
-        for n in range(self.nLyrs):
-            if z[n] < 0.41:
-                self.Ksat[n] = self.Ksat[n] * spara.anisotropy
-            else:
-                self.Ksat[n] = self.Ksat[n] * 1.0
-
-        (
-            self.dwtToSto,
-            self.stoToGwl,
-            self.dwtToTra,
-            self.C,
-            self.dwtToRat,
-            self.dwtToAfp,
-        ) = CWTr(
-            self.nLyrs, z, dz, self.pF, self.Ksat, direction="negative"
-        )  # interpolated storage, transmissivity, diff water capacity, and ratio between aifilled porosoty in rooting zone to total airf porosity  functions
-
-        self.L = spara.L  # compartemnt width, m
-        self.n = spara.n  # number of computation nodes
-        self.dy = float(self.L / self.n)  # node width m
-        sl = spara.slope  # slope %
-        lev = 1.0  # basic level of soil surface
-
-        self.ele = (
-            np.linspace(0, self.L * sl / 100.0, self.n) + lev
-        )  # surface rise in y direction, m
-        self.dt = 1  # time step, days
-        self.implic = 1.0  # 0.5                                                  # 0-forward Euler, 1-backward Euler, 0.5-Crank-Nicolson
-        self.DrIrr = False
-        self.dwt = spara.initial_h  # h in the compartment
-        self.H = (
-            self.ele + self.dwt
-        )  # np.empty(self.n)                      # depth to water table, negative down m
-
-        self.Kmap = np.tile(self.Ksat, (self.n, 1))  # Ksat map (col, lyr)
-        self.residence_time = np.zeros(
-            self.n
-        )  # residence time from column to the ditch, days
-        self.surface_runoff = np.zeros(self.n)
-
-        print("Peat strip initialized")
-
-    def reset_domain(self, initial_h):
-        self.A = np.zeros((self.n, self.n))  # computation matrix
-        self.dwt = np.ones(self.n) * initial_h  # right hand side vector
-        self.H = self.ele + self.dwt  # head with respect to absolute reference level, m
-        # self.sruno = 0.
-        self.roff = 0.0
-        print("Resetting strip scenario")
-
-    def compute_exfil(self, d, h0ts_west, h0ts_east, p):
-        """
-        Computes how much water the soil cannot store (exfiltration).
-        IN:
-            d day number
-            h0ts boundary (ditch depth, m) in time series
-            p water flux at soil surface [m]
-        OUT:
-            exfil water that cannot fit in soil pores [m]
-            S actual source/sink after capping by air volume [m]
-        """
-        n = self.n
-        Htmp = self.H.copy()
-        self.dwt = Htmp - self.ele
-        S = p.copy()
-        self.dwt[0] = h0ts_west
-        self.dwt[n - 1] = h0ts_east
-
-        airv = np.maximum(
-            self.dwtToSto(np.zeros(n)) - self.dwtToSto(self.dwt), np.zeros(n)
+    A = buffer.A
+    A.fill(0)
+    for _it in range(100):
+        Tr0 = np.maximum(constants.dwtToTra(state.H - constants.ele), 0.0)
+        Tr1 = np.maximum(constants.dwtToTra(Htmp1 - constants.ele), 0.0)
+        CC = constants.C(Htmp1 - constants.ele)
+        Trminus1, Trplus1 = _gmean_tr(Tr1)
+        alfa = CC * constants.dy**2 / params.dt
+        A = _amatrix(A, n, params.implic, Trminus1, Trplus1, alfa)
+        A = _bound_const(A, n)
+        hs = _right_side(
+            inputs.S,
+            params.dt,
+            constants.dy,
+            params.implic,
+            alfa,
+            state.H,
+            Trminus0,
+            Hminus,
+            Trplus0,
+            Hplus,
+            params.DrIrr,
+            Htmp1,
+            constants.ele,
+            inputs.h0ts_west,
+            inputs.h0ts_east,
         )
-        S = np.where(S > airv, airv, S)
-        exfil = p - S
-        return exfil, S
+        Htmp1 = np.linalg.multi_dot([np.linalg.inv(A), hs])
+        Htmp1 = np.where(Htmp1 > constants.ele, constants.ele, Htmp1)
+        conv = max(np.abs(Htmp1 - Htmp))
+        Htmp = Htmp1.copy()
+        if conv < 1.0e-7:
+            break
 
-    def run_timestep(self, d, h0ts_west, h0ts_east, S):
-        """
-        Solves groundwater flow and computes runoff totals.
-        IN:
-            d day number
-            h0ts boundary (ditch depth, m) in time series
-            S source/sink after capping by air volume [m]
-        """
-        n = self.n
-        Htmp = self.H.copy()
-        Htmp1 = self.H.copy()
-        self.dwt = Htmp - self.ele
+    H_new = Htmp1.copy()
+    roffwest, roffeast = _runoff(
+        H_new, Trminus1, Trplus1, params.dt, constants.dy, params.L
+    )
+    roff = roffwest + roffeast
+    new_dwt = H_new - constants.ele
+    air_ratio = constants.dwtToRat(new_dwt)
+    afp = constants.dwtToAfp(new_dwt)
 
-        self.dwt[0] = h0ts_west
-        self.dwt[n - 1] = h0ts_east
+    return State(H=H_new), TimestepOutputs(
+        roff=roff,
+        roffwest=roffwest,
+        roffeast=roffeast,
+        air_ratio=air_ratio,
+        afp=afp,
+    )
 
-        Tr0 = self.dwtToTra(self.dwt)  # Transmissivity from the previous time step
 
-        Trminus0, Trplus0 = self.gmeanTr(
-            Tr0
-        )  # geometric mean of adjacent node transmissivities
-        Hminus, Hplus = self.Hadjacent(self.H)  # vector of adjacent node H
+def compute_residence_time(
+    params: Params,
+    constants: ComputedConstants,
+    mean_dwt: Float[np.ndarray, " n"],
+) -> ResidenceTimeOutput:
+    n = params.n
+    porosity = 0.9
+    K = 10.0 ** (-4) * 86400
 
-        for it in range(100):  # iteration loop for implicit solution
-            Tr1 = self.dwtToTra(Htmp1 - self.ele)  # transmissivity in new iteration
-            Tr0 = np.maximum(self.dwtToTra(self.H - self.ele), 0.0)
-            Tr1 = np.maximum(self.dwtToTra(Htmp1 - self.ele), 0.0)
-            CC = self.C(Htmp1 - self.ele)  # storage coefficient in new iteration
-            Trminus1, Trplus1 = self.gmeanTr(
-                Tr1
-            )  # geometric mean of adjacent node transmissivity
-            alfa = CC * self.dy**2 / self.dt
-            self.A = self.Amatrix(
-                self.A, n, self.implic, Trminus1, Trplus1, alfa
-            )  # construct tridiaginal matrix
-            self.A = self.boundConst(self.A, n)  # constant head boundaries to A matrix
-            hs = self.rightSide(
-                S,
-                self.dt,
-                self.dy,
-                self.implic,
-                alfa,
-                self.H,
-                Trminus0,
-                Hminus,
-                Trplus0,
-                Hplus,
-                self.DrIrr,
-                Htmp1,
-                self.ele,
-                h0ts_west,
-                h0ts_east,
-            )  # right hand side of the equation
-            Htmp1 = np.linalg.multi_dot([np.linalg.inv(self.A), hs])  # solve equation
-            # Htmp1 = np.matmul(np.linalg.inv(self.A),hs)            # solve equation
+    dist = np.arange(0, params.L, constants.dy)
+    H = constants.ele + mean_dwt
+    rtime = constants.dy / (K * np.gradient(H, dist) / porosity)
 
-            Htmp1 = np.where(Htmp1 > self.ele, self.ele, Htmp1)  # cut the surface water
-            conv = max(np.abs(Htmp1 - Htmp))  # define convergence
-            Htmp = Htmp1.copy()  # new wt to old for new iteration
-            if conv < 1.0e-7:
-                if d % 365 == 0:
-                    print("  - day #", d, "iterations", it)
-                break
-        self.H = Htmp1.copy()
+    ixwest = np.where(rtime > 0)
+    ixeast = np.where(rtime < 0)
 
-        # **********************construction*****************
-        self.roffwest, self.roffeast = self.runoff(
-            self.H, Trminus1, Trplus1, self.dt, self.dy, self.L
-        )
-        self.roff = self.roffwest + self.roffeast
+    timetoditch = np.zeros(n)
+    timetoditch[ixwest] = np.cumsum(rtime[ixwest])
+    timetoditch[ixeast] = np.flip(np.cumsum(np.flip(rtime[ixeast] * -1)))
 
-        self.dwt = self.H - self.ele
-        self.air_ratio = self.dwtToRat(self.dwt)
-        self.afp = self.dwtToAfp(self.dwt)
-        # **************************************************
+    return ResidenceTimeOutput(
+        n=n, residence_time=timetoditch, ixwest=ixwest, ixeast=ixeast
+    )
 
-        return self.dwt, self.H, self.roff, self.air_ratio, self.afp
 
-    def Hadjacent(self, H):
-        """
-        Input:
-            H vector, H in each node
-        Output:
-            Hwest H(i-1), Heast H(i+1)
-        """
-        n = len(H)
-        Hwest = H[0 : n - 1]
-        Hwest = np.append(Hwest, 0.0)
-        Heast = H[1:]
-        Heast = np.insert(Heast, 0, 0.0)
-        return Hwest, Heast
+def make_numerical_buffer(params: Params) -> NumericalBuffer:
+    """
+    Allocate scratch arrays for solution of the differential equation.
 
-    def Amatrix(self, A, n, implic, Trwest, Treast, alfa):
-        """
-        Construction of tridiagonal matrix
-        """
-        i, j = np.indices(A.shape)
-        A[i == j] = implic * (Trwest + Treast) + alfa  # diagonal element
-        A[i == j + 1] = -implic * Trwest[: n - 1]  # West element
-        A[i == j - 1] = -implic * Treast[1:]  # East element
+    Call this once per scenario and pass the result to every
+    ``run_timestep`` call to avoid re-allocation overhead.
 
-        return A
-
-    def boundConst(self, A, n):
-        """
-        Diriclet (constant head boundary conditions)
-        """
-        A[0, 0] = 1
-        A[0, 1] = 0.0  # Dirichlet, west boundary
-        A[n - 1, n - 1] = 1.0
-        A[n - 1, n - 2] = 0.0  # Dirichlet, east boundary
-        return A
-
-    def boundNoFlow(A, n, implic, Trwest, Treast, alfa):
-        """
-        Diriclet (constant head boundary conditions)
-        """
-
-        A[0, 0] = 2.0 * implic * (Treast[0]) + alfa[0]  # Diagonal element
-        A[0, 1] = -2 * implic * Trwest[0]  # East element
-        A[n - 1, n - 1] = 2.0 * implic * (Trwest[n - 1]) + alfa[0]
-        A[n - 1, n - 2] = -2 * implic * Treast[n - 1]  # West element
-
-        return A
-
-    def rightSide(
-        self,
-        S,
-        dt,
-        dy,
-        implic,
-        alfa,
-        H,
-        Trminus0,
-        Hminus,
-        Trplus0,
-        Hplus,
-        DrIrr,
-        Htmp1,
-        ele,
-        h0_west,
-        h0_east,
-    ):
-        hs = (
-            S * dt * dy**2
-            + alfa * H
-            + (1 - implic) * (Trminus0 * Hminus)
-            - (1 - implic) * (Trminus0 + Trplus0) * H
-            + (1 - implic) * (Trplus0 * Hplus)
-        )
-        n = len(Htmp1)
-
-        if not DrIrr:
-            hs[0] = Htmp1[1] if Htmp1[0] > Htmp1[1] else min(ele[0] + h0_west, Htmp1[1])
-            hs[n - 1] = (
-                Htmp1[n - 2]
-                if Htmp1[n - 1] > Htmp1[n - 2]
-                else min(ele[n - 1] + h0_east, Htmp1[n - 2])
-            )  # if wt below canal water level, lower the canal wl to prevent water inflow to compartment
-        else:
-            hs[0] = ele[0] + h0_west
-            hs[n - 1] = ele[n - 1] + h0_east
-        return hs
-
-    def gmeanTr(self, Tr):
-        """
-        Input:
-            Transmissivity vector, tr in node center point
-        Output:
-            Transmissivity, tr in west surface sqrt(Tr(i-1)*Tr(i)) and east sqrt(Tr(i)*Tr(i+1))
-        """
-        n = len(Tr)
-        trwest = np.maximum(Tr[: n - 1] * Tr[1:], 0.0)
-        # Trwest = np.sqrt(Tr[:n-1]*Tr[1:])
-        Trwest = np.sqrt(trwest)
-        Trwest = np.append(Trwest, 0.0)
-        treast = np.maximum(Tr[1:] * Tr[: n - 1], 0.0)
-        # Treast = np.sqrt(Tr[1:]*Tr[:n-1])
-        Treast = np.sqrt(treast)
-        Treast = np.insert(Treast, 0, 0.0)
-        return Trwest, Treast
-
-    def runoff(self, H, Trminus, Trplus, dt, dy, L):
-        roffwest = ((H[1] - H[0]) / dy * Trminus[0] * dt) / L
-        roffeast = (H[-2] - H[-1]) / dy * Trplus[-1] * dt / L
-        return roffwest, roffeast
-
-    def create_outarrays(self, nrounds, ndays, ncols):
-        stpout = {}
-        stpout["dwts"] = np.zeros(
-            (nrounds, ndays, ncols), dtype=float
-        )  # water table depths, m,  ndarray(scenarios, days, number of nodes)
-        stpout["afps"] = np.zeros(
-            (nrounds, ndays, ncols), dtype=float
-        )  # air-filled porosity (m3 m-3),  ndarray(scenarios, days, number of nodes)
-        stpout["deltas"] = np.zeros((nrounds, ndays, ncols), dtype=float)
-        stpout["hts"] = np.zeros(
-            (nrounds, ndays, ncols), dtype=float
-        )  # water table depths, m,  ndarray(scenarios, days, number of nodes)
-        stpout["runoff"] = np.zeros(
-            (nrounds, ndays), dtype=float
-        )  # daily total runoff, here in m, sum of west, east, surface runoff
-        stpout["runoffwest"] = np.zeros(
-            (nrounds, ndays), dtype=float
-        )  # daily runoff, here in m, from west ditch
-        stpout["runoffeast"] = np.zeros(
-            (nrounds, ndays), dtype=float
-        )  # daily runoff, here in m, from east ditch
-        stpout["surfacerunoff"] = np.zeros(
-            (nrounds, ndays, ncols), dtype=float
-        )  # daily surfacerunoff, here in m, from each column
-
-        return stpout
-
-    def update_outarrays(self, r, d, stpout):
-        stpout["dwts"][r, d, :] = self.dwt  # daily water tables
-        stpout["hts"][r, d, :] = (
-            self.H
-        )  # water table height in comparison to stabile datum (elevation)
-        stpout["afps"][r, d, :] = self.afp  # air filled porosity
-        stpout["runoff"][r, d] = self.roff  # daily runoff
-        stpout["runoffwest"][r, d] = self.roffwest
-        stpout["runoffeast"][r, d] = self.roffeast
-        stpout["surfacerunoff"][r, d, :] = (
-            self.surface_runoff
-        )  # daily surfacerunoff, here in m, from each column
-
-        return stpout
-
-    def update_residence_time(self, dfwt):
-        timetoditch = np.zeros(self.n)  # residence time from column to ditch, days
-        porosity = 0.9
-        K = 10 ** (-4) * 86400  # generic Koivusalo et al, 2008
-
-        dist = np.arange(0, self.n * self.dy, self.dy)  # distance array
-        H = self.ele + dfwt.mean(axis=0)  # water table height to common datum
-        rtime = self.dy / (
-            K * np.gradient(H, dist) / porosity
-        )  # residence time within a column
-        self.ixwest = np.where(rtime > 0)  # separate with directions, west, east
-        self.ixeast = np.where(rtime < 0)
-
-        timetoditch[self.ixwest] = np.cumsum(rtime[self.ixwest])
-        timetoditch[self.ixeast] = np.flip(np.cumsum(np.flip(rtime[self.ixeast] * -1)))
-
-        self.residence_time = timetoditch
+    (This is done to allocate an array to memory once,
+    instead of allocating it at each timestep, which is less
+    memory efficient).
+    """
+    n = params.n
+    return NumericalBuffer(A=np.zeros((n, n)), hs=np.zeros(n))
 
 
 def drain_depth_development(length, hdr, hdr20y):

@@ -18,7 +18,7 @@ from supersusi.io.susi_parameter_model import (
     AshFertilizationParameters,
     StandardNPKFertilizationParameters,
 )
-from supersusi.core.strip import StripHydrology, drain_depth_development
+from supersusi.core.strip import drain_depth_development
 
 from supersusi.core.esom import Esom
 from supersusi.core.stand import Stand
@@ -34,6 +34,7 @@ import supersusi.io.utils as io_utils
 from supersusi.io.forcing_weather import read_FMI_weather, WeatherForcings
 
 from supersusi.core import (
+    strip,
     methane,
     temperature,
     fertilization,
@@ -51,6 +52,7 @@ class ModuleParams:
     methane: methane.Params
     temperature: temperature.Params
     fertilization: fertilization.Params
+    strip: strip.Params
 
 
 class Susi:
@@ -223,10 +225,11 @@ class Susi:
         print("Canopy and moss layer hydrology initialized")
 
         # ******** Soil and strip parameterization *************************
-        stp = StripHydrology(
-            self.parameters.site_parameters
+        strip_constants = strip.compute_constants(
+            module_params.strip
         )  # initialize soil hydrology model
-        out.initialize_strip(stp)  # outputs for soil hydrology
+        strip_buffer = strip.make_numerical_buffer(module_params.strip)
+        out.initialize_strip(strip_constants)  # outputs for soil hydrology
 
         static_inputs_peat_T = temperature.compute_constants(
             params=module_params.temperature,
@@ -255,9 +258,30 @@ class Susi:
             self.parameters.site_parameters.ditch_depth_east
         )  # number of ditch depth scenarios (used in comparison of management)
 
-        stpout = stp.create_outarrays(
-            rounds, n_simulation_days, self.parameters.site_parameters.n
-        )  # create output variables for WT, afp, runoff etc.
+        n = self.parameters.site_parameters.n
+        stpout = {}
+        stpout["dwts"] = np.zeros(
+            (rounds, n_simulation_days, n), dtype=float
+        )  # water table depths, m
+        stpout["afps"] = np.zeros(
+            (rounds, n_simulation_days, n), dtype=float
+        )  # air-filled porosity (m3 m-3)
+        stpout["deltas"] = np.zeros((rounds, n_simulation_days, n), dtype=float)
+        stpout["hts"] = np.zeros(
+            (rounds, n_simulation_days, n), dtype=float
+        )  # water table heights, m
+        stpout["runoff"] = np.zeros(
+            (rounds, n_simulation_days), dtype=float
+        )  # daily total runoff, m
+        stpout["runoffwest"] = np.zeros(
+            (rounds, n_simulation_days), dtype=float
+        )  # daily runoff from west ditch, m
+        stpout["runoffeast"] = np.zeros(
+            (rounds, n_simulation_days), dtype=float
+        )  # daily runoff from east ditch, m
+        stpout["surfacerunoff"] = np.zeros(
+            (rounds, n_simulation_days, n), dtype=float
+        )  # daily surface runoff, m
 
         peat_temperatures = np.zeros(
             (rounds, n_simulation_days, self.parameters.site_parameters.nLyrs)
@@ -340,7 +364,9 @@ class Susi:
             out.write_esom(n_ditch_scen, 0, "P", esP, inivals=True)
             out.write_esom(n_ditch_scen, 0, "K", esK, inivals=True)
 
-            stp.reset_domain(initial_h=self.parameters.site_parameters.initial_h)
+            strip_state = strip.compute_initial_state(
+                module_params.strip, strip_constants
+            )
 
             d = 0  # day index
             start = 0  # day counter in annual loop
@@ -429,8 +455,9 @@ class Susi:
                         )
 
                     # --------Soil hydrology-----------------
-                    exfil, S = stp.compute_exfil(
-                        d,
+                    exfil_out = strip.compute_exfil(
+                        strip_state,
+                        strip_constants,
                         h0ts_west[d],
                         h0ts_east[d],
                         stpout["deltas"][n_ditch_scen, d, :],
@@ -439,22 +466,36 @@ class Susi:
                         module_params.mosslayer,
                         moss_constants,
                         mosslayer.assemble_returnflow_inputs(
-                            rflow=exfil,
+                            rflow=exfil_out.exfil,
                             interception_mbe=moss_interception_outputs.mbe,
                         ),
                         moss_state,
                     )
-                    stp.surface_runoff = moss_rf_out.surface_runoff
-                    stp.run_timestep(
-                        d,
-                        h0ts_west[d],
-                        h0ts_east[d],
-                        S,
-                    )  # strip/peat hydrology, using S (capped source/sink)
-                    stp.roff += np.mean(
+                    strip_state, ts_out = strip.run_timestep(
+                        module_params.strip,
+                        strip_constants,
+                        strip_state,
+                        strip.assemble_timestep_inputs(
+                            h0ts_west=h0ts_west[d],
+                            h0ts_east=h0ts_east[d],
+                            exfil_out=exfil_out,
+                            moss_rf_out=moss_rf_out,
+                        ),
+                        buffer=strip_buffer,
+                    )  # strip/peat hydrology
+                    stpout["dwts"][n_ditch_scen, d, :] = (
+                        strip_state.H - strip_constants.ele
+                    )
+                    stpout["hts"][n_ditch_scen, d, :] = strip_state.H
+                    stpout["afps"][n_ditch_scen, d, :] = ts_out.afp
+                    stpout["runoff"][n_ditch_scen, d] = ts_out.roff + np.mean(
                         moss_rf_out.surface_runoff
-                    )  # complete roff with surface component
-                    stpout = stp.update_outarrays(n_ditch_scen, d, stpout)
+                    )
+                    stpout["runoffwest"][n_ditch_scen, d] = ts_out.roffwest
+                    stpout["runoffeast"][n_ditch_scen, d] = ts_out.roffeast
+                    stpout["surfacerunoff"][n_ditch_scen, d, :] = (
+                        moss_rf_out.surface_runoff
+                    )
 
                     state_peat_T, _ = temperature.run_timestep(
                         params=module_params.temperature,
@@ -507,7 +548,10 @@ class Susi:
                     peat_temperatures[n_ditch_scen, start : start + days, :],
                 )
 
-                stp.update_residence_time(dfwt)
+                mean_dwt = dfwt.mean(axis=0).values
+                strip_diag = strip.compute_residence_time(
+                    module_params.strip, strip_constants, mean_dwt
+                )
                 out.write_strip(
                     n_ditch_scen,
                     start,
@@ -517,7 +561,7 @@ class Susi:
                     dfwt,
                     stpout,
                     self.parameters.output_parameters,
-                    stp,
+                    strip_diag,
                 )
 
                 # **************  Biogeochemistry ***********************************
@@ -623,7 +667,7 @@ class Susi:
                     nonwoodylitter,
                     woodylitter,
                 )
-                esmass.compose_export(stp, df_peat_temperatures)
+                esmass.compose_export(strip_diag, df_peat_temperatures)
                 out.write_esom(n_ditch_scen, simulation_year, "Mass", esmass)
 
                 n_nonwoodylitter = (
@@ -821,6 +865,7 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
 
     c = susi_params.canopy_parameters
 
+    sp = susi_params.site_parameters
     return ModuleParams(
         canopygrid=canopygrid.Params(
             dt=c.dt,
@@ -869,4 +914,20 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
             heat_of_vaporization=susi_params.site_parameters.peat_temperature.heat_of_vaporization,
         ),
         fertilization=fertilization_params,
+        strip=strip.Params(
+            nLyrs=sp.nLyrs,
+            dzLyr=sp.dzLyr,
+            vonP=sp.vonP,
+            vonP_top=np.array(sp.vonP_top),
+            vonP_bottom=sp.vonP_bottom,
+            peat_type=[p.value for p in sp.peat_type],
+            peat_type_bottom=[p.value for p in sp.peat_type_bottom],
+            bd_top=np.array(sp.bd_top) if sp.bd_top is not None else None,
+            bd_bottom=sp.bd_bottom,
+            anisotropy=sp.anisotropy,
+            L=sp.L,
+            n=sp.n,
+            slope=sp.slope,
+            initial_h=sp.initial_h,
+        ),
     )

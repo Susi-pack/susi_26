@@ -9,7 +9,7 @@ from netCDF4 import Dataset
 from datetime import datetime
 import numpy as np
 
-from supersusi.core import methane
+from supersusi.core import strip, methane
 
 
 class Outputs:
@@ -1694,7 +1694,7 @@ class Outputs:
         )
         SWEmax.units = "Annual maximum snow water equivalent [mm]"
 
-    def initialize_strip(self, strip):
+    def initialize_strip(self, constants: strip.ComputedConstants):
         elevation = self.ncf.createVariable("/strip/elevation", "f4", ("ncols",))
         elevation.units = "soil surface elevation with respect to fixed datum, m"
         kmap = self.ncf.createVariable(
@@ -1841,8 +1841,8 @@ class Outputs:
             "columns discharging to the east ditch, [index number of a column]"
         )
 
-        self.ncf["/strip/elevation"][:] = strip.ele
-        self.ncf["/strip/kmap"][:, :] = strip.Kmap
+        self.ncf["/strip/elevation"][:] = constants.ele
+        self.ncf["/strip/kmap"][:, :] = constants.Kmap
 
     def initialize_temperature(self):
         T = self.ncf.createVariable(
@@ -2516,7 +2516,9 @@ class Outputs:
     def write_temperature(self, scen, start, days, T):
         self.ncf["temperature"]["T"][scen, start : start + days, :] = T
 
-    def write_strip(self, scen, start, days, yr, year, dfwt, stpout, outpara, stp):
+    def write_strip(
+        self, scen, start, days, yr, year, dfwt, stpout, outpara, diag: strip.ResidenceTimeOutput
+    ):
         startdate = "-" + str(outpara.startmonth) + "-" + str(outpara.startday)
         enddate = "-" + str(outpara.endmonth) + "-" + str(outpara.endday)
         self.ncf["strip"]["dwt"][scen, start : start + days, :] = stpout["dwts"][
@@ -2547,14 +2549,14 @@ class Outputs:
         self.ncf["strip"]["deltas"][scen, year, :] = np.sum(
             stpout["deltas"][scen, start : start + days, :], axis=0
         )
-        self.ncf["strip"]["residencetime"][scen, year, :] = stp.residence_time
+        self.ncf["strip"]["residencetime"][scen, year, :] = diag.residence_time
 
-        self.ncf["strip"]["ixwest"][scen, year, :] = np.zeros(stp.n) - 1.0
-        nwest = np.ravel(stp.ixwest)
-        self.ncf["strip"]["ixwest"][scen, year, : len(nwest)] = stp.ixwest
-        self.ncf["strip"]["ixeast"][scen, year, :] = np.zeros(stp.n) - 1.0
-        neast = np.ravel(stp.ixeast)
-        self.ncf["strip"]["ixeast"][scen, year, : len(neast)] = stp.ixeast
+        self.ncf["strip"]["ixwest"][scen, year, :] = np.zeros(diag.n) - 1.0
+        nwest = np.ravel(diag.ixwest)
+        self.ncf["strip"]["ixwest"][scen, year, : len(nwest)] = diag.ixwest
+        self.ncf["strip"]["ixeast"][scen, year, :] = np.zeros(diag.n) - 1.0
+        neast = np.ravel(diag.ixeast)
+        self.ncf["strip"]["ixeast"][scen, year, : len(neast)] = diag.ixeast
 
     def write_doc(self, scen, year, DOC, HMW):
         self.ncf["doc"]["DOC"][scen, year, :] = DOC
