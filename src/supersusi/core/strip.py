@@ -1,14 +1,150 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Jan 19 19:59:31 2019
-
-@author: lauren
-"""
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 import numpy as np
+from jaxtyping import Float
+
 from supersusi.core.susi_utils import peat_hydrol_properties, CWTr
 
 
+@dataclass(frozen=True)
+class Params:
+    nLyrs: int = field(doc="Number of soil layers")
+    dzLyr: float = field(doc="Vertical layer thickness [m]")
+    vonP: bool = field(doc="Use von Post scale flag")
+    vonP_top: Float[np.ndarray, " n_top"] = field(
+        doc="von Post humification at top layers"
+    )
+    vonP_bottom: int = field(doc="von Post humification at bottom layers")
+    peat_type: list[str] = field(doc="Peat type per layer (e.g., 'A', 'S')")
+    peat_type_bottom: list[str] = field(
+        doc="Peat type for bottom layers (fallback)"
+    )
+    bd_top: Float[np.ndarray, " n_top"] | None = field(
+        default=None, doc="Bulk density at top [g cm-3]"
+    )
+    bd_bottom: float = field(default=0.0, doc="Bulk density at bottom [g cm-3]")
+    anisotropy: float = field(default=1.0, doc="Hydraulic conductivity anisotropy factor")
+    L: float = field(default=10.0, doc="Strip width / ditch distance [m]")
+    n: int = field(default=10, doc="Number of computation nodes")
+    slope: float = field(default=0.0, doc="Slope [%]")
+    initial_h: float = field(default=0.0, doc="Initial water table depth [m]")
+    dt: float = field(default=1.0, doc="Time step [days]")
+    implic: float = field(
+        default=1.0, doc="Implicit factor (0=FE, 1=BE, 0.5=CN)"
+    )
+    DrIrr: bool = field(default=False, doc="Drainage/irrigation flag")
+
+
+@dataclass(frozen=True)
+class ComputedConstants:
+    dz: Float[np.ndarray, " nLyrs"] = field(doc="Layer thickness [m]")
+    z: Float[np.ndarray, " nLyrs"] = field(
+        doc="Depth of layer center points [m]"
+    )
+    pF: Float[np.ndarray, " nLyrs 4"] = field(
+        doc="van Genuchten parameters [ThetaS, ThetaR, alpha, n]"
+    )
+    Ksat: Float[np.ndarray, " nLyrs"] = field(
+        doc="Saturated hydraulic conductivity [m s-1]"
+    )
+    Kmap: Float[np.ndarray, " n nLyrs"] = field(
+        doc="Ksat tiled across nodes (n, nLyrs) [m s-1]"
+    )
+    dy: float = field(doc="Node width [m]")
+    ele: Float[np.ndarray, " n"] = field(
+        doc="Surface elevation in y-direction [m]"
+    )
+    dwtToSto: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Water storage as function of water table depth"
+    )
+    stoToGwl: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Water table depth as function of storage"
+    )
+    dwtToTra: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Transmissivity as function of water table depth"
+    )
+    C: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Storage coefficient as function of water table depth"
+    )
+    dwtToRat: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Air-filled porosity ratio as function of water table depth"
+    )
+    dwtToAfp: Callable[[np.ndarray], np.ndarray] = field(
+        doc="Air-filled porosity in root zone as function of water table depth"
+    )
+
+
+@dataclass(frozen=True)
+class State:
+    H: Float[np.ndarray, " n"] = field(
+        doc="Hydraulic head relative to datum [m]"
+    )
+
+
+@dataclass(frozen=True)
+class ExfilOutputs:
+    exfil: Float[np.ndarray, " n"] = field(
+        doc="Water that cannot fit in soil pores [m]"
+    )
+    S: Float[np.ndarray, " n"] = field(
+        doc="Actual source/sink after capping by air volume [m]"
+    )
+
+
+@dataclass(frozen=True)
+class TimestepInputs:
+    h0ts_west: float = field(doc="West boundary ditch depth [m]")
+    h0ts_east: float = field(doc="East boundary ditch depth [m]")
+    S: Float[np.ndarray, " n"] = field(
+        doc="Source/sink after capping by air volume [m]"
+    )
+    surface_runoff: Float[np.ndarray, " n"] = field(
+        doc="Surface runoff from mosslayer [m]"
+    )
+
+
+@dataclass(frozen=True)
+class TimestepOutputs:
+    roff: float = field(doc="Total runoff [m]")
+    roffwest: float = field(doc="Runoff from west ditch [m]")
+    roffeast: float = field(doc="Runoff from east ditch [m]")
+    air_ratio: Float[np.ndarray, " n"] = field(
+        doc="Air-filled porosity ratio"
+    )
+    afp: Float[np.ndarray, " n"] = field(
+        doc="Air-filled porosity in root zone [m3 m-3]"
+    )
+
+
+def compute_constants(params: Params) -> ComputedConstants:
+    ...
+
+
+def compute_initial_state(params: Params, constants: ComputedConstants) -> State:
+    ...
+
+
+def compute_exfil(
+    state: State,
+    constants: ComputedConstants,
+    h0ts_west: float,
+    h0ts_east: float,
+    p: Float[np.ndarray, " n"],
+) -> ExfilOutputs:
+    ...
+
+
+def run_timestep(
+    params: Params,
+    constants: ComputedConstants,
+    state: State,
+    inputs: TimestepInputs,
+) -> tuple[State, TimestepOutputs]:
+    ...
+
+
+# Old code below — will be removed as functions are implemented
 class StripHydrology:
     def __init__(self, spara):
         self.nLyrs = spara.nLyrs  # number of soil layers
