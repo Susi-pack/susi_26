@@ -216,10 +216,10 @@ class CanopyStateParams(StrictFrozenModel):
 
     lai_conif: float = Field(default=3.0, description="conifer 1-sided LAI (m2 m-2)")
     lai_decid_max: float = Field(
-        default=0.01, description="maximum annual deciduous 1-sided LAI (m2 m-2):"
+        default=0.01, description="Maximum annual deciduous 1-sided leaf area index [m2 m-2]"
     )
     hc: float = Field(default=16.0, description="canopy height (m)")
-    cf: float = Field(default=0.7, description="canopy closure fraction (-)")
+    cf: float = Field(default=0.7, description="Canopy closure fraction [-]")
 
     w: float = Field(default=0.0, description="Initial state of canopy storage (mm)")
     swe: float = Field(
@@ -252,11 +252,13 @@ class Flow(StrictFrozenModel):
     """
 
     # Flow field
-    zmeas: float = 2.0
-    zground: float = Field(
-        default=0.5, description="Reference height above ground (m)."
+    zmeas: float = Field(
+        default=2.0, description="Wind measurement height above canopy [m]"
     )
-    zo_ground: float = Field(default=0.01, description="ground roughness length (m).")
+    zground: float = Field(
+        default=0.5, description="Reference height above ground [m]"
+    )
+    zo_ground: float = Field(default=0.01, description="Ground roughness length [m]")
 
 
 class Interception(StrictFrozenModel):
@@ -265,8 +267,12 @@ class Interception(StrictFrozenModel):
     """
 
     # interception
-    wmax: float = 0.5
-    wmaxsnow: float = 4.0
+    wmax: float = Field(
+        default=0.5, description="Interception capacity per LAI for rain [mm]"
+    )
+    wmaxsnow: float = Field(
+        default=4.0, description="Interception capacity per LAI for snow [mm]"
+    )
 
 
 class Snow(StrictFrozenModel):
@@ -276,11 +282,11 @@ class Snow(StrictFrozenModel):
 
     # degree-day snow model
     kmelt: float = Field(
-        default=2.8934e-05, description="melt coefficient in open (mm/s)"
+        default=2.8934e-05, description="Melt coefficient (in open) [mm s-1 K-1]"
     )
-    kfreeze: float = Field(default=5.79e-6, description="freezing coefficient (mm/s)")
+    kfreeze: float = Field(default=5.79e-6, description="Freezing coefficient [mm s-1 K-1]")
     r: float = Field(
-        default=0.05, description="maximum fraction of liquid water in snow (-)"
+        default=0.05, description="Maximum fraction of liquid water in snowpack [-]"
     )
 
 
@@ -293,18 +299,18 @@ class Physpara(StrictFrozenModel):
     amax_init: float = Field(
         frozen=False,
         default=10.0,
-        description="Initial maximum photosynthetic rate (umolm-2(leaf)s-1)",
+        description="Initial maximum photosynthetic rate [umol m-2(leaf) s-1]",
     )
-    g1_conif: float = Field(default=2.1, description="stomatal parameter, conifers")
-    g1_decid: float = Field(default=3.5, description="stomatal parameter, deciduous")
-    q50: float = Field(default=50.0, description="light response parameter (Wm-2)")
-    kp: float = Field(default=0.6, description="light attenuation parameter (-)")
+    g1_conif: float = Field(default=2.1, description="Stomatal conductance parameter, conifers")
+    g1_decid: float = Field(default=3.5, description="Stomatal conductance parameter, deciduous")
+    q50: float = Field(default=50.0, description="Half-saturation of leaf light response [W m-2]")
+    kp: float = Field(default=0.6, description="PAR attenuation coefficient [-]")
     rw: float = Field(default=0.20, description="critical value for REW (-),")
     rwmin: float = Field(default=0.02, description="minimum relative conductance (-)")
     # soil evaporation
     gsoil: float = Field(
         default=1e-2,
-        description="Soil surface conductance if soil is fully wet (m/s)",
+        description="Soil surface conductance when fully wet [m s-1]",
     )
 
 
@@ -314,11 +320,26 @@ class Phenology(StrictFrozenModel):
     """
 
     # seasonal cycle of physiology: smax [degC], tau[d], xo[degC],fmin[-](residual photocapasity)
-    smax: float = Field(default=18.5, description="degC")
-    tau: float = Field(default=13.0, description="days")
-    xo: float = Field(default=-4.0, description="degC")
+    smax: float = Field(default=18.5, description="Phenology modifier sensitivity [degC]")
+    tau: float = Field(default=13.0, description="Temperature acclimation time constant [d]")
+    xo: float = Field(default=-4.0, description="Temperature threshold for acclimation [degC]")
     fmin: float = Field(
-        default=0.05, description="minimum photosynthetic capacity in winter (-)"
+        default=0.05, description="Minimum phenology modifier (residual photosynthetic capacity) [-]"
+    )
+    lai_decid_min: float = Field(
+        default=0.01, description="Minimum deciduous LAI fraction [-]"
+    )
+    ddo: float = Field(
+        default=130.0, description="Degree-day onset for leaf growth [degC]"
+    )
+    ddur: float = Field(
+        default=200.0, description="Duration of leaf growth phase [d]"
+    )
+    sso: float = Field(
+        default=260.0, description="Senescence onset day of year"
+    )
+    sdur: float = Field(
+        default=20.0, description="Senescence duration [d]"
     )
 
 
@@ -327,7 +348,7 @@ class CanopyParams(StrictFrozenModel):
     Canopy parameters
     """
 
-    dt: PositiveFloat = Field(default=86400.0, description="Canopy model timestep (s).")
+    dt: PositiveFloat = Field(default=86400.0, description="Canopy model timestep [s]")
 
     flow: Flow = Flow()
     interception: Interception = Interception()
