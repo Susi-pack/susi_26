@@ -3,7 +3,7 @@ import numpy as np
 
 from supersusi.core.fertilization_types import State, Inputs, Outputs
 from supersusi.core.fertilization_models.no_fertilization import unfertilized_output
-from susi.io.susi_parameter_model import AshFertilizationParameters
+from supersusi.io.susi_parameter_model import AshFertilizationParameters
 
 
 @dataclass(frozen=True)

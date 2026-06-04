@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import numpy as np
 
-from susi.io.susi_parameter_model import StandardNPKFertilizationParameters
+from supersusi.io.susi_parameter_model import StandardNPKFertilizationParameters
 from supersusi.core.fertilization_types import State, Inputs, Nutrient, Outputs
 from supersusi.core.fertilization_models.no_fertilization import unfertilized_output
 

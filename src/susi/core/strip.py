@@ -73,7 +73,6 @@ class StripHydrology:
         self.residence_time = np.zeros(
             self.n
         )  # residence time from column to the ditch, days
-        self.surface_runoff = np.zeros(self.n)
 
         print("Peat strip initialized")
 
@@ -85,47 +84,36 @@ class StripHydrology:
         self.roff = 0.0
         print("Resetting strip scenario")
 
-    def compute_exfil(self, d, h0ts_west, h0ts_east, p):
+    def run_timestep(self, d, h0ts_west, h0ts_east, p, moss):
         """
-        Computes how much water the soil cannot store (exfiltration).
         IN:
             d day number
-            h0ts boundary (ditch depth, m) in time series
-            p water flux at soil surface [m]
-        OUT:
-            exfil water that cannot fit in soil pores [m]
-            S actual source/sink after capping by air volume [m]
-        """
-        n = self.n
-        Htmp = self.H.copy()
-        self.dwt = Htmp - self.ele
-        S = p.copy()
-        self.dwt[0] = h0ts_west
-        self.dwt[n - 1] = h0ts_east
-
-        airv = np.maximum(
-            self.dwtToSto(np.zeros(n)) - self.dwtToSto(self.dwt), np.zeros(n)
-        )
-        S = np.where(S > airv, airv, S)
-        exfil = p - S
-        return exfil, S
-
-    def run_timestep(self, d, h0ts_west, h0ts_east, S):
-        """
-        Solves groundwater flow and computes runoff totals.
-        IN:
-            d day number
-            h0ts boundary (ditch depth, m) in time series
-            S source/sink after capping by air volume [m]
+            h0ts boudary (ditch depth, m) in time series
+            p rainfall-et m, arrayn n length
+            moss as object
         """
         n = self.n
         Htmp = self.H.copy()
         Htmp1 = self.H.copy()
         self.dwt = Htmp - self.ele
-
+        # S = p/1000.*np.ones(n)                                                # source/sink, in m
+        S = p.copy()  # *np.ones(n)                                              # source/sink, in m
         self.dwt[0] = h0ts_west
-        self.dwt[n - 1] = h0ts_east
+        self.dwt[n - 1] = h0ts_east  # symmetrical boundaries, set water level
 
+        # TESTING here
+        # airv = self.hToSto(self.ele)-self.hToSto(Htmp-self.ele)                # air volume, in m
+        airv = np.maximum(
+            self.dwtToSto(np.zeros(n)) - self.dwtToSto(self.dwt), np.zeros(n)
+        )
+
+        S = np.where(S > airv, airv, S)
+        exfil = p - S
+
+        self.surface_runoff = moss.returnflow(exfil)
+
+        # self.sruno += self.surface_runoff
+        # self.sruno += np.where(np.ones(len(airv))*(p)/1000. > airv, np.ones(len(airv))*(p)/1000.-airv, 0.0)  #cut the surface water above to runoff
         Tr0 = self.dwtToTra(self.dwt)  # Transmissivity from the previous time step
 
         Trminus0, Trplus0 = self.gmeanTr(
@@ -179,7 +167,8 @@ class StripHydrology:
         self.roffwest, self.roffeast = self.runoff(
             self.H, Trminus1, Trplus1, self.dt, self.dy, self.L
         )
-        self.roff = self.roffwest + self.roffeast
+        self.surface_runoff
+        self.roff = self.roffwest + self.roffeast + np.mean(self.surface_runoff)
 
         self.dwt = self.H - self.ele
         self.air_ratio = self.dwtToRat(self.dwt)
