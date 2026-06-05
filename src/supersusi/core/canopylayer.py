@@ -500,6 +500,28 @@ def compute_constants(
     return ComputedConstants(allodic=allodic, ixs=ixs, tree_species=tree_species)
 
 
+def compute_initial_state(
+    params: Params,
+    cc: ComputedConstants,
+    agearr: np.ndarray,
+    nut_stat: np.ndarray,
+) -> tuple[State, Outputs]:
+    """Initialise State and Outputs from age-based biomass interpolation.
+
+    Builds biomass from agearr (per zone via cc.allodic[z].age_based.bm),
+    then derives all allometric outputs via apply_allometry.
+    nut_stat is accepted for API symmetry with the old OOP code but not used here
+    (initial nut_stat is always 1.0, making the leafarea/leafmass adjustment a no-op).
+    """
+    biomass = np.zeros(params.ncols)
+    for z, ix in cc.ixs.items():
+        biomass[ix] = cc.allodic[z].age_based.bm(agearr[ix])
+
+    return State(agearr=agearr.copy(), biomass=biomass, remaining_share=np.ones(params.ncols)), apply_allometry(
+        biomass, agearr, np.ones(params.ncols), cc
+    )
+
+
 class Canopylayer:
     """
     UNITS: all units in /tree basis, except number of trees in the canopy layer, which is in /ha

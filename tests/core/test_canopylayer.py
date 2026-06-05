@@ -19,15 +19,16 @@ from supersusi.core.allometry import (
     YieldVolume,
 )
 from supersusi.core.canopylayer import (
-    Params,
     ComputedConstants,
-    State,
-    Outputs,
     CuttingOutputs,
-    LeafDynamicsOutputs,
     Inputs,
+    LeafDynamicsOutputs,
+    Outputs,
+    Params,
+    State,
     apply_allometry,
     compute_constants,
+    compute_initial_state,
 )
 
 
@@ -241,6 +242,31 @@ class TestDataclasses:
         )
         with pytest.raises(FrozenInstanceError):
             cc.tree_species = np.zeros(5, dtype=np.int32)
+
+    def test_compute_initial_state_returns_state_and_outputs(self):
+        ncols = 5
+        params = Params(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3)
+        cnames = ["yr", "age", "N", "BA", "Hg", "Dg", "hdom", "vol", "logs", "pulp",
+                  "loss", "yield", "mortality", "stem", "stemloss", "branch_living",
+                  "branch_dead", "leaves", "stump", "roots_coarse", "roots_fine"]
+        data = np.zeros((3, len(cnames)))
+        data[:, 0] = [1, 2, 3]
+        data[:, 1] = [1, 2, 3]
+        data[:, 6] = [1.0, 2.0, 3.0]
+        df = pd.DataFrame(data, columns=cnames)
+        cc = compute_constants(params, {1: df}, {1: 1})
+        agearr = np.array([1.0, 1.0, 2.0, 2.0, 3.0])
+        nut_stat = np.ones(ncols)
+        state, outputs = compute_initial_state(params, cc, agearr, nut_stat)
+        assert isinstance(state, State)
+        assert isinstance(outputs, Outputs)
+        assert state.agearr.shape == (ncols,)
+        assert state.biomass.shape == (ncols,)
+        assert state.remaining_share.shape == (ncols,)
+        np.testing.assert_array_equal(state.remaining_share, np.ones(ncols))
+        np.testing.assert_array_equal(state.agearr, agearr)
+        assert np.all(state.biomass >= 0)
+        assert outputs.stems.shape == (ncols,)
 
 
 class TestApplyAllometry:
