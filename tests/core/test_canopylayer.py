@@ -1,6 +1,7 @@
 from dataclasses import FrozenInstanceError
 
 import numpy as np
+import pandas as pd
 import pytest
 from scipy.interpolate import interp1d
 
@@ -26,6 +27,7 @@ from supersusi.core.canopylayer import (
     LeafDynamicsOutputs,
     Inputs,
     apply_allometry,
+    compute_constants,
 )
 
 
@@ -215,6 +217,22 @@ class TestDataclasses:
         )
         assert inp.lai_above.shape == (5,)
 
+    def test_compute_constants_returns_correct_type(self):
+        ncols = 5
+        params = Params(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3)
+        cnames = ["yr", "age", "N", "BA", "Hg", "Dg", "hdom", "vol", "logs", "pulp",
+                  "loss", "yield", "mortality", "stem", "stemloss", "branch_living",
+                  "branch_dead", "leaves", "stump", "roots_coarse", "roots_fine"]
+        data = np.zeros((3, len(cnames)))
+        data[:, 0] = [1, 2, 3]  # yr
+        data[:, 1] = [1, 2, 3]  # age
+        data[:, 6] = [1.0, 2.0, 3.0]  # hdom
+        df = pd.DataFrame(data, columns=cnames)
+        cc = compute_constants(params, {1: df}, {1: 1})
+        assert isinstance(cc, ComputedConstants)
+        assert 1 in cc.allodic
+        assert isinstance(cc.allodic[1], AllometryFunctions)
+
     def test_computed_constants_is_frozen(self):
         cc = ComputedConstants(
             allodic={},
@@ -270,6 +288,21 @@ class TestApplyAllometry:
         assert np.all(out.N_leaf == 0.0)
         assert np.all(out.P_leaf == 0.0)
         assert np.all(out.K_leaf == 0.0)
+
+    def test_multiple_zones(self):
+        ncols = 10
+        bm = np.arange(10.0, 10.0 + ncols)
+        age = np.full(ncols, 10.0)
+        remaining = np.ones(ncols)
+        mock_1 = _make_mock_allometry()
+        mock_2 = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_1, 2: mock_2},
+            ixs={1: np.arange(0, 5), 2: np.arange(5, 10)},
+            tree_species=np.concatenate([np.ones(5), np.full(5, 2)]).astype(np.int32),
+        )
+        out = apply_allometry(bm, age, remaining, cc)
+        assert out.stems.shape == (ncols,)
 
     def test_nonwoodylitter_equals_finerootlitter(self):
         ncols = 5

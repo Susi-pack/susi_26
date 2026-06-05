@@ -468,8 +468,36 @@ def apply_allometry(
         basNdemand=basNdemand,
         basPdemand=basPdemand,
         basKdemand=basKdemand,
-        **growth_zeros,
-    )
+    **growth_zeros,
+)
+
+
+def compute_constants(
+    params: Params,
+    allometry_data: dict[int, pd.DataFrame],
+    species_id: dict[int, int],
+) -> ComputedConstants:
+    """Build per-zone AllometryFunctions and tree_species array.
+
+    For each non-zero zone in params.nlyrs, builds interpolation functions
+    using the median site fertility class for that zone.
+    """
+    ixs: dict[int, np.ndarray] = {}
+    for z in params.nlyrs:
+        if z > 0:
+            ixs[z] = np.where(params.nlyrs == z)[0]
+
+    allodic: dict[int, AllometryFunctions] = {}
+    tree_species = np.zeros(params.ncols, dtype=np.int32)
+    for z, af_ixs in ixs.items():
+        sfc_median = int(np.median(params.sfc[af_ixs]))
+        allodic[z] = build_allometry_interpolation_functions(
+            AllometryParams(species=species_id[z], site_fertility_class=sfc_median),
+            allometry_data[z],
+        )
+        tree_species[af_ixs] = species_id[z]
+
+    return ComputedConstants(allodic=allodic, ixs=ixs, tree_species=tree_species)
 
 
 class Canopylayer:
