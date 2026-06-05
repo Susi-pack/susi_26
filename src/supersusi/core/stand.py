@@ -127,6 +127,77 @@ class Inputs:
     cutting_to_ba: float | None = None
 
 
+_PER_TREE_FIELDS: list[str] = [
+    "basalarea", "volume", "leafarea", "leafmass", "volumegrowth",
+    "logvolume", "pulpvolume", "yi",
+    "NPP", "NPP_pot", "new_lmass", "leaf_litter", "C_consumption",
+    "Nleafdemand", "Nleaf_litter", "N_leaf",
+    "Pleafdemand", "Pleaf_litter", "P_leaf",
+    "Kleafdemand", "Kleaf_litter", "K_leaf",
+    "finerootlitter", "n_finerootlitter", "p_finerootlitter", "k_finerootlitter",
+    "nonwoodylitter", "n_nonwoodylitter", "p_nonwoodylitter", "k_nonwoodylitter",
+    "woodylitter", "n_woodylitter", "p_woodylitter", "k_woodylitter",
+    "woody_litter_mort", "n_woody_litter_mort", "p_woody_litter_mort", "k_woody_litter_mort",
+    "non_woody_litter_mort", "n_non_woody_litter_mort", "p_non_woody_litter_mort", "k_non_woody_litter_mort",
+    "n_demand", "p_demand", "k_demand",
+    "basNdemand", "basPdemand", "basKdemand",
+]
+
+_CUTTING_FIELDS: list[str] = [
+    "harvested_volume", "harvested_log_volume", "harvested_pulp_volume",
+    "harvested_biomass", "harvested_stems",
+    "nonwoody_lresid", "n_nonwoody_lresid", "p_nonwoody_lresid", "k_nonwoody_lresid",
+    "woody_lresid", "n_woody_lresid", "p_woody_lresid", "k_woody_lresid",
+]
+
+
+def _aggregate(
+    dom_out: canopylayer.Outputs,
+    sub_out: canopylayer.Outputs,
+    under_out: canopylayer.Outputs,
+    dom_biomass: np.ndarray,
+    sub_biomass: np.ndarray,
+    under_biomass: np.ndarray,
+    previous_stand_biomass: np.ndarray | None = None,
+) -> Outputs:
+    total_stems = dom_out.stems + sub_out.stems + under_out.stems
+    kw: dict[str, np.ndarray] = {}
+
+    for fname in _PER_TREE_FIELDS:
+        kw[fname] = (
+            getattr(dom_out, fname) * dom_out.stems
+            + getattr(sub_out, fname) * sub_out.stems
+            + getattr(under_out, fname) * under_out.stems
+        )
+
+    kw["stems"] = total_stems
+    kw["hdom"] = np.maximum(dom_out.hdom, np.maximum(sub_out.hdom, under_out.hdom))
+    numerator = (
+        dom_out.Dg * dom_out.stems
+        + sub_out.Dg * sub_out.stems
+        + under_out.Dg * under_out.stems
+    )
+    kw["mean_diameter"] = np.divide(
+        numerator, total_stems, out=np.zeros_like(numerator), where=total_stems > 0,
+    )
+
+    biomass_val = (
+        dom_biomass * dom_out.stems
+        + sub_biomass * sub_out.stems
+        + under_biomass * under_out.stems
+    )
+    kw["biomass"] = biomass_val
+    if previous_stand_biomass is not None:
+        kw["biomassgrowth"] = biomass_val - previous_stand_biomass
+    else:
+        kw["biomassgrowth"] = np.zeros_like(biomass_val)
+
+    for fname in _CUTTING_FIELDS:
+        kw[fname] = np.zeros_like(biomass_val)
+
+    return Outputs(**kw)
+
+
 class Stand:
     def __init__(
         self,
