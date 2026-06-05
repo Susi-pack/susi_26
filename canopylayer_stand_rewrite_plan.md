@@ -719,4 +719,5 @@ The architecture says outputs should not feed back into state — but `biomassgr
 | 2026-06-05 | 3 | `compute_constants()` — per-zone AllometryFunctions via `build_allometry_interpolation_functions()`, builds `tree_species` array | 15 tests (1 new: minimal smoke test with 3-row dataframe) | ruff ✅, ty ✅ |
 | 2026-06-05 | 4 | `compute_initial_state()` — derives `State(agearr, biomass, remaining_share=1.0)` from age via zone-specific `age_based.bm()`; returns `(State, Outputs)` tuple | 15 tests (1 new: shape/value invariants) | ruff ✅, ty ✅ |
 | 2026-06-05 | 5 | `grow_stand()` — annual growth: `assimilation_yr` → `_leaf_dynamics` → biomass increment → `apply_allometry` at new biomass → merge growth fields, `volumegrowth`, `nonwoodylitter = finerootlitter + leaf_litter` | 16 tests (1 new: smoke test with mock allometry, 10 cols, 3-day weather) | ruff ✅, ty ✅ |
+| 2026-06-05 | 6 | `cut_stand()` — thinning (`to_ba ≥ 1`: retain to_ba m²/ha BA, update `remaining_share`) or clear-cut (`to_ba < 1`: age=1, re-init from allometry); per-hectare residues + harvested volumes with wood-density conversion | 17 tests (1 new: thinning smoke test) | ruff ✅, ty ✅ |
 

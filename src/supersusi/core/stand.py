@@ -5,8 +5,126 @@ Created on Tue Feb  1 18:59:52 2022
 @author: alauren
 """
 
+from dataclasses import dataclass, field
+from typing import Any
+
 import numpy as np
+import pandas as pd
+
+from supersusi.core import canopylayer
 from supersusi.core.canopylayer import Canopylayer
+
+
+@dataclass(frozen=True)
+class Params:
+    dominant: canopylayer.Params
+    subdominant: canopylayer.Params
+    under: canopylayer.Params
+
+
+@dataclass(frozen=True)
+class ComputedConstants:
+    dominant: canopylayer.ComputedConstants
+    subdominant: canopylayer.ComputedConstants
+    under: canopylayer.ComputedConstants
+
+
+@dataclass(frozen=True)
+class State:
+    nut_stat: np.ndarray
+    dominant: canopylayer.State
+    subdominant: canopylayer.State
+    under: canopylayer.State
+
+
+@dataclass(frozen=True)
+class Outputs:
+    basalarea: np.ndarray
+    biomass: np.ndarray
+    hdom: np.ndarray
+    leafarea: np.ndarray
+    leafmass: np.ndarray
+    stems: np.ndarray
+    volume: np.ndarray
+    volumegrowth: np.ndarray
+    yi: np.ndarray
+    logvolume: np.ndarray
+    pulpvolume: np.ndarray
+    mean_diameter: np.ndarray
+    biomassgrowth: np.ndarray
+
+    NPP: np.ndarray
+    NPP_pot: np.ndarray
+    new_lmass: np.ndarray
+    leaf_litter: np.ndarray
+    C_consumption: np.ndarray
+    Nleafdemand: np.ndarray
+    Nleaf_litter: np.ndarray
+    N_leaf: np.ndarray
+    Pleafdemand: np.ndarray
+    Pleaf_litter: np.ndarray
+    P_leaf: np.ndarray
+    Kleafdemand: np.ndarray
+    Kleaf_litter: np.ndarray
+    K_leaf: np.ndarray
+
+    finerootlitter: np.ndarray
+    n_finerootlitter: np.ndarray
+    p_finerootlitter: np.ndarray
+    k_finerootlitter: np.ndarray
+    nonwoodylitter: np.ndarray
+    n_nonwoodylitter: np.ndarray
+    p_nonwoodylitter: np.ndarray
+    k_nonwoodylitter: np.ndarray
+    woodylitter: np.ndarray
+    n_woodylitter: np.ndarray
+    p_woodylitter: np.ndarray
+    k_woodylitter: np.ndarray
+
+    woody_litter_mort: np.ndarray
+    n_woody_litter_mort: np.ndarray
+    p_woody_litter_mort: np.ndarray
+    k_woody_litter_mort: np.ndarray
+    non_woody_litter_mort: np.ndarray
+    n_non_woody_litter_mort: np.ndarray
+    p_non_woody_litter_mort: np.ndarray
+    k_non_woody_litter_mort: np.ndarray
+
+    n_demand: np.ndarray
+    p_demand: np.ndarray
+    k_demand: np.ndarray
+    basNdemand: np.ndarray
+    basPdemand: np.ndarray
+    basKdemand: np.ndarray
+
+    harvested_volume: np.ndarray
+    harvested_log_volume: np.ndarray
+    harvested_pulp_volume: np.ndarray
+    harvested_biomass: np.ndarray
+    harvested_stems: np.ndarray
+    nonwoody_lresid: np.ndarray
+    n_nonwoody_lresid: np.ndarray
+    p_nonwoody_lresid: np.ndarray
+    k_nonwoody_lresid: np.ndarray
+    woody_lresid: np.ndarray
+    n_woody_lresid: np.ndarray
+    p_woody_lresid: np.ndarray
+    k_woody_lresid: np.ndarray
+
+
+@dataclass(frozen=True)
+class Inputs:
+    photopara: Any
+    forc: pd.DataFrame = field(doc="annual weather")
+    wt: pd.DataFrame = field(doc="annual water table")
+    afp: pd.DataFrame = field(doc="annual air-filled porosity")
+    n_supply: np.ndarray
+    p_supply: np.ndarray
+    k_supply: np.ndarray
+    groundvegetation_outputs: Any
+    previous_nut_stat: np.ndarray
+    calendar_year: int
+    cutting_to_ba: float | None = None
 
 
 class Stand:
