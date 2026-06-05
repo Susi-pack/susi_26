@@ -17,7 +17,7 @@ from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as C
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
     _compute_lai_above, _merge_cutting_outputs, compute_constants,
-    compute_initial_state, grow_stand,
+    compute_initial_state, grow_stand, update_nutrient_status,
 )
 
 
@@ -556,3 +556,71 @@ class TestGrowStand:
         _, out = grow_stand(state, cc, inputs)
         assert np.all(out.NPP >= 0) or np.isnan(out.NPP).any()
         assert np.all(out.volumegrowth >= 0) or np.isnan(out.volumegrowth).any()
+
+
+def _make_stand_outputs(**overrides) -> Outputs:
+    ncols = overrides.pop("_ncols", 3)
+    dflt = {f: np.zeros(ncols) for f in Outputs.__dataclass_fields__}
+    dflt.update(overrides)
+    return Outputs(**dflt)
+
+
+class TestUpdateNutrientStatus:
+    def test_returns_state_with_updated_nut_stat(self):
+        n = 3
+        state = State(
+            nut_stat=np.full(n, 1.0),
+            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+        )
+        stand_out = _make_stand_outputs(
+            _ncols=n,
+            mean_diameter=np.full(n, 10.0),
+            stems=np.full(n, 1000.0),
+            n_demand=np.full(n, 100.0), Nleafdemand=np.full(n, 20.0),
+            p_demand=np.full(n, 10.0), Pleafdemand=np.full(n, 5.0),
+            k_demand=np.full(n, 50.0), Kleafdemand=np.full(n, 10.0),
+        )
+        gv = SimpleNamespace(nup=np.full(n, 10.0), pup=np.full(n, 5.0), kup=np.full(n, 5.0))
+        inputs = Inputs(
+            photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
+            n_supply=np.full(n, 130.0), p_supply=np.full(n, 20.0), k_supply=np.full(n, 65.0),
+            groundvegetation_outputs=gv,
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+        )
+        new_state = update_nutrient_status(state, stand_out, inputs)
+        assert isinstance(new_state, State)
+        assert new_state.nut_stat.shape == (n,)
+        assert np.all(new_state.nut_stat >= 0.5)
+        assert np.all(new_state.nut_stat <= 2.0)
+        np.testing.assert_array_equal(new_state.dominant, state.dominant)
+
+    def test_nut_stat_drifts_toward_ratio(self):
+        n = 3
+        state = State(
+            nut_stat=np.full(n, 2.0),
+            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+        )
+        stand_out = _make_stand_outputs(
+            _ncols=n,
+            mean_diameter=np.full(n, 20.0),
+            stems=np.full(n, 2000.0),
+            n_demand=np.full(n, 100.0), Nleafdemand=np.zeros(n),
+            p_demand=np.full(n, 10.0), Pleafdemand=np.zeros(n),
+            k_demand=np.full(n, 50.0), Kleafdemand=np.zeros(n),
+        )
+        gv = SimpleNamespace(nup=np.zeros(n), pup=np.zeros(n), kup=np.zeros(n))
+        inputs = Inputs(
+            photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
+            n_supply=np.full(n, 50.0), p_supply=np.full(n, 5.0), k_supply=np.full(n, 25.0),
+            groundvegetation_outputs=gv,
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+        )
+        new_state = update_nutrient_status(state, stand_out, inputs)
+        # ratio = 50/100 = 0.5 → clipped to 0.5; nut_stat drifts from 2.0 toward 0.5
+        assert np.all(new_state.nut_stat < 2.0)

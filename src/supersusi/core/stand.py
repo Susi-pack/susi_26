@@ -342,6 +342,43 @@ def grow_stand(
     return new_stand_state, stand_out
 
 
+_TAU = 3.0
+_NUT_LOWER = 0.5
+_NUT_UPPER = 2.0
+_REINEKE_K = 4.35
+_REINEKE_SLOPE = -1.605
+_AREA_MOD_LOWER = 0.01
+_AREA_MOD_UPPER = 1.0
+
+
+def update_nutrient_status(
+    state: State,
+    stand_out: Outputs,
+    inputs: Inputs,
+) -> State:
+    gv = inputs.groundvegetation_outputs
+    diameter = stand_out.mean_diameter
+    stems = stand_out.stems
+    safe = np.maximum(diameter, 1e-30)
+    area_modifier = np.clip(
+        stems / ((safe / 2.54) ** _REINEKE_SLOPE * 10 ** _REINEKE_K),
+        _AREA_MOD_LOWER, _AREA_MOD_UPPER,
+    )
+    n_ratio = (inputs.n_supply * area_modifier) / (
+        stand_out.n_demand + stand_out.Nleafdemand + gv.nup + 1e-30
+    )
+    p_ratio = (inputs.p_supply * area_modifier) / (
+        stand_out.p_demand + stand_out.Pleafdemand + gv.pup + 1e-30
+    )
+    k_ratio = (inputs.k_supply * area_modifier) / (
+        stand_out.k_demand + stand_out.Kleafdemand + gv.kup + 1e-30
+    )
+    min_ratio = np.minimum(np.minimum(n_ratio, p_ratio), k_ratio)
+    new_nut_stat = state.nut_stat + (min_ratio - state.nut_stat) / _TAU
+    new_nut_stat = np.clip(new_nut_stat, _NUT_LOWER, _NUT_UPPER)
+    return replace(state, nut_stat=new_nut_stat)
+
+
 class Stand:
     def __init__(
         self,
