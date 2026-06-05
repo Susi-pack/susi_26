@@ -629,6 +629,127 @@ def grow_stand(
     return State(new_agearr, new_biomass, state.remaining_share), merged
 
 
+def cut_stand(
+    state: State,
+    cc: ComputedConstants,
+    out: Outputs,
+    nut_stat: np.ndarray,
+    to_ba: float = 0.5,
+) -> tuple[State, CuttingOutputs]:
+    """Thinning (to_ba >= 1) or clear-cut (to_ba < 1).
+
+    Thinning: retain ``to_ba`` m²/ha of basal area, update remaining_share.
+    Clear-cut: reset age to 1, re-initialise state from allometry.
+    Logging residues and harvested volumes are per-hectare (× cut stems).
+
+    Returns (new_state, cutting_outputs).
+    """
+    ncols = len(state.agearr)
+    z = np.zeros
+
+    wood_density_map = {1: 420.0, 2: 400.0, 3: 450.0}
+    wood_density = np.array([wood_density_map[s] for s in cc.tree_species])
+
+    harvested_volume = z(ncols)
+    harvested_log_volume = z(ncols)
+    harvested_pulp_volume = z(ncols)
+    harvested_biomass = z(ncols)
+    harvested_stems = z(ncols)
+    nonwoody_lresid = z(ncols)
+    n_nonwoody_lresid = z(ncols)
+    p_nonwoody_lresid = z(ncols)
+    k_nonwoody_lresid = z(ncols)
+    woody_lresid = z(ncols)
+    n_woody_lresid = z(ncols)
+    p_woody_lresid = z(ncols)
+    k_woody_lresid = z(ncols)
+
+    new_remaining_share = state.remaining_share.copy()
+    new_agearr = state.agearr.copy()
+
+    if to_ba >= 1.0:
+        # Thinning
+        for zid, ix in cc.ixs.items():
+            af = cc.allodic[zid]
+            bm_z = state.biomass[ix]
+            ba_per_ha = out.basalarea[ix] * out.stems[ix]
+            remaining_share_z = to_ba / ba_per_ha
+            cut_stems = (1.0 - remaining_share_z) * out.stems[ix]
+
+            new_remaining_share[ix] = remaining_share_z
+
+            harvested_volume[ix] = af.biomass_to_stand.vol(bm_z) * cut_stems
+            harvested_log_volume[ix] = af.biomass_to_stand.log_vol(bm_z) * cut_stems
+            harvested_pulp_volume[ix] = af.biomass_to_stand.pulp_vol(bm_z) * cut_stems
+            harvested_biomass[ix] = (
+                af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z)
+            ) * cut_stems * wood_density[ix]
+            harvested_stems[ix] = cut_stems
+
+            nonwoody_lresid[ix] = (out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)) * cut_stems
+            n_nonwoody_lresid[ix] = (out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)) * cut_stems
+            p_nonwoody_lresid[ix] = (out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)) * cut_stems
+            k_nonwoody_lresid[ix] = (out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)) * cut_stems
+
+            woody_lresid[ix] = af.logging_residues.woody(bm_z) * cut_stems
+            n_woody_lresid[ix] = af.logging_residues.n_woody(bm_z) * cut_stems
+            p_woody_lresid[ix] = af.logging_residues.p_woody(bm_z) * cut_stems
+            k_woody_lresid[ix] = af.logging_residues.k_woody(bm_z) * cut_stems
+
+        new_state = State(new_agearr, state.biomass, new_remaining_share)
+    else:
+        # Clear-cut: remove all stems, reset age to 1, re-init
+        for zid, ix in cc.ixs.items():
+            af = cc.allodic[zid]
+            bm_z = state.biomass[ix]
+            cut_stems = out.stems[ix]
+            new_remaining_share[ix] = 1.0
+            new_agearr[ix] = 1.0
+
+            harvested_volume[ix] = af.biomass_to_stand.vol(bm_z) * cut_stems
+            harvested_log_volume[ix] = af.biomass_to_stand.log_vol(bm_z) * cut_stems
+            harvested_pulp_volume[ix] = af.biomass_to_stand.pulp_vol(bm_z) * cut_stems
+            harvested_biomass[ix] = (
+                af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z)
+            ) * cut_stems * wood_density[ix]
+            harvested_stems[ix] = cut_stems
+
+            nonwoody_lresid[ix] = (out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)) * cut_stems
+            n_nonwoody_lresid[ix] = (out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)) * cut_stems
+            p_nonwoody_lresid[ix] = (out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)) * cut_stems
+            k_nonwoody_lresid[ix] = (out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)) * cut_stems
+
+            woody_lresid[ix] = af.logging_residues.woody(bm_z) * cut_stems
+            n_woody_lresid[ix] = af.logging_residues.n_woody(bm_z) * cut_stems
+            p_woody_lresid[ix] = af.logging_residues.p_woody(bm_z) * cut_stems
+            k_woody_lresid[ix] = af.logging_residues.k_woody(bm_z) * cut_stems
+
+        # Re-initialise biomass from age
+        new_biomass = z(ncols)
+        for zid, ix in cc.ixs.items():
+            new_biomass[ix] = cc.allodic[zid].age_based.bm(new_agearr[ix])
+
+        new_state = State(new_agearr, new_biomass, new_remaining_share)
+
+    cutting_out = CuttingOutputs(
+        harvested_volume=harvested_volume,
+        harvested_log_volume=harvested_log_volume,
+        harvested_pulp_volume=harvested_pulp_volume,
+        harvested_biomass=harvested_biomass,
+        harvested_stems=harvested_stems,
+        nonwoody_lresid=nonwoody_lresid,
+        n_nonwoody_lresid=n_nonwoody_lresid,
+        p_nonwoody_lresid=p_nonwoody_lresid,
+        k_nonwoody_lresid=k_nonwoody_lresid,
+        woody_lresid=woody_lresid,
+        n_woody_lresid=n_woody_lresid,
+        p_woody_lresid=p_woody_lresid,
+        k_woody_lresid=k_woody_lresid,
+    )
+
+    return new_state, cutting_out
+
+
 class Canopylayer:
     """
     UNITS: all units in /tree basis, except number of trees in the canopy layer, which is in /ha

@@ -31,6 +31,7 @@ from supersusi.core.canopylayer import (
     apply_allometry,
     compute_constants,
     compute_initial_state,
+    cut_stand,
     grow_stand,
 )
 
@@ -315,6 +316,33 @@ class TestDataclasses:
         assert np.all(out.finerootlitter >= 0)
         assert np.all(out.nonwoodylitter >= 0)
         assert np.all(out.volumegrowth >= 0)
+
+    def test_cut_stand_thinning_returns_cutting_outputs(self):
+        ncols = 10
+        mock_af = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_af},
+            ixs={1: np.arange(ncols)},
+            tree_species=np.ones(ncols, dtype=np.int32),
+        )
+        state = State(
+            agearr=np.full(ncols, 20.0),
+            biomass=np.full(ncols, 20.0),
+            remaining_share=np.ones(ncols),
+        )
+        out = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
+        nuts = np.ones(ncols)
+
+        new_state, cut = cut_stand(state, cc, out, nuts, to_ba=12.0)
+        assert isinstance(new_state, State)
+        assert isinstance(cut, CuttingOutputs)
+        assert new_state.biomass.shape == (ncols,)
+        assert cut.harvested_volume.shape == (ncols,)
+        assert np.all(cut.harvested_volume >= 0)
+        assert np.all(cut.harvested_stems >= 0)
+        assert np.all(cut.harvested_stems <= out.stems)
+        assert np.all(cut.nonwoody_lresid >= 0)
+        assert np.all(cut.woody_lresid >= 0)
 
 
 class TestApplyAllometry:
