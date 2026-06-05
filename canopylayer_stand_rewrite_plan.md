@@ -714,4 +714,5 @@ The architecture says outputs should not feed back into state — but `biomassgr
 | Date | Step | What was done | Tests | Lint/Type |
 |------|------|---------------|-------|-----------|
 | 2026-06-05 | 1a | Add frozen dataclasses to `canopylayer.py`: `Params`, `ComputedConstants`, `State`, `Outputs`, `CuttingOutputs`, `LeafDynamicsOutputs`, `Inputs` | 9 new tests pass; full suite 155/155 | ruff ✅, ty ✅ |
+| 2026-06-05 | 1b | Extract `_leaf_dynamics()` as module-level function returning `LeafDynamicsOutputs`; `Canopylayer.leaf_dynamics()` becomes compat wrapper | 155/155 | ruff ✅, ty ✅ |
 

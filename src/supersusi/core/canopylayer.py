@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 from supersusi.core.allometry import (
+    AllometryFunctions,
     Params as AllometryParams,
     build_allometry_interpolation_functions,
 )
@@ -27,7 +28,7 @@ class Params:
 
 @dataclass(frozen=True)
 class ComputedConstants:
-    allodic: dict[int, object] = field(
+    allodic: dict[int, AllometryFunctions] = field(
         doc="per-zone allometry, built via build_allometry_interpolation_functions"
     )
     ixs: dict[int, np.ndarray] = field(doc="column indices per zone")
@@ -308,6 +309,166 @@ def _leaf_dynamics(
         Kleafdemand=Kdemand,
         Kleaf_litter=Kleaf_litter,
         K_leaf=K_leaf,
+    )
+
+
+def apply_allometry(
+    biomass: np.ndarray,
+    agearr: np.ndarray,
+    remaining_share: np.ndarray,
+    cc: ComputedConstants,
+) -> Outputs:
+    """Map core state (biomass, agearr, remaining_share) → all derived allometric outputs.
+
+    Pure function. Growth fields (NPP, leaf_litter, …) are set to 0.
+    nonwoodylitter = finerootlitter (leaf_litter not available here; grow_stand overrides).
+    """
+    ncols = len(biomass)
+    z = np.zeros
+
+    # Growth fields — all zero
+    growth_zeros = dict(
+        NPP=z(ncols),
+        NPP_pot=z(ncols),
+        new_lmass=z(ncols),
+        leaf_litter=z(ncols),
+        C_consumption=z(ncols),
+        Nleafdemand=z(ncols),
+        Nleaf_litter=z(ncols),
+        N_leaf=z(ncols),
+        Pleafdemand=z(ncols),
+        Pleaf_litter=z(ncols),
+        P_leaf=z(ncols),
+        Kleafdemand=z(ncols),
+        Kleaf_litter=z(ncols),
+        K_leaf=z(ncols),
+        volumegrowth=z(ncols),
+    )
+
+    # Allometric fields — will be filled per zone
+    stems = z(ncols)
+    basalarea = z(ncols)
+    hdom = z(ncols)
+    Dg = z(ncols)
+    volume = z(ncols)
+    leafarea = z(ncols)
+    leafmass = z(ncols)
+    logvolume = z(ncols)
+    pulpvolume = z(ncols)
+    yi = z(ncols)
+    finerootlitter = z(ncols)
+    n_finerootlitter = z(ncols)
+    p_finerootlitter = z(ncols)
+    k_finerootlitter = z(ncols)
+    woodylitter = z(ncols)
+    n_woodylitter = z(ncols)
+    p_woodylitter = z(ncols)
+    k_woodylitter = z(ncols)
+    woody_litter_mort = z(ncols)
+    n_woody_litter_mort = z(ncols)
+    p_woody_litter_mort = z(ncols)
+    k_woody_litter_mort = z(ncols)
+    non_woody_litter_mort = z(ncols)
+    n_non_woody_litter_mort = z(ncols)
+    p_non_woody_litter_mort = z(ncols)
+    k_non_woody_litter_mort = z(ncols)
+    n_demand = z(ncols)
+    p_demand = z(ncols)
+    k_demand = z(ncols)
+    basNdemand = z(ncols)
+    basPdemand = z(ncols)
+    basKdemand = z(ncols)
+
+    for zone_id, af in cc.allodic.items():
+        ixs = cc.ixs[zone_id]
+        bm = biomass[ixs]
+        rs = remaining_share[ixs]
+
+        bts = af.biomass_to_stand
+        nd = af.nutrient_demand
+        lm = af.litter_mass
+        nl = af.nutrient_litter
+        mm = af.mortality_mass
+        nm = af.nutrient_mortality
+        yv = af.yield_volume
+
+        stems[ixs] = bts.stems(bm) * rs
+        basalarea[ixs] = bts.ba(bm)
+        hdom[ixs] = bts.hdom(bm)
+        Dg[ixs] = bts.dg(bm)
+        leafarea[ixs] = bts.lai(bm)
+        leafmass[ixs] = bts.leaf_mass(bm)
+        volume[ixs] = bts.vol(bm)
+        yi[ixs] = bts.yi(bm)
+
+        logvolume[ixs] = yv.vol_to_logs(volume[ixs])
+        pulpvolume[ixs] = yv.vol_to_pulp(volume[ixs])
+
+        n_demand[ixs] = nd.n_demand(bm)
+        p_demand[ixs] = nd.p_demand(bm)
+        k_demand[ixs] = nd.k_demand(bm)
+        basNdemand[ixs] = nd.n_leaf_demand(bm)
+        basPdemand[ixs] = nd.p_leaf_demand(bm)
+        basKdemand[ixs] = nd.k_leaf_demand(bm)
+
+        finerootlitter[ixs] = lm.fine_root_litter(bm)
+        n_finerootlitter[ixs] = nl.n_fine_root_litter(bm)
+        p_finerootlitter[ixs] = nl.p_fine_root_litter(bm)
+        k_finerootlitter[ixs] = nl.k_fine_root_litter(bm)
+
+        woodylitter[ixs] = lm.woody_litter(bm)
+        n_woodylitter[ixs] = nl.n_woody_litter(bm)
+        p_woodylitter[ixs] = nl.p_woody_litter(bm)
+        k_woodylitter[ixs] = nl.k_woody_litter(bm)
+
+        woody_litter_mort[ixs] = mm.woody(bm)
+        n_woody_litter_mort[ixs] = nm.n_mortality_woody(bm)
+        p_woody_litter_mort[ixs] = nm.p_mortality_woody(bm)
+        k_woody_litter_mort[ixs] = nm.k_mortality_woody(bm)
+
+        non_woody_litter_mort[ixs] = mm.fine_root(bm) + mm.leaves(bm)
+        n_non_woody_litter_mort[ixs] = nm.n_mortality_fine_root(bm) + nm.n_mortality_leaves(bm)
+        p_non_woody_litter_mort[ixs] = nm.p_mortality_fine_root(bm) + nm.p_mortality_leaves(bm)
+        k_non_woody_litter_mort[ixs] = nm.k_mortality_fine_root(bm) + nm.k_mortality_leaves(bm)
+
+    return Outputs(
+        stems=stems,
+        basalarea=basalarea,
+        hdom=hdom,
+        Dg=Dg,
+        volume=volume,
+        leafarea=leafarea,
+        leafmass=leafmass,
+        logvolume=logvolume,
+        pulpvolume=pulpvolume,
+        yi=yi,
+        finerootlitter=finerootlitter,
+        n_finerootlitter=n_finerootlitter,
+        p_finerootlitter=p_finerootlitter,
+        k_finerootlitter=k_finerootlitter,
+        nonwoodylitter=finerootlitter,
+        n_nonwoodylitter=n_finerootlitter,
+        p_nonwoodylitter=p_finerootlitter,
+        k_nonwoodylitter=k_finerootlitter,
+        woodylitter=woodylitter,
+        n_woodylitter=n_woodylitter,
+        p_woodylitter=p_woodylitter,
+        k_woodylitter=k_woodylitter,
+        woody_litter_mort=woody_litter_mort,
+        n_woody_litter_mort=n_woody_litter_mort,
+        p_woody_litter_mort=p_woody_litter_mort,
+        k_woody_litter_mort=k_woody_litter_mort,
+        non_woody_litter_mort=non_woody_litter_mort,
+        n_non_woody_litter_mort=n_non_woody_litter_mort,
+        p_non_woody_litter_mort=p_non_woody_litter_mort,
+        k_non_woody_litter_mort=k_non_woody_litter_mort,
+        n_demand=n_demand,
+        p_demand=p_demand,
+        k_demand=k_demand,
+        basNdemand=basNdemand,
+        basPdemand=basPdemand,
+        basKdemand=basKdemand,
+        **growth_zeros,
     )
 
 

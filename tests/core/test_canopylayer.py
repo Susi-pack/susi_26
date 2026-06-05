@@ -2,7 +2,21 @@ from dataclasses import FrozenInstanceError
 
 import numpy as np
 import pytest
+from scipy.interpolate import interp1d
 
+from supersusi.core.allometry import (
+    AgeBased,
+    AllometryFunctions,
+    BiomassToStand,
+    FineRoots,
+    LitterMass,
+    LoggingResidues,
+    MortalityMass,
+    NutrientDemand,
+    NutrientLitter,
+    NutrientMortality,
+    YieldVolume,
+)
 from supersusi.core.canopylayer import (
     Params,
     ComputedConstants,
@@ -11,7 +25,66 @@ from supersusi.core.canopylayer import (
     CuttingOutputs,
     LeafDynamicsOutputs,
     Inputs,
+    apply_allometry,
 )
+
+
+def _identity_interp():
+    """Simple identity interpolation function for testing."""
+    return interp1d([0, 100], [0, 100], bounds_error=False, fill_value="extrapolate")
+
+
+def _make_mock_allometry():
+    """Create an AllometryFunctions with minimal working interp1d for testing."""
+    identity = _identity_interp()
+    return AllometryFunctions(
+        age_based=AgeBased(
+            hdom=identity, ba=identity, vol=identity, yield_=identity,
+            bm=identity, bm_no_leaves=identity, leaves=identity,
+        ),
+        biomass_to_stand=BiomassToStand(
+            leaf_mass=identity, with_leaves_to_leaf_mass=identity,
+            lai=identity, hdom=identity, dg=identity, yi=identity,
+            vol=identity, log_vol=identity, pulp_vol=identity,
+            ba=identity, dbm=identity, stems=identity,
+        ),
+        yield_volume=YieldVolume(
+            yi_to_vol=identity, yi_to_bm=identity,
+            vol_to_logs=identity, vol_to_pulp=identity,
+        ),
+        fine_roots=FineRoots(
+            fine_roots=identity, n_fine_roots=identity,
+            p_fine_roots=identity, k_fine_roots=identity,
+        ),
+        litter_mass=LitterMass(
+            fine_root_litter=identity, woody_litter=identity,
+            with_leaves_to_fine_root_litter=identity,
+            with_leaves_to_woody_litter=identity,
+        ),
+        mortality_mass=MortalityMass(
+            fine_root=identity, woody=identity, leaves=identity,
+        ),
+        nutrient_demand=NutrientDemand(
+            n_demand=identity, p_demand=identity, k_demand=identity,
+            n_leaf_demand=identity, p_leaf_demand=identity, k_leaf_demand=identity,
+        ),
+        nutrient_litter=NutrientLitter(
+            n_fine_root_litter=identity, p_fine_root_litter=identity,
+            k_fine_root_litter=identity, n_woody_litter=identity,
+            p_woody_litter=identity, k_woody_litter=identity,
+        ),
+        nutrient_mortality=NutrientMortality(
+            n_mortality_leaves=identity, p_mortality_leaves=identity,
+            k_mortality_leaves=identity, n_mortality_fine_root=identity,
+            p_mortality_fine_root=identity, k_mortality_fine_root=identity,
+            n_mortality_woody=identity, p_mortality_woody=identity,
+            k_mortality_woody=identity,
+        ),
+        logging_residues=LoggingResidues(
+            woody=identity, n_woody=identity,
+            p_woody=identity, k_woody=identity,
+        ),
+    )
 
 
 class TestDataclasses:
@@ -150,3 +223,67 @@ class TestDataclasses:
         )
         with pytest.raises(FrozenInstanceError):
             cc.tree_species = np.zeros(5, dtype=np.int32)
+
+
+class TestApplyAllometry:
+    def test_returns_outputs_with_correct_shape(self):
+        ncols = 5
+        bm = np.arange(10.0, 10.0 + ncols)
+        age = np.full(ncols, 10.0)
+        remaining = np.ones(ncols)
+        mock_af = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_af},
+            ixs={1: np.arange(ncols)},
+            tree_species=np.ones(ncols, dtype=np.int32),
+        )
+        out = apply_allometry(bm, age, remaining, cc)
+        assert isinstance(out, Outputs)
+        for field_name in Outputs.__dataclass_fields__:
+            val = getattr(out, field_name)
+            assert isinstance(val, np.ndarray), f"{field_name} is not an ndarray"
+            assert val.shape == (ncols,), f"{field_name} shape mismatch"
+
+    def test_growth_fields_are_zero(self):
+        ncols = 5
+        bm = np.ones(ncols) * 20.0
+        age = np.full(ncols, 10.0)
+        remaining = np.ones(ncols)
+        mock_af = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_af},
+            ixs={1: np.arange(ncols)},
+            tree_species=np.ones(ncols, dtype=np.int32),
+        )
+        out = apply_allometry(bm, age, remaining, cc)
+        assert np.all(out.NPP == 0.0)
+        assert np.all(out.NPP_pot == 0.0)
+        assert np.all(out.leaf_litter == 0.0)
+        assert np.all(out.C_consumption == 0.0)
+        assert np.all(out.new_lmass == 0.0)
+        assert np.all(out.Nleafdemand == 0.0)
+        assert np.all(out.Pleafdemand == 0.0)
+        assert np.all(out.Kleafdemand == 0.0)
+        assert np.all(out.Nleaf_litter == 0.0)
+        assert np.all(out.Pleaf_litter == 0.0)
+        assert np.all(out.Kleaf_litter == 0.0)
+        assert np.all(out.N_leaf == 0.0)
+        assert np.all(out.P_leaf == 0.0)
+        assert np.all(out.K_leaf == 0.0)
+
+    def test_nonwoodylitter_equals_finerootlitter(self):
+        ncols = 5
+        bm = np.ones(ncols) * 20.0
+        age = np.full(ncols, 10.0)
+        remaining = np.ones(ncols)
+        mock_af = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_af},
+            ixs={1: np.arange(ncols)},
+            tree_species=np.ones(ncols, dtype=np.int32),
+        )
+        out = apply_allometry(bm, age, remaining, cc)
+        np.testing.assert_array_equal(out.nonwoodylitter, out.finerootlitter)
+        np.testing.assert_array_equal(out.n_nonwoodylitter, out.n_finerootlitter)
+        np.testing.assert_array_equal(out.p_nonwoodylitter, out.p_finerootlitter)
+        np.testing.assert_array_equal(out.k_nonwoodylitter, out.k_finerootlitter)
