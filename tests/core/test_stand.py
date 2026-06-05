@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 
 from supersusi.core.canopylayer import Params as CLParams, State as CLState
-from supersusi.core.canopylayer import Outputs as CLOutputs
+from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
-    ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
+    ComputedConstants, Inputs, Outputs, Params, State, _aggregate, _merge_cutting_outputs,
 )
 
 
@@ -233,3 +233,73 @@ class TestAggregate:
         result = _aggregate(out, out, out, bm, bm, bm)
         np.testing.assert_array_equal(result.stems, np.zeros(n))
         np.testing.assert_array_equal(result.mean_diameter, np.zeros(n))
+
+
+def _make_cutting_output(value: float, ncols: int) -> CLCutting:
+    return CLCutting(
+        harvested_volume=np.full(ncols, value),
+        harvested_log_volume=np.full(ncols, value),
+        harvested_pulp_volume=np.full(ncols, value),
+        harvested_biomass=np.full(ncols, value),
+        harvested_stems=np.full(ncols, value),
+        nonwoody_lresid=np.full(ncols, value),
+        n_nonwoody_lresid=np.full(ncols, value),
+        p_nonwoody_lresid=np.full(ncols, value),
+        k_nonwoody_lresid=np.full(ncols, value),
+        woody_lresid=np.full(ncols, value),
+        n_woody_lresid=np.full(ncols, value),
+        p_woody_lresid=np.full(ncols, value),
+        k_woody_lresid=np.full(ncols, value),
+    )
+
+
+class TestMergeCuttingOutputs:
+    def test_merges_single_layer(self):
+        n = 3
+        base = _make_cl_output(np.ones(n), np.ones(n), np.ones(n), 1.0, n)
+        stand_out = _aggregate(base, base, base, np.ones(n), np.ones(n), np.ones(n))
+        dom_cut = _make_cutting_output(10.0, n)
+
+        result = _merge_cutting_outputs(stand_out, dom_cut=dom_cut)
+
+        np.testing.assert_array_equal(result.harvested_volume, np.full(n, 10.0))
+        np.testing.assert_array_equal(result.nonwoody_lresid, np.full(n, 10.0))
+        np.testing.assert_array_equal(result.woody_lresid, np.full(n, 10.0))
+        np.testing.assert_array_equal(result.stems, stand_out.stems)
+
+    def test_merges_three_layers(self):
+        n = 3
+        base = _make_cl_output(np.ones(n), np.ones(n), np.ones(n), 1.0, n)
+        stand_out = _aggregate(base, base, base, np.ones(n), np.ones(n), np.ones(n))
+        dom_cut = _make_cutting_output(10.0, n)
+        sub_cut = _make_cutting_output(5.0, n)
+        under_cut = _make_cutting_output(2.0, n)
+
+        result = _merge_cutting_outputs(stand_out, dom_cut, sub_cut, under_cut)
+
+        np.testing.assert_array_equal(result.harvested_volume, np.full(n, 17.0))
+        np.testing.assert_array_equal(result.harvested_stems, np.full(n, 17.0))
+        np.testing.assert_array_equal(result.nonwoody_lresid, np.full(n, 17.0))
+
+    def test_none_layers_contribute_zero(self):
+        n = 2
+        base = _make_cl_output(np.ones(n), np.ones(n), np.ones(n), 1.0, n)
+        stand_out = _aggregate(base, base, base, np.ones(n), np.ones(n), np.ones(n))
+        dom_cut = _make_cutting_output(7.0, n)
+
+        result = _merge_cutting_outputs(stand_out, dom_cut=dom_cut)
+
+        np.testing.assert_array_equal(result.harvested_volume, np.full(n, 7.0))
+        assert np.all(result.nonwoody_lresid == 7.0)
+
+    def test_no_cutting_returns_stand_out(self):
+        n = 2
+        base = _make_cl_output(np.ones(n), np.ones(n), np.ones(n), 1.0, n)
+        stand_out = _aggregate(base, base, base, np.ones(n), np.ones(n), np.ones(n))
+
+        result = _merge_cutting_outputs(stand_out)
+
+        assert np.all(result.harvested_volume == 0)
+        assert np.all(result.nonwoody_lresid == 0)
+        np.testing.assert_array_equal(result.stems, stand_out.stems)
+        np.testing.assert_array_equal(result.biomass, stand_out.biomass)

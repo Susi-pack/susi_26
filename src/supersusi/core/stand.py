@@ -5,7 +5,7 @@ Created on Tue Feb  1 18:59:52 2022
 @author: alauren
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -196,6 +196,28 @@ def _aggregate(
         kw[fname] = np.zeros_like(biomass_val)
 
     return Outputs(**kw)
+
+
+_CUTTING_FIELDS_SET = frozenset(_CUTTING_FIELDS)
+
+
+def _merge_cutting_outputs(
+    stand_out: Outputs,
+    dom_cut: canopylayer.CuttingOutputs | None = None,
+    sub_cut: canopylayer.CuttingOutputs | None = None,
+    under_cut: canopylayer.CuttingOutputs | None = None,
+) -> Outputs:
+    kw: dict[str, np.ndarray] = {}
+    for fname in _CUTTING_FIELDS:
+        total = np.zeros_like(getattr(stand_out, fname))
+        if dom_cut is not None:
+            total += getattr(dom_cut, fname)
+        if sub_cut is not None:
+            total += getattr(sub_cut, fname)
+        if under_cut is not None:
+            total += getattr(under_cut, fname)
+        kw[fname] = total
+    return replace(stand_out, **kw)
 
 
 class Stand:

@@ -263,13 +263,13 @@ Already structurally pure — extract as module-level private function returning
 ```python
 def compute_constants(
     params: Params,
-    allometry_df: pd.DataFrame,
-    species_id: int,
+    allometry_data: dict[int, pd.DataFrame],
+    species_id: dict[int, int],
 ) -> ComputedConstants
 ```
 
 For each non-zero zone in `params.nlyrs`:
-- Call `build_allometry_interpolation_functions(AllometryParams(species, sfc_median), allometry_df)`
+- Call `build_allometry_interpolation_functions(AllometryParams(species=species_id[z], site_fertility_class=sfc_median), allometry_data[z])`
 - Build `tree_species` per column from species per zone
 Return `ComputedConstants(allodic, ixs, tree_species)`.
 
@@ -417,15 +417,36 @@ def _aggregate(
     dom_out: canopylayer.Outputs,
     sub_out: canopylayer.Outputs,
     under_out: canopylayer.Outputs,
+    dom_biomass: Float[np.ndarray, " ncols"],
+    sub_biomass: Float[np.ndarray, " ncols"],
+    under_biomass: Float[np.ndarray, " ncols"],
     previous_stand_biomass: Float[np.ndarray, " ncols"] | None = None,
 ) -> Outputs
 ```
 
 Pure. Replaces `Stand.update()` + `Stand.reset_vars()`.
-- For each field: `stand_field = cl_out.field * cl_out.stems`, sum across 3 layers
-- `hdom = np.maximum(...)`, `mean_diameter = weighted_avg(Dg, stems)`
-- `biomassgrowth = biomass - previous_stand_biomass` (computed from explicit previous-year parameter, not hidden state; zero when `previous_stand_biomass is None`)
+- For each per-tree field: `stand_field = cl_out.field * cl_out.stems`, sum across 3 layers
+- `stems` summed directly, `hdom = np.maximum(...)`, `mean_diameter = weighted_avg(Dg, stems)`
+- `biomass = sum(state_biomass × stems)` from layer state arrays (not in `canopylayer.Outputs`)
+- `biomassgrowth = biomass - previous_stand_biomass` (zero when `previous_stand_biomass is None`)
+- Cutting fields zeroed (filled later via `_merge_cutting_outputs`)
 Return `Outputs(...)`.
+
+### `_merge_cutting_outputs`
+
+```python
+def _merge_cutting_outputs(
+    stand_out: Outputs,
+    dom_cut: canopylayer.CuttingOutputs | None = None,
+    sub_cut: canopylayer.CuttingOutputs | None = None,
+    under_cut: canopylayer.CuttingOutputs | None = None,
+) -> Outputs
+```
+
+Pure. Merges per-layer `CuttingOutputs` into a `stand.Outputs` (which has zeroed cutting fields from `_aggregate`).
+For each cutting field: sum across layers (values are already per-ha from `canopylayer.cut_stand`).
+Returns `dataclasses.replace(stand_out, harvested_volume=..., ...)`.
+Each `cut` arg is optional (None = no cutting in that layer = zeros).
 
 ### `_compute_lai_above`
 
@@ -476,13 +497,18 @@ under_state, under_out = canopylayer.grow_stand(state.under, cc.under, under_inp
 
 # 5. Compute previous biomass for growth calculation
 prev_biomass = (
-    dom_allom.biomass * dom_allom.stems
-    + sub_allom.biomass * sub_allom.stems
-    + under_allom.biomass * under_allom.stems
+    state.dominant.biomass * dom_allom.stems
+    + state.subdominant.biomass * sub_allom.stems
+    + state.under.biomass * under_allom.stems
 )
 
-# 6. Aggregate
-stand_out = _aggregate(dom_out, sub_out, under_out, previous_stand_biomass=prev_biomass)
+# 6. Aggregate (dom_out, sub_out, under_out are the outputs from grow_stand;
+#    layer state biomass is passed separately — not in canopylayer.Outputs)
+stand_out = _aggregate(
+    dom_out, sub_out, under_out,
+    dom_state.biomass, sub_state.biomass, under_state.biomass,
+    previous_stand_biomass=prev_biomass,
+)
 
 # 7. Return
 new_stand_state = State(state.nut_stat, dom_state, sub_state, under_state)
@@ -517,9 +543,10 @@ def cut_stand(
 
 Always returns a `CuttingOutputs` (zero-filled in non-cutting years — no `Optional`).
 - Only applies to dominant layer (matches current OOP behavior)
-- Call `canopylayer.cut_stand(state.dominant, cc.dominant, inputs.calendar_year, state.nut_stat, inputs.cutting_to_ba)`
-- Re-aggregate: `_aggregate(dom_out, sub_out, under_out)` (sub/under unchanged)
-- Return `(state, stand_out, cutting_out)`
+- Call `canopylayer.cut_stand(state.dominant, cc.dominant, dom_out, state.nut_stat, inputs.cutting_to_ba)` → `(dom_state, dom_cut)`
+- Re-aggregate: `_aggregate(dom_state, sub_state, under_state, dom_out, sub_out, under_out)` with updated state biomass
+- Merge cutting outputs: `_merge_cutting_outputs(stand_out, dom_cut=dom_cut)`
+- Return `(new_state, stand_out, cutting_out)` where `cutting_out` is the dominant `CuttingOutputs`
 
 ### `assimilate_stand`
 
@@ -540,11 +567,12 @@ new_state, stand_out = grow_stand(state, cc, inputs)
 # 2. Cutting (before nutrient update, matching OOP order)
 if inputs.cutting_to_ba is not None and inputs.cutting_to_ba < 1.0:
     new_state, stand_out, cut_out = cut_stand(new_state, cc, inputs)
-    # cut_stand uses state.nut_stat (pre-update) internally
+    # cut_stand internally calls _merge_cutting_outputs to fill cutting fields
 else:
     cut_out = canopylayer.CuttingOutputs(
         *[np.zeros_like(state.nut_stat) for _ in fields(canopylayer.CuttingOutputs)]
     )
+    stand_out = _merge_cutting_outputs(stand_out)
 
 # 3. Nutrient status
 new_state = update_nutrient_status(new_state, stand_out, inputs)
@@ -673,13 +701,14 @@ Each step: **write failing test → make pass → `ruff` / `ty` clean → commit
 | 5 | `canopylayer.py` | `grow_stand()` — takes `state, cc, inputs: Inputs`, calls `assimilation_yr()` + `_leaf_dynamics()`, biomass increment, re-apply allometry, merge outputs |
 | 6 | `canopylayer.py` | `cut_stand()` — thinning (keep `to_ba` fraction of BA) or clear-cut, computes logging residues + harvested volumes, updates `remaining_share`, resets age |
 | 7 | `stand.py` | Define dataclasses: `Params`, `ComputedConstants`, `State`, `Outputs`, `Inputs` |
-| 8 | `stand.py` | `_aggregate()` — sums 3 canopylayer outputs to per-ha basis; takes `previous_stand_biomass` for growth calc (explicit, no hidden state) |
+| 8 | `stand.py` | `_aggregate()` — sums 3 canopylayer outputs to per-ha basis; takes layer biomass arrays + `previous_stand_biomass` for growth calc |
+| — | `stand.py` | `_merge_cutting_outputs()` — merges per-layer `CuttingOutputs` into `stand.Outputs` (fills harvested/residue fields) |
 | 9 | `stand.py` | `_compute_lai_above()` — height-order LAI for correct shading between layers |
 | 10 | `stand.py` | `compute_constants()` — accepts per-column zone ID arrays, builds `ixs` dict, delegates to canopylayer ×3 |
 | 11 | `stand.py` | `compute_initial_state()` — delegates to canopylayer ×3, aggregates with `previous_stand_biomass=None` |
 | 12 | `stand.py` | `grow_stand()` — builds per-layer `canopylayer.Inputs`, delegates to canopylayer ×3 with LAI_above, aggregates |
 | 13 | `stand.py` | `update_nutrient_status()` — N/P/K supply vs demand ratio with delay ODE (τ=3), clips to [0.5, 2.0] |
-| 14 | `stand.py` | `cut_stand()` — applies cutting only to dominant layer; always returns `CuttingOutputs` |
+| 14 | `stand.py` | `cut_stand()` — applies cutting to dominant layer; re-aggregates + merges cutting fields; always returns `CuttingOutputs` |
 | — | `stand.py` | `assimilate_stand()` — full annual orchestrator: grow → cut (or zero `CuttingOutputs`) → nutrient update |
 | — | Both | Lint (`ruff`) and type-check (`ty`) pass clean on both `canopylayer.py` and `stand.py` |
 | 15 | `susi_main.py` | Add `stand.Params` to `ModuleParams` + update `_build_params()` |
@@ -707,6 +736,22 @@ The architecture prescribes `Inputs` as a bundle of *other* categories. Here `ca
 
 The architecture says outputs should not feed back into state — but `biomassgrowth` *is* an output that depends on the previous year's biomass. Making the previous year's biomass an explicit parameter keeps the function pure.
 
+### `_aggregate` also needs layer biomass arrays
+
+`canopylayer.Outputs` does not contain a `biomass` field (biomass is part of `canopylayer.State`, not the allometric outputs). So `_aggregate` accepts `dom_biomass`, `sub_biomass`, `under_biomass` separately to compute the stand-level `biomass` field.
+
+### `_merge_cutting_outputs` is separate from `_aggregate`
+
+The architecture prescribes one aggregation function. Cutting fields (harvested_*, *_lresid) are zeroed by `_aggregate` and filled later by `_merge_cutting_outputs` when cutting occurs. This keeps `_aggregate` focused on growth aggregation and avoids branching on whether cutting happened.
+
+### `canopylayer.compute_constants` uses per-zone data dicts
+
+The plan initially proposed `(params, allometry_df: pd.DataFrame, species_id: int)` but the multiple canopy layer zones require per-zone data, hence `allometry_data: dict[int, pd.DataFrame]` and `species_id: dict[int, int]`.
+
+### `canopylayer.cut_stand` receives `out: Outputs` not `calendar_year`
+
+The plan initially proposed `cut_stand(state, cc, calendar_year, nut_stat, to_ba)`. The actual signature is `cut_stand(state, cc, out, nut_stat, to_ba)` — it needs the allometry output to read basalarea, stems, and leaf mass for computing cut amounts. `calendar_year` was unused.
+
 ---
 
 ## 8. Progress Log
@@ -722,4 +767,5 @@ The architecture says outputs should not feed back into state — but `biomassgr
 | 2026-06-05 | 6 | `cut_stand()` — thinning (`to_ba ≥ 1`: retain to_ba m²/ha BA, update `remaining_share`) or clear-cut (`to_ba < 1`: age=1, re-init from allometry); per-hectare residues + harvested volumes with wood-density conversion | 17 tests (1 new: thinning smoke test) | ruff ✅, ty ✅ |
 | 2026-06-05 | 7 | `stand.py` — frozen dataclasses: `Params` (3× canopylayer.Params), `ComputedConstants` (3× canopylayer.ComputedConstants), `State` (nut_stat + 3× canopylayer.State), `Outputs` (all fields per-ha + stand-only + cutting), `Inputs` (bundled annual inputs) | 7 tests (new `tests/core/test_stand.py`) | ruff ✅, ty ✅ |
 | 2026-06-05 | 8 | `_aggregate()` — pure function summing 3 canopylayer.Outputs to per-ha stand.Outputs; per-tree fields × stems, hdom=max, Dg weighted by stems for mean_diameter, biomass from layer states × stems; accepts `previous_stand_biomass` for biomassgrowth; safe division for zero stems; cutting fields zeroed | 10 tests (3 new: per-field sum, None previous, zero stems) | ruff ✅, ty ✅ |
+| 2026-06-05 | — | Update plan signatures to match actual implementation; add `_merge_cutting_outputs` to plan as needed helper | — | — |
 
