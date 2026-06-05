@@ -5,13 +5,139 @@ Created on Sat Apr  2 17:37:43 2022
 @author: alauren
 """
 
+from dataclasses import dataclass, field
+
 import numpy as np
+import pandas as pd
 from scipy.interpolate import interp1d
 from supersusi.core.allometry import (
     Params as AllometryParams,
     build_allometry_interpolation_functions,
 )
-from susi.core.susi_utils import assimilation_yr
+from supersusi.core.susi_utils import assimilation_yr
+
+
+@dataclass(frozen=True)
+class Params:
+    name: str = field(doc="'dominant' / 'subdominant' / 'under'")
+    ncols: int
+    nlyrs: np.ndarray = field(doc="unique allometry zone IDs in this layer")
+    sfc: np.ndarray = field(doc="site fertility class per column")
+
+
+@dataclass(frozen=True)
+class ComputedConstants:
+    allodic: dict[int, object] = field(
+        doc="per-zone allometry, built via build_allometry_interpolation_functions"
+    )
+    ixs: dict[int, np.ndarray] = field(doc="column indices per zone")
+    tree_species: np.ndarray = field(doc="1=Pine, 2=Spruce, 3=Birch")
+
+
+@dataclass(frozen=True)
+class State:
+    agearr: np.ndarray = field(doc="years")
+    biomass: np.ndarray = field(doc="kg/tree")
+    remaining_share: np.ndarray = field(doc="thinning fraction 0..1")
+
+
+@dataclass(frozen=True)
+class Outputs:
+    stems: np.ndarray = field(doc="trees/ha")
+    basalarea: np.ndarray = field(doc="m2/tree")
+    hdom: np.ndarray = field(doc="dominant height, m")
+    Dg: np.ndarray = field(doc="mean diameter, cm")
+    volume: np.ndarray = field(doc="m3/tree")
+    leafarea: np.ndarray = field(doc="one-sided, m2/m2 per tree")
+    leafmass: np.ndarray = field(doc="kg/tree")
+    volumegrowth: np.ndarray = field(doc="m3/tree/yr")
+    logvolume: np.ndarray
+    pulpvolume: np.ndarray
+    yi: np.ndarray
+    NPP: np.ndarray = field(doc="kg/tree/yr")
+    NPP_pot: np.ndarray
+    new_lmass: np.ndarray
+    leaf_litter: np.ndarray
+    C_consumption: np.ndarray
+    Nleafdemand: np.ndarray
+    Nleaf_litter: np.ndarray
+    N_leaf: np.ndarray
+    Pleafdemand: np.ndarray
+    Pleaf_litter: np.ndarray
+    P_leaf: np.ndarray
+    Kleafdemand: np.ndarray
+    Kleaf_litter: np.ndarray
+    K_leaf: np.ndarray
+    finerootlitter: np.ndarray
+    n_finerootlitter: np.ndarray
+    p_finerootlitter: np.ndarray
+    k_finerootlitter: np.ndarray
+    nonwoodylitter: np.ndarray
+    n_nonwoodylitter: np.ndarray
+    p_nonwoodylitter: np.ndarray
+    k_nonwoodylitter: np.ndarray
+    woodylitter: np.ndarray
+    n_woodylitter: np.ndarray
+    p_woodylitter: np.ndarray
+    k_woodylitter: np.ndarray
+    woody_litter_mort: np.ndarray
+    n_woody_litter_mort: np.ndarray
+    p_woody_litter_mort: np.ndarray
+    k_woody_litter_mort: np.ndarray
+    non_woody_litter_mort: np.ndarray
+    n_non_woody_litter_mort: np.ndarray
+    p_non_woody_litter_mort: np.ndarray
+    k_non_woody_litter_mort: np.ndarray
+    n_demand: np.ndarray
+    p_demand: np.ndarray
+    k_demand: np.ndarray
+    basNdemand: np.ndarray
+    basPdemand: np.ndarray
+    basKdemand: np.ndarray
+
+
+@dataclass(frozen=True)
+class CuttingOutputs:
+    harvested_volume: np.ndarray
+    harvested_log_volume: np.ndarray
+    harvested_pulp_volume: np.ndarray
+    harvested_biomass: np.ndarray
+    harvested_stems: np.ndarray
+    nonwoody_lresid: np.ndarray
+    n_nonwoody_lresid: np.ndarray
+    p_nonwoody_lresid: np.ndarray
+    k_nonwoody_lresid: np.ndarray
+    woody_lresid: np.ndarray
+    n_woody_lresid: np.ndarray
+    p_woody_lresid: np.ndarray
+    k_woody_lresid: np.ndarray
+
+
+@dataclass(frozen=True)
+class LeafDynamicsOutputs:
+    new_lmass: np.ndarray
+    leaf_litter: np.ndarray
+    C_consumption: np.ndarray
+    Nleafdemand: np.ndarray
+    Nleaf_litter: np.ndarray
+    N_leaf: np.ndarray
+    Pleafdemand: np.ndarray
+    Pleaf_litter: np.ndarray
+    P_leaf: np.ndarray
+    Kleafdemand: np.ndarray
+    Kleaf_litter: np.ndarray
+    K_leaf: np.ndarray
+
+
+@dataclass(frozen=True)
+class Inputs:
+    photopara: object
+    forc: pd.DataFrame = field(doc="annual weather")
+    wt: pd.DataFrame = field(doc="annual water table")
+    afp: pd.DataFrame = field(doc="annual air-filled porosity")
+    previous_nut_stat: np.ndarray
+    nut_stat: np.ndarray
+    lai_above: np.ndarray
 
 
 class Canopylayer:
