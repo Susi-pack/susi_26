@@ -220,6 +220,42 @@ def _merge_cutting_outputs(
     return replace(stand_out, **kw)
 
 
+def _compute_lai_above(
+    dom_allom: canopylayer.Outputs,
+    sub_allom: canopylayer.Outputs,
+    under_allom: canopylayer.Outputs,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Height-order LAI for shading between layers.
+
+    Returns (lai_above_dom, lai_above_sub, lai_above_under) — each is the
+    cumulative LAI (leafarea × stems) of all taller layers for that column.
+    """
+    heightarray = np.vstack([dom_allom.hdom, sub_allom.hdom, under_allom.hdom])
+    h_order = np.argsort(heightarray * -1, axis=0)
+    laiarray = np.vstack([
+        dom_allom.leafarea * dom_allom.stems,
+        sub_allom.leafarea * sub_allom.stems,
+        under_allom.leafarea * under_allom.stems,
+    ])
+
+    n = laiarray.shape[1]
+    laiout = np.zeros((3, n))
+    for layer in range(3):
+        laiout[layer] = laiarray[h_order[layer], np.arange(n)]
+
+    laiabove = np.cumsum(laiout, axis=0)
+
+    lai_above = np.zeros((3, n))
+    for layer in range(3):
+        order = h_order[layer]
+        if layer == 0:
+            lai_above[order, np.arange(n)] = 0.0
+        else:
+            lai_above[order, np.arange(n)] = laiabove[layer - 1]
+
+    return lai_above[0], lai_above[1], lai_above[2]
+
+
 class Stand:
     def __init__(
         self,

@@ -1,4 +1,4 @@
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import numpy as np
 import pytest
@@ -6,7 +6,8 @@ import pytest
 from supersusi.core.canopylayer import Params as CLParams, State as CLState
 from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
-    ComputedConstants, Inputs, Outputs, Params, State, _aggregate, _merge_cutting_outputs,
+    ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
+    _compute_lai_above, _merge_cutting_outputs,
 )
 
 
@@ -303,3 +304,32 @@ class TestMergeCuttingOutputs:
         assert np.all(result.nonwoody_lresid == 0)
         np.testing.assert_array_equal(result.stems, stand_out.stems)
         np.testing.assert_array_equal(result.biomass, stand_out.biomass)
+
+
+class TestComputeLaiAbove:
+    def test_returns_tuples_of_arrays(self):
+        n = 3
+        allom = _make_cl_output(np.ones(n), np.ones(n), np.ones(n), 1.0, n)
+        dom, sub, under = _compute_lai_above(allom, allom, allom)
+        assert dom.shape == (n,)
+        assert sub.shape == (n,)
+        assert under.shape == (n,)
+
+    def test_tallest_layer_gets_zero_lai_above(self):
+        n = 3
+        stems_dom = np.full(n, 1000.0)
+        stems_sub = np.full(n, 500.0)
+        stems_under = np.full(n, 100.0)
+        dom = _make_cl_output(stems_dom, np.full(n, 20.0), np.ones(n), 1.0, n)
+        sub = _make_cl_output(stems_sub, np.full(n, 15.0), np.ones(n), 1.0, n)
+        under = _make_cl_output(stems_under, np.full(n, 8.0), np.ones(n), 1.0, n)
+        # Override leafarea (default is multiplier=1.0)
+        dom = replace(dom, leafarea=np.full(n, 5.0))
+        sub = replace(sub, leafarea=np.full(n, 3.0))
+        under = replace(under, leafarea=np.full(n, 1.0))
+
+        lai_dom, lai_sub, lai_under = _compute_lai_above(dom, sub, under)
+
+        np.testing.assert_array_equal(lai_dom, np.zeros(n))
+        np.testing.assert_array_equal(lai_sub, np.full(n, 5000.0))  # 5 * 1000
+        np.testing.assert_array_equal(lai_under, np.full(n, 6500.0))  # 5000 + 1500
