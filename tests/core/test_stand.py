@@ -11,6 +11,7 @@ from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as C
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
     _compute_lai_above, _merge_cutting_outputs, compute_constants,
+    compute_initial_state,
 )
 
 
@@ -378,3 +379,47 @@ class TestComputeConstants:
         )
         cc = compute_constants(params, _mock_allometry_params)
         assert cc.dominant is not cc.subdominant
+
+
+@pytest.fixture
+def _stand_params_and_cc(_mock_allometry_params):
+    ncols = 5
+    params = Params(
+        dominant=CLParams(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+        subdominant=CLParams(name="subdominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+        under=CLParams(name="under", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+    )
+    cc = compute_constants(params, _mock_allometry_params)
+    return params, cc
+
+
+class TestComputeInitialState:
+    def test_returns_state_and_outputs(self, _stand_params_and_cc):
+        params, cc = _stand_params_and_cc
+        ncols = 5
+        agearr = {
+            "dominant": np.full(ncols, 2.0),
+            "subdominant": np.full(ncols, 2.0),
+            "under": np.full(ncols, 2.0),
+        }
+        state, stand_out = compute_initial_state(params, cc, agearr, ncols)
+        assert isinstance(state, State)
+        assert isinstance(stand_out, Outputs)
+        assert state.nut_stat.shape == (ncols,)
+        assert np.all(state.nut_stat == 1.0)
+        assert isinstance(state.dominant, CLState)
+
+    def test_biomass_is_nonzero(self, _stand_params_and_cc):
+        params, cc = _stand_params_and_cc
+        ncols = 5
+        agearr = {
+            "dominant": np.full(ncols, 2.0),
+            "subdominant": np.full(ncols, 2.0),
+            "under": np.full(ncols, 2.0),
+        }
+        state, stand_out = compute_initial_state(params, cc, agearr, ncols)
+        assert np.all(stand_out.biomassgrowth == 0)
+        assert state.dominant.agearr.shape == (ncols,)
+        assert state.subdominant.agearr.shape == (ncols,)
+        assert state.under.agearr.shape == (ncols,)
+        assert np.all(state.dominant.remaining_share == 1.0)

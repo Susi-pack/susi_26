@@ -273,6 +273,30 @@ def compute_constants(
     )
 
 
+def compute_initial_state(
+    params: Params,
+    cc: ComputedConstants,
+    agearr: dict[str, np.ndarray],
+    ncols: int,
+) -> tuple[State, Outputs]:
+    nut_stat = np.ones(ncols)
+    dom_state, dom_out = canopylayer.compute_initial_state(
+        params.dominant, cc.dominant, agearr["dominant"], nut_stat,
+    )
+    sub_state, sub_out = canopylayer.compute_initial_state(
+        params.subdominant, cc.subdominant, agearr["subdominant"], nut_stat,
+    )
+    under_state, under_out = canopylayer.compute_initial_state(
+        params.under, cc.under, agearr["under"], nut_stat,
+    )
+    stand_out = _aggregate(
+        dom_out, sub_out, under_out,
+        dom_state.biomass, sub_state.biomass, under_state.biomass,
+        previous_stand_biomass=None,
+    )
+    return State(nut_stat=nut_stat, dominant=dom_state, subdominant=sub_state, under=under_state), stand_out
+
+
 class Stand:
     def __init__(
         self,

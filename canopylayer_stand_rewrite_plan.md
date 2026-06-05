@@ -769,4 +769,5 @@ The plan initially proposed `cut_stand(state, cc, calendar_year, nut_stat, to_ba
 | 2026-06-05 | 8 | `_aggregate()` — pure function summing 3 canopylayer.Outputs to per-ha stand.Outputs; per-tree fields × stems, hdom=max, Dg weighted by stems for mean_diameter, biomass from layer states × stems; accepts `previous_stand_biomass` for biomassgrowth; safe division for zero stems; cutting fields zeroed | 10 tests (3 new: per-field sum, None previous, zero stems) | ruff ✅, ty ✅ |
 | 2026-06-05 | — | Update plan signatures to match actual implementation; add `_merge_cutting_outputs` to plan as needed helper | — | — |
 | 2026-06-05 | 9 | `_compute_lai_above()` — stack hdom ×3, argsort descending, reorder LAI (`leafarea * stems`) by height, cumsum, remap back to layer order; returns `(lai_above_dom, lai_above_sub, lai_above_under)` | 2 tests (shape, expected values for ordered heights) | ruff ✅, pytest 94/94 ✅ |
+| 2026-06-05 | 10 | `stand.compute_constants()` — delegates to `canopylayer.compute_constants()` ×3 with per-layer `allometry_params.dominant_data/species_id` etc. | 2 tests (type checks, separate instances) | ruff ✅, pytest 96/96 ✅ |
 
