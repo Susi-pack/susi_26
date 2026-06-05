@@ -5,6 +5,7 @@ Created on Tue Feb  1 18:59:52 2022
 @author: alauren
 """
 
+import dataclasses
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -411,6 +412,25 @@ def cut_stand(
         under=state.under,
     )
     return new_state, stand_out, dom_cut
+
+
+def assimilate_stand(
+    state: State,
+    cc: ComputedConstants,
+    inputs: Inputs,
+) -> tuple[State, Outputs, canopylayer.CuttingOutputs]:
+    new_state, stand_out = grow_stand(state, cc, inputs)
+
+    if inputs.cutting_to_ba is not None and inputs.cutting_to_ba < 1.0:
+        new_state, stand_out, cut_out = cut_stand(new_state, cc, inputs)
+    else:
+        cut_out = canopylayer.CuttingOutputs(
+            *[np.zeros_like(state.nut_stat) for _ in dataclasses.fields(canopylayer.CuttingOutputs)],
+        )
+
+    new_state = update_nutrient_status(new_state, stand_out, inputs)
+
+    return new_state, stand_out, cut_out
 
 
 class Stand:

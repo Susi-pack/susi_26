@@ -17,8 +17,9 @@ from supersusi.core.canopylayer import ComputedConstants as CLComputedConstants
 from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
-    _compute_lai_above, _merge_cutting_outputs, compute_constants,
-    compute_initial_state, cut_stand, grow_stand, update_nutrient_status,
+    _compute_lai_above, _merge_cutting_outputs, assimilate_stand,
+    compute_constants, compute_initial_state, cut_stand, grow_stand,
+    update_nutrient_status,
 )
 
 
@@ -672,3 +673,71 @@ class TestCutStand:
         )
         new_state, stand_out, cutting_out = cut_stand(state, cc, inputs)
         assert np.all(cutting_out.harvested_volume >= 0)
+
+
+class TestAssimilateStand:
+    def test_returns_state_outputs_and_cutting(self):
+        n = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(n, 10.0),
+            biomass=np.full(n, 20.0),
+            remaining_share=np.ones(n),
+        )
+        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+
+        days = 3
+        photopara = SimpleNamespace(
+            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+        )
+        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        wt = pd.DataFrame(np.full((days, n), -0.3))
+        afp = pd.DataFrame(np.ones((days, n)))
+
+        inputs = Inputs(
+            photopara=photopara, forc=forc, wt=wt, afp=afp,
+            n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
+            groundvegetation_outputs=SimpleNamespace(nup=np.zeros(n), pup=np.zeros(n), kup=np.zeros(n)),
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+        )
+
+        new_state, stand_out, cut_out = assimilate_stand(state, cc, inputs)
+        assert isinstance(new_state, State)
+        assert isinstance(stand_out, Outputs)
+        assert isinstance(cut_out, canopylayer.CuttingOutputs)
+        assert np.all(new_state.nut_stat >= 0.5)
+        assert np.all(new_state.nut_stat <= 2.0)
+        assert np.all(cut_out.harvested_volume == 0)
+
+    def test_cutting_year_populates_harvest_fields(self):
+        n = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(n, 15.0),
+            biomass=np.full(n, 30.0),
+            remaining_share=np.ones(n),
+        )
+        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+
+        days = 3
+        photopara = SimpleNamespace(
+            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+        )
+        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        wt = pd.DataFrame(np.full((days, n), -0.3))
+        afp = pd.DataFrame(np.ones((days, n)))
+
+        inputs = Inputs(
+            photopara=photopara, forc=forc, wt=wt, afp=afp,
+            n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
+            groundvegetation_outputs=SimpleNamespace(nup=np.zeros(n), pup=np.zeros(n), kup=np.zeros(n)),
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+            cutting_to_ba=0.5,
+        )
+
+        new_state, stand_out, cut_out = assimilate_stand(state, cc, inputs)
+        assert np.any(stand_out.harvested_volume >= 0)
