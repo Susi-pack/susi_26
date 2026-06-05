@@ -10,6 +10,7 @@ from datetime import datetime
 import numpy as np
 
 from supersusi.core import strip, methane
+from supersusi.core.esom import State, YearOutputs, DOCExportOutputs
 
 
 class Outputs:
@@ -2456,48 +2457,54 @@ class Outputs:
         self.ncf["groundvegetation"]["pup"][scen, year, :] = gv_outputs.pup
         self.ncf["groundvegetation"]["kup"][scen, year, :] = gv_outputs.kup
 
-    def write_esom(self, scen, year, substance, esom, inivals=False):
+    def write_esom(
+        self, scen, year, substance, state: State, outputs: YearOutputs | None = None, inivals: bool = False,
+    ):
+        n = state.M.shape[1]
         if inivals:
-            self.ncf["esom"][substance]["L0L"][scen, year, :] = np.zeros(esom.y)
-            self.ncf["esom"][substance]["L0W"][scen, year, :] = np.zeros(esom.y)
-        else:
+            self.ncf["esom"][substance]["L0L"][scen, year, :] = np.zeros(n)
+            self.ncf["esom"][substance]["L0W"][scen, year, :] = np.zeros(n)
+            self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = np.zeros(n)
+            self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = np.zeros(n)
+        elif outputs is not None:
             self.ncf["esom"][substance]["L0L"][scen, year, :] = (
-                esom.nonwoodylitter * 10000.0
+                outputs.nonwoodylitter * 10000.0
             )
             self.ncf["esom"][substance]["L0W"][scen, year, :] = (
-                esom.woodylitter * 10000.0
+                outputs.woodylitter * 10000.0
             )
 
-        self.ncf["esom"][substance]["LL"][scen, year, :] = esom.M[:, :, 2] * 10000.0
-        self.ncf["esom"][substance]["LW"][scen, year, :] = esom.M[:, :, 3] * 10000.0
-        self.ncf["esom"][substance]["FL"][scen, year, :] = esom.M[:, :, 4] * 10000.0
-        self.ncf["esom"][substance]["FW"][scen, year, :] = esom.M[:, :, 5] * 10000.0
-        self.ncf["esom"][substance]["H"][scen, year, :] = esom.M[:, :, 6] * 10000.0
-        self.ncf["esom"][substance]["P1"][scen, year, :] = esom.M[:, :, 7] * 10000.0
-        self.ncf["esom"][substance]["P2"][scen, year, :] = esom.M[:, :, 8] * 10000.0
-        self.ncf["esom"][substance]["P3"][scen, year, :] = esom.M[:, :, 9] * 10000.0
-        self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = esom.out_root_lyr
-        self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = (
-            esom.out_below_root_lyr
-        )
+        self.ncf["esom"][substance]["LL"][scen, year, :] = state.M[0, :, 2] * 10000.0
+        self.ncf["esom"][substance]["LW"][scen, year, :] = state.M[0, :, 3] * 10000.0
+        self.ncf["esom"][substance]["FL"][scen, year, :] = state.M[0, :, 4] * 10000.0
+        self.ncf["esom"][substance]["FW"][scen, year, :] = state.M[0, :, 5] * 10000.0
+        self.ncf["esom"][substance]["H"][scen, year, :] = state.M[0, :, 6] * 10000.0
+        self.ncf["esom"][substance]["P1"][scen, year, :] = state.M[0, :, 7] * 10000.0
+        self.ncf["esom"][substance]["P2"][scen, year, :] = state.M[0, :, 8] * 10000.0
+        self.ncf["esom"][substance]["P3"][scen, year, :] = state.M[0, :, 9] * 10000.0
+        if outputs is not None:
+            self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = outputs.out_root_lyr
+            self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = (
+                outputs.out_below_root_lyr
+            )
 
         if inivals:
-            self.ncf["esom"][substance]["out"][scen, year, :] = np.zeros(esom.y)
-        else:
-            self.ncf["esom"][substance]["out"][scen, year, :] = esom.out
+            self.ncf["esom"][substance]["out"][scen, year, :] = np.zeros(n)
+        elif outputs is not None:
+            self.ncf["esom"][substance]["out"][scen, year, :] = outputs.out
             if substance == "Mass":
                 mass_to_c = 0.5
                 self.ncf["esom"][substance]["c_to_atm"][scen, year, :] = (
-                    esom.out * 1 / 1.05 * mass_to_c
+                    outputs.out * 1 / 1.05 * mass_to_c
                 )
                 self.ncf["esom"][substance]["co2"][scen, year, :] = (
-                    esom.out * 1 / 1.05 * mass_to_c * 44.0 / 12
+                    outputs.out * 1 / 1.05 * mass_to_c * 44.0 / 12
                 )
                 self.ncf["esom"][substance]["doc"][scen, year, :] = (
-                    esom.out * 1 / 1.05 * 0.05 * mass_to_c
+                    outputs.out * 1 / 1.05 * 0.05 * mass_to_c
                 )
                 self.ncf["esom"][substance]["lmwdoc"][scen, year, :] = (
-                    esom.out * 1 / 1.05 * 0.05 * 0.04 * mass_to_c
+                    outputs.out * 1 / 1.05 * 0.05 * 0.04 * mass_to_c
                 )
 
     def write_cpy(self, scen, start, days, yr, interc, evap, ET, transpi, efloor, SWE):
@@ -2578,24 +2585,24 @@ class Outputs:
             fertilization_effect.nutrient_release["K"]
         )
 
-    def write_export(self, scen, year, esmass):
-        self.ncf["export"]["hmwtoditch"][scen, year, :] = esmass.hmwtoditch
-        self.ncf["export"]["lmwtoditch"][scen, year, :] = esmass.lmwtoditch
-        self.ncf["export"]["hmwdoc_to_west"][scen, year] = esmass.hmw_to_west
-        self.ncf["export"]["hmwdoc_to_east"][scen, year] = esmass.hmw_to_east
-        self.ncf["export"]["lmwdoc_to_west"][scen, year] = esmass.lmw_to_west
-        self.ncf["export"]["lmwdoc_to_east"][scen, year] = esmass.lmw_to_east
+    def write_export(self, scen, year, doc_export: DOCExportOutputs):
+        self.ncf["export"]["hmwtoditch"][scen, year, :] = doc_export.hmwtoditch
+        self.ncf["export"]["lmwtoditch"][scen, year, :] = doc_export.lmwtoditch
+        self.ncf["export"]["hmwdoc_to_west"][scen, year] = doc_export.hmw_to_west
+        self.ncf["export"]["hmwdoc_to_east"][scen, year] = doc_export.hmw_to_east
+        self.ncf["export"]["lmwdoc_to_west"][scen, year] = doc_export.lmw_to_west
+        self.ncf["export"]["lmwdoc_to_east"][scen, year] = doc_export.lmw_to_east
 
     def write_nutrient_balance(
-        self, scen, year, substance, es, depo, ferti, stand_up, groundvegetation_up
+        self, scen, year, substance, outputs: YearOutputs, depo, ferti, stand_up, groundvegetation_up
     ):
-        self.ncf["balance"][substance]["decomposition_tot"][scen, year, :] = es.out
+        self.ncf["balance"][substance]["decomposition_tot"][scen, year, :] = outputs.out
         self.ncf["balance"][substance]["decomposition_root_lyr"][scen, year, :] = (
-            es.out_root_lyr
+            outputs.out_root_lyr
         )
         self.ncf["balance"][substance]["decomposition_below_root_lyr"][
             scen, year, :
-        ] = es.out_below_root_lyr
+        ] = outputs.out_below_root_lyr
 
         self.ncf["balance"][substance]["deposition"][scen, year, :] = depo * np.ones(
             self.ncols
@@ -2605,7 +2612,7 @@ class Outputs:
 
         self.ncf["balance"][substance]["gv_demand"][scen, year, :] = groundvegetation_up
         self.ncf["balance"][substance]["balance_root_lyr"][scen, year, :] = (
-            es.out_root_lyr
+            outputs.out_root_lyr
             + ferti
             + depo * np.ones(self.ncols)
             - stand_up
@@ -2614,14 +2621,14 @@ class Outputs:
 
         self.ncf["balance"][substance]["to_water"][scen, year, :] = (
             np.maximum(
-                es.out_root_lyr
+                outputs.out_root_lyr
                 + ferti
                 + depo * np.ones(self.ncols)
                 - stand_up
                 - groundvegetation_up,
                 0.0,
             )
-            + es.out_below_root_lyr
+            + outputs.out_below_root_lyr
         )
         # if substance == 'P':
         # print (substance, np.mean(es.out),   np.mean(stand_up), np.mean(groundvegetation_up))
@@ -2634,7 +2641,8 @@ class Outputs:
         year,
         stand,
         groundvegetation,
-        esmass,
+        outputs: YearOutputs,
+        doc_export: DOCExportOutputs,
         ch4_outputs: methane.Outputs,
     ):
         bm_to_c = 0.5
@@ -2657,15 +2665,15 @@ class Outputs:
         self.ncf["balance"]["C"]["gv_change"][scen, year, :] = (
             groundvegetation.gv_change * bm_to_c
         )
-        self.ncf["balance"]["C"]["co2c_release"][scen, year, :] = esmass.out * bm_to_c
+        self.ncf["balance"]["C"]["co2c_release"][scen, year, :] = outputs.out * bm_to_c
         self.ncf["balance"]["C"]["ch4c_release"][scen, year, :] = c_in_ch4
-        self.ncf["balance"]["C"]["LMWdoc_to_water"][scen, year, :] = esmass.lmwtoditch
+        self.ncf["balance"]["C"]["LMWdoc_to_water"][scen, year, :] = doc_export.lmwtoditch
         self.ncf["balance"]["C"]["LMWdoc_to_atm"][scen, year, :] = (
-            esmass.lmw - esmass.lmwtoditch
+            doc_export.lmw - doc_export.lmwtoditch
         )
-        self.ncf["balance"]["C"]["HMW_to_water"][scen, year, :] = esmass.hmwtoditch
+        self.ncf["balance"]["C"]["HMW_to_water"][scen, year, :] = doc_export.hmwtoditch
         self.ncf["balance"]["C"]["HMW_to_atm"][scen, year, :] = (
-            esmass.hmw - esmass.hmwtoditch
+            doc_export.hmw - doc_export.hmwtoditch
         )
         standbal = (
             (
@@ -2681,9 +2689,9 @@ class Outputs:
                 + groundvegetation.woodylitter
             )
             * bm_to_c
-            - esmass.out * bm_to_c
-            - esmass.lmw
-            - esmass.hmw
+            - outputs.out * bm_to_c
+            - doc_export.lmw
+            - doc_export.hmw
         )
 
         soilbal = (
@@ -2698,9 +2706,9 @@ class Outputs:
                 + groundvegetation.woodylitter
             )
             * bm_to_c
-            - esmass.out * bm_to_c
-            - esmass.lmw
-            - esmass.hmw
+            - outputs.out * bm_to_c
+            - doc_export.lmw
+            - doc_export.hmw
         )
 
         self.ncf["balance"]["C"]["stand_c_balance_c"][scen, year, :] = (

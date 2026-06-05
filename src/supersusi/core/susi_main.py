@@ -20,7 +20,6 @@ from supersusi.io.susi_parameter_model import (
 )
 from supersusi.core.strip import drain_depth_development
 
-from supersusi.core.esom import Esom
 from supersusi.core.stand import Stand
 from supersusi.core.susi_utils import rew_drylimit
 from supersusi.core.susi_utils import (
@@ -34,6 +33,7 @@ import supersusi.io.utils as io_utils
 from supersusi.io.forcing_weather import read_FMI_weather, WeatherForcings
 
 from supersusi.core import (
+    esom,
     strip,
     methane,
     temperature,
@@ -171,30 +171,80 @@ class Susi:
         )
         out.initialize_gv()  # output variables to netCDF
 
-        esmass = Esom(
-            spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
-            days=366 * n_simulation_years,
-            substance="Mass",
-        )  # initializing organic matter decomposition instace for mass
-        esN = Esom(
-            spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
-            days=366 * n_simulation_years,
-            substance="N",
-        )  # initializing organic matter decomposition instace for N
-        esP = Esom(
-            spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
-            days=366 * n_simulation_years,
-            substance="P",
-        )  # initializing organic matter decomposition instace for P
-        esK = Esom(
-            spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
-            days=366 * n_simulation_years,
-            substance="K",
-        )  # initializing organic matter decomposition instace for K
+        spara = self.parameters.site_parameters
+        dz = np.ones(spara.nLyrs) * spara.dzLyr
+        if spara.vonP:
+            vpost = spara.vonP_bottom * np.ones(spara.nLyrs)
+            vpost[: len(spara.vonP_top)] = spara.vonP_top
+            bd = 0.035 + 0.0159 * vpost
+        else:
+            bd = spara.bd_bottom * np.ones(spara.nLyrs)
+            bd[: len(spara.bd_top)] = spara.bd_top
+
+        peat_key = {"N": spara.peatN, "P": spara.peatP, "K": spara.peatK}
+
+        params_mass = esom.build_params(
+            "Mass",
+            spara.n,
+            spara.nLyrs,
+            dz,
+            bd,
+            spara.sfc,
+            spara.h_mor,
+            spara.rho_mor,
+            spara.enable_peattop,
+            spara.enable_peatmiddle,
+            spara.enable_peatbottom,
+        )
+        cc_mass = esom.compute_constants(params_mass)
+
+        params_N = esom.build_params(
+            "N",
+            spara.n,
+            spara.nLyrs,
+            dz,
+            bd,
+            spara.sfc,
+            spara.h_mor,
+            spara.rho_mor,
+            spara.enable_peattop,
+            spara.enable_peatmiddle,
+            spara.enable_peatbottom,
+            peat_override=peat_key["N"],
+        )
+        cc_N = esom.compute_constants(params_N)
+
+        params_P = esom.build_params(
+            "P",
+            spara.n,
+            spara.nLyrs,
+            dz,
+            bd,
+            spara.sfc,
+            spara.h_mor,
+            spara.rho_mor,
+            spara.enable_peattop,
+            spara.enable_peatmiddle,
+            spara.enable_peatbottom,
+            peat_override=peat_key["P"],
+        )
+        cc_P = esom.compute_constants(params_P)
+
+        params_K = esom.build_params(
+            "K",
+            spara.n,
+            spara.nLyrs,
+            dz,
+            bd,
+            spara.sfc,
+            spara.h_mor,
+            spara.rho_mor,
+            spara.enable_peattop,
+            spara.enable_peatmiddle,
+            spara.enable_peatbottom,
+            peat_override=peat_key["K"],
+        )
+        cc_K = esom.compute_constants(params_K)
 
         fertilization_static_inputs = fertilization.compute_constants(
             module_params.fertilization
@@ -354,15 +404,15 @@ class Susi:
             )
             out.write_groundvegetation(n_ditch_scen, 0, gv_state, gv_outputs)
 
-            esmass.reset_storages()
-            esN.reset_storages()
-            esP.reset_storages()
-            esK.reset_storages()
+            state_mass = esom.compute_initial_state(params_mass, cc_mass)
+            state_N = esom.compute_initial_state(params_N, cc_N)
+            state_P = esom.compute_initial_state(params_P, cc_P)
+            state_K = esom.compute_initial_state(params_K, cc_K)
 
-            out.write_esom(n_ditch_scen, 0, "Mass", esmass, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "N", esN, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "P", esP, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "K", esK, inivals=True)
+            out.write_esom(n_ditch_scen, 0, "Mass", state_mass, inivals=True)
+            out.write_esom(n_ditch_scen, 0, "N", state_N, inivals=True)
+            out.write_esom(n_ditch_scen, 0, "P", state_P, inivals=True)
+            out.write_esom(n_ditch_scen, 0, "K", state_K, inivals=True)
 
             strip_state = strip.compute_initial_state(
                 module_params.strip, strip_constants
@@ -635,8 +685,31 @@ class Susi:
                         params=module_params.fertilization, calendar_year=calendar_year
                     ),
                 )
-                for es in (esmass, esN, esP, esK):
-                    es.update_soil_pH(fertilization_outputs.pH_increment)
+                pH_inc = fertilization_outputs.pH_increment
+                state_mass = esom.State(
+                    M=state_mass.M,
+                    i=state_mass.i,
+                    previous_mass=state_mass.previous_mass,
+                    pH=esom.update_soil_pH(state_mass.pH, params_mass, pH_inc),
+                )
+                state_N = esom.State(
+                    M=state_N.M,
+                    i=state_N.i,
+                    previous_mass=state_N.previous_mass,
+                    pH=esom.update_soil_pH(state_N.pH, params_N, pH_inc),
+                )
+                state_P = esom.State(
+                    M=state_P.M,
+                    i=state_P.i,
+                    previous_mass=state_P.previous_mass,
+                    pH=esom.update_soil_pH(state_P.pH, params_P, pH_inc),
+                )
+                state_K = esom.State(
+                    M=state_K.M,
+                    i=state_K.i,
+                    previous_mass=state_K.previous_mass,
+                    pH=esom.update_soil_pH(state_K.pH, params_K, pH_inc),
+                )
 
                 out.write_fertilization(
                     n_ditch_scen, simulation_year, fertilization_outputs
@@ -648,27 +721,41 @@ class Susi:
                     harvested volume and biomass to outputs
                     construct balcances at the end of simulation, join to outputs
                 """
+                weather_yr = self.weather_forcing.loc[str(calendar_year)]
                 nonwoodylitter = (
                     stand.nonwoodylitter
                     + stand.nonwoody_lresid
                     + stand.non_woody_litter_mort
                     + gv_outputs.nonwoodylitter
-                ) / 10000.0  # conversion kg/ha/yr -> kg/m2/yr
+                ) / 10000.0
                 woodylitter = (
                     stand.woodylitter
                     + stand.woody_lresid
                     + stand.woody_litter_mort
                     + gv_outputs.woodylitter
                 ) / 10000.0
-                esmass.run_yr(
-                    self.weather_forcing.loc[str(calendar_year)],
-                    df_peat_temperatures,
-                    dfwt,
-                    nonwoodylitter,
-                    woodylitter,
+                inputs_mass = esom.assemble_inputs(
+                    tair_ts=weather_yr["T"].values,
+                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                    water_tables=dfwt.values,
+                    nonwoodylitter=nonwoodylitter,
+                    woodylitter=woodylitter,
                 )
-                esmass.compose_export(strip_diag, df_peat_temperatures)
-                out.write_esom(n_ditch_scen, simulation_year, "Mass", esmass)
+                state_mass, yr_out_mass = esom.run_yr(
+                    params_mass, cc_mass, inputs_mass, state_mass
+                )
+                assert yr_out_mass.daily_cumulative_out is not None
+                doc_export = esom.compose_export(
+                    yr_out_mass.daily_cumulative_out,
+                    strip_diag,
+                    df_peat_temperatures.iloc[:, 2].values,
+                    spara.n,
+                )
+                out.write_esom(
+                    n_ditch_scen, simulation_year, "Mass", state_mass, yr_out_mass
+                )
 
                 n_nonwoodylitter = (
                     stand.n_nonwoodylitter
@@ -683,14 +770,17 @@ class Susi:
                     + stand.n_woody_litter_mort
                     + gv_outputs.n_litter_w
                 ) / 10000.0
-                esN.run_yr(
-                    self.weather_forcing.loc[str(calendar_year)],
-                    df_peat_temperatures,
-                    dfwt,
-                    n_nonwoodylitter,
-                    n_woodylitter,
+                inputs_N = esom.assemble_inputs(
+                    tair_ts=weather_yr["T"].values,
+                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                    water_tables=dfwt.values,
+                    nonwoodylitter=n_nonwoodylitter,
+                    woodylitter=n_woodylitter,
                 )
-                out.write_esom(n_ditch_scen, simulation_year, "N", esN)
+                state_N, yr_out_N = esom.run_yr(params_N, cc_N, inputs_N, state_N)
+                out.write_esom(n_ditch_scen, simulation_year, "N", state_N, yr_out_N)
 
                 p_nonwoodylitter = (
                     stand.p_nonwoodylitter
@@ -704,14 +794,17 @@ class Susi:
                     + stand.p_woody_litter_mort
                     + gv_outputs.p_litter_w
                 ) / 10000.0
-                esP.run_yr(
-                    self.weather_forcing.loc[str(calendar_year)],
-                    df_peat_temperatures,
-                    dfwt,
-                    p_nonwoodylitter,
-                    p_woodylitter,
+                inputs_P = esom.assemble_inputs(
+                    tair_ts=weather_yr["T"].values,
+                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                    water_tables=dfwt.values,
+                    nonwoodylitter=p_nonwoodylitter,
+                    woodylitter=p_woodylitter,
                 )
-                out.write_esom(n_ditch_scen, simulation_year, "P", esP)
+                state_P, yr_out_P = esom.run_yr(params_P, cc_P, inputs_P, state_P)
+                out.write_esom(n_ditch_scen, simulation_year, "P", state_P, yr_out_P)
 
                 k_nonwoodylitter = (
                     stand.k_nonwoodylitter
@@ -725,24 +818,27 @@ class Susi:
                     + stand.k_woody_litter_mort
                     + gv_outputs.k_litter_w
                 ) / 10000.0
-                esK.run_yr(
-                    self.weather_forcing.loc[str(calendar_year)],
-                    df_peat_temperatures,
-                    dfwt,
-                    k_nonwoodylitter,
-                    k_woodylitter,
+                inputs_K = esom.assemble_inputs(
+                    tair_ts=weather_yr["T"].values,
+                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                    water_tables=dfwt.values,
+                    nonwoodylitter=k_nonwoodylitter,
+                    woodylitter=k_woodylitter,
                 )
-                out.write_esom(n_ditch_scen, simulation_year, "K", esK)
+                state_K, yr_out_K = esom.run_yr(params_K, cc_K, inputs_K, state_K)
+                out.write_esom(n_ditch_scen, simulation_year, "K", state_K, yr_out_K)
 
                 stand.update_nutrient_status(
                     gv_outputs,
-                    esN.out_root_lyr
+                    yr_out_N.out_root_lyr
                     + self.parameters.site_parameters.depoN
                     + fertilization_outputs.nutrient_release["N"],
-                    esP.out_root_lyr
+                    yr_out_P.out_root_lyr
                     + self.parameters.site_parameters.depoP
                     + fertilization_outputs.nutrient_release["P"],
-                    esK.out_root_lyr
+                    yr_out_K.out_root_lyr
                     + self.parameters.site_parameters.depoK
                     + fertilization_outputs.nutrient_release["K"],
                 )
@@ -769,13 +865,13 @@ class Susi:
                 out.write_groundvegetation(
                     n_ditch_scen, simulation_year, gv_state, gv_outputs
                 )
-                out.write_export(n_ditch_scen, simulation_year, esmass)
+                out.write_export(n_ditch_scen, simulation_year, doc_export)
 
                 out.write_nutrient_balance(
                     n_ditch_scen,
                     simulation_year,
                     "N",
-                    esN,
+                    yr_out_N,
                     self.parameters.site_parameters.depoN,
                     fertilization_outputs.nutrient_release["N"],
                     stand.n_demand + stand.n_leaf_demand,
@@ -785,7 +881,7 @@ class Susi:
                     n_ditch_scen,
                     simulation_year,
                     "P",
-                    esP,
+                    yr_out_P,
                     self.parameters.site_parameters.depoP,
                     fertilization_outputs.nutrient_release["P"],
                     stand.p_demand + stand.p_leaf_demand,
@@ -795,7 +891,7 @@ class Susi:
                     n_ditch_scen,
                     simulation_year,
                     "K",
-                    esK,
+                    yr_out_K,
                     self.parameters.site_parameters.depoK,
                     fertilization_outputs.nutrient_release["K"],
                     stand.k_demand + stand.k_leaf_demand,
@@ -807,7 +903,8 @@ class Susi:
                     simulation_year,
                     stand,
                     gv_outputs,
-                    esmass,
+                    yr_out_mass,
+                    doc_export,
                     ch4_outputs,
                 )
 
@@ -819,7 +916,7 @@ class Susi:
         # del stand.dominant
         # del stand.subdominant
         # del stand.under
-        # del stand, gv_state, esmass, esN, esP, esK, ferti, cpy, moss, stp, pt
+        # del stand, gv_state, cpy, moss, stp, pt
 
     def create_output_folder(self) -> None:
         assert self.metadata.experiment_folder_path is not None
