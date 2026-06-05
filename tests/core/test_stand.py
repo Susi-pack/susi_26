@@ -11,13 +11,14 @@ from supersusi.core.allometry import (
     LoggingResidues, MortalityMass, NutrientDemand, NutrientLitter,
     NutrientMortality, YieldVolume,
 )
+import supersusi.core.canopylayer as canopylayer
 from supersusi.core.canopylayer import Params as CLParams, State as CLState
 from supersusi.core.canopylayer import ComputedConstants as CLComputedConstants
 from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
     _compute_lai_above, _merge_cutting_outputs, compute_constants,
-    compute_initial_state, grow_stand, update_nutrient_status,
+    compute_initial_state, cut_stand, grow_stand, update_nutrient_status,
 )
 
 
@@ -624,3 +625,50 @@ class TestUpdateNutrientStatus:
         new_state = update_nutrient_status(state, stand_out, inputs)
         # ratio = 50/100 = 0.5 → clipped to 0.5; nut_stat drifts from 2.0 toward 0.5
         assert np.all(new_state.nut_stat < 2.0)
+
+
+class TestCutStand:
+    def test_returns_state_outputs_and_cutting(self):
+        n = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(n, 15.0),
+            biomass=np.full(n, 30.0),
+            remaining_share=np.ones(n),
+        )
+        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        inputs = Inputs(
+            photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
+            n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
+            groundvegetation_outputs=SimpleNamespace(nup=np.zeros(n), pup=np.zeros(n), kup=np.zeros(n)),
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+            cutting_to_ba=0.5,
+        )
+        new_state, stand_out, cutting_out = cut_stand(state, cc, inputs)
+        assert isinstance(new_state, State)
+        assert isinstance(stand_out, Outputs)
+        assert isinstance(cutting_out, canopylayer.CuttingOutputs)
+        assert np.all(stand_out.harvested_volume >= 0)
+
+    def test_cutting_zero_when_to_ba_is_1_or_more(self):
+        n = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(n, 15.0),
+            biomass=np.full(n, 30.0),
+            remaining_share=np.ones(n),
+        )
+        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        inputs = Inputs(
+            photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
+            n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
+            groundvegetation_outputs=SimpleNamespace(nup=np.zeros(n), pup=np.zeros(n), kup=np.zeros(n)),
+            previous_nut_stat=np.ones(n),
+            calendar_year=2020,
+            cutting_to_ba=1.0,
+        )
+        new_state, stand_out, cutting_out = cut_stand(state, cc, inputs)
+        assert np.all(cutting_out.harvested_volume >= 0)

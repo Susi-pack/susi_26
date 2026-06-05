@@ -379,6 +379,40 @@ def update_nutrient_status(
     return replace(state, nut_stat=new_nut_stat)
 
 
+def cut_stand(
+    state: State,
+    cc: ComputedConstants,
+    inputs: Inputs,
+) -> tuple[State, Outputs, canopylayer.CuttingOutputs]:
+    dom_out = canopylayer.apply_allometry(
+        state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant,
+    )
+    sub_out = canopylayer.apply_allometry(
+        state.subdominant.biomass, state.subdominant.agearr, state.subdominant.remaining_share, cc.subdominant,
+    )
+    under_out = canopylayer.apply_allometry(
+        state.under.biomass, state.under.agearr, state.under.remaining_share, cc.under,
+    )
+
+    dom_state, dom_cut = canopylayer.cut_stand(
+        state.dominant, cc.dominant, dom_out, state.nut_stat, inputs.cutting_to_ba,
+    )
+
+    stand_out = _aggregate(
+        dom_out, sub_out, under_out,
+        dom_state.biomass, state.subdominant.biomass, state.under.biomass,
+    )
+    stand_out = _merge_cutting_outputs(stand_out, dom_cut=dom_cut)
+
+    new_state = State(
+        nut_stat=state.nut_stat,
+        dominant=dom_state,
+        subdominant=state.subdominant,
+        under=state.under,
+    )
+    return new_state, stand_out, dom_cut
+
+
 class Stand:
     def __init__(
         self,
