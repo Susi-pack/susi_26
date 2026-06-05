@@ -163,6 +163,8 @@ def _make_cl_output(
         "basNdemand": np.full(ncols, multiplier),
         "basPdemand": np.full(ncols, multiplier),
         "basKdemand": np.full(ncols, multiplier),
+        "leafmax": np.full(ncols, multiplier),
+        "leafmin": np.full(ncols, multiplier),
     }
     return CLOutputs(**kw)
 
@@ -647,13 +649,14 @@ class TestCutStand:
             calendar_year=2020,
             cutting_to_ba=0.5,
         )
-        new_state, stand_out, cutting_out = cut_stand(state, cc, inputs)
+        stand_out = _make_stand_outputs(_ncols=n)
+        new_state, stand_out, cutting_out = cut_stand(state, cc, stand_out, inputs)
         assert isinstance(new_state, State)
         assert isinstance(stand_out, Outputs)
         assert isinstance(cutting_out, canopylayer.CuttingOutputs)
         assert np.all(stand_out.harvested_volume >= 0)
 
-    def test_cutting_zero_when_to_ba_is_1_or_more(self):
+    def test_cutting_with_thinning_to_ba_1(self):
         n = 5
         cl_cc = _mock_cl_cc()
         cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
@@ -671,7 +674,8 @@ class TestCutStand:
             calendar_year=2020,
             cutting_to_ba=1.0,
         )
-        new_state, stand_out, cutting_out = cut_stand(state, cc, inputs)
+        stand_out = _make_stand_outputs(_ncols=n)
+        new_state, stand_out, cutting_out = cut_stand(state, cc, stand_out, inputs)
         assert np.all(cutting_out.harvested_volume >= 0)
 
 

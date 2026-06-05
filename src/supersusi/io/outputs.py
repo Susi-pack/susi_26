@@ -2293,125 +2293,125 @@ class Outputs:
         self.ncf["scen"]["tree_species_subdominant"][:] = subdominant_sp
         self.ncf["scen"]["tree_species_under"][:] = under_sp
 
-    def write_stand(self, scen, year, stand):
-        self.ncf["stand"]["basalarea"][scen, year, :] = stand.basalarea
-        self.ncf["stand"]["biomass"][scen, year, :] = stand.biomass
-        self.ncf["stand"]["n_demand"][scen, year, :] = stand.n_demand
-        self.ncf["stand"]["p_demand"][scen, year, :] = stand.p_demand
-        self.ncf["stand"]["k_demand"][scen, year, :] = stand.k_demand
-        self.ncf["stand"]["hdom"][scen, year, :] = stand.hdom
-        self.ncf["stand"]["leafarea"][scen, year, :] = stand.leafarea
-        self.ncf["stand"]["leafmass"][scen, year, :] = stand.leafmass
-        self.ncf["stand"]["logvolume"][scen, year, :] = stand.logvolume
-        self.ncf["stand"]["finerootlitter"][scen, year, :] = stand.finerootlitter
-        self.ncf["stand"]["n_finerootlitter"][scen, year, :] = stand.n_finerootlitter
-        self.ncf["stand"]["p_finerootlitter"][scen, year, :] = stand.p_finerootlitter
-        self.ncf["stand"]["k_finerootlitter"][scen, year, :] = stand.k_finerootlitter
-        self.ncf["stand"]["nonwoodylitter"][scen, year, :] = stand.nonwoodylitter
-        self.ncf["stand"]["pulpvolume"][scen, year, :] = stand.pulpvolume
-        self.ncf["stand"]["stems"][scen, year, :] = stand.stems
-        self.ncf["stand"]["volume"][scen, year, :] = stand.volume
-        self.ncf["stand"]["mean_diameter"][scen, year, :] = stand.mean_diameter
+    def write_stand(self, scen, year, stand_out, stand_state, previous_nut_stat):
+        self.ncf["stand"]["basalarea"][scen, year, :] = stand_out.basalarea
+        self.ncf["stand"]["biomass"][scen, year, :] = stand_out.biomass
+        self.ncf["stand"]["n_demand"][scen, year, :] = stand_out.n_demand
+        self.ncf["stand"]["p_demand"][scen, year, :] = stand_out.p_demand
+        self.ncf["stand"]["k_demand"][scen, year, :] = stand_out.k_demand
+        self.ncf["stand"]["hdom"][scen, year, :] = stand_out.hdom
+        self.ncf["stand"]["leafarea"][scen, year, :] = stand_out.leafarea
+        self.ncf["stand"]["leafmass"][scen, year, :] = stand_out.leafmass
+        self.ncf["stand"]["logvolume"][scen, year, :] = stand_out.logvolume
+        self.ncf["stand"]["finerootlitter"][scen, year, :] = stand_out.finerootlitter
+        self.ncf["stand"]["n_finerootlitter"][scen, year, :] = stand_out.n_finerootlitter
+        self.ncf["stand"]["p_finerootlitter"][scen, year, :] = stand_out.p_finerootlitter
+        self.ncf["stand"]["k_finerootlitter"][scen, year, :] = stand_out.k_finerootlitter
+        self.ncf["stand"]["nonwoodylitter"][scen, year, :] = stand_out.nonwoodylitter
+        self.ncf["stand"]["pulpvolume"][scen, year, :] = stand_out.pulpvolume
+        self.ncf["stand"]["stems"][scen, year, :] = stand_out.stems
+        self.ncf["stand"]["volume"][scen, year, :] = stand_out.volume
+        self.ncf["stand"]["mean_diameter"][scen, year, :] = stand_out.mean_diameter
 
-        self.ncf["stand"]["volumegrowth"][scen, year, :] = stand.volumegrowth
-        self.ncf["stand"]["woodylitter"][scen, year, :] = stand.woodylitter
-        self.ncf["stand"]["n_woodylitter"][scen, year, :] = stand.n_woodylitter
-        self.ncf["stand"]["p_woodylitter"][scen, year, :] = stand.p_woodylitter
-        self.ncf["stand"]["k_woodylitter"][scen, year, :] = stand.k_woodylitter
-        self.ncf["stand"]["yi"][scen, year, :] = stand.yi
-        self.ncf["stand"]["previous_nut_stat"][scen, year, :] = stand.previous_nut_stat
-        self.ncf["stand"]["nut_stat"][scen, year, :] = stand.nut_stat
+        self.ncf["stand"]["volumegrowth"][scen, year, :] = stand_out.volumegrowth
+        self.ncf["stand"]["woodylitter"][scen, year, :] = stand_out.woodylitter
+        self.ncf["stand"]["n_woodylitter"][scen, year, :] = stand_out.n_woodylitter
+        self.ncf["stand"]["p_woodylitter"][scen, year, :] = stand_out.p_woodylitter
+        self.ncf["stand"]["k_woodylitter"][scen, year, :] = stand_out.k_woodylitter
+        self.ncf["stand"]["yi"][scen, year, :] = stand_out.yi
+        self.ncf["stand"]["previous_nut_stat"][scen, year, :] = previous_nut_stat
+        self.ncf["stand"]["nut_stat"][scen, year, :] = stand_state.nut_stat
 
-        self.ncf["stand"]["woody_litter_mort"][scen, year, :] = stand.woody_litter_mort
+        self.ncf["stand"]["woody_litter_mort"][scen, year, :] = stand_out.woody_litter_mort
         self.ncf["stand"]["n_woody_litter_mort"][scen, year, :] = (
-            stand.n_woody_litter_mort
+            stand_out.n_woody_litter_mort
         )
         self.ncf["stand"]["p_woody_litter_mort"][scen, year, :] = (
-            stand.p_woody_litter_mort
+            stand_out.p_woody_litter_mort
         )
         self.ncf["stand"]["k_woody_litter_mort"][scen, year, :] = (
-            stand.k_woody_litter_mort
+            stand_out.k_woody_litter_mort
         )
 
         self.ncf["stand"]["non_woody_litter_mort"][scen, year, :] = (
-            stand.non_woody_litter_mort
+            stand_out.non_woody_litter_mort
         )
         self.ncf["stand"]["n_non_woody_litter_mort"][scen, year, :] = (
-            stand.n_non_woody_litter_mort
+            stand_out.n_non_woody_litter_mort
         )
         self.ncf["stand"]["p_non_woody_litter_mort"][scen, year, :] = (
-            stand.p_non_woody_litter_mort
+            stand_out.p_non_woody_litter_mort
         )
         self.ncf["stand"]["k_non_woody_litter_mort"][scen, year, :] = (
-            stand.k_non_woody_litter_mort
+            stand_out.k_non_woody_litter_mort
         )
 
-        self.ncf["stand"]["woody_lresid"][scen, year, :] = stand.woody_lresid
-        self.ncf["stand"]["n_woody_lresid"][scen, year, :] = stand.n_woody_lresid
-        self.ncf["stand"]["p_woody_lresid"][scen, year, :] = stand.p_woody_lresid
-        self.ncf["stand"]["k_woody_lresid"][scen, year, :] = stand.k_woody_lresid
+        self.ncf["stand"]["woody_lresid"][scen, year, :] = stand_out.woody_lresid
+        self.ncf["stand"]["n_woody_lresid"][scen, year, :] = stand_out.n_woody_lresid
+        self.ncf["stand"]["p_woody_lresid"][scen, year, :] = stand_out.p_woody_lresid
+        self.ncf["stand"]["k_woody_lresid"][scen, year, :] = stand_out.k_woody_lresid
 
-        self.ncf["stand"]["nonwoody_lresid"][scen, year, :] = stand.woody_lresid
-        self.ncf["stand"]["n_nonwoody_lresid"][scen, year, :] = stand.n_nonwoody_lresid
-        self.ncf["stand"]["p_nonwoody_lresid"][scen, year, :] = stand.p_nonwoody_lresid
-        self.ncf["stand"]["k_nonwoody_lresid"][scen, year, :] = stand.k_nonwoody_lresid
+        self.ncf["stand"]["nonwoody_lresid"][scen, year, :] = stand_out.woody_lresid
+        self.ncf["stand"]["n_nonwoody_lresid"][scen, year, :] = stand_out.n_nonwoody_lresid
+        self.ncf["stand"]["p_nonwoody_lresid"][scen, year, :] = stand_out.p_nonwoody_lresid
+        self.ncf["stand"]["k_nonwoody_lresid"][scen, year, :] = stand_out.k_nonwoody_lresid
 
-        self.ncf["stand"]["harvested_volume"][scen, year, :] = stand.harvested_volume
+        self.ncf["stand"]["harvested_volume"][scen, year, :] = stand_out.harvested_volume
         self.ncf["stand"]["harvested_log_volume"][scen, year, :] = (
-            stand.harvested_log_volume
+            stand_out.harvested_log_volume
         )
         self.ncf["stand"]["harvested_pulp_volume"][scen, year, :] = (
-            stand.harvested_pulp_volume
+            stand_out.harvested_pulp_volume
         )
-        self.ncf["stand"]["harvested_biomass"][scen, year, :] = stand.harvested_biomass
-        self.ncf["stand"]["harvested_stems"][scen, year, :] = stand.harvested_stems
+        self.ncf["stand"]["harvested_biomass"][scen, year, :] = stand_out.harvested_biomass
+        self.ncf["stand"]["harvested_stems"][scen, year, :] = stand_out.harvested_stems
 
-    def write_canopy_layer(self, scen, year, name, layer):
-        self.ncf["stand"][name]["basalarea"][scen, year, :] = layer.basalarea
-        self.ncf["stand"][name]["biomass"][scen, year, :] = layer.biomass
-        self.ncf["stand"][name]["n_demand"][scen, year, :] = layer.n_demand
-        self.ncf["stand"][name]["p_demand"][scen, year, :] = layer.p_demand
-        self.ncf["stand"][name]["k_demand"][scen, year, :] = layer.k_demand
-        self.ncf["stand"][name]["hdom"][scen, year, :] = layer.hdom
-        self.ncf["stand"][name]["leafarea"][scen, year, :] = layer.leafarea
-        self.ncf["stand"][name]["leafmass"][scen, year, :] = layer.leafmass
-        self.ncf["stand"][name]["logvolume"][scen, year, :] = layer.logvolume
-        self.ncf["stand"][name]["finerootlitter"][scen, year, :] = layer.finerootlitter
+    def write_canopy_layer(self, scen, year, name, layer_state, layer_outputs):
+        self.ncf["stand"][name]["basalarea"][scen, year, :] = layer_outputs.basalarea
+        self.ncf["stand"][name]["biomass"][scen, year, :] = layer_state.biomass
+        self.ncf["stand"][name]["n_demand"][scen, year, :] = layer_outputs.n_demand
+        self.ncf["stand"][name]["p_demand"][scen, year, :] = layer_outputs.p_demand
+        self.ncf["stand"][name]["k_demand"][scen, year, :] = layer_outputs.k_demand
+        self.ncf["stand"][name]["hdom"][scen, year, :] = layer_outputs.hdom
+        self.ncf["stand"][name]["leafarea"][scen, year, :] = layer_outputs.leafarea
+        self.ncf["stand"][name]["leafmass"][scen, year, :] = layer_outputs.leafmass
+        self.ncf["stand"][name]["logvolume"][scen, year, :] = layer_outputs.logvolume
+        self.ncf["stand"][name]["finerootlitter"][scen, year, :] = layer_outputs.finerootlitter
         self.ncf["stand"][name]["n_finerootlitter"][scen, year, :] = (
-            layer.n_finerootlitter
+            layer_outputs.n_finerootlitter
         )
         self.ncf["stand"][name]["p_finerootlitter"][scen, year, :] = (
-            layer.p_finerootlitter
+            layer_outputs.p_finerootlitter
         )
         self.ncf["stand"][name]["k_finerootlitter"][scen, year, :] = (
-            layer.k_finerootlitter
+            layer_outputs.k_finerootlitter
         )
-        self.ncf["stand"][name]["nonwoodylitter"][scen, year, :] = layer.nonwoodylitter
-        self.ncf["stand"][name]["pulpvolume"][scen, year, :] = layer.pulpvolume
-        self.ncf["stand"][name]["stems"][scen, year, :] = layer.stems
-        self.ncf["stand"][name]["volume"][scen, year, :] = layer.volume
-        self.ncf["stand"][name]["volumegrowth"][scen, year, :] = layer.volumegrowth
+        self.ncf["stand"][name]["nonwoodylitter"][scen, year, :] = layer_outputs.nonwoodylitter
+        self.ncf["stand"][name]["pulpvolume"][scen, year, :] = layer_outputs.pulpvolume
+        self.ncf["stand"][name]["stems"][scen, year, :] = layer_outputs.stems
+        self.ncf["stand"][name]["volume"][scen, year, :] = layer_outputs.volume
+        self.ncf["stand"][name]["volumegrowth"][scen, year, :] = layer_outputs.volumegrowth
 
-        self.ncf["stand"][name]["woodylitter"][scen, year, :] = layer.woodylitter
-        self.ncf["stand"][name]["n_woodylitter"][scen, year, :] = layer.n_woodylitter
-        self.ncf["stand"][name]["p_woodylitter"][scen, year, :] = layer.p_woodylitter
-        self.ncf["stand"][name]["k_woodylitter"][scen, year, :] = layer.k_woodylitter
-        self.ncf["stand"][name]["yi"][scen, year, :] = layer.yi
+        self.ncf["stand"][name]["woodylitter"][scen, year, :] = layer_outputs.woodylitter
+        self.ncf["stand"][name]["n_woodylitter"][scen, year, :] = layer_outputs.n_woodylitter
+        self.ncf["stand"][name]["p_woodylitter"][scen, year, :] = layer_outputs.p_woodylitter
+        self.ncf["stand"][name]["k_woodylitter"][scen, year, :] = layer_outputs.k_woodylitter
+        self.ncf["stand"][name]["yi"][scen, year, :] = layer_outputs.yi
 
-        self.ncf["stand"][name]["new_lmass"][scen, year, :] = layer.new_lmass
-        self.ncf["stand"][name]["leaf_litter"][scen, year, :] = layer.leaf_litter
-        self.ncf["stand"][name]["C_consumption"][scen, year, :] = layer.C_consumption
-        self.ncf["stand"][name]["leafmax"][scen, year, :] = layer.leafmax
-        self.ncf["stand"][name]["leafmin"][scen, year, :] = layer.leafmin
+        self.ncf["stand"][name]["new_lmass"][scen, year, :] = layer_outputs.new_lmass
+        self.ncf["stand"][name]["leaf_litter"][scen, year, :] = layer_outputs.leaf_litter
+        self.ncf["stand"][name]["C_consumption"][scen, year, :] = layer_outputs.C_consumption
+        self.ncf["stand"][name]["leafmax"][scen, year, :] = layer_outputs.leafmax
+        self.ncf["stand"][name]["leafmin"][scen, year, :] = layer_outputs.leafmin
 
-        self.ncf["stand"][name]["NPP"][scen, year, :] = layer.NPP
-        self.ncf["stand"][name]["NPP_pot"][scen, year, :] = layer.NPP_pot
-        self.ncf["stand"][name]["Nleafdemand"][scen, year, :] = layer.Nleafdemand
-        self.ncf["stand"][name]["Nleaf_litter"][scen, year, :] = layer.Nleaf_litter
-        self.ncf["stand"][name]["Pleafdemand"][scen, year, :] = layer.Pleafdemand
-        self.ncf["stand"][name]["Pleaf_litter"][scen, year, :] = layer.Pleaf_litter
-        self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = layer.Kleafdemand
-        self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = layer.Kleaf_litter
+        self.ncf["stand"][name]["NPP"][scen, year, :] = layer_outputs.NPP
+        self.ncf["stand"][name]["NPP_pot"][scen, year, :] = layer_outputs.NPP_pot
+        self.ncf["stand"][name]["Nleafdemand"][scen, year, :] = layer_outputs.Nleafdemand
+        self.ncf["stand"][name]["Nleaf_litter"][scen, year, :] = layer_outputs.Nleaf_litter
+        self.ncf["stand"][name]["Pleafdemand"][scen, year, :] = layer_outputs.Pleafdemand
+        self.ncf["stand"][name]["Pleaf_litter"][scen, year, :] = layer_outputs.Pleaf_litter
+        self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = layer_outputs.Kleafdemand
+        self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = layer_outputs.Kleaf_litter
 
     def write_groundvegetation(self, scen, year, gv_state, gv_outputs):
         self.ncf["groundvegetation"]["gv_tot"][scen, year, :] = gv_state.gv_tot
@@ -2639,7 +2639,7 @@ class Outputs:
         self,
         scen,
         year,
-        stand,
+        stand_out,
         groundvegetation,
         outputs: YearOutputs,
         doc_export: DOCExportOutputs,
@@ -2649,18 +2649,18 @@ class Outputs:
         c_to_co2 = 44 / 12.0
         c_in_ch4 = ch4_outputs.ch4 * 12.0 / 16.0
         self.ncf["balance"]["C"]["stand_litter_in"][scen, year, :] = (
-            stand.nonwoodylitter
-            + stand.nonwoody_lresid
-            + stand.non_woody_litter_mort
-            + stand.woodylitter
-            + stand.woody_lresid
-            + stand.woody_litter_mort
+            stand_out.nonwoodylitter
+            + stand_out.nonwoody_lresid
+            + stand_out.non_woody_litter_mort
+            + stand_out.woodylitter
+            + stand_out.woody_lresid
+            + stand_out.woody_litter_mort
         ) * bm_to_c
         self.ncf["balance"]["C"]["gv_litter_in"][scen, year, :] = (
             groundvegetation.nonwoodylitter + groundvegetation.woodylitter
         ) * bm_to_c
         self.ncf["balance"]["C"]["stand_change"][scen, year, :] = (
-            stand.biomassgrowth * bm_to_c
+            stand_out.biomassgrowth * bm_to_c
         )
         self.ncf["balance"]["C"]["gv_change"][scen, year, :] = (
             groundvegetation.gv_change * bm_to_c
@@ -2677,14 +2677,14 @@ class Outputs:
         )
         standbal = (
             (
-                stand.biomassgrowth
+                stand_out.biomassgrowth
                 + groundvegetation.gv_change
-                + stand.nonwoodylitter
-                + stand.nonwoody_lresid
-                + stand.non_woody_litter_mort
-                + stand.woodylitter
-                + stand.woody_lresid
-                + stand.woody_litter_mort
+                + stand_out.nonwoodylitter
+                + stand_out.nonwoody_lresid
+                + stand_out.non_woody_litter_mort
+                + stand_out.woodylitter
+                + stand_out.woody_lresid
+                + stand_out.woody_litter_mort
                 + groundvegetation.nonwoodylitter
                 + groundvegetation.woodylitter
             )
@@ -2696,12 +2696,12 @@ class Outputs:
 
         soilbal = (
             (
-                stand.nonwoodylitter
-                + stand.nonwoody_lresid
-                + stand.non_woody_litter_mort
-                + stand.woodylitter
-                + stand.woody_lresid
-                + stand.woody_litter_mort
+                stand_out.nonwoodylitter
+                + stand_out.nonwoody_lresid
+                + stand_out.non_woody_litter_mort
+                + stand_out.woodylitter
+                + stand_out.woody_lresid
+                + stand_out.woody_litter_mort
                 + groundvegetation.nonwoodylitter
                 + groundvegetation.woodylitter
             )

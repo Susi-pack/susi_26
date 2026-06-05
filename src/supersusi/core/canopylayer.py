@@ -95,6 +95,8 @@ class Outputs:
     basNdemand: np.ndarray
     basPdemand: np.ndarray
     basKdemand: np.ndarray
+    leafmax: np.ndarray
+    leafmin: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,8 @@ class LeafDynamicsOutputs:
     Kleafdemand: np.ndarray
     Kleaf_litter: np.ndarray
     K_leaf: np.ndarray
+    leafmax: np.ndarray
+    leafmin: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -309,6 +313,8 @@ def _leaf_dynamics(
         Kleafdemand=Kdemand,
         Kleaf_litter=Kleaf_litter,
         K_leaf=K_leaf,
+        leafmax=leafmax,
+        leafmin=leafmin,
     )
 
 
@@ -343,6 +349,8 @@ def apply_allometry(
         Kleaf_litter=z(ncols),
         K_leaf=z(ncols),
         volumegrowth=z(ncols),
+        leafmax=z(ncols),
+        leafmin=z(ncols),
     )
 
     # Allometric fields — will be filled per zone
@@ -564,6 +572,8 @@ def grow_stand(
     nleaf_litter = np.zeros(ncols)
     pleaf_litter = np.zeros(ncols)
     kleaf_litter = np.zeros(ncols)
+    leafmax = np.zeros(ncols)
+    leafmin = np.zeros(ncols)
 
     for zid, ix in cc.ixs.items():
         af = cc.allodic[zid]
@@ -594,6 +604,8 @@ def grow_stand(
         kleafdemand[ix] = ld.Kleafdemand
         kleaf_litter[ix] = ld.Kleaf_litter
         k_leaf[ix] = ld.K_leaf
+        leafmax[ix] = ld.leafmax
+        leafmin[ix] = ld.leafmin
 
         delta[ix] = npp_per_tree[ix] - ld.C_consumption - fr_lit - wd_lit
 
@@ -624,6 +636,8 @@ def grow_stand(
         n_nonwoodylitter=out.n_finerootlitter + nleaf_litter,
         p_nonwoodylitter=out.p_finerootlitter + pleaf_litter,
         k_nonwoodylitter=out.k_finerootlitter + kleaf_litter,
+        leafmax=leafmax,
+        leafmin=leafmin,
     )
 
     return State(new_agearr, new_biomass, state.remaining_share), merged

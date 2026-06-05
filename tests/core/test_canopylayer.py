@@ -171,6 +171,8 @@ class TestDataclasses:
             basNdemand=np.ones(5),
             basPdemand=np.ones(5),
             basKdemand=np.ones(5),
+            leafmax=np.ones(5),
+            leafmin=np.ones(5),
         )
         assert o.stems.shape == (5,)
 
@@ -207,6 +209,8 @@ class TestDataclasses:
             Kleafdemand=np.ones(5),
             Kleaf_litter=np.ones(5),
             K_leaf=np.ones(5),
+            leafmax=np.ones(5),
+            leafmin=np.ones(5),
         )
         assert ldo.new_lmass.shape == (5,)
 

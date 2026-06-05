@@ -5,7 +5,7 @@ Created on Mon May 21 18:38:10 2018
 @author: lauren
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,8 @@ from supersusi.io.susi_parameter_model import (
 )
 from supersusi.core.strip import drain_depth_development
 
-from supersusi.core.stand import Stand
+from supersusi.core import stand as stand_mod
+import supersusi.core.canopylayer as canopylayer
 from supersusi.core.susi_utils import rew_drylimit
 from supersusi.core.susi_utils import (
     get_temp_sum,
@@ -47,6 +48,7 @@ from supersusi.core.fertilization_models import ash, npk, no_fertilization
 
 @dataclass(frozen=True)
 class ModuleParams:
+    stand: stand_mod.Params
     canopygrid: canopygrid.Params
     mosslayer: mosslayer.Params
     methane: methane.Params
@@ -121,17 +123,12 @@ class Susi:
         )
         print("      - Latitude:", lat, ", Longitude:", lon)
 
-        stand = Stand(
-            n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
-            n_yrs=n_simulation_years,
-            canopylayers=self.parameters.site_parameters.canopylayers,
-            n_cols=self.parameters.site_parameters.n,
-            sfc=self.parameters.site_parameters.sfc,
-            agearr=self.parameters.site_parameters.age,
-            allometry_params=self.parameters.allometry_parameters,
-            photopara=self.parameters.photo_parameters,
-        )  # create stand class
-        stand.update()
+        stand_cc = stand_mod.compute_constants(
+            module_params.stand, self.parameters.allometry_parameters,
+        )
+        stand_state, stand_out = stand_mod.compute_initial_state(
+            module_params.stand, stand_cc, self.parameters.site_parameters.age, self.parameters.site_parameters.n,
+        )
 
         out.initialize_stand()  # create output variables to netCDF
         out.initialize_canopy_layer("dominant")  # output variables of trees
@@ -140,9 +137,9 @@ class Susi:
 
         out.write_paras(
             sfc=self.parameters.site_parameters.sfc,
-            dominant_sp=stand.dominant.tree_species,
-            subdominant_sp=stand.subdominant.tree_species,
-            under_sp=stand.under.tree_species,
+            dominant_sp=stand_cc.dominant.tree_species,
+            subdominant_sp=stand_cc.subdominant.tree_species,
+            under_sp=stand_cc.under.tree_species,
         )
 
         # describe site parameters for user
@@ -150,7 +147,7 @@ class Susi:
 
         gv_params = gvegetation.Params(
             num_nodes=self.parameters.site_parameters.n,
-            tree_species=stand.dominant.species,
+            tree_species=stand_cc.dominant.tree_species,
             site_fertility_class=self.parameters.site_parameters.sfc,
             latitude=lat,
             longitude=lon,
@@ -162,9 +159,9 @@ class Susi:
             gv_cc,
             gvegetation.assemble_inputs(
                 ts=temperature_sun_days_degree,
-                vol=stand.volume,
-                stems=stand.stems,
-                ba=stand.basalarea,
+                vol=stand_out.volume,
+                stems=stand_out.stems,
+                ba=stand_out.basalarea,
                 age=self.parameters.site_parameters.age["dominant"],
             ),
             gv_state,
@@ -265,7 +262,7 @@ class Susi:
         # ********* Above ground hydrology initialization ***************
 
         canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
-        canopy_state = canopygrid.update_amax(stand.nut_stat, canopy_state)
+        canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
         out.initialize_cpy()
 
         moss_constants = mosslayer.compute_constants(module_params.mosslayer)
@@ -380,14 +377,19 @@ class Susi:
                 scen[n_ditch_scen],
             )
 
-            stand.reset_domain(self.parameters.site_parameters.age)
+            stand_state, stand_out = stand_mod.compute_initial_state(
+                module_params.stand, stand_cc, self.parameters.site_parameters.age, self.parameters.site_parameters.n,
+            )
 
             out.write_scen(n_ditch_scen, hdr_west, hdr_east)
 
-            out.write_stand(n_ditch_scen, 0, stand)
-            out.write_canopy_layer(n_ditch_scen, 0, "dominant", stand.dominant)
-            out.write_canopy_layer(n_ditch_scen, 0, "subdominant", stand.subdominant)
-            out.write_canopy_layer(n_ditch_scen, 0, "under", stand.under)
+            _dom_out_init = canopylayer.apply_allometry(stand_state.dominant.biomass, stand_state.dominant.agearr, stand_state.dominant.remaining_share, stand_cc.dominant)
+            _sub_out_init = canopylayer.apply_allometry(stand_state.subdominant.biomass, stand_state.subdominant.agearr, stand_state.subdominant.remaining_share, stand_cc.subdominant)
+            _under_out_init = canopylayer.apply_allometry(stand_state.under.biomass, stand_state.under.agearr, stand_state.under.remaining_share, stand_cc.under)
+            out.write_stand(n_ditch_scen, 0, stand_out, stand_state, previous_nut_stat=np.ones(self.parameters.site_parameters.n))
+            out.write_canopy_layer(n_ditch_scen, 0, "dominant", stand_state.dominant, _dom_out_init)
+            out.write_canopy_layer(n_ditch_scen, 0, "subdominant", stand_state.subdominant, _sub_out_init)
+            out.write_canopy_layer(n_ditch_scen, 0, "under", stand_state.under, _under_out_init)
 
             gv_state = gvegetation.compute_initial_state(gv_params, gv_cc)
             gv_state, gv_outputs = gvegetation.run_timestep(
@@ -395,9 +397,9 @@ class Susi:
                 gv_cc,
                 gvegetation.assemble_inputs(
                     ts=temperature_sun_days_degree,
-                    vol=stand.volume,
-                    stems=stand.stems,
-                    ba=stand.basalarea,
+                    vol=stand_out.volume,
+                    stems=stand_out.stems,
+                    ba=stand_out.basalarea,
                     age=self.parameters.site_parameters.age["dominant"],
                 ),
                 gv_state,
@@ -435,7 +437,7 @@ class Susi:
                     - datetime.datetime(calendar_year, 1, 1)
                 ).days + 1
 
-                canopy_state = canopygrid.update_amax(stand.nut_stat, canopy_state)
+                canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
 
                 # **********  Daily loop ************************************************************
                 for dd in range(days):  # day loop
@@ -453,8 +455,8 @@ class Susi:
 
                     inputs = canopygrid.assemble_inputs(
                         forcings,
-                        hc=stand.hdom,
-                        LAIconif=stand.leafarea,
+                        hc=stand_out.hdom,
+                        LAIconif=stand_out.leafarea,
                         Rew=reww,
                         beta=moss_state.Ree,
                     )
@@ -497,10 +499,10 @@ class Susi:
                             "  - day #",
                             d,
                             " hdom ",
-                            np.round(np.mean(stand.hdom), 2),
+                            np.round(np.mean(stand_out.hdom), 2),
                             " m, ",
                             "LAI ",
-                            np.round(np.mean(stand.leafarea), 2),
+                            np.round(np.mean(stand_out.leafarea), 2),
                             " m2 m-2",
                         )
 
@@ -616,7 +618,7 @@ class Susi:
 
                 # **************  Biogeochemistry ***********************************
                 if switches["Ojanen2010_2019"]:
-                    v = stand.volume
+                    v = stand_out.volume
                     _, co2, Rhet = heterotrophic_respiration_yr(
                         df_peat_temperatures,
                         calendar_year,
@@ -636,42 +638,60 @@ class Susi:
                     gv_cc,
                     gvegetation.assemble_inputs(
                         ts=temperature_sun_days_degree,
-                        vol=stand.volume,
-                        stems=stand.stems,
-                        ba=stand.basalarea,
+                        vol=stand_out.volume,
+                        stems=stand_out.stems,
+                        ba=stand_out.basalarea,
                         age=self.parameters.site_parameters.age["dominant"],
                     ),
                     gv_state,
                 )
 
-                stand.assimilate(
-                    self.parameters.photo_parameters,
-                    self.weather_forcing.loc[str(calendar_year)],
-                    dfwt.loc[str(calendar_year)],
-                    dfafp.loc[str(calendar_year)],
+                _stand_inputs = stand_mod.Inputs(
+                    photopara=self.parameters.photo_parameters,
+                    forc=self.weather_forcing.loc[str(calendar_year)],
+                    wt=dfwt.loc[str(calendar_year)],
+                    afp=dfafp.loc[str(calendar_year)],
+                    n_supply=np.zeros(self.parameters.site_parameters.n),
+                    p_supply=np.zeros(self.parameters.site_parameters.n),
+                    k_supply=np.zeros(self.parameters.site_parameters.n),
+                    groundvegetation_outputs=gv_outputs,
+                    previous_nut_stat=stand_state.nut_stat.copy(),
+                    calendar_year=calendar_year,
                 )
-                stand.update()
+                stand_state, stand_out = stand_mod.grow_stand(stand_state, stand_cc, _stand_inputs)
 
                 # --------- Locate cuttings here--------------------
                 print("calculating year " + str(calendar_year))
                 if calendar_year == self.parameters.site_parameters.cutting_yr:
                     print("xxxxxxxxxxxx   VOL before cutting xxxxxxxxxxxxxxxx")
-                    print(str(np.round(np.mean(stand.volume), 1)))
+                    print(str(np.round(np.mean(stand_out.volume), 1)))
                     print(
                         "cutting now "
                         + str(calendar_year)
                         + " from basal area "
-                        + str(np.round(np.mean(stand.basalarea), 1))
+                        + str(np.round(np.mean(stand_out.basalarea), 1))
                         + " to "
                         + str(self.parameters.site_parameters.cutting_to_ba)
                     )
 
-                    stand.dominant.cutting(
-                        calendar_year,
-                        nut_stat=stand.nut_stat,
-                        to_ba=self.parameters.site_parameters.cutting_to_ba,
+                    _cut_inputs = replace(_stand_inputs, cutting_to_ba=self.parameters.site_parameters.cutting_to_ba)
+                    stand_state, stand_out, _cutting_out = stand_mod.cut_stand(stand_state, stand_cc, stand_out, _cut_inputs)
+                else:
+                    _cutting_out = canopylayer.CuttingOutputs(
+                        harvested_volume=np.zeros(self.parameters.site_parameters.n),
+                        harvested_log_volume=np.zeros(self.parameters.site_parameters.n),
+                        harvested_pulp_volume=np.zeros(self.parameters.site_parameters.n),
+                        harvested_biomass=np.zeros(self.parameters.site_parameters.n),
+                        harvested_stems=np.zeros(self.parameters.site_parameters.n),
+                        nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        n_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        p_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        k_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        woody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        n_woody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        p_woody_lresid=np.zeros(self.parameters.site_parameters.n),
+                        k_woody_lresid=np.zeros(self.parameters.site_parameters.n),
                     )
-                    stand.update_logging()
 
                 #      """ ATTN distinct stem mortaility from the logging -> fate of stems different!!!"""
                 # ---------- Organic matter decomposition and nutrient release-----------------
@@ -723,15 +743,15 @@ class Susi:
                 """
                 weather_yr = self.weather_forcing.loc[str(calendar_year)]
                 nonwoodylitter = (
-                    stand.nonwoodylitter
-                    + stand.nonwoody_lresid
-                    + stand.non_woody_litter_mort
+                    stand_out.nonwoodylitter
+                    + stand_out.nonwoody_lresid
+                    + stand_out.non_woody_litter_mort
                     + gv_outputs.nonwoodylitter
                 ) / 10000.0
                 woodylitter = (
-                    stand.woodylitter
-                    + stand.woody_lresid
-                    + stand.woody_litter_mort
+                    stand_out.woodylitter
+                    + stand_out.woody_lresid
+                    + stand_out.woody_litter_mort
                     + gv_outputs.woodylitter
                 ) / 10000.0
                 inputs_mass = esom.assemble_inputs(
@@ -758,16 +778,16 @@ class Susi:
                 )
 
                 n_nonwoodylitter = (
-                    stand.n_nonwoodylitter
-                    + stand.n_nonwoody_lresid
-                    + stand.n_non_woody_litter_mort
+                    stand_out.n_nonwoodylitter
+                    + stand_out.n_nonwoody_lresid
+                    + stand_out.n_non_woody_litter_mort
                     + gv_outputs.n_litter_nw
                 ) / 10000.0
                 n_woodylitter = (
-                    stand.n_woodylitter
-                    + stand.n_woody_lresid
-                    + stand.n_woody_litter_mort
-                    + stand.n_woody_litter_mort
+                    stand_out.n_woodylitter
+                    + stand_out.n_woody_lresid
+                    + stand_out.n_woody_litter_mort
+                    + stand_out.n_woody_litter_mort
                     + gv_outputs.n_litter_w
                 ) / 10000.0
                 inputs_N = esom.assemble_inputs(
@@ -783,15 +803,15 @@ class Susi:
                 out.write_esom(n_ditch_scen, simulation_year, "N", state_N, yr_out_N)
 
                 p_nonwoodylitter = (
-                    stand.p_nonwoodylitter
-                    + stand.p_nonwoody_lresid
-                    + stand.p_non_woody_litter_mort
+                    stand_out.p_nonwoodylitter
+                    + stand_out.p_nonwoody_lresid
+                    + stand_out.p_non_woody_litter_mort
                     + gv_outputs.p_litter_nw
                 ) / 10000.0
                 p_woodylitter = (
-                    stand.p_woodylitter
-                    + stand.p_woody_lresid
-                    + stand.p_woody_litter_mort
+                    stand_out.p_woodylitter
+                    + stand_out.p_woody_lresid
+                    + stand_out.p_woody_litter_mort
                     + gv_outputs.p_litter_w
                 ) / 10000.0
                 inputs_P = esom.assemble_inputs(
@@ -807,15 +827,15 @@ class Susi:
                 out.write_esom(n_ditch_scen, simulation_year, "P", state_P, yr_out_P)
 
                 k_nonwoodylitter = (
-                    stand.k_nonwoodylitter
-                    + stand.k_nonwoody_lresid
-                    + stand.k_non_woody_litter_mort
+                    stand_out.k_nonwoodylitter
+                    + stand_out.k_nonwoody_lresid
+                    + stand_out.k_non_woody_litter_mort
                     + gv_outputs.k_litter_nw
                 ) / 10000.0
                 k_woodylitter = (
-                    stand.k_woodylitter
-                    + stand.k_woody_lresid
-                    + stand.k_woody_litter_mort
+                    stand_out.k_woodylitter
+                    + stand_out.k_woody_lresid
+                    + stand_out.k_woody_litter_mort
                     + gv_outputs.k_litter_w
                 ) / 10000.0
                 inputs_K = esom.assemble_inputs(
@@ -830,37 +850,30 @@ class Susi:
                 state_K, yr_out_K = esom.run_yr(params_K, cc_K, inputs_K, state_K)
                 out.write_esom(n_ditch_scen, simulation_year, "K", state_K, yr_out_K)
 
-                stand.update_nutrient_status(
-                    gv_outputs,
-                    yr_out_N.out_root_lyr
-                    + self.parameters.site_parameters.depoN
-                    + fertilization_outputs.nutrient_release["N"],
-                    yr_out_P.out_root_lyr
-                    + self.parameters.site_parameters.depoP
-                    + fertilization_outputs.nutrient_release["P"],
-                    yr_out_K.out_root_lyr
-                    + self.parameters.site_parameters.depoK
-                    + fertilization_outputs.nutrient_release["K"],
+                _nut_inputs = replace(_stand_inputs,
+                    n_supply=yr_out_N.out_root_lyr + self.parameters.site_parameters.depoN + fertilization_outputs.nutrient_release["N"],
+                    p_supply=yr_out_P.out_root_lyr + self.parameters.site_parameters.depoP + fertilization_outputs.nutrient_release["P"],
+                    k_supply=yr_out_K.out_root_lyr + self.parameters.site_parameters.depoK + fertilization_outputs.nutrient_release["K"],
                 )
-
-                # move stand.assimilate here, if first year, take foliage litter from 'table growth (interpolation functions)'
-                # stand.assimilate(self.weather_forcing.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)])
-                # stand.update()
+                stand_state = stand_mod.update_nutrient_status(stand_state, stand_out, _nut_inputs)
 
                 _, ch4_outputs = methane.run_timestep(
                     inputs=methane.assemble_inputs(year=calendar_year, dfwt=dfwt),
                 )
                 out.write_methane(n_ditch_scen, simulation_year, ch4_outputs)
 
-                out.write_stand(n_ditch_scen, simulation_year, stand)
+                _dom_out = canopylayer.apply_allometry(stand_state.dominant.biomass, stand_state.dominant.agearr, stand_state.dominant.remaining_share, stand_cc.dominant)
+                _sub_out = canopylayer.apply_allometry(stand_state.subdominant.biomass, stand_state.subdominant.agearr, stand_state.subdominant.remaining_share, stand_cc.subdominant)
+                _under_out = canopylayer.apply_allometry(stand_state.under.biomass, stand_state.under.agearr, stand_state.under.remaining_share, stand_cc.under)
+                out.write_stand(n_ditch_scen, simulation_year, stand_out, stand_state, previous_nut_stat=_stand_inputs.previous_nut_stat)
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "dominant", stand.dominant
+                    n_ditch_scen, simulation_year, "dominant", stand_state.dominant, _dom_out
                 )
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "subdominant", stand.subdominant
+                    n_ditch_scen, simulation_year, "subdominant", stand_state.subdominant, _sub_out
                 )
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "under", stand.under
+                    n_ditch_scen, simulation_year, "under", stand_state.under, _under_out
                 )
                 out.write_groundvegetation(
                     n_ditch_scen, simulation_year, gv_state, gv_outputs
@@ -874,7 +887,7 @@ class Susi:
                     yr_out_N,
                     self.parameters.site_parameters.depoN,
                     fertilization_outputs.nutrient_release["N"],
-                    stand.n_demand + stand.n_leaf_demand,
+                    stand_out.n_demand + stand_out.Nleafdemand,
                     gv_outputs.nup,
                 )
                 out.write_nutrient_balance(
@@ -884,7 +897,7 @@ class Susi:
                     yr_out_P,
                     self.parameters.site_parameters.depoP,
                     fertilization_outputs.nutrient_release["P"],
-                    stand.p_demand + stand.p_leaf_demand,
+                    stand_out.p_demand + stand_out.Pleafdemand,
                     gv_outputs.pup,
                 )
                 out.write_nutrient_balance(
@@ -894,21 +907,19 @@ class Susi:
                     yr_out_K,
                     self.parameters.site_parameters.depoK,
                     fertilization_outputs.nutrient_release["K"],
-                    stand.k_demand + stand.k_leaf_demand,
+                    stand_out.k_demand + stand_out.Kleafdemand,
                     gv_outputs.kup,
                 )
 
                 out.write_carbon_balance(
                     n_ditch_scen,
                     simulation_year,
-                    stand,
+                    stand_out,
                     gv_outputs,
                     yr_out_mass,
                     doc_export,
                     ch4_outputs,
                 )
-
-                stand.reset_logging()  # reset logging in general
                 #
                 start = start + days  # starting point of the next year daily loop
 
@@ -964,6 +975,26 @@ def _build_params(susi_params: SusiParams) -> ModuleParams:
 
     sp = susi_params.site_parameters
     return ModuleParams(
+        stand=stand_mod.Params(
+            dominant=canopylayer.Params(
+                name="dominant",
+                ncols=sp.n,
+                nlyrs=np.array(sp.canopylayers.dominant, dtype=int),
+                sfc=sp.sfc.copy(),
+            ),
+            subdominant=canopylayer.Params(
+                name="subdominant",
+                ncols=sp.n,
+                nlyrs=np.array(sp.canopylayers.subdominant, dtype=int),
+                sfc=sp.sfc.copy(),
+            ),
+            under=canopylayer.Params(
+                name="under",
+                ncols=sp.n,
+                nlyrs=np.array(sp.canopylayers.under, dtype=int),
+                sfc=sp.sfc.copy(),
+            ),
+        ),
         canopygrid=canopygrid.Params(
             dt=c.dt,
             cf=np.ones(n) * c.state.cf,
