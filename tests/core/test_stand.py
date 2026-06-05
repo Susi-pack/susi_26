@@ -4,14 +4,20 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.interpolate import interp1d
 
+from supersusi.core.allometry import (
+    AgeBased, AllometryFunctions, BiomassToStand, FineRoots, LitterMass,
+    LoggingResidues, MortalityMass, NutrientDemand, NutrientLitter,
+    NutrientMortality, YieldVolume,
+)
 from supersusi.core.canopylayer import Params as CLParams, State as CLState
 from supersusi.core.canopylayer import ComputedConstants as CLComputedConstants
 from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
     _compute_lai_above, _merge_cutting_outputs, compute_constants,
-    compute_initial_state,
+    compute_initial_state, grow_stand,
 )
 
 
@@ -423,3 +429,130 @@ class TestComputeInitialState:
         assert state.subdominant.agearr.shape == (ncols,)
         assert state.under.agearr.shape == (ncols,)
         assert np.all(state.dominant.remaining_share == 1.0)
+
+
+def _identity_interp():
+    return interp1d([0, 100], [0, 100], bounds_error=False, fill_value="extrapolate")
+
+
+def _mock_cl_cc() -> CLComputedConstants:
+    af = AllometryFunctions(
+        age_based=AgeBased(
+            hdom=_identity_interp(), ba=_identity_interp(), vol=_identity_interp(), yield_=_identity_interp(),
+            bm=_identity_interp(), bm_no_leaves=_identity_interp(), leaves=_identity_interp(),
+        ),
+        biomass_to_stand=BiomassToStand(
+            leaf_mass=_identity_interp(), with_leaves_to_leaf_mass=_identity_interp(),
+            lai=_identity_interp(), hdom=_identity_interp(), dg=_identity_interp(), yi=_identity_interp(),
+            vol=_identity_interp(), log_vol=_identity_interp(), pulp_vol=_identity_interp(),
+            ba=_identity_interp(), dbm=_identity_interp(), stems=_identity_interp(),
+        ),
+        yield_volume=YieldVolume(
+            yi_to_vol=_identity_interp(), yi_to_bm=_identity_interp(),
+            vol_to_logs=_identity_interp(), vol_to_pulp=_identity_interp(),
+        ),
+        fine_roots=FineRoots(
+            fine_roots=_identity_interp(), n_fine_roots=_identity_interp(),
+            p_fine_roots=_identity_interp(), k_fine_roots=_identity_interp(),
+        ),
+        litter_mass=LitterMass(
+            fine_root_litter=_identity_interp(), woody_litter=_identity_interp(),
+            with_leaves_to_fine_root_litter=_identity_interp(),
+            with_leaves_to_woody_litter=_identity_interp(),
+        ),
+        mortality_mass=MortalityMass(
+            fine_root=_identity_interp(), woody=_identity_interp(), leaves=_identity_interp(),
+        ),
+        nutrient_demand=NutrientDemand(
+            n_demand=_identity_interp(), p_demand=_identity_interp(), k_demand=_identity_interp(),
+            n_leaf_demand=_identity_interp(), p_leaf_demand=_identity_interp(), k_leaf_demand=_identity_interp(),
+        ),
+        nutrient_litter=NutrientLitter(
+            n_fine_root_litter=_identity_interp(), p_fine_root_litter=_identity_interp(),
+            k_fine_root_litter=_identity_interp(), n_woody_litter=_identity_interp(),
+            p_woody_litter=_identity_interp(), k_woody_litter=_identity_interp(),
+        ),
+        nutrient_mortality=NutrientMortality(
+            n_mortality_leaves=_identity_interp(), p_mortality_leaves=_identity_interp(),
+            k_mortality_leaves=_identity_interp(), n_mortality_fine_root=_identity_interp(),
+            p_mortality_fine_root=_identity_interp(), k_mortality_fine_root=_identity_interp(),
+            n_mortality_woody=_identity_interp(), p_mortality_woody=_identity_interp(),
+            k_mortality_woody=_identity_interp(),
+        ),
+        logging_residues=LoggingResidues(
+            woody=_identity_interp(), n_woody=_identity_interp(),
+            p_woody=_identity_interp(), k_woody=_identity_interp(),
+        ),
+    )
+    return CLComputedConstants(allodic={1: af}, ixs={1: np.arange(5)}, tree_species=np.ones(5, dtype=np.int32))
+
+
+class TestGrowStand:
+    def test_returns_state_and_outputs(self):
+        ncols = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(ncols, 10.0),
+            biomass=np.full(ncols, 20.0),
+            remaining_share=np.ones(ncols),
+        )
+        state = State(nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
+
+        days = 3
+        photopara = SimpleNamespace(
+            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+        )
+        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        wt = pd.DataFrame(np.full((days, ncols), -0.3))
+        afp = pd.DataFrame(np.ones((days, ncols)))
+
+        inputs = Inputs(
+            photopara=photopara,
+            forc=forc, wt=wt, afp=afp,
+            n_supply=np.ones(ncols), p_supply=np.ones(ncols), k_supply=np.ones(ncols),
+            groundvegetation_outputs=None,
+            previous_nut_stat=np.ones(ncols),
+            calendar_year=2020,
+        )
+
+        new_state, out = grow_stand(state, cc, inputs)
+        assert isinstance(new_state, State)
+        assert isinstance(out, Outputs)
+        assert out.stems.shape == (ncols,)
+        assert out.biomass.shape == (ncols,)
+        np.testing.assert_array_equal(new_state.dominant.agearr, cl_state.agearr + 1)
+        np.testing.assert_array_equal(new_state.subdominant.agearr, cl_state.agearr + 1)
+        np.testing.assert_array_equal(new_state.under.agearr, cl_state.agearr + 1)
+
+    def test_nonnegative_outputs(self):
+        ncols = 5
+        cl_cc = _mock_cl_cc()
+        cc = ComputedConstants(dominant=cl_cc, subdominant=cl_cc, under=cl_cc)
+        cl_state = CLState(
+            agearr=np.full(ncols, 10.0),
+            biomass=np.full(ncols, 20.0),
+            remaining_share=np.ones(ncols),
+        )
+        state = State(nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
+
+        days = 3
+        photopara = SimpleNamespace(
+            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+        )
+        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        wt = pd.DataFrame(np.full((days, ncols), -0.3))
+        afp = pd.DataFrame(np.ones((days, ncols)))
+
+        inputs = Inputs(
+            photopara=photopara,
+            forc=forc, wt=wt, afp=afp,
+            n_supply=np.ones(ncols), p_supply=np.ones(ncols), k_supply=np.ones(ncols),
+            groundvegetation_outputs=None,
+            previous_nut_stat=np.ones(ncols),
+            calendar_year=2020,
+        )
+
+        _, out = grow_stand(state, cc, inputs)
+        assert np.all(out.NPP >= 0) or np.isnan(out.NPP).any()
+        assert np.all(out.volumegrowth >= 0) or np.isnan(out.volumegrowth).any()

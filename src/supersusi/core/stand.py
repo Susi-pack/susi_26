@@ -297,6 +297,51 @@ def compute_initial_state(
     return State(nut_stat=nut_stat, dominant=dom_state, subdominant=sub_state, under=under_state), stand_out
 
 
+def grow_stand(
+    state: State,
+    cc: ComputedConstants,
+    inputs: Inputs,
+) -> tuple[State, Outputs]:
+    dom_allom = canopylayer.apply_allometry(
+        state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant,
+    )
+    sub_allom = canopylayer.apply_allometry(
+        state.subdominant.biomass, state.subdominant.agearr, state.subdominant.remaining_share, cc.subdominant,
+    )
+    under_allom = canopylayer.apply_allometry(
+        state.under.biomass, state.under.agearr, state.under.remaining_share, cc.under,
+    )
+
+    lai_dom, lai_sub, lai_under = _compute_lai_above(dom_allom, sub_allom, under_allom)
+
+    dom_inputs = canopylayer.Inputs(
+        photopara=inputs.photopara, forc=inputs.forc, wt=inputs.wt, afp=inputs.afp,
+        previous_nut_stat=inputs.previous_nut_stat, nut_stat=state.nut_stat,
+        lai_above=lai_dom,
+    )
+    sub_inputs = replace(dom_inputs, lai_above=lai_sub)
+    under_inputs = replace(dom_inputs, lai_above=lai_under)
+
+    dom_state, dom_out = canopylayer.grow_stand(state.dominant, cc.dominant, dom_inputs)
+    sub_state, sub_out = canopylayer.grow_stand(state.subdominant, cc.subdominant, sub_inputs)
+    under_state, under_out = canopylayer.grow_stand(state.under, cc.under, under_inputs)
+
+    prev_biomass = (
+        state.dominant.biomass * dom_allom.stems
+        + state.subdominant.biomass * sub_allom.stems
+        + state.under.biomass * under_allom.stems
+    )
+
+    stand_out = _aggregate(
+        dom_out, sub_out, under_out,
+        dom_state.biomass, sub_state.biomass, under_state.biomass,
+        previous_stand_biomass=prev_biomass,
+    )
+
+    new_stand_state = State(state.nut_stat, dom_state, sub_state, under_state)
+    return new_stand_state, stand_out
+
+
 class Stand:
     def __init__(
         self,
