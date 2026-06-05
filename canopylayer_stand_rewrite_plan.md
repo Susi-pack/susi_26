@@ -707,3 +707,11 @@ The architecture prescribes `Inputs` as a bundle of *other* categories. Here `ca
 
 The architecture says outputs should not feed back into state — but `biomassgrowth` *is* an output that depends on the previous year's biomass. Making the previous year's biomass an explicit parameter keeps the function pure.
 
+---
+
+## 8. Progress Log
+
+| Date | Step | What was done | Tests | Lint/Type |
+|------|------|---------------|-------|-----------|
+| 2026-06-05 | 1a | Add frozen dataclasses to `canopylayer.py`: `Params`, `ComputedConstants`, `State`, `Outputs`, `CuttingOutputs`, `LeafDynamicsOutputs`, `Inputs` | 9 new tests pass; full suite 155/155 | ruff ✅, ty ✅ |
+

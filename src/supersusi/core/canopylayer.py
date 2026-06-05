@@ -140,6 +140,177 @@ class Inputs:
     lai_above: np.ndarray
 
 
+def _leaf_dynamics(
+    bm,
+    bm_increment,
+    current_leafmass,
+    previous_nut_stat,
+    nut_stat,
+    agenow,
+    allometry_funcs,
+    species,
+    printOpt=False,
+) -> LeafDynamicsOutputs:
+    """
+    input:
+         bm, current biomass, array, kg/tree without leaves
+         bm_increment, array, total NPP kg/tree
+         incoming columns are of single tree species canopy layers
+    returns LeafDynamicsOutputs (new_lmass, leaf_litter, C_consumption,
+            N/P/K demand/litter/content)
+    """
+    # ******** Parameters *****************
+    nuts = {
+        "Pine": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [5.0, 6.5]}},
+        "Spruce": {
+            "Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}
+        },
+        "Birch": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}},
+    }
+
+    retrans = {"N": 0.69, "P": 0.73, "K": 0.8}  # Nieminen Helmisaari 1996 Tree Phys
+    species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
+    spe = species_codes[species[0]]  # Take the first item, all are same here
+    longevityLeaves = {
+        "Pine": [5.0, 3.5],
+        "Spruce": [8.0, 5.0],
+        "Birch": [1.0, 1.0],
+    }  # yrs, life span of leaves and fine roots
+
+    N_con = interp1d(
+        np.array([0.66, 1.5]),
+        np.array(nuts[spe]["Foliage"]["N"]),
+        fill_value=tuple(nuts[spe]["Foliage"]["N"]),
+        bounds_error=False,
+    )
+    P_con = interp1d(
+        np.array([0.66, 1.5]),
+        np.array(nuts[spe]["Foliage"]["P"]),
+        fill_value=tuple(nuts[spe]["Foliage"]["P"]),
+        bounds_error=False,
+    )
+    K_con = interp1d(
+        np.array([0.66, 1.5]),
+        np.array(nuts[spe]["Foliage"]["K"]),
+        fill_value=tuple(nuts[spe]["Foliage"]["K"]),
+        bounds_error=False,
+    )
+
+    longevity = interp1d(
+        np.array([0.66, 1.5]),
+        np.array(longevityLeaves[spe]),
+        fill_value=tuple(longevityLeaves[spe]),
+        bounds_error=False,
+    )
+
+    n = len(nut_stat)
+    # ************ Biomass and litter**************
+    """ Change units to /tree here"""
+    leafbase0 = allometry_funcs.biomass_to_stand.leaf_mass(
+        bm
+    )  # table growth leaf mass in the beginning of timestep
+    leafbase1 = allometry_funcs.biomass_to_stand.leaf_mass(
+        bm + bm_increment
+    )  # table growth leaf mass in the end of timestep
+
+    # -------------------------------------------------
+    leafmax = leafbase1 * 1.5
+    leafmin = leafbase1 / 1.5
+
+    net_ch = leafbase1 - leafbase0
+    gr_demand = leafbase1 * nut_stat - current_leafmass  # actual leaf mass - current
+
+    max_ch = (leafmax - leafmin) / (2 * longevity(nut_stat))
+
+    allowed_ch = np.zeros(n, dtype=float)
+    lmass_ch = np.zeros(n, dtype=float)
+
+    ix1 = np.where(gr_demand >= 0)
+    ix0 = np.where(gr_demand < 0)
+    allowed_ch[ix1] = net_ch[ix1] + max_ch[ix1]
+    allowed_ch[ix0] = net_ch[ix0] - max_ch[ix0]
+    lmass_ch[ix1] = np.minimum(allowed_ch[ix1], gr_demand[ix1])
+    lmass_ch[ix0] = np.maximum(allowed_ch[ix0], gr_demand[ix0])
+
+    new_lmass = current_leafmass + lmass_ch
+    new_lmass = np.minimum(leafmax, new_lmass)
+    new_lmass = np.maximum(leafmin, new_lmass)
+    leaf_litter = new_lmass / longevity(nut_stat)
+    C_consumption = lmass_ch + leaf_litter
+
+    N_net = np.maximum(
+        np.zeros(n),
+        N_con(nut_stat) / 1000.0 * new_lmass
+        - N_con(previous_nut_stat) / 1000.0 * current_leafmass,
+    )
+    Nleaf_litter = leaf_litter * (1 - retrans["N"]) * N_con(nut_stat) / 1000.0
+    Ndemand = N_net + Nleaf_litter
+    N_leaf = N_con(nut_stat) / 1000.0 * new_lmass
+
+    P_net = np.maximum(
+        np.zeros(n),
+        P_con(nut_stat) / 1000.0 * new_lmass
+        - P_con(previous_nut_stat) / 1000.0 * current_leafmass,
+    )
+    Pleaf_litter = leaf_litter * (1 - retrans["P"]) * P_con(nut_stat) / 1000.0
+    Pdemand = P_net + Pleaf_litter
+    P_leaf = P_con(nut_stat) / 1000.0 * new_lmass
+
+    K_net = np.maximum(
+        np.zeros(n),
+        K_con(nut_stat) / 1000.0 * new_lmass
+        - K_con(previous_nut_stat) / 1000.0 * current_leafmass,
+    )
+    Kleaf_litter = leaf_litter * (1 - retrans["K"]) * K_con(nut_stat) / 1000.0
+    Kdemand = K_net + Kleaf_litter
+    K_leaf = K_con(nut_stat) / 1000.0 * new_lmass
+
+    if printOpt:
+        print("********************************************")
+        print("bm", bm)
+        print("bm_increment", bm_increment)
+        print("nutstat ", nut_stat)
+        print("leafmin", leafmin)
+        print("leafbase0", leafbase0)
+        print("leafbase1", leafbase1)
+        print("leafmax", leafmax)
+        print("net_change", net_ch)
+        print("demanded growth", gr_demand)
+        print("max_change", max_ch)
+        print("allowed change", allowed_ch)
+        print("leaf mass change", lmass_ch)
+        print("new leaf mass", new_lmass)
+        print("leaf_litter", leaf_litter)
+        print("basic consumption", C_consumption)
+        print("Ndemand ", N_net + Nleaf_litter)
+        print("Nlitter", Nleaf_litter)
+        print("Nnet", N_net, N_con(nut_stat), N_con(previous_nut_stat))
+        print("Pdemand ", P_net + Pleaf_litter)
+        print("Plitter", Pleaf_litter)
+        print("Pnet", P_net, P_con(nut_stat), P_con(previous_nut_stat))
+        print("Kdemand ", K_net + Kleaf_litter)
+        print("Klitter", Kleaf_litter)
+        print("Knet", K_net, K_con(nut_stat), K_con(previous_nut_stat))
+        print("*******************************************")
+        print("nitrogen content,", N_con(nut_stat))
+        print("leaf longevity", longevity(nut_stat))
+
+    return LeafDynamicsOutputs(
+        new_lmass=new_lmass,
+        leaf_litter=leaf_litter,
+        C_consumption=C_consumption,
+        Nleafdemand=Ndemand,
+        Nleaf_litter=Nleaf_litter,
+        N_leaf=N_leaf,
+        Pleafdemand=Pdemand,
+        Pleaf_litter=Pleaf_litter,
+        P_leaf=P_leaf,
+        Kleafdemand=Kdemand,
+        Kleaf_litter=Kleaf_litter,
+        K_leaf=K_leaf,
+    )
+
+
 class Canopylayer:
     """
     UNITS: all units in /tree basis, except number of trees in the canopy layer, which is in /ha
@@ -731,180 +902,42 @@ class Canopylayer:
         species,
         printOpt=False,
     ):
+        """Wrapper around module-level _leaf_dynamics for backward compatibility.
+
+        Returns the original 15-element tuple (new_lmass, leaf_litter, C_consumption,
+        leafmax, leafmin, Ndemand, Nleaf_litter, N_leaf, Pdemand, Pleaf_litter,
+        P_leaf, Kdemand, Kleaf_litter, K_leaf, LAI).
         """
-        input:
-             bm, current biomass, array, kg/tree without leaves
-             bm_increment, array, total NPP kg/tree
-             incoming columns are of single tree species canopy layers
-        """
-        # ******** Parameters *****************
-        nuts = {
-            "Pine": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [5.0, 6.5]}},
-            "Spruce": {
-                "Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}
-            },
-            "Birch": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}},
-        }
-
-        retrans = {"N": 0.69, "P": 0.73, "K": 0.8}  # Nieminen Helmisaari 1996 Tree Phys
-        sla = {
-            "Pine": 6.8,
-            "Spruce": 7.25,
-            "Birch": 14.0,
-        }  # specific leaf area Härkönen et al. 2015 BER 20, 181-195
-        species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
-        spe = species_codes[species[0]]  # Take the first item, all are same here
-        # longevityLeaves = {'Pine':[3.5, 2.5], 'Spruce':[6.0, 4.0], 'Birch':[1.0, 1.0]}                     # yrs, life span of leaves and fine roots
-        longevityLeaves = {
-            "Pine": [5.0, 3.5],
-            "Spruce": [8.0, 5.0],
-            "Birch": [1.0, 1.0],
-        }  # yrs, life span of leaves and fine roots
-
-        N_con = interp1d(
-            np.array([0.66, 1.5]),
-            np.array(nuts[spe]["Foliage"]["N"]),
-            fill_value=tuple(nuts[spe]["Foliage"]["N"]),
-            bounds_error=False,
-        )
-        P_con = interp1d(
-            np.array([0.66, 1.5]),
-            np.array(nuts[spe]["Foliage"]["P"]),
-            fill_value=tuple(nuts[spe]["Foliage"]["P"]),
-            bounds_error=False,
-        )
-        K_con = interp1d(
-            np.array([0.66, 1.5]),
-            np.array(nuts[spe]["Foliage"]["K"]),
-            fill_value=tuple(nuts[spe]["Foliage"]["K"]),
-            bounds_error=False,
+        ld = _leaf_dynamics(
+            bm, bm_increment, current_leafmass,
+            previous_nut_stat, nut_stat, agenow,
+            allometry_funcs, species, printOpt,
         )
 
-        longevity = interp1d(
-            np.array([0.66, 1.5]),
-            np.array(longevityLeaves[spe]),
-            fill_value=tuple(longevityLeaves[spe]),
-            bounds_error=False,
-        )
-
-        n = len(nut_stat)
-        # ************ Biomass and litter**************
-        """ Change units to /tree here"""
-        leafbase0 = allometry_funcs.biomass_to_stand.leaf_mass(
-            bm
-        )  # table growth leaf mass in the beginning of timestep
-        leafbase1 = allometry_funcs.biomass_to_stand.leaf_mass(
-            bm + bm_increment
-        )  # table growth leaf mass in the end of timestep
-        leafmass = leafbase1 * nut_stat  # actual leaf mass
-
-        # -------------------------------------------------
+        leafbase1 = allometry_funcs.biomass_to_stand.leaf_mass(bm + bm_increment)
         leafmax = leafbase1 * 1.5
         leafmin = leafbase1 / 1.5
 
-        net_ch = leafbase1 - leafbase0
-        gr_demand = leafmass - current_leafmass
+        sla = {"Pine": 6.8, "Spruce": 7.25, "Birch": 14.0}
+        species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
+        spe = species_codes[species[0]]
+        LAI = ld.new_lmass / 10000.0 * sla[spe]
 
-        max_ch = (leafmax - leafmin) / (2 * longevity(nut_stat))
-
-        allowed_ch = np.zeros(n, dtype=float)
-        lmass_ch = np.zeros(n, dtype=float)
-
-        ix1 = np.where(gr_demand >= 0)
-        ix0 = np.where(gr_demand < 0)
-        allowed_ch[ix1] = net_ch[ix1] + max_ch[ix1]
-        allowed_ch[ix0] = net_ch[ix0] - max_ch[ix0]
-        lmass_ch[ix1] = np.minimum(allowed_ch[ix1], gr_demand[ix1])
-        lmass_ch[ix0] = np.maximum(allowed_ch[ix0], gr_demand[ix0])
-
-        new_lmass = current_leafmass + lmass_ch
-        new_lmass = np.minimum(leafmax, new_lmass)
-        new_lmass = np.maximum(leafmin, new_lmass)
-        leaf_litter = new_lmass / longevity(nut_stat)
-        C_consumption = lmass_ch + leaf_litter
-
-        N_net = np.maximum(
-            np.zeros(n),
-            N_con(nut_stat) / 1000.0 * new_lmass
-            - N_con(previous_nut_stat) / 1000.0 * current_leafmass,
-        )
-        Nleaf_litter = leaf_litter * (1 - retrans["N"]) * N_con(nut_stat) / 1000.0
-        Ndemand = N_net + Nleaf_litter
-        N_leaf = N_con(nut_stat) / 1000.0 * new_lmass
-
-        P_net = np.maximum(
-            np.zeros(n),
-            P_con(nut_stat) / 1000.0 * new_lmass
-            - P_con(previous_nut_stat) / 1000.0 * current_leafmass,
-        )
-        Pleaf_litter = leaf_litter * (1 - retrans["P"]) * P_con(nut_stat) / 1000.0
-        Pdemand = P_net + Pleaf_litter
-        P_leaf = P_con(nut_stat) / 1000.0 * new_lmass
-
-        K_net = np.maximum(
-            np.zeros(n),
-            K_con(nut_stat) / 1000.0 * new_lmass
-            - K_con(previous_nut_stat) / 1000.0 * current_leafmass,
-        )
-        Kleaf_litter = leaf_litter * (1 - retrans["K"]) * K_con(nut_stat) / 1000.0
-        Kdemand = K_net + Kleaf_litter
-        K_leaf = K_con(nut_stat) / 1000.0 * new_lmass
-
-        LAI = new_lmass / 10000.0 * sla[spe]
-
-        if printOpt:
-            print("********************************************")
-            print("bm", bm)
-            print("bm_increment", bm_increment)
-            print("nutstat ", nut_stat)
-            print("leafmin", leafmin)
-            print("leafbase0", leafbase0)
-            print("leafbase1", leafbase1)
-
-            print("leafmax", leafmax)
-            print("net_change", net_ch)
-            print("demanded growth", gr_demand)
-            print("max_change", max_ch)
-
-            print("allowed change", allowed_ch)
-
-            print("leaf mass change", lmass_ch)
-            print("new leaf mass", new_lmass)
-
-            print("leaf_litter", leaf_litter)
-            print("basic consumption", C_consumption)
-
-            print("Ndemand ", N_net + Nleaf_litter)
-            print("Nlitter", Nleaf_litter)
-            print("Nnet", N_net, N_con(nut_stat), N_con(previous_nut_stat))
-
-            print("Pdemand ", P_net + Pleaf_litter)
-            print("Plitter", Pleaf_litter)
-            print("Pnet", P_net, P_con(nut_stat), P_con(previous_nut_stat))
-
-            print("Kdemand ", K_net + Kleaf_litter)
-            print("Klitter", Kleaf_litter)
-            print("Knet", K_net, K_con(nut_stat), K_con(previous_nut_stat))
-
-            print("*******************************************")
-
-            print("nitrogen content,", N_con(nut_stat))
-            print("leaf longevity", longevity(nut_stat))
         return (
-            new_lmass,
-            leaf_litter,
-            C_consumption,
+            ld.new_lmass,
+            ld.leaf_litter,
+            ld.C_consumption,
             leafmax,
             leafmin,
-            Ndemand,
-            Nleaf_litter,
-            N_leaf,
-            Pdemand,
-            Pleaf_litter,
-            P_leaf,
-            Kdemand,
-            Kleaf_litter,
-            K_leaf,
+            ld.Nleafdemand,
+            ld.Nleaf_litter,
+            ld.N_leaf,
+            ld.Pleafdemand,
+            ld.Pleaf_litter,
+            ld.P_leaf,
+            ld.Kleafdemand,
+            ld.Kleaf_litter,
+            ld.K_leaf,
             LAI,
         )
 
