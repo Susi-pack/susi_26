@@ -770,4 +770,6 @@ The plan initially proposed `cut_stand(state, cc, calendar_year, nut_stat, to_ba
 | 2026-06-05 | — | Update plan signatures to match actual implementation; add `_merge_cutting_outputs` to plan as needed helper | — | — |
 | 2026-06-05 | 9 | `_compute_lai_above()` — stack hdom ×3, argsort descending, reorder LAI (`leafarea * stems`) by height, cumsum, remap back to layer order; returns `(lai_above_dom, lai_above_sub, lai_above_under)` | 2 tests (shape, expected values for ordered heights) | ruff ✅, pytest 94/94 ✅ |
 | 2026-06-05 | 13 | `stand.update_nutrient_status()` — N/P/K supply/(demand + leaf_demand + GV demand) × Reineke density modifier, delay ODE (τ=3), clip to [0.5, 2.0] | 2 tests (clip bounds, drift toward ratio) | ruff ✅, pytest 102/102 ✅ |
+| 2026-06-05 | 14 | `stand.cut_stand()` — delegate to canopylayer, re-aggregate with updated biomass, merge cutting outputs | 2 tests (type check, to_ba=1.0 no-op) | ruff ✅, pytest 104/104 ✅ |
+| 2026-06-05 | — | `stand.assimilate_stand()` — full annual orchestrator: grow → cut/zero → nutrient update | 2 tests (type/shape, cutting year) | ruff ✅, pytest 106/106 ✅ |
 
