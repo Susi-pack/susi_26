@@ -118,7 +118,7 @@ class Outputs:
 
 @dataclass(frozen=True)
 class CuttingOutputs:
-    """Only non-zero in cutting years."""
+    """Zero-filled in non-cutting years (no Optional union — JAX-friendly)."""
     harvested_volume: Float[np.ndarray, " ncols"]
     harvested_log_volume: Float[np.ndarray, " ncols"]
     harvested_pulp_volume: Float[np.ndarray, " ncols"]
@@ -132,6 +132,33 @@ class CuttingOutputs:
     n_woody_lresid: Float[np.ndarray, " ncols"]
     p_woody_lresid: Float[np.ndarray, " ncols"]
     k_woody_lresid: Float[np.ndarray, " ncols"]
+
+@dataclass(frozen=True)
+class LeafDynamicsOutputs:
+    """Named return from _leaf_dynamics (replaces anonymous tuple)."""
+    new_lmass: Float[np.ndarray, " ncols"]
+    leaf_litter: Float[np.ndarray, " ncols"]
+    C_consumption: Float[np.ndarray, " ncols"]
+    Nleafdemand: Float[np.ndarray, " ncols"]
+    Nleaf_litter: Float[np.ndarray, " ncols"]
+    N_leaf: Float[np.ndarray, " ncols"]
+    Pleafdemand: Float[np.ndarray, " ncols"]
+    Pleaf_litter: Float[np.ndarray, " ncols"]
+    P_leaf: Float[np.ndarray, " ncols"]
+    Kleafdemand: Float[np.ndarray, " ncols"]
+    Kleaf_litter: Float[np.ndarray, " ncols"]
+    K_leaf: Float[np.ndarray, " ncols"]
+
+@dataclass(frozen=True)
+class Inputs:
+    """Annual inputs for canopylayer.grow_stand()."""
+    photopara: Any
+    forc: pd.DataFrame = field(doc="annual weather")
+    wt: pd.DataFrame = field(doc="annual water table")
+    afp: pd.DataFrame = field(doc="annual air-filled porosity")
+    previous_nut_stat: Float[np.ndarray, " ncols"]
+    nut_stat: Float[np.ndarray, " ncols"]
+    lai_above: Float[np.ndarray, " ncols"]
 ```
 
 ---
@@ -163,13 +190,7 @@ For each zone in `cc.allodic`:
 def grow_stand(
     state: State,
     cc: ComputedConstants,
-    photopara,
-    forc: pd.DataFrame,
-    wt: pd.DataFrame,
-    afp: pd.DataFrame,
-    previous_nut_stat: Float[np.ndarray, " ncols"],
-    nut_stat: Float[np.ndarray, " ncols"],
-    lai_above: Float[np.ndarray, " ncols"],
+    inputs: Inputs,
 ) -> tuple[State, Outputs]
 ```
 
@@ -181,22 +202,25 @@ allom = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
 
 # 2. Photosynthesis
 LAI_photo = allom.leafarea * 2 * allom.stems          # double-sided
-npp, npp_pot = assimilation_yr(photopara, forc, wt, afp, LAI_photo, lai_above * 2)
+npp, npp_pot = assimilation_yr(
+    inputs.photopara, inputs.forc, inputs.wt, inputs.afp,
+    LAI_photo, inputs.lai_above * 2,
+)
 
 # Convert to tree basis (handle zero stems)
 mask = allom.stems > 0
-npp = np.divide(npp * nut_stat, allom.stems, out=np.full_like(npp, np.nan), where=mask)
-npp_pot = np.divide(npp_pot * nut_stat, allom.stems, out=np.full_like(npp_pot, np.nan), where=mask)
+npp = np.divide(npp * inputs.nut_stat, allom.stems, out=np.full_like(npp, np.nan), where=mask)
+npp_pot = np.divide(npp_pot * inputs.nut_stat, allom.stems, out=np.full_like(npp_pot, np.nan), where=mask)
 
 # 3. Leaf dynamics
-(new_lmass, leaf_litter, C_consumption, ...) = _leaf_dynamics(
+ld = _leaf_dynamics(
     state.biomass, npp, allom.leafmass,
-    previous_nut_stat, nut_stat, state.agearr,
+    inputs.previous_nut_stat, inputs.nut_stat, state.agearr,
     cc.allodic, cc.tree_species,
 )
 
 # 4. Biomass increment (leaf dynamics allocates carbon to leaves; rest goes to stem)
-delta_bm = npp - C_consumption - allom.finerootlitter - allom.woodylitter
+delta_bm = npp - ld.C_consumption - allom.finerootlitter - allom.woodylitter
 new_biomass = state.biomass + np.maximum(delta_bm, 0)
 new_agearr = state.agearr + 1
 new_state = State(new_agearr, new_biomass, state.remaining_share)
@@ -209,13 +233,16 @@ outputs = dataclasses.replace(
     new_allom,
     NPP=npp,
     NPP_pot=npp_pot,
-    new_lmass=new_lmass,
-    leaf_litter=leaf_litter,
-    C_consumption=C_consumption,
-    ...  # all leaf dynamics fields
-    nonwoodylitter=new_allom.finerootlitter + leaf_litter,
-    n_nonwoodylitter=new_allom.n_finerootlitter + Nleaf_litter,
-    ...  # same for P, K
+    new_lmass=ld.new_lmass,
+    leaf_litter=ld.leaf_litter,
+    C_consumption=ld.C_consumption,
+    Nleafdemand=ld.Nleafdemand, Nleaf_litter=ld.Nleaf_litter, N_leaf=ld.N_leaf,
+    Pleafdemand=ld.Pleafdemand, Pleaf_litter=ld.Pleaf_litter, P_leaf=ld.P_leaf,
+    Kleafdemand=ld.Kleafdemand, Kleaf_litter=ld.Kleaf_litter, K_leaf=ld.K_leaf,
+    nonwoodylitter=new_allom.finerootlitter + ld.leaf_litter,
+    n_nonwoodylitter=new_allom.n_finerootlitter + ld.Nleaf_litter,
+    p_nonwoodylitter=new_allom.p_finerootlitter + ld.Pleaf_litter,
+    k_nonwoodylitter=new_allom.k_finerootlitter + ld.Kleaf_litter,
 )
 return new_state, outputs
 ```
@@ -226,10 +253,10 @@ return new_state, outputs
 def _leaf_dynamics(
     bm, bm_increment, current_leafmass, previous_nut_stat, nut_stat,
     agenow, allometry_funcs, species, printOpt=False
-) -> tuple[...]
+) -> LeafDynamicsOutputs
 ```
 
-Already structurally pure — just extract as module-level private function. No changes to the computation.
+Already structurally pure — extract as module-level private function returning `LeafDynamicsOutputs`. No changes to the computation.
 
 ### `compute_constants`
 
@@ -275,6 +302,7 @@ def cut_stand(
 ) -> tuple[State, Outputs, CuttingOutputs]
 ```
 
+Always returns a `CuttingOutputs` (zero-filled when no cutting occurs — no `Optional`).
 Extracted from current `cutting()` method. No mutation.
 - Compute `cut_stems`, logging residues, harvested volumes
 - Update `remaining_share`, reset `agearr` to 1 for cut columns
@@ -336,7 +364,7 @@ class Outputs:
     # ... same harvested volume fields
 
 @dataclass(frozen=True)
-class ForcingInputs:
+class Inputs:
     """Bundled annual inputs for stand.grow_stand() and stand.assimilate_stand()."""
     photopara: Any
     forc: pd.DataFrame = field(doc="annual weather")
@@ -379,7 +407,7 @@ def compute_initial_state(
 
 - `nut_stat = np.ones(ncols)`
 - Call `canopylayer.compute_initial_state()` for each of the 3 layers
-- `_aggregate()` → first year's stand outputs
+- `_aggregate(..., previous_stand_biomass=None)` → first year's stand outputs
 - Return `(State(nut_stat, dom_state, sub_state, under_state), stand_out)`
 
 ### `_aggregate`
@@ -389,13 +417,14 @@ def _aggregate(
     dom_out: canopylayer.Outputs,
     sub_out: canopylayer.Outputs,
     under_out: canopylayer.Outputs,
+    previous_stand_biomass: Float[np.ndarray, " ncols"] | None = None,
 ) -> Outputs
 ```
 
 Pure. Replaces `Stand.update()` + `Stand.reset_vars()`.
 - For each field: `stand_field = cl_out.field * cl_out.stems`, sum across 3 layers
 - `hdom = np.maximum(...)`, `mean_diameter = weighted_avg(Dg, stems)`
-- `biomassgrowth = biomass - biomass from previous aggregation`
+- `biomassgrowth = biomass - previous_stand_biomass` (computed from explicit previous-year parameter, not hidden state; zero when `previous_stand_biomass is None`)
 Return `Outputs(...)`.
 
 ### `_compute_lai_above`
@@ -416,13 +445,13 @@ Extracted from `Stand.assimilate()` lines 516-545. Stack hdom, argsort descendin
 def grow_stand(
     state: State,
     cc: ComputedConstants,
-    inputs: ForcingInputs,
+    inputs: Inputs,
 ) -> tuple[State, Outputs]
 ```
 
 **Bundles the 3 layers.** Body:
 
-```
+```python
 # 1. Apply allometry on each layer's current state (for lai_above + growth inputs)
 dom_allom = canopylayer.apply_allometry(state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant)
 sub_allom = canopylayer.apply_allometry(...)
@@ -431,19 +460,31 @@ under_allom = canopylayer.apply_allometry(...)
 # 2. Height-order for light competition
 lai_dom, lai_sub, lai_under = _compute_lai_above(dom_allom, sub_allom, under_allom)
 
-# 3. Grow each layer
-dom_state, dom_out = canopylayer.grow_stand(
-    state.dominant, cc.dominant,
-    inputs.photopara, inputs.forc, inputs.wt, inputs.afp,
-    inputs.previous_nut_stat, state.nut_stat, lai_dom,
+# 3. Build per-layer Inputs with correct lai_above
+dom_inputs = canopylayer.Inputs(
+    photopara=inputs.photopara, forc=inputs.forc, wt=inputs.wt, afp=inputs.afp,
+    previous_nut_stat=inputs.previous_nut_stat, nut_stat=state.nut_stat,
+    lai_above=lai_dom,
 )
-sub_state, sub_out = canopylayer.grow_stand(...)
-under_state, under_out = canopylayer.grow_stand(...)
+sub_inputs = dataclasses.replace(dom_inputs, lai_above=lai_sub)
+under_inputs = dataclasses.replace(dom_inputs, lai_above=lai_under)
 
-# 4. Aggregate
-stand_out = _aggregate(dom_out, sub_out, under_out)
+# 4. Grow each layer
+dom_state, dom_out = canopylayer.grow_stand(state.dominant, cc.dominant, dom_inputs)
+sub_state, sub_out = canopylayer.grow_stand(state.subdominant, cc.subdominant, sub_inputs)
+under_state, under_out = canopylayer.grow_stand(state.under, cc.under, under_inputs)
 
-# 5. Return
+# 5. Compute previous biomass for growth calculation
+prev_biomass = (
+    dom_allom.biomass * dom_allom.stems
+    + sub_allom.biomass * sub_allom.stems
+    + under_allom.biomass * under_allom.stems
+)
+
+# 6. Aggregate
+stand_out = _aggregate(dom_out, sub_out, under_out, previous_stand_biomass=prev_biomass)
+
+# 7. Return
 new_stand_state = State(state.nut_stat, dom_state, sub_state, under_state)
 return new_stand_state, stand_out
 ```
@@ -470,10 +511,11 @@ Return `replace(state, nut_stat=new_nut_stat)` — canopy layer states unchanged
 def cut_stand(
     state: State,
     cc: ComputedConstants,
-    inputs: ForcingInputs,
-) -> tuple[State, Outputs, canopylayer.CuttingOutputs | None]
+    inputs: Inputs,
+) -> tuple[State, Outputs, canopylayer.CuttingOutputs]
 ```
 
+Always returns a `CuttingOutputs` (zero-filled in non-cutting years — no `Optional`).
 - Only applies to dominant layer (matches current OOP behavior)
 - Call `canopylayer.cut_stand(state.dominant, cc.dominant, inputs.calendar_year, state.nut_stat, inputs.cutting_to_ba)`
 - Re-aggregate: `_aggregate(dom_out, sub_out, under_out)` (sub/under unchanged)
@@ -485,8 +527,8 @@ def cut_stand(
 def assimilate_stand(
     state: State,
     cc: ComputedConstants,
-    inputs: ForcingInputs,
-) -> tuple[State, Outputs, canopylayer.CuttingOutputs | None]
+    inputs: Inputs,
+) -> tuple[State, Outputs, canopylayer.CuttingOutputs]
 ```
 
 **Full annual orchestrator.** Body:
@@ -496,10 +538,13 @@ def assimilate_stand(
 new_state, stand_out = grow_stand(state, cc, inputs)
 
 # 2. Cutting (before nutrient update, matching OOP order)
-cut_out = None
 if inputs.cutting_to_ba is not None and inputs.cutting_to_ba < 1.0:
     new_state, stand_out, cut_out = cut_stand(new_state, cc, inputs)
     # cut_stand uses state.nut_stat (pre-update) internally
+else:
+    cut_out = canopylayer.CuttingOutputs(
+        *[np.zeros_like(state.nut_stat) for _ in fields(canopylayer.CuttingOutputs)]
+    )
 
 # 3. Nutrient status
 new_state = update_nutrient_status(new_state, stand_out, inputs)
@@ -568,7 +613,7 @@ stand_state, stand_out = stand.compute_initial_state(
 ### Annual loop — one call replaces assimilate + update + cutting + update_nutrient_status + reset_logging
 
 ```python
-forcings = stand.ForcingInputs(
+stand_inputs = stand.Inputs(
     photopara=self.parameters.photo_parameters,
     forc=self.weather_forcing.loc[str(calendar_year)],
     wt=dfwt.loc[str(calendar_year)],
@@ -583,7 +628,7 @@ forcings = stand.ForcingInputs(
 )
 
 stand_state, stand_out, cutting_out = stand.assimilate_stand(
-    stand_state, stand_cc, forcings,
+    stand_state, stand_cc, stand_inputs,
 )
 ```
 
@@ -600,7 +645,7 @@ stand_state, stand_out, cutting_out = stand.assimilate_stand(
 | `stand.nonwoodylitter` | `stand_out.nonwoodylitter` |
 | `stand.woodylitter` | `stand_out.woodylitter` |
 | `stand.n_demand` | `stand_out.n_demand` |
-| `stand.nonwoody_lresid` | `cutting_out.nonwoody_lresid` (or stand_out in cut years) |
+| `stand.nonwoody_lresid` | `cutting_out.nonwoody_lresid` (always valid; zero in non-cutting years) |
 | `stand.dominant` | `stand_state.dominant` |
 | `stand.subdominant` | `stand_state.subdominant` |
 | `stand.under` | `stand_state.under` |
@@ -616,30 +661,49 @@ Stand-alone attribute reads in susi_main that remain after the annual call:
 
 ## 6. Implementation order (TDD — red/green per step)
 
+Each step: **write failing test → make pass → `ruff` / `ty` clean → commit → append progress to this document**.
 
 | # | File | Description |
 |---|------|-------------|
-| 1a | `canopylayer.py` | Define dataclasses: `Params`, `ComputedConstants`, `State`, `Outputs`, `CuttingOutputs` |
-| 1b | `canopylayer.py` | Extract `_leaf_dynamics` as module-level private function |
+| 1a | `canopylayer.py` | Define dataclasses: `Params`, `ComputedConstants`, `State`, `Outputs`, `CuttingOutputs`, `LeafDynamicsOutputs`, `Inputs` |
+| 1b | `canopylayer.py` | Extract `_leaf_dynamics` as module-level private function returning `LeafDynamicsOutputs` |
 | 2 | `canopylayer.py` | `apply_allometry()` — maps core state `(biomass, agearr, remaining_share)` → all derived allometric outputs |
 | 3 | `canopylayer.py` | `compute_constants()` — per-zone interpolation functions via `build_allometry_interpolation_functions()`, builds `tree_species` |
 | 4 | `canopylayer.py` | `compute_initial_state()` — initialises `State(agearr, biomass, remaining_share=1.0)` from age-based bm interpolation |
-| 5 | `canopylayer.py` | `grow_stand()` — applies allometry, calls `assimilation_yr()`, per-zone `_leaf_dynamics()`, biomass increment, re-apply allometry, merge outputs |
+| 5 | `canopylayer.py` | `grow_stand()` — takes `state, cc, inputs: Inputs`, calls `assimilation_yr()` + `_leaf_dynamics()`, biomass increment, re-apply allometry, merge outputs |
 | 6 | `canopylayer.py` | `cut_stand()` — thinning (keep `to_ba` fraction of BA) or clear-cut, computes logging residues + harvested volumes, updates `remaining_share`, resets age |
-| 7 | `stand.py` | Define dataclasses: `Params`, `ComputedConstants`, `State`, `Outputs`, `ForcingInputs` |
-| 8 | `stand.py` | `_aggregate()` — sums 3 canopylayer outputs to per-ha basis (per-tree fields × stems, cutting/ha fields summed directly) |
+| 7 | `stand.py` | Define dataclasses: `Params`, `ComputedConstants`, `State`, `Outputs`, `Inputs` |
+| 8 | `stand.py` | `_aggregate()` — sums 3 canopylayer outputs to per-ha basis; takes `previous_stand_biomass` for growth calc (explicit, no hidden state) |
 | 9 | `stand.py` | `_compute_lai_above()` — height-order LAI for correct shading between layers |
 | 10 | `stand.py` | `compute_constants()` — accepts per-column zone ID arrays, builds `ixs` dict, delegates to canopylayer ×3 |
-| 11 | `stand.py` | `compute_initial_state()` — delegates to canopylayer ×3, aggregates |
-| 12 | `stand.py` | `grow_stand()` — delegates to canopylayer ×3 with LAI_above, aggregates |
+| 11 | `stand.py` | `compute_initial_state()` — delegates to canopylayer ×3, aggregates with `previous_stand_biomass=None` |
+| 12 | `stand.py` | `grow_stand()` — builds per-layer `canopylayer.Inputs`, delegates to canopylayer ×3 with LAI_above, aggregates |
 | 13 | `stand.py` | `update_nutrient_status()` — N/P/K supply vs demand ratio with delay ODE (τ=3), clips to [0.5, 2.0] |
-| 14 | `stand.py` | `cut_stand()` — applies cutting only to dominant layer (matches existing OOP behaviour) |
-| — | `stand.py` | `assimilate_stand()` — full annual orchestrator: grow → cut (if cutting year) → nutrient update |
+| 14 | `stand.py` | `cut_stand()` — applies cutting only to dominant layer; always returns `CuttingOutputs` |
+| — | `stand.py` | `assimilate_stand()` — full annual orchestrator: grow → cut (or zero `CuttingOutputs`) → nutrient update |
 | — | Both | Lint (`ruff`) and type-check (`ty`) pass clean on both `canopylayer.py` and `stand.py` |
 | 15 | `susi_main.py` | Add `stand.Params` to `ModuleParams` + update `_build_params()` |
-| 16 | `susi_main.py` | Replace all OOP Stand/Canopylayer usage with functional calls through `stand.py` |
+| 16 | `susi_main.py` | Replace all OOP Stand/Canopylayer usage with functional calls through `stand.py`; update `stand.ForcingInputs` → `stand.Inputs` |
 | 17 | — | Golden file test: `pytest tests/golden_file_test/` passes |
 | 18 | — | Clean up old OOP classes and imports |
 
 ---
+
+## 7. Intentional Divergences from SuperSUSI_functional_architecture.md
+
+### `canopylayer` is not a first-class module
+
+`canopylayer` lacks its own `assemble_inputs()` / `run_timestep()` protocol entry points. It is deliberately hidden behind `stand.py` — `susi_main.py` never imports `canopylayer` directly. This is a pragmatic choice to keep the orchestrator lean: stacking 3 canopy layers per stand into the orchestration loop would triple the coupling calls without scientific benefit.
+
+### No `run_timestep()` naming
+
+The architecture doc suggests `run_timestep()` as the standard module entry point. Instead we use `grow_stand()` / `assimilate_stand()` at stand level and `grow_stand()` at canopy level. These names match the domain language and distinguish growth from the full assimilation cycle that includes cutting and nutrient update.
+
+### `Inputs` bundles module-owned and external data
+
+The architecture prescribes `Inputs` as a bundle of *other* categories. Here `canopylayer.Inputs` includes `nut_stat` (owned by stand) alongside `forc`, `wt`, `afp` (owned by weather). This is simpler than requiring susi_main to assemble separate per-layer inputs per year.
+
+### `_aggregate` receives `previous_stand_biomass` explicitly
+
+The architecture says outputs should not feed back into state — but `biomassgrowth` *is* an output that depends on the previous year's biomass. Making the previous year's biomass an explicit parameter keeps the function pure.
 
