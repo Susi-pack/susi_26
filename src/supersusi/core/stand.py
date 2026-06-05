@@ -256,6 +256,23 @@ def _compute_lai_above(
     return lai_above[0], lai_above[1], lai_above[2]
 
 
+def compute_constants(
+    params: Params,
+    allometry_params: Any,
+) -> ComputedConstants:
+    return ComputedConstants(
+        dominant=canopylayer.compute_constants(
+            params.dominant, allometry_params.dominant_data, allometry_params.dominant_species_id,
+        ),
+        subdominant=canopylayer.compute_constants(
+            params.subdominant, allometry_params.subdominant_data, allometry_params.subdominant_species_id,
+        ),
+        under=canopylayer.compute_constants(
+            params.under, allometry_params.under_data, allometry_params.under_species_id,
+        ),
+    )
+
+
 class Stand:
     def __init__(
         self,

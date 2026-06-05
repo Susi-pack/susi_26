@@ -1,13 +1,16 @@
 from dataclasses import FrozenInstanceError, replace
+from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from supersusi.core.canopylayer import Params as CLParams, State as CLState
+from supersusi.core.canopylayer import ComputedConstants as CLComputedConstants
 from supersusi.core.canopylayer import CuttingOutputs as CLCutting, Outputs as CLOutputs
 from supersusi.core.stand import (
     ComputedConstants, Inputs, Outputs, Params, State, _aggregate,
-    _compute_lai_above, _merge_cutting_outputs,
+    _compute_lai_above, _merge_cutting_outputs, compute_constants,
 )
 
 
@@ -333,3 +336,45 @@ class TestComputeLaiAbove:
         np.testing.assert_array_equal(lai_dom, np.zeros(n))
         np.testing.assert_array_equal(lai_sub, np.full(n, 5000.0))  # 5 * 1000
         np.testing.assert_array_equal(lai_under, np.full(n, 6500.0))  # 5000 + 1500
+
+
+@pytest.fixture
+def _mock_allometry_params():
+    cnames = ["yr", "age", "N", "BA", "Hg", "Dg", "hdom", "vol", "logs", "pulp",
+              "loss", "yield", "mortality", "stem", "stemloss", "branch_living",
+              "branch_dead", "leaves", "stump", "roots_coarse", "roots_fine"]
+    data = np.zeros((3, len(cnames)))
+    data[:, 0] = [1, 2, 3]
+    data[:, 1] = [1, 2, 3]
+    data[:, 6] = [1.0, 2.0, 3.0]
+    df = pd.DataFrame(data, columns=cnames)
+    return SimpleNamespace(
+        dominant_data={1: df}, dominant_species_id={1: 1},
+        subdominant_data={1: df}, subdominant_species_id={1: 1},
+        under_data={1: df}, under_species_id={1: 1},
+    )
+
+
+class TestComputeConstants:
+    def test_returns_computed_constants(self, _mock_allometry_params):
+        ncols = 5
+        params = Params(
+            dominant=CLParams(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+            subdominant=CLParams(name="subdominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+            under=CLParams(name="under", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+        )
+        cc = compute_constants(params, _mock_allometry_params)
+        assert isinstance(cc, ComputedConstants)
+        assert isinstance(cc.dominant, CLComputedConstants)
+        assert isinstance(cc.subdominant, CLComputedConstants)
+        assert isinstance(cc.under, CLComputedConstants)
+
+    def test_three_layers_have_separate_constants(self, _mock_allometry_params):
+        ncols = 5
+        params = Params(
+            dominant=CLParams(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+            subdominant=CLParams(name="subdominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+            under=CLParams(name="under", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3),
+        )
+        cc = compute_constants(params, _mock_allometry_params)
+        assert cc.dominant is not cc.subdominant
