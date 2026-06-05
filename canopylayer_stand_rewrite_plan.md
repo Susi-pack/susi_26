@@ -717,4 +717,5 @@ The architecture says outputs should not feed back into state — but `biomassgr
 | 2026-06-05 | 1b | Extract `_leaf_dynamics()` as module-level function returning `LeafDynamicsOutputs`; `Canopylayer.leaf_dynamics()` becomes compat wrapper | 155/155 | ruff ✅, ty ✅ |
 | 2026-06-05 | 2 | `apply_allometry()` — maps core state `(biomass, agearr, remaining_share, cc)` → all derived allometric outputs; growth fields zeroed; `nonwoodylitter = finerootlitter` | 158/158 (3 new tests) | ruff ✅, ty ✅ |
 | 2026-06-05 | 3 | `compute_constants()` — per-zone AllometryFunctions via `build_allometry_interpolation_functions()`, builds `tree_species` array | 15 tests (1 new: minimal smoke test with 3-row dataframe) | ruff ✅, ty ✅ |
+| 2026-06-05 | 4 | `compute_initial_state()` — derives `State(agearr, biomass, remaining_share=1.0)` from age via zone-specific `age_based.bm()`; returns `(State, Outputs)` tuple | 15 tests (1 new: shape/value invariants) | ruff ✅, ty ✅ |
 

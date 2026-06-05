@@ -5,7 +5,7 @@ Created on Sat Apr  2 17:37:43 2022
 @author: alauren
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -520,6 +520,113 @@ def compute_initial_state(
     return State(agearr=agearr.copy(), biomass=biomass, remaining_share=np.ones(params.ncols)), apply_allometry(
         biomass, agearr, np.ones(params.ncols), cc
     )
+
+
+def grow_stand(
+    state: State,
+    cc: ComputedConstants,
+    inputs: Inputs,
+) -> tuple[State, Outputs]:
+    """Annual growth: photosynthesis, leaf dynamics, biomass increment.
+
+    Pure function. Returns (new_state, outputs) where outputs has:
+    - growth fields (NPP, leaf_litter, C_consumption, …) filled by leaf dynamics
+    - allometric fields (stems, volume, …) at the new biomass
+    - nonwoodylitter = finerootlitter(new biomass) + leaf_litter
+    """
+    ncols = len(state.agearr)
+    prev = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
+
+    # NPP — assimilation_yr returns kg/ha/yr
+    npp_ha, npp_pot_ha = assimilation_yr(
+        inputs.photopara,
+        inputs.forc,
+        inputs.wt,
+        inputs.afp,
+        prev.leafarea * 2 * prev.stems,
+        inputs.lai_above * 2,
+    )
+    stems_safe = np.maximum(prev.stems, 1e-30)
+    npp_per_tree = npp_ha * inputs.nut_stat / stems_safe
+    npp_pot_per_tree = npp_pot_ha * inputs.nut_stat / stems_safe
+
+    # Per-zone: leaf dynamics + delta calc
+    delta = np.zeros(ncols)
+    new_lmass = np.zeros(ncols)
+    leaf_litter = np.zeros(ncols)
+    c_consumption = np.zeros(ncols)
+    n_leaf = np.zeros(ncols)
+    p_leaf = np.zeros(ncols)
+    k_leaf = np.zeros(ncols)
+    nleafdemand = np.zeros(ncols)
+    pleafdemand = np.zeros(ncols)
+    kleafdemand = np.zeros(ncols)
+    nleaf_litter = np.zeros(ncols)
+    pleaf_litter = np.zeros(ncols)
+    kleaf_litter = np.zeros(ncols)
+
+    for zid, ix in cc.ixs.items():
+        af = cc.allodic[zid]
+        bm_z = state.biomass[ix]
+        fr_lit = af.litter_mass.fine_root_litter(bm_z)
+        wd_lit = af.litter_mass.woody_litter(bm_z)
+
+        ld = _leaf_dynamics(
+            bm_z,
+            npp_per_tree[ix],
+            prev.leafmass[ix],
+            inputs.previous_nut_stat[ix],
+            inputs.nut_stat[ix],
+            state.agearr[ix],
+            af,
+            cc.tree_species[ix],
+        )
+
+        new_lmass[ix] = ld.new_lmass
+        leaf_litter[ix] = ld.leaf_litter
+        c_consumption[ix] = ld.C_consumption
+        nleafdemand[ix] = ld.Nleafdemand
+        nleaf_litter[ix] = ld.Nleaf_litter
+        n_leaf[ix] = ld.N_leaf
+        pleafdemand[ix] = ld.Pleafdemand
+        pleaf_litter[ix] = ld.Pleaf_litter
+        p_leaf[ix] = ld.P_leaf
+        kleafdemand[ix] = ld.Kleafdemand
+        kleaf_litter[ix] = ld.Kleaf_litter
+        k_leaf[ix] = ld.K_leaf
+
+        delta[ix] = npp_per_tree[ix] - ld.C_consumption - fr_lit - wd_lit
+
+    new_biomass = state.biomass + np.maximum(delta, 0.0)
+    new_agearr = state.agearr + 1
+
+    out = apply_allometry(new_biomass, new_agearr, state.remaining_share, cc)
+
+    merged = replace(
+        out,
+        NPP=npp_per_tree,
+        NPP_pot=npp_pot_per_tree,
+        new_lmass=new_lmass,
+        leaf_litter=leaf_litter,
+        C_consumption=c_consumption,
+        Nleafdemand=nleafdemand,
+        Nleaf_litter=nleaf_litter,
+        N_leaf=n_leaf,
+        Pleafdemand=pleafdemand,
+        Pleaf_litter=pleaf_litter,
+        P_leaf=p_leaf,
+        Kleafdemand=kleafdemand,
+        Kleaf_litter=kleaf_litter,
+        K_leaf=k_leaf,
+        leafmass=new_lmass,
+        volumegrowth=out.volume - prev.volume,
+        nonwoodylitter=out.finerootlitter + leaf_litter,
+        n_nonwoodylitter=out.n_finerootlitter + nleaf_litter,
+        p_nonwoodylitter=out.p_finerootlitter + pleaf_litter,
+        k_nonwoodylitter=out.k_finerootlitter + kleaf_litter,
+    )
+
+    return State(new_agearr, new_biomass, state.remaining_share), merged
 
 
 class Canopylayer:

@@ -1,5 +1,7 @@
 from dataclasses import FrozenInstanceError
 
+import types
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -29,6 +31,7 @@ from supersusi.core.canopylayer import (
     apply_allometry,
     compute_constants,
     compute_initial_state,
+    grow_stand,
 )
 
 
@@ -267,6 +270,51 @@ class TestDataclasses:
         np.testing.assert_array_equal(state.agearr, agearr)
         assert np.all(state.biomass >= 0)
         assert outputs.stems.shape == (ncols,)
+
+    def test_grow_stand_returns_state_and_outputs(self):
+        ncols = 10
+        mock_af = _make_mock_allometry()
+        cc = ComputedConstants(
+            allodic={1: mock_af},
+            ixs={1: np.arange(ncols)},
+            tree_species=np.ones(ncols, dtype=np.int32),
+        )
+        state = State(
+            agearr=np.linspace(1.0, 3.0, ncols),
+            biomass=np.full(ncols, 20.0),
+            remaining_share=np.ones(ncols),
+        )
+
+        days = 3
+        photopara = types.SimpleNamespace(
+            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+        )
+        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        wt = pd.DataFrame(np.full((days, ncols), -0.3))
+        afp = pd.DataFrame(np.ones((days, ncols)))
+
+        inputs = Inputs(
+            photopara=photopara,
+            forc=forc,
+            wt=wt,
+            afp=afp,
+            previous_nut_stat=np.ones(ncols),
+            nut_stat=np.ones(ncols),
+            lai_above=np.zeros(ncols),
+        )
+
+        new_state, out = grow_stand(state, cc, inputs)
+        assert isinstance(new_state, State)
+        assert isinstance(out, Outputs)
+        assert new_state.agearr.shape == (ncols,)
+        assert new_state.biomass.shape == (ncols,)
+        assert out.stems.shape == (ncols,)
+        np.testing.assert_array_equal(new_state.agearr, state.agearr + 1)
+        assert np.all(out.NPP >= 0)
+        assert np.all(out.leaf_litter >= 0)
+        assert np.all(out.finerootlitter >= 0)
+        assert np.all(out.nonwoodylitter >= 0)
+        assert np.all(out.volumegrowth >= 0)
 
 
 class TestApplyAllometry:
