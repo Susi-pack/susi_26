@@ -412,3 +412,18 @@ def test_all_modules_have_run_and_initialize():
         hints = get_type_hints(mod.run)
         assert "return" in hints, f"{mod.__name__}.run() missing return type annotation"
 ```
+
+## Known Divergences
+
+### State leafmass vs biomass-based leafmass
+
+The old OOP code discards the leaf-dynamics leafmass (`new_lmass`) after each year.  Inside
+`assimilate()` the canopy layer calls `self.update(new_bm)`, which overwrites `self.leafmass`
+with `bmToLeafMass(new_bm)`.  The next year's leaf dynamics therefore starts from the
+biomass‑based leafmass, *not* the leaf dynamics result.
+
+The functional rewrite originally preserved `new_lmass` in the state (arguably more correct),
+but this caused a cascading divergence from the golden reference from year 2 onward.
+To match the old behaviour the state is set to `new_allom.leafmass` (= `bmToLeafMass(new_bm)`)
+instead.
+```

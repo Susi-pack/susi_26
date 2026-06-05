@@ -1,51 +1,5 @@
 # Functional Rewrite Plan — Remaining Modules
 
-Ranked from simplest to most difficult.
-
----
-
-## 1. `stem_curve.py` (~287 lines) — **Stateless utility**
-
-A class that groups pure math functions (stem taper curves, volume integration via `scipy.integrate.quad`, bucking). No mutable state.
-
-**Difficulty:** Very low — just convert methods to standalone functions.
-
-**Dependencies:** None (standalone).
-
-**Required by:** `allometric_road_map.py` (calls `StemCurve().predictAssortmentVolumes()`).
-
-**Called in `supersusi/core/susi_main.py`:** No. Not imported or called anywhere in the supersusi orchestrator.
-
----
-
-## 3. `allometric_road_map.py` (~782 lines) — **Builder pattern**
-
-`Growth_and_Yield_Table` stores parameters at init but all methods are effectively pure functions over DataFrames (`.get_table()`, `.stand_development()`, etc.).
-
-**Difficulty:** Low — straightforward functionalization. Init data become function parameters.
-
-**Dependencies:** `stem_curve` (⤴ #1), `weibull_recovery.py` (already functions), `metsi/` (already functions).
-
-**Required by:** `susi_main.py` (indirectly, for pre-computing growth tables before simulation).
-
-**Called in `supersusi/core/susi_main.py`:** No. Only used to prepare input data ahead of time (external to the main loop).
-
----
-
-## 4. `esom.py` (~765 lines) — **Complex numerics, significant state**
-
-The `Esom` class manages the M matrix (11-compartment OM decomposition), builds ~20 interpolation functions at init, and implements sparse-matrix-based decomposition with 9 rate constants. Has 4 substance variants (Mass, N, P, K).
-
-**Difficulty:** Medium — algorithmically involved but self-contained.
-
-**Dependencies:** `susi_utils.py` (already functions — `peat_hydrol_properties`, `wrc`).
-
-**Required by:** `susi_main.py` (4 instances for Mass, N, P, K).
-
-**Called in `supersusi/core/susi_main.py`:** Yes — lines 174–197 (instantiated as `Esom` OOP class), and used in the annual loop (lines 663–735, 737–748). Still OOP — needs full rewrite.
-
----
-
 ## 5. `canopylayer.py` (~981 lines) — **Most complex module**
 
 Heavy mutable state (dozens of array attributes). Core algorithms: `assimilate()` (photosynthesis + leaf dynamics + biomass allocation + NPP), `leaf_dynamics()` (nutrient cycling with N/P/K), `cutting()` (thinning/logging).
