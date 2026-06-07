@@ -42,14 +42,14 @@ class TestDataclasses:
         assert p.dominant.name == "dominant"
 
     def test_state_is_frozen(self):
-        cl = CLState(agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5))
-        s = State(nut_stat=np.ones(5), dominant=cl, subdominant=cl, under=cl)
+        cl = CLState(agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5))
+        s = State(nut_stat=np.ones(5), previous_nut_stat=np.ones(5), dominant=cl, subdominant=cl, under=cl)
         with pytest.raises(FrozenInstanceError):
             s.nut_stat = np.zeros(5)
 
     def test_state_instantiates(self):
-        cl = CLState(agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5))
-        s = State(nut_stat=np.ones(5), dominant=cl, subdominant=cl, under=cl)
+        cl = CLState(agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5))
+        s = State(nut_stat=np.ones(5), previous_nut_stat=np.ones(5), dominant=cl, subdominant=cl, under=cl)
         assert s.nut_stat.shape == (5,)
 
     def test_computed_constants_instantiates(self):
@@ -500,8 +500,9 @@ class TestGrowStand:
             agearr=np.full(ncols, 10.0),
             biomass=np.full(ncols, 20.0),
             remaining_share=np.ones(ncols),
+            leafmass=np.full(ncols, 1.0),
         )
-        state = State(nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(ncols), previous_nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
 
         days = 3
         photopara = SimpleNamespace(
@@ -537,8 +538,9 @@ class TestGrowStand:
             agearr=np.full(ncols, 10.0),
             biomass=np.full(ncols, 20.0),
             remaining_share=np.ones(ncols),
+            leafmass=np.full(ncols, 1.0),
         )
-        state = State(nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(ncols), previous_nut_stat=np.ones(ncols), dominant=cl_state, subdominant=cl_state, under=cl_state)
 
         days = 3
         photopara = SimpleNamespace(
@@ -573,10 +575,10 @@ class TestUpdateNutrientStatus:
     def test_returns_state_with_updated_nut_stat(self):
         n = 3
         state = State(
-            nut_stat=np.full(n, 1.0),
-            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
-            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
-            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            nut_stat=np.full(n, 1.0), previous_nut_stat=np.full(n, 1.0),
+            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
+            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
+            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
         )
         stand_out = _make_stand_outputs(
             _ncols=n,
@@ -604,10 +606,10 @@ class TestUpdateNutrientStatus:
     def test_nut_stat_drifts_toward_ratio(self):
         n = 3
         state = State(
-            nut_stat=np.full(n, 2.0),
-            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
-            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
-            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n)),
+            nut_stat=np.full(n, 2.0), previous_nut_stat=np.full(n, 2.0),
+            dominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
+            subdominant=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
+            under=CLState(agearr=np.ones(n), biomass=np.ones(n), remaining_share=np.ones(n), leafmass=np.ones(n)),
         )
         stand_out = _make_stand_outputs(
             _ncols=n,
@@ -639,8 +641,9 @@ class TestCutStand:
             agearr=np.full(n, 15.0),
             biomass=np.full(n, 30.0),
             remaining_share=np.ones(n),
+            leafmass=np.full(n, 1.0),
         )
-        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(n), previous_nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
         inputs = Inputs(
             photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
             n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
@@ -664,8 +667,9 @@ class TestCutStand:
             agearr=np.full(n, 15.0),
             biomass=np.full(n, 30.0),
             remaining_share=np.ones(n),
+            leafmass=np.full(n, 1.0),
         )
-        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(n), previous_nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
         inputs = Inputs(
             photopara=None, forc=pd.DataFrame(), wt=pd.DataFrame(), afp=pd.DataFrame(),
             n_supply=np.ones(n), p_supply=np.ones(n), k_supply=np.ones(n),
@@ -688,8 +692,9 @@ class TestAssimilateStand:
             agearr=np.full(n, 10.0),
             biomass=np.full(n, 20.0),
             remaining_share=np.ones(n),
+            leafmass=np.full(n, 1.0),
         )
-        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(n), previous_nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
 
         days = 3
         photopara = SimpleNamespace(
@@ -723,8 +728,9 @@ class TestAssimilateStand:
             agearr=np.full(n, 15.0),
             biomass=np.full(n, 30.0),
             remaining_share=np.ones(n),
+            leafmass=np.full(n, 1.0),
         )
-        state = State(nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
+        state = State(nut_stat=np.ones(n), previous_nut_stat=np.ones(n), dominant=cl_state, subdominant=cl_state, under=cl_state)
 
         days = 3
         photopara = SimpleNamespace(

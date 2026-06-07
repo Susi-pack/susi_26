@@ -416,10 +416,17 @@ class Canopylayer:
                     "bmToKMortalityWoody"
                 ](bm[ixs[m]])
 
+                # BUG: The + leaves term below is a NO-OP because it sits on the next
+                #      line, outside the implicit bracket continuation. Python treats
+                #      it as a separate expression statement (+leaves) whose result
+                #      is discarded. This means stand/non_woody_litter_mort OMITS
+                #      the leaves mortality component, including only fine-root mortality.
+                #      Confirmed by debug: nwm == fr (True), nwm == fr+lv (False).
                 self.non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
                     "bmToMortalityFineRoot"
                 ](bm[ixs[m]])
                 +self.allodic[m].allometry_f["bmToMortalityLeaves"](bm[ixs[m]])
+                # BUG: Same pattern for N, P, K — the + term on the next line is a no-op.
                 self.n_non_woody_litter_mort[ixs[m]] = self.allodic[m].allometry_f[
                     "bmToNMortalityFineRoot"
                 ](bm[ixs[m]])

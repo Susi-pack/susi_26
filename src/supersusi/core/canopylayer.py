@@ -40,6 +40,7 @@ class State:
     agearr: np.ndarray = field(doc="years")
     biomass: np.ndarray = field(doc="kg/tree")
     remaining_share: np.ndarray = field(doc="thinning fraction 0..1")
+    leafmass: np.ndarray = field(doc="pre-growth leaf mass kg/tree (age-based at init, biomass-based after year 1)")
 
 
 @dataclass(frozen=True)
@@ -434,10 +435,21 @@ def apply_allometry(
         p_woody_litter_mort[ixs] = nm.p_mortality_woody(bm)
         k_woody_litter_mort[ixs] = nm.k_mortality_woody(bm)
 
-        non_woody_litter_mort[ixs] = mm.fine_root(bm) + mm.leaves(bm)
-        n_non_woody_litter_mort[ixs] = nm.n_mortality_fine_root(bm) + nm.n_mortality_leaves(bm)
-        p_non_woody_litter_mort[ixs] = nm.p_mortality_fine_root(bm) + nm.p_mortality_leaves(bm)
-        k_non_woody_litter_mort[ixs] = nm.k_mortality_fine_root(bm) + nm.k_mortality_leaves(bm)
+        # BUG: The + leaves term below is a NO-OP because it sits on the next line,
+        #      outside the implicit bracket continuation. Python treats it as a
+        #      separate expression statement (+leaves) whose result is discarded.
+        #      This means stand/non_woody_litter_mort OMITS the leaves mortality
+        #      component, including only fine-root mortality.
+        #      See OOP src/susi/core/canopylayer.py lines 419-422.
+        non_woody_litter_mort[ixs] = mm.fine_root(bm)
+        + mm.leaves(bm)
+        # BUG: Same pattern for N, P, K — the + term on the next line is a no-op.
+        n_non_woody_litter_mort[ixs] = nm.n_mortality_fine_root(bm)
+        + nm.n_mortality_leaves(bm)
+        p_non_woody_litter_mort[ixs] = nm.p_mortality_fine_root(bm)
+        + nm.p_mortality_leaves(bm)
+        k_non_woody_litter_mort[ixs] = nm.k_mortality_fine_root(bm)
+        + nm.k_mortality_leaves(bm)
 
     return Outputs(
         stems=stems,
@@ -514,19 +526,63 @@ def compute_initial_state(
     agearr: np.ndarray,
     nut_stat: np.ndarray,
 ) -> tuple[State, Outputs]:
-    """Initialise State and Outputs from age-based biomass interpolation.
+    """Initialise State and Outputs matching OOP initialize_domain().
 
-    Builds biomass from agearr (per zone via cc.allodic[z].age_based.bm),
-    then derives all allometric outputs via apply_allometry.
-    nut_stat is accepted for API symmetry with the old OOP code but not used here
-    (initial nut_stat is always 1.0, making the leafarea/leafmass adjustment a no-op).
+    Starts from age-based biomass (same as apply_allometry), then overrides
+    with OOP's mixed formulas: basalarea←ageToBa, hdom←ageToHdom,
+    leafmass←ageToLeaves×nut_stat, leafarea←bmToLAI×nut_stat.
+    OOP init zeros all litter/mortality/demand fields except those set above.
     """
     biomass = np.zeros(params.ncols)
     for z, ix in cc.ixs.items():
         biomass[ix] = cc.allodic[z].age_based.bm(agearr[ix])
 
-    return State(agearr=agearr.copy(), biomass=biomass, remaining_share=np.ones(params.ncols)), apply_allometry(
-        biomass, agearr, np.ones(params.ncols), cc
+    out = apply_allometry(biomass, agearr, np.ones(params.ncols), cc)
+
+    # Override fields where OOP init uses different formulas
+    basalarea = np.zeros(params.ncols)
+    hdom = np.zeros(params.ncols)
+    init_leafmass = np.zeros(params.ncols)
+    leafarea = np.zeros(params.ncols)
+    for z, ix in cc.ixs.items():
+        age = agearr[ix]
+        ns = nut_stat[ix]
+        bm = biomass[ix]
+        basalarea[ix] = cc.allodic[z].age_based.ba(age)
+        hdom[ix] = cc.allodic[z].age_based.hdom(age)
+        init_leafmass[ix] = cc.allodic[z].age_based.leaves(age) * ns
+        leafarea[ix] = cc.allodic[z].biomass_to_stand.lai(bm) * ns
+
+    # Zero fields that OOP init leaves at zero
+    zero = np.zeros(params.ncols)
+
+    state = State(
+        agearr=agearr.copy(), biomass=biomass, remaining_share=np.ones(params.ncols),
+        leafmass=init_leafmass.copy(),
+    )
+    return state, replace(out,
+        basalarea=basalarea, hdom=hdom, leafmass=init_leafmass, leafarea=leafarea,
+        # Litter
+        finerootlitter=zero, n_finerootlitter=zero,
+        p_finerootlitter=zero, k_finerootlitter=zero,
+        nonwoodylitter=zero, n_nonwoodylitter=zero,
+        p_nonwoodylitter=zero, k_nonwoodylitter=zero,
+        woodylitter=zero, n_woodylitter=zero,
+        p_woodylitter=zero, k_woodylitter=zero,
+        woody_litter_mort=zero, n_woody_litter_mort=zero,
+        p_woody_litter_mort=zero, k_woody_litter_mort=zero,
+        non_woody_litter_mort=zero, n_non_woody_litter_mort=zero,
+        p_non_woody_litter_mort=zero, k_non_woody_litter_mort=zero,
+        # Growth fields
+        NPP=zero, NPP_pot=zero, new_lmass=zero, leaf_litter=zero, C_consumption=zero,
+        Nleafdemand=zero, Nleaf_litter=zero, N_leaf=zero,
+        Pleafdemand=zero, Pleaf_litter=zero, P_leaf=zero,
+        Kleafdemand=zero, Kleaf_litter=zero, K_leaf=zero,
+        # Nutrient demands (keep basN/P/Kdemand from apply_allometry)
+        n_demand=zero, p_demand=zero, k_demand=zero,
+        # Other
+        logvolume=zero, pulpvolume=zero, yi=zero, volumegrowth=zero,
+        leafmax=zero, leafmin=zero,
     )
 
 
@@ -557,6 +613,10 @@ def grow_stand(
     stems_safe = np.maximum(prev.stems, 1e-30)
     npp_per_tree = npp_ha * inputs.nut_stat / stems_safe
     npp_pot_per_tree = npp_pot_ha * inputs.nut_stat / stems_safe
+    # BUG: OOP writes nan for NPP/NPP_pot when stems=0 (np.divide with
+    #      out=np.nan, where=stems>0). Replicate to match golden file.
+    npp_per_tree = np.where(prev.stems > 0, npp_per_tree, np.nan)
+    npp_pot_per_tree = np.where(prev.stems > 0, npp_pot_per_tree, np.nan)
 
     # Per-zone: leaf dynamics + delta calc
     delta = np.zeros(ncols)
@@ -584,7 +644,7 @@ def grow_stand(
         ld = _leaf_dynamics(
             bm_z,
             npp_per_tree[ix],
-            prev.leafmass[ix],
+            state.leafmass[ix],
             inputs.previous_nut_stat[ix],
             inputs.nut_stat[ix],
             state.agearr[ix],
@@ -614,11 +674,14 @@ def grow_stand(
 
     out = apply_allometry(new_biomass, new_agearr, state.remaining_share, cc)
 
+    # OOP's self.leafmass = self.new_lmass aliases leafmass→new_lmass, then
+    # self.update() overwrites both with allometry-based leafmass.
+    # Match this by using out.leafmass for new_lmass.
     merged = replace(
         out,
         NPP=npp_per_tree,
         NPP_pot=npp_pot_per_tree,
-        new_lmass=new_lmass,
+        new_lmass=out.leafmass,
         leaf_litter=leaf_litter,
         C_consumption=c_consumption,
         Nleafdemand=nleafdemand,
@@ -630,7 +693,7 @@ def grow_stand(
         Kleafdemand=kleafdemand,
         Kleaf_litter=kleaf_litter,
         K_leaf=k_leaf,
-        leafmass=new_lmass,
+        leafmass=out.leafmass,
         volumegrowth=out.volume - prev.volume,
         nonwoodylitter=out.finerootlitter + leaf_litter,
         n_nonwoodylitter=out.n_finerootlitter + nleaf_litter,
@@ -640,7 +703,7 @@ def grow_stand(
         leafmin=leafmin,
     )
 
-    return State(new_agearr, new_biomass, state.remaining_share), merged
+    return State(new_agearr, new_biomass, state.remaining_share, out.leafmass), merged
 
 
 def cut_stand(
@@ -710,7 +773,7 @@ def cut_stand(
             p_woody_lresid[ix] = af.logging_residues.p_woody(bm_z) * cut_stems
             k_woody_lresid[ix] = af.logging_residues.k_woody(bm_z) * cut_stems
 
-        new_state = State(new_agearr, state.biomass, new_remaining_share)
+        new_state = State(new_agearr, state.biomass, new_remaining_share, state.leafmass)
     else:
         # Clear-cut: remove all stems, reset age to 1, re-init
         for zid, ix in cc.ixs.items():
@@ -740,10 +803,12 @@ def cut_stand(
 
         # Re-initialise biomass from age
         new_biomass = z(ncols)
+        new_leafmass = z(ncols)
         for zid, ix in cc.ixs.items():
             new_biomass[ix] = cc.allodic[zid].age_based.bm(new_agearr[ix])
+            new_leafmass[ix] = cc.allodic[zid].age_based.leaves(new_agearr[ix]) * nut_stat[ix]
 
-        new_state = State(new_agearr, new_biomass, new_remaining_share)
+        new_state = State(new_agearr, new_biomass, new_remaining_share, new_leafmass)
 
     cutting_out = CuttingOutputs(
         harvested_volume=harvested_volume,

@@ -107,14 +107,14 @@ class TestDataclasses:
 
     def test_state_is_frozen(self):
         s = State(
-            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5)
+            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5)
         )
         with pytest.raises(FrozenInstanceError):
             s.agearr = np.zeros(5)
 
     def test_state_instantiates(self):
         s = State(
-            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5)
+            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5)
         )
         assert s.agearr.shape == (5,)
 
@@ -288,6 +288,7 @@ class TestDataclasses:
             agearr=np.linspace(1.0, 3.0, ncols),
             biomass=np.full(ncols, 20.0),
             remaining_share=np.ones(ncols),
+            leafmass=np.full(ncols, 1.0),
         )
 
         days = 3
@@ -333,6 +334,7 @@ class TestDataclasses:
             agearr=np.full(ncols, 20.0),
             biomass=np.full(ncols, 20.0),
             remaining_share=np.ones(ncols),
+            leafmass=np.full(ncols, 1.0),
         )
         out = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
         nuts = np.ones(ncols)

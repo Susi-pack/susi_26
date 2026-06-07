@@ -126,7 +126,7 @@ class Susi:
         stand_cc = stand_mod.compute_constants(
             module_params.stand, self.parameters.allometry_parameters,
         )
-        stand_state, stand_out = stand_mod.compute_initial_state(
+        stand_state, stand_out, *_ = stand_mod.compute_initial_state(
             module_params.stand, stand_cc, self.parameters.site_parameters.age, self.parameters.site_parameters.n,
         )
 
@@ -377,19 +377,16 @@ class Susi:
                 scen[n_ditch_scen],
             )
 
-            stand_state, stand_out = stand_mod.compute_initial_state(
+            stand_state, stand_out, dom_out_init, sub_out_init, under_out_init = stand_mod.compute_initial_state(
                 module_params.stand, stand_cc, self.parameters.site_parameters.age, self.parameters.site_parameters.n,
             )
 
             out.write_scen(n_ditch_scen, hdr_west, hdr_east)
 
-            _dom_out_init = canopylayer.apply_allometry(stand_state.dominant.biomass, stand_state.dominant.agearr, stand_state.dominant.remaining_share, stand_cc.dominant)
-            _sub_out_init = canopylayer.apply_allometry(stand_state.subdominant.biomass, stand_state.subdominant.agearr, stand_state.subdominant.remaining_share, stand_cc.subdominant)
-            _under_out_init = canopylayer.apply_allometry(stand_state.under.biomass, stand_state.under.agearr, stand_state.under.remaining_share, stand_cc.under)
-            out.write_stand(n_ditch_scen, 0, stand_out, stand_state, previous_nut_stat=np.ones(self.parameters.site_parameters.n))
-            out.write_canopy_layer(n_ditch_scen, 0, "dominant", stand_state.dominant, _dom_out_init)
-            out.write_canopy_layer(n_ditch_scen, 0, "subdominant", stand_state.subdominant, _sub_out_init)
-            out.write_canopy_layer(n_ditch_scen, 0, "under", stand_state.under, _under_out_init)
+            out.write_stand(n_ditch_scen, 0, stand_out, stand_state, previous_nut_stat=stand_state.previous_nut_stat)
+            out.write_canopy_layer(n_ditch_scen, 0, "dominant", stand_state.dominant, dom_out_init)
+            out.write_canopy_layer(n_ditch_scen, 0, "subdominant", stand_state.subdominant, sub_out_init)
+            out.write_canopy_layer(n_ditch_scen, 0, "under", stand_state.under, under_out_init)
 
             gv_state = gvegetation.compute_initial_state(gv_params, gv_cc)
             gv_state, gv_outputs = gvegetation.run_timestep(
@@ -655,10 +652,10 @@ class Susi:
                     p_supply=np.zeros(self.parameters.site_parameters.n),
                     k_supply=np.zeros(self.parameters.site_parameters.n),
                     groundvegetation_outputs=gv_outputs,
-                    previous_nut_stat=stand_state.nut_stat.copy(),
+                    previous_nut_stat=stand_state.previous_nut_stat,
                     calendar_year=calendar_year,
                 )
-                stand_state, stand_out = stand_mod.grow_stand(stand_state, stand_cc, _stand_inputs)
+                stand_state, stand_out, dom_out, sub_out, under_out = stand_mod.grow_stand(stand_state, stand_cc, _stand_inputs)
 
                 # --------- Locate cuttings here--------------------
                 print("calculating year " + str(calendar_year))
@@ -862,18 +859,18 @@ class Susi:
                 )
                 out.write_methane(n_ditch_scen, simulation_year, ch4_outputs)
 
-                _dom_out = canopylayer.apply_allometry(stand_state.dominant.biomass, stand_state.dominant.agearr, stand_state.dominant.remaining_share, stand_cc.dominant)
-                _sub_out = canopylayer.apply_allometry(stand_state.subdominant.biomass, stand_state.subdominant.agearr, stand_state.subdominant.remaining_share, stand_cc.subdominant)
-                _under_out = canopylayer.apply_allometry(stand_state.under.biomass, stand_state.under.agearr, stand_state.under.remaining_share, stand_cc.under)
-                out.write_stand(n_ditch_scen, simulation_year, stand_out, stand_state, previous_nut_stat=_stand_inputs.previous_nut_stat)
+                # BUG: OOP writes previous_nut_stat AFTER update_nutrient_status
+                #      (copy of nut_stat before update). Pass state.previous_nut_stat
+                #      which was set by update_nutrient_status to nut_stat from this year.
+                out.write_stand(n_ditch_scen, simulation_year, stand_out, stand_state, previous_nut_stat=stand_state.previous_nut_stat)
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "dominant", stand_state.dominant, _dom_out
+                    n_ditch_scen, simulation_year, "dominant", stand_state.dominant, dom_out
                 )
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "subdominant", stand_state.subdominant, _sub_out
+                    n_ditch_scen, simulation_year, "subdominant", stand_state.subdominant, sub_out
                 )
                 out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "under", stand_state.under, _under_out
+                    n_ditch_scen, simulation_year, "under", stand_state.under, under_out
                 )
                 out.write_groundvegetation(
                     n_ditch_scen, simulation_year, gv_state, gv_outputs
