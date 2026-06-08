@@ -27,341 +27,8 @@ def runoff_to_excel(runoff, swe, outpara, scen):
     df.to_excel(f)
 
 
-def c_and_nut_to_excel(
-    inivol,
-    vols,
-    phys_restrictions,
-    c_bals,
-    c_bals_trees,
-    ch4_yr,
-    n_export_yr,
-    p_export_yr,
-    k_export_yr,
-    krels,
-    outpara,
-    scen,
-):
-    data = {
-        "vols": vols,
-        "phys_restr": phys_restrictions,
-        "c_bals": c_bals,
-        "c_bals_trees": c_bals_trees,
-        "ch4_yr": ch4_yr,
-        "n_export_yr": n_export_yr,
-        "p_export_yr": p_export_yr,
-        "k_export_yr": k_export_yr,
-        "krelease": krels,
-    }
-    f = outpara["outfolder"] + scen + "_" + outpara["c_and_nut_file"]
-
-    writer = pd.ExcelWriter(f, engine="xlsxwriter")
-    dfcbals = pd.DataFrame(data["c_bals"])
-    dfcbalstrees = pd.DataFrame(data["c_bals_trees"])
-    dfn = pd.DataFrame(data["n_export_yr"])
-    dfp = pd.DataFrame(data["p_export_yr"])
-    dfk = pd.DataFrame(data["k_export_yr"])
-    dfch4 = pd.DataFrame(data["ch4_yr"])
-    dfkrels = pd.DataFrame(data["krelease"])
-    dfphys = pd.DataFrame(data["phys_restr"])
-
-    dfrow = pd.DataFrame([inivol])
-    dfrow.columns = dfcbals.columns
-    dfv = pd.DataFrame(data["vols"])
-    dfv = pd.concat([dfrow, dfv], axis=0)
-
-    gr = np.gradient(dfv.to_numpy(), axis=0)
-    cols = np.shape(gr)[1]
-    colnames = list(range(cols))
-    dfgr = pd.DataFrame(data=gr, columns=colnames)
-
-    dfv.to_excel(writer, sheet_name="Stand volume")
-    dfgr.to_excel(writer, sheet_name="Growth")
-    dfcbals.to_excel(writer, sheet_name="Peat C balance")
-    dfcbalstrees.to_excel(writer, sheet_name="Stand C balance")
-    dfn.to_excel(writer, sheet_name="N export")
-    dfp.to_excel(writer, sheet_name="P export")
-    dfk.to_excel(writer, sheet_name="K export")
-    dfch4.to_excel(writer, sheet_name="ch4")
-    dfkrels.to_excel(writer, sheet_name="K release")
-    dfphys.to_excel(writer, sheet_name="Physical restriction")
-
-    writer.save()
-
-
-def output_dwt_growing_season(
-    dwt, length, start_yr, end_yr, start_date, outpara, wpara, scen
-):
-    """
-    Output for growing season water tables
-    """
-    import datetime
-
-    days, n = np.shape(dwt)
-    #    dfOut = pd.DataFrame(data={'dwt': dwt},
-    #                   index=pd.date_range(start_date,periods=length))  #len(deltas)
-    dfOut = pd.DataFrame(
-        dwt, columns=range(n), index=pd.date_range(start_date, periods=length)
-    )  # len(deltas)
-
-    dfOut["doy"] = dfOut.index.dayofyear
-    if outpara["to_file"]:
-        dfOut.to_csv(outpara["outfolder"] + outpara["tsfile"] + "_" + scen + ".csv")
-
-    y = wpara["start_yr"]
-    m = outpara["startmonth"]
-    d = outpara["startday"]
-    ey = wpara["end_yr"]
-    start = datetime.datetime(y, m, d).timetuple().tm_yday
-    m = outpara["endmonth"]
-    d = outpara["endday"]
-    end = datetime.datetime(ey, m, d).timetuple().tm_yday
-
-    summer = dfOut.groupby(dfOut["doy"]).mean()
-    summer = summer[start:end]
-    # summer_mean_dwt = np.round(summer['dwt'].mean(),3)
-    summer_mean_dwt = summer.mean(axis=0)
-
-    # print '  +Summer mean dwt', summer_mean_dwt.values
-    return summer_mean_dwt.values, summer
-
-
-def write_mese(fout, nro, v_ini, v, iv5, Nrel, Prel, Krel, Crel, dwt_loc, cb, cbt, sfc):
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    # fout = outpara['outfolder'] + outpara['ofile']
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, nro)
-    outSummary.write(rows, 1, v_ini)
-    outSummary.write(rows, 2, v)
-    outSummary.write(rows, 3, iv5)
-    outSummary.write(rows, 4, Nrel)
-    outSummary.write(rows, 5, Prel)
-    outSummary.write(rows, 6, Krel)
-    outSummary.write(rows, 7, Crel)
-    outSummary.write(rows, 8, dwt_loc)
-    outSummary.write(rows, 9, cb)
-    outSummary.write(rows, 10, cbt)
-    outSummary.write(rows, 11, sfc)
-
-    wb.save(fout)
-
-
-def write_mese_scen(fout, nro, v_ini, v_end, gr, w, dw):
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    r = len(v_end)  # rounds
-    ix0 = range(2, 2 + r)
-    ix1 = range(2 + r, 2 + 2 * r)
-    ix2 = range(2 + 2 * r, 2 + 3 * r)
-    ix3 = range(2 + 3 * r, 2 + 4 * r)
-    range(2 + 4 * r, 2 + 5 * r)
-    range(2 + 5 * r, 2 + 6 * r)
-    range(2 + 6 * r, 2 + 7 * r)
-    range(2 + 7 * r, 2 + 8 * r)
-    2 + 8 * r
-    # fout = outpara['outfolder'] + outpara['ofile']
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, nro)
-    outSummary.write(rows, 1, v_ini)
-    for ix, vv in zip(ix0, v_end):
-        outSummary.write(rows, ix, vv)
-    for ix, g in zip(ix1, gr):
-        outSummary.write(rows, ix, g)
-    for ix, ww in zip(ix2, w):
-        outSummary.write(rows, ix, ww)
-    for ix, dww in zip(ix3, dw):
-        outSummary.write(rows, ix, dww)
-
-    wb.save(fout)
-
-
-def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, cb, dcb, w, dw, runo, druno):
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    r = len(v_end)  # rounds
-    ix0 = range(2, 2 + r)
-    ix1 = range(2 + r, 2 + 2 * r)
-    ix2 = range(2 + 2 * r, 2 + 3 * r)
-    ix3 = range(2 + 3 * r, 2 + 4 * r)
-    ix4 = range(2 + 4 * r, 2 + 5 * r)
-    ix5 = range(2 + 5 * r, 2 + 6 * r)
-    ix6 = 2 + 6 * r  # range(2+6*r, 2+7*r)
-
-    # fout = outpara['outfolder'] + outpara['ofile']
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, nro)
-    outSummary.write(rows, 1, v_ini)
-    for ix, vv in zip(ix0, v_end):  # vol at the end
-        outSummary.write(rows, ix, vv)
-    for ix, g in zip(ix1, gr):  # growth
-        outSummary.write(rows, ix, g)
-    for ix, ww in zip(ix2, w):
-        outSummary.write(rows, ix, ww)  # wt
-    for ix, dww in zip(ix3, dw):
-        outSummary.write(rows, ix, dww)  # dwt
-    for ix, r in zip(ix4, runo):
-        outSummary.write(rows, ix, r)  # runoff
-    for ix, dr in zip(ix5, druno):
-        outSummary.write(rows, ix, dr)  # drunoff
-    print(rows, ix6, float(ID))
-    outSummary.write(rows, ix6, float(ID))
-
-    wb.save(fout)
-
-
-def write_demand(fout, nro, Ndem, Pdem, Kdem):
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    # fout = outpara['outfolder'] + outpara['ofile']
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, nro)
-    outSummary.write(rows, 1, Ndem)
-    outSummary.write(rows, 2, Pdem)
-    outSummary.write(rows, 3, Kdem)
-
-    wb.save(fout)
-
-
-def write_excel(
-    wlocation, wpara, spara, outpara, LAI, hdom, h0_west, h0_east, summer, summermed
-):
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    fout = outpara["outfolder"] + outpara["ofile"]
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, rows)
-    outSummary.write(rows, 1, h0_west)
-    outSummary.write(rows, 2, h0_east)
-    outSummary.write(rows, 3, spara.L)
-    outSummary.write(rows, 4, spara.slope)
-    outSummary.write(rows, 5, wlocation)
-    outSummary.write(rows, 6, spara.peat_type)
-    LAI if LAI != "iterable" else max(LAI)
-    outSummary.write(rows, 7, max(LAI))
-    hdom if hdom != "iterable" else max(hdom)
-    outSummary.write(rows, 8, max(hdom))
-    outSummary.write(rows, 9, str(wpara["start_yr"]) + " " + str(wpara["end_yr"]))
-    outSummary.write(rows, 10, summer["dwt"].mean())
-    outSummary.write(rows, 11, summer["dwt"].std())
-    outSummary.write(rows, 12, summermed["dwt"].mean())
-    outSummary.write(rows, 13, summermed["dwt"].std())
-
-    wb.save(fout)
-
-
-def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr_crd):
-    print("now printing gr-excel")
-    # from xlutils.copy import copy
-    from xlutils import copy
-    import xlrd
-
-    title = "Control vs " + spara.scenario_name[c]
-    fout = outpara["outfolder"] + outpara["gr_file"]
-    rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
-    rows = rb.sheet_by_name("Summary").nrows
-    print(rows)
-    for i in range(rb.nsheets):
-        sheet = rb.sheet_by_index(i)
-        if sheet.name == "Summary":
-            indSummary = i
-    wb = copy.copy(rb)
-    outSummary = wb.get_sheet(indSummary)
-    # sarakkeita = outSummary.ncols
-    # print sarakkeita
-    outSummary.write(rows, 0, rows)
-    outSummary.write(rows, 1, title)
-    outSummary.write(rows, 2, spara.ditch_depth[0])
-    outSummary.write(rows, 3, spara.ditch_depth[c])
-    outSummary.write(rows, 4, spara.ditch_depth_20y[0])
-    outSummary.write(rows, 5, spara.ditch_depth_20y[c])
-    outSummary.write(rows, 6, spara.L)
-    outSummary.write(rows, 7, spara.slope)
-    outSummary.write(rows, 8, wlocation)
-    outSummary.write(rows, 9, spara.peat_type)
-    outSummary.write(rows, 10, str(spara.vonP_top))
-    outSummary.write(rows, 11, spara.peat_type_bottom)
-    outSummary.write(rows, 12, spara.vonP_bottom)
-    outSummary.write(rows, 13, spara.vol)
-    outSummary.write(rows, 14, spara.hdom)
-    outSummary.write(rows, 15, spara.species)
-    outSummary.write(rows, 16, spara.sfc)
-    outSummary.write(rows, 17, str(wpara["start_yr"]) + " " + str(wpara["end_yr"]))
-    outSummary.write(rows, 18, float(gN))
-    outSummary.write(rows, 19, float(gP))
-    outSummary.write(rows, 20, float(gK))
-    outSummary.write(rows, 21, float(cr_depth))
-    outSummary.write(rows, 22, float(gr_crd))
-    wb.save(fout)
-
-
 def outfig(
-    summer_dwt, co2_respi, growth_response, ditch_depth, relative_response, rounds
+    summer_dwt, co2_respi, growth_response, ditch_depth, relative_response, _rounds
 ):
     plt.figure(
         num="Susi drainage",
@@ -522,7 +189,7 @@ def fig_stand_growth_node_bck(
 
 
 def fig_stand_growth_node(
-    rounds, ageSim, start_yr, end_yr, ageToVol, agearray, vols, name, dwts
+    _rounds, ageSim, start_yr, end_yr, ageToVol, agearray, vols, name, dwts
 ):
     sns.set()
     # yrs, cols = np.shape(agearray)
@@ -553,7 +220,7 @@ def fig_stand_growth_node(
         plt.fill_between(gr_age, gr_low, gr_up, color="gray", alpha=0.3)
 
         colors = ["blue", "red", "green", "yellow", "cyan", "magenta"]
-        rnds, yrs, nodes = np.shape(vols)
+        rnds, _yrs, _nodes = np.shape(vols)
         for r in range(rnds):
             vtmp = vols[r, :, column]
             vtmp = np.insert(vtmp, 0, ageToVol(ageSim[column]))
@@ -561,7 +228,7 @@ def fig_stand_growth_node(
     # ---------------------------------------------------------
 
     plt.subplot(212)
-    rnds, days, nodes = np.shape(dwts)
+    rnds, days, _nodes = np.shape(dwts)
     agedays = np.array(range(days))
     for r in range(rnds):
         dwttmp = dwts[r, :, 1:-1]
@@ -584,7 +251,7 @@ def fig_hydro(
     hts,
     spara,
     wpara,
-    wlocation,
+    _wlocation,
     ets,
     Prec,
     T,
@@ -601,7 +268,7 @@ def fig_hydro(
     n = spara.n
     L = spara.L
     sim_yrs = len(het) / 365.0
-    aa, bb = np.shape(hts)
+    aa, _bb = np.shape(hts)
     x = np.linspace(0, L, n)
     float(L / n)
     fig = plt.figure(
@@ -610,13 +277,11 @@ def fig_hydro(
         edgecolor="k",
         figsize=(20.0, 11.0),
     )  # Figsize(w,h), tuple inches
-    ax = fig.add_axes([0.05, 0.5, 0.55, 0.46])  # left, bottom, width, height
+    ax = fig.add_axes((0.05, 0.5, 0.55, 0.46))  # left, bottom, width, height
     low = min([ele[0] + h0_west, ele[n - 1] + h0_east]) * 0.4
     high = max(ele) * 1.2
-    ax.set_ylim([low, high])
-    (line2,) = ax.plot(
-        x[1 : n - 1], ele[1 : n - 1], "k-", linewidth=2, label="Surface elevation"
-    )
+    ax.set_ylim(bottom=low, top=high)
+    ax.plot(x[1 : n - 1], ele[1 : n - 1], "k-", linewidth=2, label="Surface elevation")
     line1 = Line2D(
         [],
         [],
@@ -667,8 +332,8 @@ def fig_hydro(
     ax.add_line(line1)
     ax.legend(loc=1)
 
-    ax2 = fig.add_axes([0.05, 0.1, 0.55, 0.3])  # left, bottom, width, height)
-    ax2.set_ylim([h0_west * 2.0, 0.2])
+    ax2 = fig.add_axes((0.05, 0.1, 0.55, 0.3))  # left, bottom, width, height)
+    ax2.set_ylim(bottom=h0_west * 2.0, top=0.2)
     surf = np.zeros(aa)
     limit2 = -0.5 * np.ones(aa)
     limit3 = -0.35 * np.ones(aa)
@@ -712,7 +377,7 @@ def fig_hydro(
         label="East wt",
     )
     ax2.add_line(line5)
-    ax2.set_xlim([0, aa])
+    ax2.set_xlim(left=0, right=aa)
     plt.xlabel("Time, days", fontsize=16)
     plt.ylabel("wt depth, m", fontsize=16)
     ax2.legend(loc=1)
@@ -722,13 +387,13 @@ def fig_hydro(
 
     ax22 = ax2.twinx()
     plt.plot(range(len(runoff)), runoff * 1000.0, color="blue")
-    ax22.set_ylim([0.0, max(runoff) * 3.0 * 1000.0])
+    ax22.set_ylim(bottom=0.0, top=max(runoff) * 3.0 * 1000.0)
     plt.fill_between(range(len(runoff)), 0.0, runoff * 1000.0, color="blue", alpha=0.3)
     plt.ylabel("Runoff, mm $day^{-1}$")
 
-    ax3 = fig.add_axes([0.68, 0.75, 0.3, 0.21])  # left, bottom, width, height
-    ax3.set_ylim([0, sum(Prec) * 1.1])
-    ax3.set_xlim([0, aa])
+    ax3 = fig.add_axes((0.68, 0.75, 0.3, 0.21))  # left, bottom, width, height
+    ax3.set_ylim(bottom=0, top=sum(Prec) * 1.1)
+    ax3.set_xlim(left=0, right=aa)
     x = range(len(runoff))
     z = np.zeros(len(runoff))
     y = np.cumsum(runoff) * 1000.0
@@ -757,9 +422,9 @@ def fig_hydro(
     t4 = "Runoff " + str(np.round(sum(runoff) * 1000.0 / sim_yrs)) + " mm yr-1"
     ax3.text(10, sum(Prec) * 0.55, t4, fontsize=14, color="0.25")
 
-    ax4 = fig.add_axes([0.68, 0.45, 0.3, 0.21])  # left, bottom, width, height
-    ax4.set_ylim([-10, 35])
-    ax4.set_xlim([0, aa])
+    ax4 = fig.add_axes((0.68, 0.45, 0.3, 0.21))  # left, bottom, width, height
+    ax4.set_ylim(bottom=-10, top=35)
+    ax4.set_xlim(left=0, right=aa)
     line8 = Line2D(
         [],
         [],
@@ -780,7 +445,7 @@ def fig_hydro(
     t1 = "Mean temperature " + str(np.round(np.mean(T)))
     ax4.text(10, 30, t1, fontsize=14, color="0.25")
 
-    ax5 = fig.add_axes([0.68, 0.1, 0.3, 0.21])  # left, bottom, width, height
+    ax5 = fig.add_axes((0.68, 0.1, 0.3, 0.21))  # left, bottom, width, height
     line9 = Line2D(
         [],
         [],
@@ -790,8 +455,8 @@ def fig_hydro(
         markersize=1,
         label="CO2 efflux",
     )
-    ax5.set_ylim([-10, 100])
-    ax5.set_xlim([0, aa])
+    ax5.set_ylim((-10, 100))
+    ax5.set_xlim((0, aa))
     ax5.add_line(line9)
     ax5.legend(loc=1)
     plt.fill_between(range(aa), lo, nolla, color="yellow", alpha=0.2)
@@ -813,7 +478,7 @@ def weather_fig(df):
     )  # see hex color codes from https://www.rapidtables.com/web/color/html-color-codes.html
     df["Kunta"][0]
     # fig.suptitle('Weather data, '+ filter(lambda x: x in printable, municipality), fontsize=18)
-    ax1 = fig.add_axes([0.05, 0.55, 0.6, 0.35])  # left, bottom, width, height
+    ax1 = fig.add_axes((0.05, 0.55, 0.6, 0.35))  # left, bottom, width, height
     ax1.plot(df.index, df["Prec"].values, "b-", label="Rainfall")
     ax1.set_xlabel("Time", fontsize=fs)
     ax1.set_ylabel("Rainfall, mm", fontsize=12)
@@ -830,7 +495,7 @@ def weather_fig(df):
     ax11.legend(loc="upper right")
 
     annual_prec = df["Prec"].resample("A").sum()
-    ax2 = fig.add_axes([0.73, 0.55, 0.25, 0.35])
+    ax2 = fig.add_axes((0.73, 0.55, 0.25, 0.35))
 
     t1 = "Mean annual rainfall " + str(np.round(np.mean(annual_prec.values))) + " mm"
     ax2.set_title(t1, fontsize=14)
@@ -840,7 +505,7 @@ def weather_fig(df):
     ax2.set_ylabel("mm")
 
     zeroline = np.zeros(len(df.index))
-    ax3 = fig.add_axes([0.05, 0.08, 0.6, 0.35])
+    ax3 = fig.add_axes((0.05, 0.08, 0.6, 0.35))
     ax3.plot(df.index, df["T"], "g", linewidth=0.5)
     ax3.plot(df.index, zeroline, "b-")
     ax3.fill_between(
@@ -858,7 +523,7 @@ def weather_fig(df):
         + "  $^\circ$ C"
     )
 
-    ax4 = fig.add_axes([0.73, 0.08, 0.25, 0.35])
+    ax4 = fig.add_axes((0.73, 0.08, 0.25, 0.35))
     ax4.set_title(t2, fontsize=14)
     y_pos = np.arange((len(annual_temp)))
     plt.bar(y_pos, annual_temp.values, align="center", alpha=0.5)

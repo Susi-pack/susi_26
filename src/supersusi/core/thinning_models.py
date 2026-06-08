@@ -341,17 +341,21 @@ def find_matching_parameters(region, soil, fertility_class, main_sp, H_dom):
     # Check both thinningLimit and thinningRecommendation
     for key in ["thinningLimit", "thinningRecommendation"]:
         for entry in species_data.get(key, []):
-            if entry["min"] <= H_dom <= entry["max"]:
-                results.append(
-                    {
-                        "type": key,
-                        "function": entry["function"],
-                        "parameters": {
-                            p["name"]: p["value"] for p in entry["parameters"]
-                        },
-                        "range": (entry["min"], entry["max"]),
-                    }
-                )
+            if isinstance(entry, dict) and "min" in entry and "max" in entry:
+                if entry["min"] <= H_dom <= entry["max"]:
+                    params = entry.get("parameters", [])
+                    if isinstance(params, list):
+                        param_dict = {p["name"]: p["value"] for p in params}
+                    else:
+                        param_dict = {}
+                    results.append(
+                        {
+                            "type": key,
+                            "function": entry["function"],
+                            "parameters": param_dict,
+                            "range": (entry["min"], entry["max"]),
+                        }
+                    )
 
     return results
 

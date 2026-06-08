@@ -11,7 +11,7 @@ from supersusi.core.fertilization_models import (
     npk as npk_module,
 )
 from supersusi.core.fertilization_types import Inputs, Nutrient, Outputs, State
-from susi.io.susi_parameter_model import (
+from supersusi.io.susi_parameter_model import (
     AshFertilizationParameters,
     NutrientFertilizationParameters,
     StandardNPKFertilizationParameters,

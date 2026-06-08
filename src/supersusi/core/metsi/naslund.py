@@ -38,4 +38,6 @@ def naslund_correction(species: float, diameter: float, height: float) -> float:
     :return: height correction coefficient
     """
     h_computed = naslund_height(diameter, species)
+    if h_computed is None:
+        return 0.0
     return height / h_computed

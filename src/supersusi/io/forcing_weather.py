@@ -48,7 +48,7 @@ def read_FMI_weather(ID, start_date, end_date, sourcefile=None) -> pd.DataFrame:
     # fmi=pd.read_csv(sourcefile, sep=';', header='infer', usecols=['OmaTunniste','Kunta','aika','longitude','latitude','t_mean','t_max','t_min','rainfall','radiation','hpa'])
     # time=pd.to_datetime(fmi['aika'],format='%Y%m%d')
 
-    fmi = pd.read_csv(
+    fmi = pd.read_csv(  # ty: ignore[no-matching-overload]
         sourcefile,
         sep=";",
         header="infer",

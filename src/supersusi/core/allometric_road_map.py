@@ -522,7 +522,7 @@ class Growth_and_Yield_Table:
                 spi = int(row["sp"] - 1)
             else:
                 spi = 2
-            height_scaled = h_scalar[spi] * height_estimate
+            height_scaled = h_scalar[spi] * (height_estimate or 0.0)
             height.append(height_scaled)
         ReferenceTrees["H"] = height
 
@@ -586,7 +586,7 @@ class Growth_and_Yield_Table:
                         self.n_trees, self.G_1, self.Dg_1, self.N_1
                     )
                 ),
-                columns=["Nd", "D"],
+                columns=pd.Index(["Nd", "D"]),
             )
             ref_1.insert(0, "sp", 1)
             ReferenceTrees.append(ref_1)
@@ -599,7 +599,7 @@ class Growth_and_Yield_Table:
                         self.n_trees, self.G_2, self.Dg_2, self.N_2
                     )
                 ),
-                columns=["Nd", "D"],
+                columns=pd.Index(["Nd", "D"]),
             )
             ref_2.insert(0, "sp", 2)
             ReferenceTrees.append(ref_2)
@@ -612,7 +612,7 @@ class Growth_and_Yield_Table:
                         self.n_trees, self.G_3, self.Dg_3, self.N_3
                     )
                 ),
-                columns=["Nd", "D"],
+                columns=pd.Index(["Nd", "D"]),
             )
             ref_3.insert(0, "sp", 4)
             ReferenceTrees.append(ref_3)
@@ -635,7 +635,7 @@ class Growth_and_Yield_Table:
                 spi = int(row["sp"] - 1)
             else:
                 spi = 2
-            height_scaled = h_scalar[spi] * height_estimate
+            height_scaled = h_scalar[spi] * (height_estimate or 0.0)
             if height_scaled < 1.3:
                 height_scaled = 1.3
             height.append(height_scaled)

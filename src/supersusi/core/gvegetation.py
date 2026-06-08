@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -29,14 +27,9 @@ class FieldLayerShare:
 @dataclass(frozen=True)
 class Params:
     num_nodes: int = field(doc="Number of computation nodes")
-    tree_species: Float[np.ndarray, " n"] = field(
-        doc="Dominant tree species (1=pine, 2=spruce, 3=birch, 4=open peat)"
-    )
     site_fertility_class: Float[np.ndarray, " n"] = field(
         doc="Site fertility class (1-5)"
     )
-    latitude: float = field(doc="Latitude in EPSG:3067 [m]")
-    longitude: float = field(doc="Longitude in EPSG:3067 [m]")
     drainage_status: int = field(default=4, doc="Drainage status (1-4)")
     total_turnover_multiplier: float = field(
         default=1.5,
@@ -143,6 +136,7 @@ class ComputedConstants:
     ix_open_peat: tuple = field(
         doc="Boolean/indices where species == 4 (open peatland)"
     )
+    dominant_tree_species: Float[np.ndarray, " n"]
 
 
 @dataclass(frozen=True)
@@ -198,23 +192,29 @@ class Inputs:
     age: Float[np.ndarray, " n"] = field(doc="Stand age [years]")
 
 
-def compute_constants(params: Params) -> ComputedConstants:
+def compute_constants(
+    params: Params,
+    lat: float,
+    lon: float,
+    dominant_tree_species: Float[np.ndarray, " n"],
+) -> ComputedConstants:
     dem = np.ones(params.num_nodes) * 80.0
 
     inProj = CRS("epsg:3067")
     outProj = CRS("epsg:4326")
     transformer = Transformer.from_crs(inProj, outProj)
-    latitude_wgs84, longitude_wgs84 = transformer.transform(
-        params.longitude, params.latitude
-    )
+
+    # Original (lat,lon) is in EPSG:3067 [m]
+    latitude_wgs84, longitude_wgs84 = transformer.transform(lon, lat)
 
     return ComputedConstants(
         dem=dem,
         latitude_wgs84=latitude_wgs84,
         longitude_wgs84=longitude_wgs84,
-        ix_spruce_mire=np.where(np.equal(params.tree_species, 2)),
-        ix_pine_bog=np.where(np.equal(params.tree_species, 1)),
-        ix_open_peat=np.where(np.equal(params.tree_species, 4)),
+        ix_spruce_mire=np.where(np.equal(dominant_tree_species, 2)),
+        ix_pine_bog=np.where(np.equal(dominant_tree_species, 1)),
+        ix_open_peat=np.where(np.equal(dominant_tree_species, 4)),
+        dominant_tree_species=dominant_tree_species,
     )
 
 

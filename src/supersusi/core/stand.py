@@ -396,6 +396,7 @@ def cut_stand(
     dom_out = canopylayer.apply_allometry(
         state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant,
     )
+    assert inputs.cutting_to_ba is not None
     dom_state, dom_cut = canopylayer.cut_stand(
         state.dominant, cc.dominant, dom_out, state.nut_stat, inputs.cutting_to_ba,
     )

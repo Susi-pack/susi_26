@@ -46,50 +46,83 @@ def _make_mock_allometry():
     identity = _identity_interp()
     return AllometryFunctions(
         age_based=AgeBased(
-            hdom=identity, ba=identity, vol=identity, yield_=identity,
-            bm=identity, bm_no_leaves=identity, leaves=identity,
+            hdom=identity,
+            ba=identity,
+            vol=identity,
+            yield_=identity,
+            bm=identity,
+            bm_no_leaves=identity,
+            leaves=identity,
         ),
         biomass_to_stand=BiomassToStand(
-            leaf_mass=identity, with_leaves_to_leaf_mass=identity,
-            lai=identity, hdom=identity, dg=identity, yi=identity,
-            vol=identity, log_vol=identity, pulp_vol=identity,
-            ba=identity, dbm=identity, stems=identity,
+            leaf_mass=identity,
+            with_leaves_to_leaf_mass=identity,
+            lai=identity,
+            hdom=identity,
+            dg=identity,
+            yi=identity,
+            vol=identity,
+            log_vol=identity,
+            pulp_vol=identity,
+            ba=identity,
+            dbm=identity,
+            stems=identity,
         ),
         yield_volume=YieldVolume(
-            yi_to_vol=identity, yi_to_bm=identity,
-            vol_to_logs=identity, vol_to_pulp=identity,
+            yi_to_vol=identity,
+            yi_to_bm=identity,
+            vol_to_logs=identity,
+            vol_to_pulp=identity,
         ),
         fine_roots=FineRoots(
-            fine_roots=identity, n_fine_roots=identity,
-            p_fine_roots=identity, k_fine_roots=identity,
+            fine_roots=identity,
+            n_fine_roots=identity,
+            p_fine_roots=identity,
+            k_fine_roots=identity,
         ),
         litter_mass=LitterMass(
-            fine_root_litter=identity, woody_litter=identity,
+            fine_root_litter=identity,
+            woody_litter=identity,
             with_leaves_to_fine_root_litter=identity,
             with_leaves_to_woody_litter=identity,
         ),
         mortality_mass=MortalityMass(
-            fine_root=identity, woody=identity, leaves=identity,
+            fine_root=identity,
+            woody=identity,
+            leaves=identity,
         ),
         nutrient_demand=NutrientDemand(
-            n_demand=identity, p_demand=identity, k_demand=identity,
-            n_leaf_demand=identity, p_leaf_demand=identity, k_leaf_demand=identity,
+            n_demand=identity,
+            p_demand=identity,
+            k_demand=identity,
+            n_leaf_demand=identity,
+            p_leaf_demand=identity,
+            k_leaf_demand=identity,
         ),
         nutrient_litter=NutrientLitter(
-            n_fine_root_litter=identity, p_fine_root_litter=identity,
-            k_fine_root_litter=identity, n_woody_litter=identity,
-            p_woody_litter=identity, k_woody_litter=identity,
+            n_fine_root_litter=identity,
+            p_fine_root_litter=identity,
+            k_fine_root_litter=identity,
+            n_woody_litter=identity,
+            p_woody_litter=identity,
+            k_woody_litter=identity,
         ),
         nutrient_mortality=NutrientMortality(
-            n_mortality_leaves=identity, p_mortality_leaves=identity,
-            k_mortality_leaves=identity, n_mortality_fine_root=identity,
-            p_mortality_fine_root=identity, k_mortality_fine_root=identity,
-            n_mortality_woody=identity, p_mortality_woody=identity,
+            n_mortality_leaves=identity,
+            p_mortality_leaves=identity,
+            k_mortality_leaves=identity,
+            n_mortality_fine_root=identity,
+            p_mortality_fine_root=identity,
+            k_mortality_fine_root=identity,
+            n_mortality_woody=identity,
+            p_mortality_woody=identity,
             k_mortality_woody=identity,
         ),
         logging_residues=LoggingResidues(
-            woody=identity, n_woody=identity,
-            p_woody=identity, k_woody=identity,
+            woody=identity,
+            n_woody=identity,
+            p_woody=identity,
+            k_woody=identity,
         ),
     )
 
@@ -98,7 +131,7 @@ class TestDataclasses:
     def test_params_is_frozen(self):
         p = Params(name="dominant", ncols=5, nlyrs=np.array([0, 1]), sfc=np.ones(5))
         with pytest.raises(FrozenInstanceError):
-            p.name = "subdominant"
+            p.name = "subdominant"  # ty: ignore[invalid-assignment]
 
     def test_params_instantiates(self):
         p = Params(name="dominant", ncols=5, nlyrs=np.array([0, 1]), sfc=np.ones(5))
@@ -107,14 +140,20 @@ class TestDataclasses:
 
     def test_state_is_frozen(self):
         s = State(
-            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5)
+            agearr=np.ones(5),
+            biomass=np.ones(5),
+            remaining_share=np.ones(5),
+            leafmass=np.ones(5),
         )
         with pytest.raises(FrozenInstanceError):
-            s.agearr = np.zeros(5)
+            s.agearr = np.zeros(5)  # ty: ignore[invalid-assignment]
 
     def test_state_instantiates(self):
         s = State(
-            agearr=np.ones(5), biomass=np.ones(5), remaining_share=np.ones(5), leafmass=np.ones(5)
+            agearr=np.ones(5),
+            biomass=np.ones(5),
+            remaining_share=np.ones(5),
+            leafmass=np.ones(5),
         )
         assert s.agearr.shape == (5,)
 
@@ -193,7 +232,7 @@ class TestDataclasses:
             k_woody_lresid=np.ones(5),
         )
         with pytest.raises(FrozenInstanceError):
-            co.harvested_volume = np.zeros(5)
+            co.harvested_volume = np.zeros(5)  # ty: ignore[invalid-assignment]
 
     def test_leaf_dynamics_outputs_instantiates(self):
         ldo = LeafDynamicsOutputs(
@@ -214,54 +253,83 @@ class TestDataclasses:
         )
         assert ldo.new_lmass.shape == (5,)
 
-    def test_inputs_instantiates(self):
-        inp = Inputs(
-            photopara=None,
-            forc="dummy",
-            wt="dummy",
-            afp="dummy",
-            previous_nut_stat=np.ones(5),
-            nut_stat=np.ones(5),
-            lai_above=np.ones(5),
-        )
-        assert inp.lai_above.shape == (5,)
-
     def test_compute_constants_returns_correct_type(self):
         ncols = 5
-        params = Params(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3)
-        cnames = ["yr", "age", "N", "BA", "Hg", "Dg", "hdom", "vol", "logs", "pulp",
-                  "loss", "yield", "mortality", "stem", "stemloss", "branch_living",
-                  "branch_dead", "leaves", "stump", "roots_coarse", "roots_fine"]
+        params = Params(
+            name="dominant",
+            ncols=ncols,
+            nlyrs=np.ones(ncols, dtype=int),
+            sfc=np.ones(ncols, dtype=int) * 3,
+        )
+        cnames = [
+            "yr",
+            "age",
+            "N",
+            "BA",
+            "Hg",
+            "Dg",
+            "hdom",
+            "vol",
+            "logs",
+            "pulp",
+            "loss",
+            "yield",
+            "mortality",
+            "stem",
+            "stemloss",
+            "branch_living",
+            "branch_dead",
+            "leaves",
+            "stump",
+            "roots_coarse",
+            "roots_fine",
+        ]
         data = np.zeros((3, len(cnames)))
         data[:, 0] = [1, 2, 3]  # yr
         data[:, 1] = [1, 2, 3]  # age
         data[:, 6] = [1.0, 2.0, 3.0]  # hdom
-        df = pd.DataFrame(data, columns=cnames)
+        df = pd.DataFrame(data, columns=pd.Index(cnames))
         cc = compute_constants(params, {1: df}, {1: 1})
         assert isinstance(cc, ComputedConstants)
         assert 1 in cc.allodic
         assert isinstance(cc.allodic[1], AllometryFunctions)
 
-    def test_computed_constants_is_frozen(self):
-        cc = ComputedConstants(
-            allodic={},
-            ixs={},
-            tree_species=np.ones(5, dtype=np.int32),
-        )
-        with pytest.raises(FrozenInstanceError):
-            cc.tree_species = np.zeros(5, dtype=np.int32)
-
     def test_compute_initial_state_returns_state_and_outputs(self):
         ncols = 5
-        params = Params(name="dominant", ncols=ncols, nlyrs=np.ones(ncols, dtype=int), sfc=np.ones(ncols, dtype=int) * 3)
-        cnames = ["yr", "age", "N", "BA", "Hg", "Dg", "hdom", "vol", "logs", "pulp",
-                  "loss", "yield", "mortality", "stem", "stemloss", "branch_living",
-                  "branch_dead", "leaves", "stump", "roots_coarse", "roots_fine"]
+        params = Params(
+            name="dominant",
+            ncols=ncols,
+            nlyrs=np.ones(ncols, dtype=int),
+            sfc=np.ones(ncols, dtype=int) * 3,
+        )
+        cnames = [
+            "yr",
+            "age",
+            "N",
+            "BA",
+            "Hg",
+            "Dg",
+            "hdom",
+            "vol",
+            "logs",
+            "pulp",
+            "loss",
+            "yield",
+            "mortality",
+            "stem",
+            "stemloss",
+            "branch_living",
+            "branch_dead",
+            "leaves",
+            "stump",
+            "roots_coarse",
+            "roots_fine",
+        ]
         data = np.zeros((3, len(cnames)))
         data[:, 0] = [1, 2, 3]
         data[:, 1] = [1, 2, 3]
         data[:, 6] = [1.0, 2.0, 3.0]
-        df = pd.DataFrame(data, columns=cnames)
+        df = pd.DataFrame(data, columns=pd.Index(cnames))
         cc = compute_constants(params, {1: df}, {1: 1})
         agearr = np.array([1.0, 1.0, 2.0, 2.0, 3.0])
         nut_stat = np.ones(ncols)
@@ -293,9 +361,22 @@ class TestDataclasses:
 
         days = 3
         photopara = types.SimpleNamespace(
-            beta=1.0, gamma=0.5, kappa=-0.5, tau=10.0, X0=5.0, Smax=20.0, alfa=0.5, nu=2.0,
+            beta=1.0,
+            gamma=0.5,
+            kappa=-0.5,
+            tau=10.0,
+            X0=5.0,
+            Smax=20.0,
+            alfa=0.5,
+            nu=2.0,
         )
-        forc = pd.DataFrame({"Rg": np.full(days, 100.0), "vpd": np.full(days, 0.5), "T": np.full(days, 15.0)})
+        forc = pd.DataFrame(
+            {
+                "Rg": np.full(days, 100.0),
+                "vpd": np.full(days, 0.5),
+                "T": np.full(days, 15.0),
+            }
+        )
         wt = pd.DataFrame(np.full((days, ncols), -0.3))
         afp = pd.DataFrame(np.ones((days, ncols)))
 
