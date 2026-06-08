@@ -111,12 +111,22 @@ def run(simulation_params: SimulationParams):
         module_params.stand,
         susi_params.allometry_parameters,
     )
-    stand_state, stand_out, *_ = stand.compute_initial_state(
+
+    gv_constants = gvegetation.compute_constants(
+        params=module_params.gvegetation,
+        lon=lon,
+        lat=lat,
+        dominant_tree_species=stand_constants.dominant.tree_species,
+    )
+    moss_constants = mosslayer.compute_constants(module_params.mosslayer)
+    stand_state, _, *_ = stand.compute_initial_state(
         module_params.stand,
         stand_constants,
         susi_params.site_parameters.age,
         susi_params.site_parameters.n,
     )
+    strip_constants = strip.compute_constants(module_params.strip)
+    strip_buffer = strip.make_numerical_buffer(module_params.strip)
 
     out = Outputs(
         n_scenarios=len(susi_params.site_parameters.ditch_depth_east),
@@ -139,33 +149,15 @@ def run(simulation_params: SimulationParams):
         subdominant_sp=stand_constants.subdominant.tree_species,
         under_sp=stand_constants.under.tree_species,
     )
+    out.initialize_strip(strip_constants)  # outputs for soil hydrology
+    out.initialize_gv()
 
     # describe site parameters for user
     susi_io.print_site_description(susi_params.site_parameters)
 
-    gv_cc = gvegetation.compute_constants(
-        params=module_params.gvegetation,
-        lon=lon,
-        lat=lat,
-        dominant_tree_species=stand_constants.dominant.tree_species,
-    )
-    gv_state = gvegetation.compute_initial_state(module_params.gvegetation, gv_cc)
-    _, _ = gvegetation.run_timestep(
-        module_params.gvegetation,
-        gv_cc,
-        gvegetation.assemble_inputs(
-            ts=temperature_sun_days_degree,
-            vol=stand_out.volume,
-            stems=stand_out.stems,
-            ba=stand_out.basalarea,
-            age=susi_params.site_parameters.age["dominant"],
-        ),
-        gv_state,
-    )
-    out.initialize_gv()  # output variables to netCDF
-
     spara = susi_params.site_parameters
     dz = np.ones(spara.nLyrs) * spara.dzLyr
+
     if spara.vonP:
         vpost = spara.vonP_bottom * np.ones(spara.nLyrs)
         vpost[: len(spara.vonP_top)] = spara.vonP_top
@@ -177,7 +169,7 @@ def run(simulation_params: SimulationParams):
     peat_key = {"N": spara.peatN, "P": spara.peatP, "K": spara.peatK}
 
     h_mor_val = cast(float, spara.h_mor)  # pydantic validator always resolves to float
-    params_mass = esom.build_params(
+    mass_params = esom.build_params(
         "Mass",
         spara.n,
         spara.nLyrs,
@@ -190,9 +182,9 @@ def run(simulation_params: SimulationParams):
         spara.enable_peatmiddle,
         spara.enable_peatbottom,
     )
-    cc_mass = esom.compute_constants(params_mass)
+    mass_constants = esom.compute_constants(mass_params)
 
-    params_N = esom.build_params(
+    N_params = esom.build_params(
         "N",
         spara.n,
         spara.nLyrs,
@@ -206,9 +198,9 @@ def run(simulation_params: SimulationParams):
         spara.enable_peatbottom,
         peat_override=peat_key["N"],
     )
-    cc_N = esom.compute_constants(params_N)
+    N_constants = esom.compute_constants(N_params)
 
-    params_P = esom.build_params(
+    P_params = esom.build_params(
         "P",
         spara.n,
         spara.nLyrs,
@@ -222,9 +214,9 @@ def run(simulation_params: SimulationParams):
         spara.enable_peatbottom,
         peat_override=peat_key["P"],
     )
-    cc_P = esom.compute_constants(params_P)
+    P_constants = esom.compute_constants(P_params)
 
-    params_K = esom.build_params(
+    K_params = esom.build_params(
         "K",
         spara.n,
         spara.nLyrs,
@@ -238,10 +230,15 @@ def run(simulation_params: SimulationParams):
         spara.enable_peatbottom,
         peat_override=peat_key["K"],
     )
-    cc_K = esom.compute_constants(params_K)
+    K_constants = esom.compute_constants(K_params)
 
-    fertilization_static_inputs = fertilization.compute_constants(
+    fertilization_constants = fertilization.compute_constants(
         module_params.fertilization
+    )
+
+    peat_T_constants = temperature.compute_constants(
+        params=module_params.temperature,
+        T_air_mean=weather_forcing["T"].mean(),
     )
 
     out.initialize_esom("Mass")  # creating output variables for organic matter
@@ -254,40 +251,25 @@ def run(simulation_params: SimulationParams):
     out.initialize_nutrient_balance("K")
     out.initialize_carbon_balance()
     out.initialize_ojanen()
+    out.initialize_temperature()
+    out.initialize_methane()
+    out.initialize_export()  # create output variables for DOC components, east and west ditch
+    out.initialize_cpy()
 
     # ********* Above ground hydrology initialization ***************
 
     canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
     canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
-    out.initialize_cpy()
 
-    moss_constants = mosslayer.compute_constants(module_params.mosslayer)
     moss_state = mosslayer.compute_initial_state(
         module_params.mosslayer, moss_constants
     )
-    print("Canopy and moss layer hydrology initialized")
 
     # ******** Soil and strip parameterization *************************
-    strip_constants = strip.compute_constants(
-        module_params.strip
-    )  # initialize soil hydrology model
-    strip_buffer = strip.make_numerical_buffer(module_params.strip)
-    out.initialize_strip(strip_constants)  # outputs for soil hydrology
 
-    static_inputs_peat_T = temperature.compute_constants(
-        params=module_params.temperature,
-        T_air_mean=weather_forcing["T"].mean(),
+    peat_T_state = temperature.compute_initial_state(
+        computed_constants=peat_T_constants
     )
-    state_peat_T = temperature.compute_initial_state(
-        computed_constants=static_inputs_peat_T
-    )
-    out.initialize_temperature()
-
-    _ = methane.initial_state()
-    out.initialize_methane()
-
-    out.initialize_export()  # create output variables for DOC components, east and west ditch
-    print("Soil hydrology, temperature and DOC models initialized")
 
     ets = np.zeros(
         (n_simulation_days, susi_params.site_parameters.n)
@@ -397,10 +379,12 @@ def run(simulation_params: SimulationParams):
             n_ditch_scen, 0, "under", stand_state.under, under_out_init
         )
 
-        gv_state = gvegetation.compute_initial_state(module_params.gvegetation, gv_cc)
+        gv_state = gvegetation.compute_initial_state(
+            module_params.gvegetation, gv_constants
+        )
         gv_state, gv_outputs = gvegetation.run_timestep(
             module_params.gvegetation,
-            gv_cc,
+            gv_constants,
             gvegetation.assemble_inputs(
                 ts=temperature_sun_days_degree,
                 vol=stand_out.volume,
@@ -412,10 +396,10 @@ def run(simulation_params: SimulationParams):
         )
         out.write_groundvegetation(n_ditch_scen, 0, gv_state, gv_outputs)
 
-        state_mass = esom.compute_initial_state(params_mass, cc_mass)
-        state_N = esom.compute_initial_state(params_N, cc_N)
-        state_P = esom.compute_initial_state(params_P, cc_P)
-        state_K = esom.compute_initial_state(params_K, cc_K)
+        state_mass = esom.compute_initial_state(mass_params, mass_constants)
+        state_N = esom.compute_initial_state(N_params, N_constants)
+        state_P = esom.compute_initial_state(P_params, P_constants)
+        state_K = esom.compute_initial_state(K_params, K_constants)
 
         out.write_esom(n_ditch_scen, 0, "Mass", state_mass, inivals=True)
         out.write_esom(n_ditch_scen, 0, "N", state_N, inivals=True)
@@ -547,15 +531,15 @@ def run(simulation_params: SimulationParams):
                 stpout["runoffeast"][n_ditch_scen, d] = ts_out.roffeast
                 stpout["surfacerunoff"][n_ditch_scen, d, :] = moss_rf_out.surface_runoff
 
-                state_peat_T, _ = temperature.run_timestep(
+                peat_T_state, _ = temperature.run_timestep(
                     params=module_params.temperature,
-                    computed_constants=static_inputs_peat_T,
+                    computed_constants=peat_T_constants,
                     inputs=temperature.assemble_inputs(
                         T_air=forcings.T, swe=SWE, efloor=efloor
                     ),
-                    state=state_peat_T,
+                    state=peat_T_state,
                 )
-                peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
+                peat_temperatures[n_ditch_scen, d, :] = peat_T_state.T_soil[
                     : module_params.temperature.n_layers_hydro
                 ]
 
@@ -630,7 +614,7 @@ def run(simulation_params: SimulationParams):
 
             gv_state, gv_outputs = gvegetation.run_timestep(
                 module_params.gvegetation,
-                gv_cc,
+                gv_constants,
                 gvegetation.assemble_inputs(
                     ts=temperature_sun_days_degree,
                     vol=stand_out.volume,
@@ -702,7 +686,7 @@ def run(simulation_params: SimulationParams):
 
             _, fertilization_outputs = fertilization.run_timestep(
                 params=module_params.fertilization,
-                computed_constants=fertilization_static_inputs,
+                computed_constants=fertilization_constants,
                 inputs=fertilization.assemble_inputs(
                     params=module_params.fertilization, calendar_year=calendar_year
                 ),
@@ -712,25 +696,25 @@ def run(simulation_params: SimulationParams):
                 M=state_mass.M,
                 i=state_mass.i,
                 previous_mass=state_mass.previous_mass,
-                pH=esom.update_soil_pH(state_mass.pH, params_mass, pH_inc),
+                pH=esom.update_soil_pH(state_mass.pH, mass_params, pH_inc),
             )
             state_N = esom.State(
                 M=state_N.M,
                 i=state_N.i,
                 previous_mass=state_N.previous_mass,
-                pH=esom.update_soil_pH(state_N.pH, params_N, pH_inc),
+                pH=esom.update_soil_pH(state_N.pH, N_params, pH_inc),
             )
             state_P = esom.State(
                 M=state_P.M,
                 i=state_P.i,
                 previous_mass=state_P.previous_mass,
-                pH=esom.update_soil_pH(state_P.pH, params_P, pH_inc),
+                pH=esom.update_soil_pH(state_P.pH, P_params, pH_inc),
             )
             state_K = esom.State(
                 M=state_K.M,
                 i=state_K.i,
                 previous_mass=state_K.previous_mass,
-                pH=esom.update_soil_pH(state_K.pH, params_K, pH_inc),
+                pH=esom.update_soil_pH(state_K.pH, K_params, pH_inc),
             )
 
             out.write_fertilization(
@@ -766,7 +750,7 @@ def run(simulation_params: SimulationParams):
                 woodylitter=woodylitter,
             )
             state_mass, yr_out_mass = esom.run_yr(
-                params_mass, cc_mass, inputs_mass, state_mass
+                mass_params, mass_constants, inputs_mass, state_mass
             )
             assert yr_out_mass.daily_cumulative_out is not None
             doc_export = esom.compose_export(
@@ -801,7 +785,7 @@ def run(simulation_params: SimulationParams):
                 nonwoodylitter=n_nonwoodylitter,
                 woodylitter=n_woodylitter,
             )
-            state_N, yr_out_N = esom.run_yr(params_N, cc_N, inputs_N, state_N)
+            state_N, yr_out_N = esom.run_yr(N_params, N_constants, inputs_N, state_N)
             out.write_esom(n_ditch_scen, simulation_year, "N", state_N, yr_out_N)
 
             p_nonwoodylitter = (
@@ -825,7 +809,7 @@ def run(simulation_params: SimulationParams):
                 nonwoodylitter=p_nonwoodylitter,
                 woodylitter=p_woodylitter,
             )
-            state_P, yr_out_P = esom.run_yr(params_P, cc_P, inputs_P, state_P)
+            state_P, yr_out_P = esom.run_yr(P_params, P_constants, inputs_P, state_P)
             out.write_esom(n_ditch_scen, simulation_year, "P", state_P, yr_out_P)
 
             k_nonwoodylitter = (
@@ -849,7 +833,7 @@ def run(simulation_params: SimulationParams):
                 nonwoodylitter=k_nonwoodylitter,
                 woodylitter=k_woodylitter,
             )
-            state_K, yr_out_K = esom.run_yr(params_K, cc_K, inputs_K, state_K)
+            state_K, yr_out_K = esom.run_yr(K_params, K_constants, inputs_K, state_K)
             out.write_esom(n_ditch_scen, simulation_year, "K", state_K, yr_out_K)
 
             _nut_inputs = replace(
