@@ -5,6 +5,8 @@ Created on Mon May 21 18:38:10 2018
 @author: lauren
 """
 
+from supersusi.io.execution_config import SimulationParams
+
 from typing import cast
 from dataclasses import dataclass, replace
 
@@ -12,7 +14,6 @@ import numpy as np
 import pandas as pd
 import datetime
 
-from supersusi.io.execution_config import SimulationParams
 from supersusi.io.metadata_model import SimulationMetaData
 from supersusi.io.susi_parameter_model import (
     SusiParams,
@@ -59,90 +60,345 @@ class ModuleParams:
     gvegetation: gvegetation.Params
 
 
-class Susi:
-    def __init__(self, simulation_parameters: SimulationParams):
-        self.metadata: SimulationMetaData = simulation_parameters.metadata
-        self.parameters: SusiParams = simulation_parameters.susi_params
+@dataclass(frozen=True)
+class ModuleComputedConstants:
+    stand: stand.ComputedConstants
+    canopygrid: canopygrid.ComputedConstants
+    mosslayer: mosslayer.ComputedConstants
+    methane: methane.ComputedConstants
+    temperature: temperature.ComputedConstants
+    fertilization: fertilization.ComputedConstants
+    strip: strip.ComputedConstants
+    gvegetation: gvegetation.ComputedConstants
 
-        self.weather_forcing = read_FMI_weather(
-            ID=0,
-            start_date=simulation_parameters.susi_params.simulation_config.start_date,
-            end_date=simulation_parameters.susi_params.simulation_config.end_date,
-            sourcefile=simulation_parameters.susi_params.weather_parameters.FMI_weather_filepath,
+
+def run(simulation_params: SimulationParams):
+    susi_params = simulation_params.susi_params
+    simulation_metadata = simulation_params.metadata
+
+    weather_forcing = read_FMI_weather(
+        ID=0,
+        start_date=susi_params.simulation_config.start_date,
+        end_date=susi_params.simulation_config.end_date,
+        sourcefile=susi_params.weather_parameters.FMI_weather_filepath,
+    )
+    module_params = _build_params(susi_params)
+
+    # Create output folder for the simulation results.
+    _create_output_folder(simulation_metadata)
+
+    # simulation time in days
+    n_simulation_days = (
+        susi_params.simulation_config.end_date
+        - susi_params.simulation_config.start_date
+    ).days + 1
+
+    # simulation time in years
+    n_simulation_years = (
+        susi_params.simulation_config.end_date.year
+        - susi_params.simulation_config.start_date.year
+        + 1
+    )
+    temperature_sun_days_degree = get_temp_sum(weather_forcing)
+
+    # The location of the weather file determines the simulation location
+    lat, lon = (
+        weather_forcing["lat"].iloc[0],
+        weather_forcing["lon"].iloc[0],
+    )
+
+    stand_constants = stand.compute_constants(
+        module_params.stand,
+        susi_params.allometry_parameters,
+    )
+    stand_state, stand_out, *_ = stand.compute_initial_state(
+        module_params.stand,
+        stand_constants,
+        susi_params.site_parameters.age,
+        susi_params.site_parameters.n,
+    )
+
+    out = Outputs(
+        n_scenarios=len(susi_params.site_parameters.ditch_depth_east),
+        n_cols=susi_params.site_parameters.n,
+        n_days=n_simulation_days,
+        n_years=n_simulation_years,
+        n_layers=susi_params.site_parameters.nLyrs,
+        fname=simulation_metadata.netcdf_output_filepath,
+    )
+
+    out.initialize_scens()  # write number scenario attributes: ditch depth,
+    out.initialize_paras()  # write tree species, sfc
+    out.initialize_stand()  # create output variables to netCDF
+    out.initialize_canopy_layer("dominant")  # output variables of trees
+    out.initialize_canopy_layer("subdominant")
+    out.initialize_canopy_layer("under")
+    out.write_paras(
+        sfc=susi_params.site_parameters.sfc,
+        dominant_sp=stand_constants.dominant.tree_species,
+        subdominant_sp=stand_constants.subdominant.tree_species,
+        under_sp=stand_constants.under.tree_species,
+    )
+
+    # describe site parameters for user
+    susi_io.print_site_description(susi_params.site_parameters)
+
+    gv_cc = gvegetation.compute_constants(
+        params=module_params.gvegetation,
+        lon=lon,
+        lat=lat,
+        dominant_tree_species=stand_constants.dominant.tree_species,
+    )
+    gv_state = gvegetation.compute_initial_state(module_params.gvegetation, gv_cc)
+    _, _ = gvegetation.run_timestep(
+        module_params.gvegetation,
+        gv_cc,
+        gvegetation.assemble_inputs(
+            ts=temperature_sun_days_degree,
+            vol=stand_out.volume,
+            stems=stand_out.stems,
+            ba=stand_out.basalarea,
+            age=susi_params.site_parameters.age["dominant"],
+        ),
+        gv_state,
+    )
+    out.initialize_gv()  # output variables to netCDF
+
+    spara = susi_params.site_parameters
+    dz = np.ones(spara.nLyrs) * spara.dzLyr
+    if spara.vonP:
+        vpost = spara.vonP_bottom * np.ones(spara.nLyrs)
+        vpost[: len(spara.vonP_top)] = spara.vonP_top
+        bd = 0.035 + 0.0159 * vpost
+    else:
+        bd = spara.bd_bottom * np.ones(spara.nLyrs)
+        bd[: len(spara.bd_top)] = spara.bd_top
+
+    peat_key = {"N": spara.peatN, "P": spara.peatP, "K": spara.peatK}
+
+    h_mor_val = cast(float, spara.h_mor)  # pydantic validator always resolves to float
+    params_mass = esom.build_params(
+        "Mass",
+        spara.n,
+        spara.nLyrs,
+        dz,
+        bd,
+        spara.sfc,
+        h_mor_val,
+        spara.rho_mor,
+        spara.enable_peattop,
+        spara.enable_peatmiddle,
+        spara.enable_peatbottom,
+    )
+    cc_mass = esom.compute_constants(params_mass)
+
+    params_N = esom.build_params(
+        "N",
+        spara.n,
+        spara.nLyrs,
+        dz,
+        bd,
+        spara.sfc,
+        h_mor_val,
+        spara.rho_mor,
+        spara.enable_peattop,
+        spara.enable_peatmiddle,
+        spara.enable_peatbottom,
+        peat_override=peat_key["N"],
+    )
+    cc_N = esom.compute_constants(params_N)
+
+    params_P = esom.build_params(
+        "P",
+        spara.n,
+        spara.nLyrs,
+        dz,
+        bd,
+        spara.sfc,
+        h_mor_val,
+        spara.rho_mor,
+        spara.enable_peattop,
+        spara.enable_peatmiddle,
+        spara.enable_peatbottom,
+        peat_override=peat_key["P"],
+    )
+    cc_P = esom.compute_constants(params_P)
+
+    params_K = esom.build_params(
+        "K",
+        spara.n,
+        spara.nLyrs,
+        dz,
+        bd,
+        spara.sfc,
+        h_mor_val,
+        spara.rho_mor,
+        spara.enable_peattop,
+        spara.enable_peatmiddle,
+        spara.enable_peatbottom,
+        peat_override=peat_key["K"],
+    )
+    cc_K = esom.compute_constants(params_K)
+
+    fertilization_static_inputs = fertilization.compute_constants(
+        module_params.fertilization
+    )
+
+    out.initialize_esom("Mass")  # creating output variables for organic matter
+    out.initialize_esom("N")
+    out.initialize_esom("P")
+    out.initialize_esom("K")
+    out.initialize_fertilization()  # creating output variables for fertilization
+    out.initialize_nutrient_balance("N")  # and for nutrient balance
+    out.initialize_nutrient_balance("P")
+    out.initialize_nutrient_balance("K")
+    out.initialize_carbon_balance()
+    out.initialize_ojanen()
+
+    # ********* Above ground hydrology initialization ***************
+
+    canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
+    canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
+    out.initialize_cpy()
+
+    moss_constants = mosslayer.compute_constants(module_params.mosslayer)
+    moss_state = mosslayer.compute_initial_state(
+        module_params.mosslayer, moss_constants
+    )
+    print("Canopy and moss layer hydrology initialized")
+
+    # ******** Soil and strip parameterization *************************
+    strip_constants = strip.compute_constants(
+        module_params.strip
+    )  # initialize soil hydrology model
+    strip_buffer = strip.make_numerical_buffer(module_params.strip)
+    out.initialize_strip(strip_constants)  # outputs for soil hydrology
+
+    static_inputs_peat_T = temperature.compute_constants(
+        params=module_params.temperature,
+        T_air_mean=weather_forcing["T"].mean(),
+    )
+    state_peat_T = temperature.compute_initial_state(
+        computed_constants=static_inputs_peat_T
+    )
+    out.initialize_temperature()
+
+    _ = methane.initial_state()
+    out.initialize_methane()
+
+    out.initialize_export()  # create output variables for DOC components, east and west ditch
+    print("Soil hydrology, temperature and DOC models initialized")
+
+    ets = np.zeros(
+        (n_simulation_days, susi_params.site_parameters.n)
+    )  # Evapotranspiration, mm/day
+
+    # ********initialize result arrays***************************
+    scen = susi_params.site_parameters.scenario_name  # scenario name for outputs
+    rounds = len(
+        susi_params.site_parameters.ditch_depth_east
+    )  # number of ditch depth scenarios (used in comparison of management)
+
+    n = susi_params.site_parameters.n
+    stpout = {}
+    stpout["dwts"] = np.zeros(
+        (rounds, n_simulation_days, n), dtype=float
+    )  # water table depths, m
+    stpout["afps"] = np.zeros(
+        (rounds, n_simulation_days, n), dtype=float
+    )  # air-filled porosity (m3 m-3)
+    stpout["deltas"] = np.zeros((rounds, n_simulation_days, n), dtype=float)
+    stpout["hts"] = np.zeros(
+        (rounds, n_simulation_days, n), dtype=float
+    )  # water table heights, m
+    stpout["runoff"] = np.zeros(
+        (rounds, n_simulation_days), dtype=float
+    )  # daily total runoff, m
+    stpout["runoffwest"] = np.zeros(
+        (rounds, n_simulation_days), dtype=float
+    )  # daily runoff from west ditch, m
+    stpout["runoffeast"] = np.zeros(
+        (rounds, n_simulation_days), dtype=float
+    )  # daily runoff from east ditch, m
+    stpout["surfacerunoff"] = np.zeros(
+        (rounds, n_simulation_days, n), dtype=float
+    )  # daily surface runoff, m
+
+    peat_temperatures = np.zeros(
+        (rounds, n_simulation_days, susi_params.site_parameters.nLyrs)
+    )  # daily peat temperature profiles
+
+    intercs = np.zeros((rounds, n_simulation_days, susi_params.site_parameters.n))
+    evaps = np.zeros_like(intercs)
+    ETs = np.zeros_like(intercs)
+    transpis = np.zeros_like(intercs)
+    efloors = np.zeros_like(intercs)
+    swes = np.zeros_like(intercs)
+
+    # ***********Scenario loop ********************************************************
+
+    for n_ditch_scen, dr in enumerate(
+        zip(
+            susi_params.site_parameters.ditch_depth_west,
+            susi_params.site_parameters.ditch_depth_20y_west,
+            susi_params.site_parameters.ditch_depth_east,
+            susi_params.site_parameters.ditch_depth_20y_east,
         )
-
-    def run(
-        self,
     ):
-        module_params = _build_params(self.parameters)
-
-        # Create output folder for the simulation results.
-        self.create_output_folder()
-
-        # simulation time in days
-        n_simulation_days = (
-            self.parameters.simulation_config.end_date
-            - self.parameters.simulation_config.start_date
-        ).days + 1
-
-        # simulation time in years
-        n_simulation_years = (
-            self.parameters.simulation_config.end_date.year
-            - self.parameters.simulation_config.start_date.year
-            + 1
+        dwt = susi_params.site_parameters.initial_h * np.ones(
+            susi_params.site_parameters.n
+        )  # set the initial WT for the scenario
+        hdr_west, hdr20y_west, hdr_east, hdr20y_east = (
+            dr  # drain depth [m] in the beginning and after 20 yrs
         )
-        temperature_sun_days_degree = get_temp_sum(self.weather_forcing)
+        h0ts_west = drain_depth_development(
+            n_simulation_days, hdr_west, hdr20y_west
+        )  # compute daily values for drain bottom boundary condition
+        h0ts_east = drain_depth_development(
+            n_simulation_days, hdr_east, hdr20y_east
+        )  # compute daily values for drain bottom boundary condition
 
-        # The location of the weather file determines the simulation location
-        lat, lon = (
-            self.weather_forcing["lat"].iloc[0],
-            self.weather_forcing["lon"].iloc[0],
-        )
+        # ---- Initialize integrative output arrays (outputs in nodewise sums) -------------------------------
 
-        stand_constants = stand.compute_constants(
-            module_params.stand,
-            self.parameters.allometry_parameters,
-        )
-        stand_state, stand_out, *_ = stand.compute_initial_state(
-            module_params.stand,
-            stand_constants,
-            self.parameters.site_parameters.age,
-            self.parameters.site_parameters.n,
+        print("***********************************")
+        print(
+            "Computing canopy and soil hydrology ",
+            n_simulation_days,
+            " days",
+            "scenario:",
+            scen[n_ditch_scen],
         )
 
-        out = Outputs(
-            n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
-            n_cols=self.parameters.site_parameters.n,
-            n_days=n_simulation_days,
-            n_years=n_simulation_years,
-            n_layers=self.parameters.site_parameters.nLyrs,
-            fname=self.metadata.netcdf_output_filepath,
+        stand_state, stand_out, dom_out_init, sub_out_init, under_out_init = (
+            stand.compute_initial_state(
+                module_params.stand,
+                stand_constants,
+                susi_params.site_parameters.age,
+                susi_params.site_parameters.n,
+            )
         )
 
-        out.initialize_scens()  # write number scenario attributes: ditch depth,
-        out.initialize_paras()  # write tree species, sfc
-        out.initialize_stand()  # create output variables to netCDF
-        out.initialize_canopy_layer("dominant")  # output variables of trees
-        out.initialize_canopy_layer("subdominant")
-        out.initialize_canopy_layer("under")
-        out.write_paras(
-            sfc=self.parameters.site_parameters.sfc,
-            dominant_sp=stand_constants.dominant.tree_species,
-            subdominant_sp=stand_constants.subdominant.tree_species,
-            under_sp=stand_constants.under.tree_species,
+        out.write_scen(n_ditch_scen, hdr_west, hdr_east)
+
+        out.write_stand(
+            n_ditch_scen,
+            0,
+            stand_out,
+            stand_state,
+            previous_nut_stat=stand_state.previous_nut_stat,
+        )
+        out.write_canopy_layer(
+            n_ditch_scen, 0, "dominant", stand_state.dominant, dom_out_init
+        )
+        out.write_canopy_layer(
+            n_ditch_scen, 0, "subdominant", stand_state.subdominant, sub_out_init
+        )
+        out.write_canopy_layer(
+            n_ditch_scen, 0, "under", stand_state.under, under_out_init
         )
 
-        # describe site parameters for user
-        susi_io.print_site_description(self.parameters.site_parameters)
-
-        gv_cc = gvegetation.compute_constants(
-            params=module_params.gvegetation,
-            lon=lon,
-            lat=lat,
-            dominant_tree_species=stand_constants.dominant.tree_species,
-        )
         gv_state = gvegetation.compute_initial_state(module_params.gvegetation, gv_cc)
-        _, _ = gvegetation.run_timestep(
+        gv_state, gv_outputs = gvegetation.run_timestep(
             module_params.gvegetation,
             gv_cc,
             gvegetation.assemble_inputs(
@@ -150,254 +406,228 @@ class Susi:
                 vol=stand_out.volume,
                 stems=stand_out.stems,
                 ba=stand_out.basalarea,
-                age=self.parameters.site_parameters.age["dominant"],
+                age=susi_params.site_parameters.age["dominant"],
             ),
             gv_state,
         )
-        out.initialize_gv()  # output variables to netCDF
+        out.write_groundvegetation(n_ditch_scen, 0, gv_state, gv_outputs)
 
-        spara = self.parameters.site_parameters
-        dz = np.ones(spara.nLyrs) * spara.dzLyr
-        if spara.vonP:
-            vpost = spara.vonP_bottom * np.ones(spara.nLyrs)
-            vpost[: len(spara.vonP_top)] = spara.vonP_top
-            bd = 0.035 + 0.0159 * vpost
-        else:
-            bd = spara.bd_bottom * np.ones(spara.nLyrs)
-            bd[: len(spara.bd_top)] = spara.bd_top
+        state_mass = esom.compute_initial_state(params_mass, cc_mass)
+        state_N = esom.compute_initial_state(params_N, cc_N)
+        state_P = esom.compute_initial_state(params_P, cc_P)
+        state_K = esom.compute_initial_state(params_K, cc_K)
 
-        peat_key = {"N": spara.peatN, "P": spara.peatP, "K": spara.peatK}
+        out.write_esom(n_ditch_scen, 0, "Mass", state_mass, inivals=True)
+        out.write_esom(n_ditch_scen, 0, "N", state_N, inivals=True)
+        out.write_esom(n_ditch_scen, 0, "P", state_P, inivals=True)
+        out.write_esom(n_ditch_scen, 0, "K", state_K, inivals=True)
 
-        h_mor_val = cast(
-            float, spara.h_mor
-        )  # pydantic validator always resolves to float
-        params_mass = esom.build_params(
-            "Mass",
-            spara.n,
-            spara.nLyrs,
-            dz,
-            bd,
-            spara.sfc,
-            h_mor_val,
-            spara.rho_mor,
-            spara.enable_peattop,
-            spara.enable_peatmiddle,
-            spara.enable_peatbottom,
-        )
-        cc_mass = esom.compute_constants(params_mass)
+        strip_state = strip.compute_initial_state(module_params.strip, strip_constants)
 
-        params_N = esom.build_params(
-            "N",
-            spara.n,
-            spara.nLyrs,
-            dz,
-            bd,
-            spara.sfc,
-            h_mor_val,
-            spara.rho_mor,
-            spara.enable_peattop,
-            spara.enable_peatmiddle,
-            spara.enable_peatbottom,
-            peat_override=peat_key["N"],
-        )
-        cc_N = esom.compute_constants(params_N)
-
-        params_P = esom.build_params(
-            "P",
-            spara.n,
-            spara.nLyrs,
-            dz,
-            bd,
-            spara.sfc,
-            h_mor_val,
-            spara.rho_mor,
-            spara.enable_peattop,
-            spara.enable_peatmiddle,
-            spara.enable_peatbottom,
-            peat_override=peat_key["P"],
-        )
-        cc_P = esom.compute_constants(params_P)
-
-        params_K = esom.build_params(
-            "K",
-            spara.n,
-            spara.nLyrs,
-            dz,
-            bd,
-            spara.sfc,
-            h_mor_val,
-            spara.rho_mor,
-            spara.enable_peattop,
-            spara.enable_peatmiddle,
-            spara.enable_peatbottom,
-            peat_override=peat_key["K"],
-        )
-        cc_K = esom.compute_constants(params_K)
-
-        fertilization_static_inputs = fertilization.compute_constants(
-            module_params.fertilization
-        )
-
-        out.initialize_esom("Mass")  # creating output variables for organic matter
-        out.initialize_esom("N")
-        out.initialize_esom("P")
-        out.initialize_esom("K")
-        out.initialize_fertilization()  # creating output variables for fertilization
-        out.initialize_nutrient_balance("N")  # and for nutrient balance
-        out.initialize_nutrient_balance("P")
-        out.initialize_nutrient_balance("K")
-        out.initialize_carbon_balance()
-        out.initialize_ojanen()
-
-        # ********* Above ground hydrology initialization ***************
-
-        canopy_state = canopygrid.compute_initial_state(module_params.canopygrid)
-        canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
-        out.initialize_cpy()
-
-        moss_constants = mosslayer.compute_constants(module_params.mosslayer)
-        moss_state = mosslayer.compute_initial_state(
-            module_params.mosslayer, moss_constants
-        )
-        print("Canopy and moss layer hydrology initialized")
-
-        # ******** Soil and strip parameterization *************************
-        strip_constants = strip.compute_constants(
-            module_params.strip
-        )  # initialize soil hydrology model
-        strip_buffer = strip.make_numerical_buffer(module_params.strip)
-        out.initialize_strip(strip_constants)  # outputs for soil hydrology
-
-        static_inputs_peat_T = temperature.compute_constants(
-            params=module_params.temperature,
-            T_air_mean=self.weather_forcing["T"].mean(),
-        )
-        state_peat_T = temperature.compute_initial_state(
-            computed_constants=static_inputs_peat_T
-        )
-        out.initialize_temperature()
-
-        _ = methane.initial_state()
-        out.initialize_methane()
-
-        out.initialize_export()  # create output variables for DOC components, east and west ditch
-        print("Soil hydrology, temperature and DOC models initialized")
-
-        ets = np.zeros(
-            (n_simulation_days, self.parameters.site_parameters.n)
-        )  # Evapotranspiration, mm/day
-
-        # ********initialize result arrays***************************
-        scen = (
-            self.parameters.site_parameters.scenario_name
-        )  # scenario name for outputs
-        rounds = len(
-            self.parameters.site_parameters.ditch_depth_east
-        )  # number of ditch depth scenarios (used in comparison of management)
-
-        n = self.parameters.site_parameters.n
-        stpout = {}
-        stpout["dwts"] = np.zeros(
-            (rounds, n_simulation_days, n), dtype=float
-        )  # water table depths, m
-        stpout["afps"] = np.zeros(
-            (rounds, n_simulation_days, n), dtype=float
-        )  # air-filled porosity (m3 m-3)
-        stpout["deltas"] = np.zeros((rounds, n_simulation_days, n), dtype=float)
-        stpout["hts"] = np.zeros(
-            (rounds, n_simulation_days, n), dtype=float
-        )  # water table heights, m
-        stpout["runoff"] = np.zeros(
-            (rounds, n_simulation_days), dtype=float
-        )  # daily total runoff, m
-        stpout["runoffwest"] = np.zeros(
-            (rounds, n_simulation_days), dtype=float
-        )  # daily runoff from west ditch, m
-        stpout["runoffeast"] = np.zeros(
-            (rounds, n_simulation_days), dtype=float
-        )  # daily runoff from east ditch, m
-        stpout["surfacerunoff"] = np.zeros(
-            (rounds, n_simulation_days, n), dtype=float
-        )  # daily surface runoff, m
-
-        peat_temperatures = np.zeros(
-            (rounds, n_simulation_days, self.parameters.site_parameters.nLyrs)
-        )  # daily peat temperature profiles
-
-        intercs = np.zeros(
-            (rounds, n_simulation_days, self.parameters.site_parameters.n)
-        )
-        evaps = np.zeros_like(intercs)
-        ETs = np.zeros_like(intercs)
-        transpis = np.zeros_like(intercs)
-        efloors = np.zeros_like(intercs)
-        swes = np.zeros_like(intercs)
-
-        # ***********Scenario loop ********************************************************
-
-        for n_ditch_scen, dr in enumerate(
-            zip(
-                self.parameters.site_parameters.ditch_depth_west,
-                self.parameters.site_parameters.ditch_depth_20y_west,
-                self.parameters.site_parameters.ditch_depth_east,
-                self.parameters.site_parameters.ditch_depth_20y_east,
-            )
+        d = 0  # day index
+        start = 0  # day counter in annual loop
+        # *************** Annual loop *****************************************************************
+        # simulation_year starts at 1
+        # calendar_year starts at the year of the starting date, e.g., 2004.
+        for simulation_year, calendar_year in enumerate(
+            range(
+                susi_params.simulation_config.start_date.year,
+                susi_params.simulation_config.end_date.year + 1,
+            ),
+            start=1,
         ):
-            dwt = self.parameters.site_parameters.initial_h * np.ones(
-                self.parameters.site_parameters.n
-            )  # set the initial WT for the scenario
-            hdr_west, hdr20y_west, hdr_east, hdr20y_east = (
-                dr  # drain depth [m] in the beginning and after 20 yrs
-            )
-            h0ts_west = drain_depth_development(
-                n_simulation_days, hdr_west, hdr20y_west
-            )  # compute daily values for drain bottom boundary condition
-            h0ts_east = drain_depth_development(
-                n_simulation_days, hdr_east, hdr20y_east
-            )  # compute daily values for drain bottom boundary condition
+            days = (
+                datetime.datetime(calendar_year, 12, 31)
+                - datetime.datetime(calendar_year, 1, 1)
+            ).days + 1
 
-            # ---- Initialize integrative output arrays (outputs in nodewise sums) -------------------------------
+            canopy_state = canopygrid.update_amax(stand_state.nut_stat, canopy_state)
 
-            print("***********************************")
-            print(
-                "Computing canopy and soil hydrology ",
-                n_simulation_days,
-                " days",
-                "scenario:",
-                scen[n_ditch_scen],
-            )
-
-            stand_state, stand_out, dom_out_init, sub_out_init, under_out_init = (
-                stand.compute_initial_state(
-                    module_params.stand,
-                    stand_constants,
-                    self.parameters.site_parameters.age,
-                    self.parameters.site_parameters.n,
+            # **********  Daily loop ************************************************************
+            for dd in range(days):  # day loop
+                # -------Canopy hydrology--------------------------
+                reww = rew_drylimit(
+                    dwt
+                )  # for each column: moisture limitation from ground water level (Feddes-function)
+                forcings = WeatherForcings(
+                    T=weather_forcing.iloc[d, 4],
+                    Prec=weather_forcing.iloc[d, 7],
+                    Rg=weather_forcing.iloc[d, 8],
+                    Par=weather_forcing.iloc[d, 10],
+                    VPD=weather_forcing.iloc[d, 13],
                 )
-            )
 
-            out.write_scen(n_ditch_scen, hdr_west, hdr_east)
+                inputs = canopygrid.assemble_inputs(
+                    forcings,
+                    hc=stand_out.hdom,
+                    LAIconif=stand_out.leafarea,
+                    Rew=reww,
+                    beta=moss_state.Ree,
+                )
+                canopy_state, canopy_out = canopygrid.run_timestep(
+                    module_params.canopygrid, inputs, canopy_state
+                )
+                potinf = canopy_out.potinf
+                interc = canopy_out.interc
+                evap = canopy_out.evap
+                ET = canopy_out.et
+                transpi = canopy_out.transpi
+                efloor = canopy_out.efloor
+                SWE = canopy_out.swe
 
-            out.write_stand(
+                intercs[n_ditch_scen, d, :] = interc
+                evaps[n_ditch_scen, d, :] = evap
+                ETs[n_ditch_scen, d, :] = ET
+                transpis[n_ditch_scen, d, :] = transpi
+                efloors[n_ditch_scen, d, :] = efloor
+
+                moss_state, moss_interception_outputs = mosslayer.run_interception(
+                    moss_constants,
+                    mosslayer.assemble_interception_inputs(potinf=potinf, evap=efloor),
+                    moss_state,
+                )
+                # TODO: This should go to some module!
+                potinf, efloor = (
+                    moss_interception_outputs.potinf,
+                    moss_interception_outputs.evap,
+                )
+                stpout["deltas"][n_ditch_scen, d, :] = (
+                    potinf - transpi
+                )  # water flux thru soil surface
+                ets[d] = efloor + transpi + interc  # evapotranspiration components
+
+                if d % 365 == 0:
+                    print(
+                        "  - day #",
+                        d,
+                        " hdom ",
+                        np.round(np.mean(stand_out.hdom), 2),
+                        " m, ",
+                        "LAI ",
+                        np.round(np.mean(stand_out.leafarea), 2),
+                        " m2 m-2",
+                    )
+
+                # --------Soil hydrology-----------------
+                exfil_out = strip.compute_exfil(
+                    strip_state,
+                    strip_constants,
+                    h0ts_west[d],
+                    h0ts_east[d],
+                    stpout["deltas"][n_ditch_scen, d, :],
+                )  # how much water soil cannot store
+                moss_state, moss_rf_out = mosslayer.run_returnflow(
+                    module_params.mosslayer,
+                    moss_constants,
+                    mosslayer.assemble_returnflow_inputs(
+                        rflow=exfil_out.exfil,
+                        interception_mbe=moss_interception_outputs.mbe,
+                    ),
+                    moss_state,
+                )
+                strip_state, ts_out = strip.run_timestep(
+                    module_params.strip,
+                    strip_constants,
+                    strip_state,
+                    strip.assemble_timestep_inputs(
+                        h0ts_west=h0ts_west[d],
+                        h0ts_east=h0ts_east[d],
+                        exfil_out=exfil_out,
+                        moss_rf_out=moss_rf_out,
+                    ),
+                    buffer=strip_buffer,
+                )  # strip/peat hydrology
+                stpout["dwts"][n_ditch_scen, d, :] = strip_state.H - strip_constants.ele
+                stpout["hts"][n_ditch_scen, d, :] = strip_state.H
+                stpout["afps"][n_ditch_scen, d, :] = ts_out.afp
+                stpout["runoff"][n_ditch_scen, d] = ts_out.roff + np.mean(
+                    moss_rf_out.surface_runoff
+                )
+                stpout["runoffwest"][n_ditch_scen, d] = ts_out.roffwest
+                stpout["runoffeast"][n_ditch_scen, d] = ts_out.roffeast
+                stpout["surfacerunoff"][n_ditch_scen, d, :] = moss_rf_out.surface_runoff
+
+                state_peat_T, _ = temperature.run_timestep(
+                    params=module_params.temperature,
+                    computed_constants=static_inputs_peat_T,
+                    inputs=temperature.assemble_inputs(
+                        T_air=forcings.T, swe=SWE, efloor=efloor
+                    ),
+                    state=state_peat_T,
+                )
+                peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
+                    : module_params.temperature.n_layers_hydro
+                ]
+
+                swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
+                d += 1
+            # ******* End of daily loop*****************************
+
+            # ----- Hydrology and temperature-related variables to time-indexed dataframes -----------------
+            sday = datetime.datetime(calendar_year, 1, 1)  # start day of the year
+            df_peat_temperatures = pd.DataFrame(
+                peat_temperatures[n_ditch_scen, start : start + days, :],
+                index=pd.date_range(sday, periods=days),
+            )  # all peat temperatures
+            dfwt = pd.DataFrame(
+                stpout["dwts"][n_ditch_scen, start : start + days, :],
+                index=pd.date_range(sday, periods=days),
+            )  # daily water table data frame
+            dfafp = pd.DataFrame(
+                stpout["afps"][n_ditch_scen, start : start + days, :],
+                index=pd.date_range(sday, periods=days),
+            )  # air filled porosity
+
+            out.write_cpy(
                 n_ditch_scen,
-                0,
-                stand_out,
-                stand_state,
-                previous_nut_stat=stand_state.previous_nut_stat,
-            )
-            out.write_canopy_layer(
-                n_ditch_scen, 0, "dominant", stand_state.dominant, dom_out_init
-            )
-            out.write_canopy_layer(
-                n_ditch_scen, 0, "subdominant", stand_state.subdominant, sub_out_init
-            )
-            out.write_canopy_layer(
-                n_ditch_scen, 0, "under", stand_state.under, under_out_init
+                start,
+                days,
+                simulation_year,
+                intercs[n_ditch_scen, start : start + days, :],
+                evaps[n_ditch_scen, start : start + days, :],
+                ETs[n_ditch_scen, start : start + days, :],
+                transpis[n_ditch_scen, start : start + days, :],
+                efloors[n_ditch_scen, start : start + days, :],
+                swes[n_ditch_scen, start : start + days, :],
             )
 
-            gv_state = gvegetation.compute_initial_state(
-                module_params.gvegetation, gv_cc
+            out.write_temperature(
+                n_ditch_scen,
+                start,
+                days,
+                peat_temperatures[n_ditch_scen, start : start + days, :],
             )
+
+            mean_dwt = dfwt.mean(axis=0).values
+            strip_diag = strip.compute_residence_time(
+                module_params.strip, strip_constants, mean_dwt
+            )
+            out.write_strip(
+                n_ditch_scen,
+                start,
+                days,
+                calendar_year,
+                simulation_year,
+                dfwt,
+                stpout,
+                susi_params.output_parameters,
+                strip_diag,
+            )
+
+            # **************  Biogeochemistry ***********************************
+            v = stand_out.volume
+            _, _co2, Rhet = heterotrophic_respiration_yr(
+                df_peat_temperatures,
+                calendar_year,
+                dfwt,
+                v,
+                susi_params.site_parameters,
+            )  # Rhet is total annual heterotrophic respiration in kg/ha/yr CO2, per computation node
+            soil_co2_balance = ojanen_2019(
+                susi_params.site_parameters, calendar_year, dfwt
+            )
+            out.write_ojanen(n_ditch_scen, simulation_year, Rhet, soil_co2_balance)
+
             gv_state, gv_outputs = gvegetation.run_timestep(
                 module_params.gvegetation,
                 gv_cc,
@@ -406,582 +636,342 @@ class Susi:
                     vol=stand_out.volume,
                     stems=stand_out.stems,
                     ba=stand_out.basalarea,
-                    age=self.parameters.site_parameters.age["dominant"],
+                    age=susi_params.site_parameters.age["dominant"],
                 ),
                 gv_state,
             )
-            out.write_groundvegetation(n_ditch_scen, 0, gv_state, gv_outputs)
 
-            state_mass = esom.compute_initial_state(params_mass, cc_mass)
-            state_N = esom.compute_initial_state(params_N, cc_N)
-            state_P = esom.compute_initial_state(params_P, cc_P)
-            state_K = esom.compute_initial_state(params_K, cc_K)
-
-            out.write_esom(n_ditch_scen, 0, "Mass", state_mass, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "N", state_N, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "P", state_P, inivals=True)
-            out.write_esom(n_ditch_scen, 0, "K", state_K, inivals=True)
-
-            strip_state = strip.compute_initial_state(
-                module_params.strip, strip_constants
+            _stand_inputs = stand.Inputs(
+                photopara=susi_params.photo_parameters,
+                forc=weather_forcing.loc[str(calendar_year)],
+                wt=dfwt.loc[str(calendar_year)],
+                afp=dfafp.loc[str(calendar_year)],
+                n_supply=np.zeros(susi_params.site_parameters.n),
+                p_supply=np.zeros(susi_params.site_parameters.n),
+                k_supply=np.zeros(susi_params.site_parameters.n),
+                groundvegetation_outputs=gv_outputs,
+                previous_nut_stat=stand_state.previous_nut_stat,
+                calendar_year=calendar_year,
+            )
+            stand_state, stand_out, dom_out, sub_out, under_out = stand.grow_stand(
+                stand_state, stand_constants, _stand_inputs
             )
 
-            d = 0  # day index
-            start = 0  # day counter in annual loop
-            # *************** Annual loop *****************************************************************
-            # simulation_year starts at 1
-            # calendar_year starts at the year of the starting date, e.g., 2004.
-            for simulation_year, calendar_year in enumerate(
-                range(
-                    self.parameters.simulation_config.start_date.year,
-                    self.parameters.simulation_config.end_date.year + 1,
-                ),
-                start=1,
-            ):
-                days = (
-                    datetime.datetime(calendar_year, 12, 31)
-                    - datetime.datetime(calendar_year, 1, 1)
-                ).days + 1
-
-                canopy_state = canopygrid.update_amax(
-                    stand_state.nut_stat, canopy_state
+            # --------- Locate cuttings here--------------------
+            print("calculating year " + str(calendar_year))
+            if calendar_year == susi_params.site_parameters.cutting_yr:
+                print("xxxxxxxxxxxx   VOL before cutting xxxxxxxxxxxxxxxx")
+                print(str(np.round(np.mean(stand_out.volume), 1)))
+                print(
+                    "cutting now "
+                    + str(calendar_year)
+                    + " from basal area "
+                    + str(np.round(np.mean(stand_out.basalarea), 1))
+                    + " to "
+                    + str(susi_params.site_parameters.cutting_to_ba)
                 )
 
-                # **********  Daily loop ************************************************************
-                for dd in range(days):  # day loop
-                    # -------Canopy hydrology--------------------------
-                    reww = rew_drylimit(
-                        dwt
-                    )  # for each column: moisture limitation from ground water level (Feddes-function)
-                    forcings = WeatherForcings(
-                        T=self.weather_forcing.iloc[d, 4],
-                        Prec=self.weather_forcing.iloc[d, 7],
-                        Rg=self.weather_forcing.iloc[d, 8],
-                        Par=self.weather_forcing.iloc[d, 10],
-                        VPD=self.weather_forcing.iloc[d, 13],
-                    )
-
-                    inputs = canopygrid.assemble_inputs(
-                        forcings,
-                        hc=stand_out.hdom,
-                        LAIconif=stand_out.leafarea,
-                        Rew=reww,
-                        beta=moss_state.Ree,
-                    )
-                    canopy_state, canopy_out = canopygrid.run_timestep(
-                        module_params.canopygrid, inputs, canopy_state
-                    )
-                    potinf = canopy_out.potinf
-                    interc = canopy_out.interc
-                    evap = canopy_out.evap
-                    ET = canopy_out.et
-                    transpi = canopy_out.transpi
-                    efloor = canopy_out.efloor
-                    SWE = canopy_out.swe
-
-                    intercs[n_ditch_scen, d, :] = interc
-                    evaps[n_ditch_scen, d, :] = evap
-                    ETs[n_ditch_scen, d, :] = ET
-                    transpis[n_ditch_scen, d, :] = transpi
-                    efloors[n_ditch_scen, d, :] = efloor
-
-                    moss_state, moss_interception_outputs = mosslayer.run_interception(
-                        moss_constants,
-                        mosslayer.assemble_interception_inputs(
-                            potinf=potinf, evap=efloor
-                        ),
-                        moss_state,
-                    )
-                    # TODO: This should go to some module!
-                    potinf, efloor = (
-                        moss_interception_outputs.potinf,
-                        moss_interception_outputs.evap,
-                    )
-                    stpout["deltas"][n_ditch_scen, d, :] = (
-                        potinf - transpi
-                    )  # water flux thru soil surface
-                    ets[d] = efloor + transpi + interc  # evapotranspiration components
-
-                    if d % 365 == 0:
-                        print(
-                            "  - day #",
-                            d,
-                            " hdom ",
-                            np.round(np.mean(stand_out.hdom), 2),
-                            " m, ",
-                            "LAI ",
-                            np.round(np.mean(stand_out.leafarea), 2),
-                            " m2 m-2",
-                        )
-
-                    # --------Soil hydrology-----------------
-                    exfil_out = strip.compute_exfil(
-                        strip_state,
-                        strip_constants,
-                        h0ts_west[d],
-                        h0ts_east[d],
-                        stpout["deltas"][n_ditch_scen, d, :],
-                    )  # how much water soil cannot store
-                    moss_state, moss_rf_out = mosslayer.run_returnflow(
-                        module_params.mosslayer,
-                        moss_constants,
-                        mosslayer.assemble_returnflow_inputs(
-                            rflow=exfil_out.exfil,
-                            interception_mbe=moss_interception_outputs.mbe,
-                        ),
-                        moss_state,
-                    )
-                    strip_state, ts_out = strip.run_timestep(
-                        module_params.strip,
-                        strip_constants,
-                        strip_state,
-                        strip.assemble_timestep_inputs(
-                            h0ts_west=h0ts_west[d],
-                            h0ts_east=h0ts_east[d],
-                            exfil_out=exfil_out,
-                            moss_rf_out=moss_rf_out,
-                        ),
-                        buffer=strip_buffer,
-                    )  # strip/peat hydrology
-                    stpout["dwts"][n_ditch_scen, d, :] = (
-                        strip_state.H - strip_constants.ele
-                    )
-                    stpout["hts"][n_ditch_scen, d, :] = strip_state.H
-                    stpout["afps"][n_ditch_scen, d, :] = ts_out.afp
-                    stpout["runoff"][n_ditch_scen, d] = ts_out.roff + np.mean(
-                        moss_rf_out.surface_runoff
-                    )
-                    stpout["runoffwest"][n_ditch_scen, d] = ts_out.roffwest
-                    stpout["runoffeast"][n_ditch_scen, d] = ts_out.roffeast
-                    stpout["surfacerunoff"][n_ditch_scen, d, :] = (
-                        moss_rf_out.surface_runoff
-                    )
-
-                    state_peat_T, _ = temperature.run_timestep(
-                        params=module_params.temperature,
-                        computed_constants=static_inputs_peat_T,
-                        inputs=temperature.assemble_inputs(
-                            T_air=forcings.T, swe=SWE, efloor=efloor
-                        ),
-                        state=state_peat_T,
-                    )
-                    peat_temperatures[n_ditch_scen, d, :] = state_peat_T.T_soil[
-                        : module_params.temperature.n_layers_hydro
-                    ]
-
-                    swes[n_ditch_scen, d] = np.mean(SWE)  # snow water equivalent
-                    d += 1
-                # ******* End of daily loop*****************************
-
-                # ----- Hydrology and temperature-related variables to time-indexed dataframes -----------------
-                sday = datetime.datetime(calendar_year, 1, 1)  # start day of the year
-                df_peat_temperatures = pd.DataFrame(
-                    peat_temperatures[n_ditch_scen, start : start + days, :],
-                    index=pd.date_range(sday, periods=days),
-                )  # all peat temperatures
-                dfwt = pd.DataFrame(
-                    stpout["dwts"][n_ditch_scen, start : start + days, :],
-                    index=pd.date_range(sday, periods=days),
-                )  # daily water table data frame
-                dfafp = pd.DataFrame(
-                    stpout["afps"][n_ditch_scen, start : start + days, :],
-                    index=pd.date_range(sday, periods=days),
-                )  # air filled porosity
-
-                out.write_cpy(
-                    n_ditch_scen,
-                    start,
-                    days,
-                    simulation_year,
-                    intercs[n_ditch_scen, start : start + days, :],
-                    evaps[n_ditch_scen, start : start + days, :],
-                    ETs[n_ditch_scen, start : start + days, :],
-                    transpis[n_ditch_scen, start : start + days, :],
-                    efloors[n_ditch_scen, start : start + days, :],
-                    swes[n_ditch_scen, start : start + days, :],
-                )
-
-                out.write_temperature(
-                    n_ditch_scen,
-                    start,
-                    days,
-                    peat_temperatures[n_ditch_scen, start : start + days, :],
-                )
-
-                mean_dwt = dfwt.mean(axis=0).values
-                strip_diag = strip.compute_residence_time(
-                    module_params.strip, strip_constants, mean_dwt
-                )
-                out.write_strip(
-                    n_ditch_scen,
-                    start,
-                    days,
-                    calendar_year,
-                    simulation_year,
-                    dfwt,
-                    stpout,
-                    self.parameters.output_parameters,
-                    strip_diag,
-                )
-
-                # **************  Biogeochemistry ***********************************
-                v = stand_out.volume
-                _, _co2, Rhet = heterotrophic_respiration_yr(
-                    df_peat_temperatures,
-                    calendar_year,
-                    dfwt,
-                    v,
-                    self.parameters.site_parameters,
-                )  # Rhet is total annual heterotrophic respiration in kg/ha/yr CO2, per computation node
-                soil_co2_balance = ojanen_2019(
-                    self.parameters.site_parameters, calendar_year, dfwt
-                )
-                out.write_ojanen(n_ditch_scen, simulation_year, Rhet, soil_co2_balance)
-
-                gv_state, gv_outputs = gvegetation.run_timestep(
-                    module_params.gvegetation,
-                    gv_cc,
-                    gvegetation.assemble_inputs(
-                        ts=temperature_sun_days_degree,
-                        vol=stand_out.volume,
-                        stems=stand_out.stems,
-                        ba=stand_out.basalarea,
-                        age=self.parameters.site_parameters.age["dominant"],
-                    ),
-                    gv_state,
-                )
-
-                _stand_inputs = stand.Inputs(
-                    photopara=self.parameters.photo_parameters,
-                    forc=self.weather_forcing.loc[str(calendar_year)],
-                    wt=dfwt.loc[str(calendar_year)],
-                    afp=dfafp.loc[str(calendar_year)],
-                    n_supply=np.zeros(self.parameters.site_parameters.n),
-                    p_supply=np.zeros(self.parameters.site_parameters.n),
-                    k_supply=np.zeros(self.parameters.site_parameters.n),
-                    groundvegetation_outputs=gv_outputs,
-                    previous_nut_stat=stand_state.previous_nut_stat,
-                    calendar_year=calendar_year,
-                )
-                stand_state, stand_out, dom_out, sub_out, under_out = stand.grow_stand(
-                    stand_state, stand_constants, _stand_inputs
-                )
-
-                # --------- Locate cuttings here--------------------
-                print("calculating year " + str(calendar_year))
-                if calendar_year == self.parameters.site_parameters.cutting_yr:
-                    print("xxxxxxxxxxxx   VOL before cutting xxxxxxxxxxxxxxxx")
-                    print(str(np.round(np.mean(stand_out.volume), 1)))
-                    print(
-                        "cutting now "
-                        + str(calendar_year)
-                        + " from basal area "
-                        + str(np.round(np.mean(stand_out.basalarea), 1))
-                        + " to "
-                        + str(self.parameters.site_parameters.cutting_to_ba)
-                    )
-
-                    _cut_inputs = replace(
-                        _stand_inputs,
-                        cutting_to_ba=self.parameters.site_parameters.cutting_to_ba,
-                    )
-                    stand_state, stand_out, _cutting_out = stand.cut_stand(
-                        stand_state, stand_constants, stand_out, _cut_inputs
-                    )
-                else:
-                    _cutting_out = canopylayer.CuttingOutputs(
-                        harvested_volume=np.zeros(self.parameters.site_parameters.n),
-                        harvested_log_volume=np.zeros(
-                            self.parameters.site_parameters.n
-                        ),
-                        harvested_pulp_volume=np.zeros(
-                            self.parameters.site_parameters.n
-                        ),
-                        harvested_biomass=np.zeros(self.parameters.site_parameters.n),
-                        harvested_stems=np.zeros(self.parameters.site_parameters.n),
-                        nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        n_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        p_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        k_nonwoody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        woody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        n_woody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        p_woody_lresid=np.zeros(self.parameters.site_parameters.n),
-                        k_woody_lresid=np.zeros(self.parameters.site_parameters.n),
-                    )
-
-                #      """ ATTN distinct stem mortaility from the logging -> fate of stems different!!!"""
-                # ---------- Organic matter decomposition and nutrient release-----------------
-
-                # ---------------- Fertilization --------------------------------
-
-                _, fertilization_outputs = fertilization.run_timestep(
-                    params=module_params.fertilization,
-                    computed_constants=fertilization_static_inputs,
-                    inputs=fertilization.assemble_inputs(
-                        params=module_params.fertilization, calendar_year=calendar_year
-                    ),
-                )
-                pH_inc = fertilization_outputs.pH_increment
-                state_mass = esom.State(
-                    M=state_mass.M,
-                    i=state_mass.i,
-                    previous_mass=state_mass.previous_mass,
-                    pH=esom.update_soil_pH(state_mass.pH, params_mass, pH_inc),
-                )
-                state_N = esom.State(
-                    M=state_N.M,
-                    i=state_N.i,
-                    previous_mass=state_N.previous_mass,
-                    pH=esom.update_soil_pH(state_N.pH, params_N, pH_inc),
-                )
-                state_P = esom.State(
-                    M=state_P.M,
-                    i=state_P.i,
-                    previous_mass=state_P.previous_mass,
-                    pH=esom.update_soil_pH(state_P.pH, params_P, pH_inc),
-                )
-                state_K = esom.State(
-                    M=state_K.M,
-                    i=state_K.i,
-                    previous_mass=state_K.previous_mass,
-                    pH=esom.update_soil_pH(state_K.pH, params_K, pH_inc),
-                )
-
-                out.write_fertilization(
-                    n_ditch_scen, simulation_year, fertilization_outputs
-                )
-
-                """
-                TODO:
-                    logging resdues to output, to be joined wtih litter in figures
-                    harvested volume and biomass to outputs
-                    construct balcances at the end of simulation, join to outputs
-                """
-                weather_yr = self.weather_forcing.loc[str(calendar_year)]
-                nonwoodylitter = (
-                    stand_out.nonwoodylitter
-                    + stand_out.nonwoody_lresid
-                    + stand_out.non_woody_litter_mort
-                    + gv_outputs.nonwoodylitter
-                ) / 10000.0
-                woodylitter = (
-                    stand_out.woodylitter
-                    + stand_out.woody_lresid
-                    + stand_out.woody_litter_mort
-                    + gv_outputs.woodylitter
-                ) / 10000.0
-                inputs_mass = esom.assemble_inputs(
-                    tair_ts=weather_yr["T"].values,
-                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
-                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
-                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
-                    water_tables=dfwt.values,
-                    nonwoodylitter=nonwoodylitter,
-                    woodylitter=woodylitter,
-                )
-                state_mass, yr_out_mass = esom.run_yr(
-                    params_mass, cc_mass, inputs_mass, state_mass
-                )
-                assert yr_out_mass.daily_cumulative_out is not None
-                doc_export = esom.compose_export(
-                    yr_out_mass.daily_cumulative_out,
-                    strip_diag,
-                    df_peat_temperatures.iloc[:, 2].values,
-                    spara.n,
-                )
-                out.write_esom(
-                    n_ditch_scen, simulation_year, "Mass", state_mass, yr_out_mass
-                )
-
-                n_nonwoodylitter = (
-                    stand_out.n_nonwoodylitter
-                    + stand_out.n_nonwoody_lresid
-                    + stand_out.n_non_woody_litter_mort
-                    + gv_outputs.n_litter_nw
-                ) / 10000.0
-                n_woodylitter = (
-                    stand_out.n_woodylitter
-                    + stand_out.n_woody_lresid
-                    + stand_out.n_woody_litter_mort
-                    + stand_out.n_woody_litter_mort
-                    + gv_outputs.n_litter_w
-                ) / 10000.0
-                inputs_N = esom.assemble_inputs(
-                    tair_ts=weather_yr["T"].values,
-                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
-                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
-                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
-                    water_tables=dfwt.values,
-                    nonwoodylitter=n_nonwoodylitter,
-                    woodylitter=n_woodylitter,
-                )
-                state_N, yr_out_N = esom.run_yr(params_N, cc_N, inputs_N, state_N)
-                out.write_esom(n_ditch_scen, simulation_year, "N", state_N, yr_out_N)
-
-                p_nonwoodylitter = (
-                    stand_out.p_nonwoodylitter
-                    + stand_out.p_nonwoody_lresid
-                    + stand_out.p_non_woody_litter_mort
-                    + gv_outputs.p_litter_nw
-                ) / 10000.0
-                p_woodylitter = (
-                    stand_out.p_woodylitter
-                    + stand_out.p_woody_lresid
-                    + stand_out.p_woody_litter_mort
-                    + gv_outputs.p_litter_w
-                ) / 10000.0
-                inputs_P = esom.assemble_inputs(
-                    tair_ts=weather_yr["T"].values,
-                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
-                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
-                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
-                    water_tables=dfwt.values,
-                    nonwoodylitter=p_nonwoodylitter,
-                    woodylitter=p_woodylitter,
-                )
-                state_P, yr_out_P = esom.run_yr(params_P, cc_P, inputs_P, state_P)
-                out.write_esom(n_ditch_scen, simulation_year, "P", state_P, yr_out_P)
-
-                k_nonwoodylitter = (
-                    stand_out.k_nonwoodylitter
-                    + stand_out.k_nonwoody_lresid
-                    + stand_out.k_non_woody_litter_mort
-                    + gv_outputs.k_litter_nw
-                ) / 10000.0
-                k_woodylitter = (
-                    stand_out.k_woodylitter
-                    + stand_out.k_woody_lresid
-                    + stand_out.k_woody_litter_mort
-                    + gv_outputs.k_litter_w
-                ) / 10000.0
-                inputs_K = esom.assemble_inputs(
-                    tair_ts=weather_yr["T"].values,
-                    tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
-                    tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
-                    tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
-                    water_tables=dfwt.values,
-                    nonwoodylitter=k_nonwoodylitter,
-                    woodylitter=k_woodylitter,
-                )
-                state_K, yr_out_K = esom.run_yr(params_K, cc_K, inputs_K, state_K)
-                out.write_esom(n_ditch_scen, simulation_year, "K", state_K, yr_out_K)
-
-                _nut_inputs = replace(
+                _cut_inputs = replace(
                     _stand_inputs,
-                    n_supply=yr_out_N.out_root_lyr
-                    + self.parameters.site_parameters.depoN
-                    + fertilization_outputs.nutrient_release["N"],
-                    p_supply=yr_out_P.out_root_lyr
-                    + self.parameters.site_parameters.depoP
-                    + fertilization_outputs.nutrient_release["P"],
-                    k_supply=yr_out_K.out_root_lyr
-                    + self.parameters.site_parameters.depoK
-                    + fertilization_outputs.nutrient_release["K"],
+                    cutting_to_ba=susi_params.site_parameters.cutting_to_ba,
                 )
-                stand_state = stand.update_nutrient_status(
-                    stand_state, stand_out, _nut_inputs
+                stand_state, stand_out, _cutting_out = stand.cut_stand(
+                    stand_state, stand_constants, stand_out, _cut_inputs
                 )
-
-                _, ch4_outputs = methane.run_timestep(
-                    inputs=methane.assemble_inputs(year=calendar_year, dfwt=dfwt),
-                )
-                out.write_methane(n_ditch_scen, simulation_year, ch4_outputs)
-
-                # BUG: OOP writes previous_nut_stat AFTER update_nutrient_status
-                #      (copy of nut_stat before update). Pass state.previous_nut_stat
-                #      which was set by update_nutrient_status to nut_stat from this year.
-                out.write_stand(
-                    n_ditch_scen,
-                    simulation_year,
-                    stand_out,
-                    stand_state,
-                    previous_nut_stat=stand_state.previous_nut_stat,
-                )
-                out.write_canopy_layer(
-                    n_ditch_scen,
-                    simulation_year,
-                    "dominant",
-                    stand_state.dominant,
-                    dom_out,
-                )
-                out.write_canopy_layer(
-                    n_ditch_scen,
-                    simulation_year,
-                    "subdominant",
-                    stand_state.subdominant,
-                    sub_out,
-                )
-                out.write_canopy_layer(
-                    n_ditch_scen, simulation_year, "under", stand_state.under, under_out
-                )
-                out.write_groundvegetation(
-                    n_ditch_scen, simulation_year, gv_state, gv_outputs
-                )
-                out.write_export(n_ditch_scen, simulation_year, doc_export)
-
-                out.write_nutrient_balance(
-                    n_ditch_scen,
-                    simulation_year,
-                    "N",
-                    yr_out_N,
-                    self.parameters.site_parameters.depoN,
-                    fertilization_outputs.nutrient_release["N"],
-                    stand_out.n_demand + stand_out.Nleafdemand,
-                    gv_outputs.nup,
-                )
-                out.write_nutrient_balance(
-                    n_ditch_scen,
-                    simulation_year,
-                    "P",
-                    yr_out_P,
-                    self.parameters.site_parameters.depoP,
-                    fertilization_outputs.nutrient_release["P"],
-                    stand_out.p_demand + stand_out.Pleafdemand,
-                    gv_outputs.pup,
-                )
-                out.write_nutrient_balance(
-                    n_ditch_scen,
-                    simulation_year,
-                    "K",
-                    yr_out_K,
-                    self.parameters.site_parameters.depoK,
-                    fertilization_outputs.nutrient_release["K"],
-                    stand_out.k_demand + stand_out.Kleafdemand,
-                    gv_outputs.kup,
+            else:
+                _cutting_out = canopylayer.CuttingOutputs(
+                    harvested_volume=np.zeros(susi_params.site_parameters.n),
+                    harvested_log_volume=np.zeros(susi_params.site_parameters.n),
+                    harvested_pulp_volume=np.zeros(susi_params.site_parameters.n),
+                    harvested_biomass=np.zeros(susi_params.site_parameters.n),
+                    harvested_stems=np.zeros(susi_params.site_parameters.n),
+                    nonwoody_lresid=np.zeros(susi_params.site_parameters.n),
+                    n_nonwoody_lresid=np.zeros(susi_params.site_parameters.n),
+                    p_nonwoody_lresid=np.zeros(susi_params.site_parameters.n),
+                    k_nonwoody_lresid=np.zeros(susi_params.site_parameters.n),
+                    woody_lresid=np.zeros(susi_params.site_parameters.n),
+                    n_woody_lresid=np.zeros(susi_params.site_parameters.n),
+                    p_woody_lresid=np.zeros(susi_params.site_parameters.n),
+                    k_woody_lresid=np.zeros(susi_params.site_parameters.n),
                 )
 
-                out.write_carbon_balance(
-                    n_ditch_scen,
-                    simulation_year,
-                    stand_out,
-                    gv_outputs,
-                    yr_out_mass,
-                    doc_export,
-                    ch4_outputs,
-                )
-                #
-                start = start + days  # starting point of the next year daily loop
+            #      """ ATTN distinct stem mortaility from the logging -> fate of stems different!!!"""
+            # ---------- Organic matter decomposition and nutrient release-----------------
 
-        out.close()
-        # del stand.dominant
-        # del stand.subdominant
-        # del stand.under
-        # del stand, gv_state, cpy, moss, stp, pt
+            # ---------------- Fertilization --------------------------------
 
-    def create_output_folder(self) -> None:
-        assert self.metadata.experiment_folder_path is not None
-        assert not self.metadata.experiment_folder_path.is_dir()
-        assert not self.metadata.experiment_folder_path.exists()
-        io_utils.create_folder(path=self.metadata.experiment_folder_path)
-        return None
+            _, fertilization_outputs = fertilization.run_timestep(
+                params=module_params.fertilization,
+                computed_constants=fertilization_static_inputs,
+                inputs=fertilization.assemble_inputs(
+                    params=module_params.fertilization, calendar_year=calendar_year
+                ),
+            )
+            pH_inc = fertilization_outputs.pH_increment
+            state_mass = esom.State(
+                M=state_mass.M,
+                i=state_mass.i,
+                previous_mass=state_mass.previous_mass,
+                pH=esom.update_soil_pH(state_mass.pH, params_mass, pH_inc),
+            )
+            state_N = esom.State(
+                M=state_N.M,
+                i=state_N.i,
+                previous_mass=state_N.previous_mass,
+                pH=esom.update_soil_pH(state_N.pH, params_N, pH_inc),
+            )
+            state_P = esom.State(
+                M=state_P.M,
+                i=state_P.i,
+                previous_mass=state_P.previous_mass,
+                pH=esom.update_soil_pH(state_P.pH, params_P, pH_inc),
+            )
+            state_K = esom.State(
+                M=state_K.M,
+                i=state_K.i,
+                previous_mass=state_K.previous_mass,
+                pH=esom.update_soil_pH(state_K.pH, params_K, pH_inc),
+            )
 
-    def write_params_and_metadata(self) -> None:
-        self.metadata.record_end_timestamp()
-        self.metadata.dump_json_to_file()
-        self.parameters.dump_json_to_file(
-            filepath=self.metadata.parameter_output_filepath
-        )
-        return None
+            out.write_fertilization(
+                n_ditch_scen, simulation_year, fertilization_outputs
+            )
+
+            """
+            TODO:
+                logging resdues to output, to be joined wtih litter in figures
+                harvested volume and biomass to outputs
+                construct balcances at the end of simulation, join to outputs
+            """
+            weather_yr = weather_forcing.loc[str(calendar_year)]
+            nonwoodylitter = (
+                stand_out.nonwoodylitter
+                + stand_out.nonwoody_lresid
+                + stand_out.non_woody_litter_mort
+                + gv_outputs.nonwoodylitter
+            ) / 10000.0
+            woodylitter = (
+                stand_out.woodylitter
+                + stand_out.woody_lresid
+                + stand_out.woody_litter_mort
+                + gv_outputs.woodylitter
+            ) / 10000.0
+            inputs_mass = esom.assemble_inputs(
+                tair_ts=weather_yr["T"].values,
+                tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                water_tables=dfwt.values,
+                nonwoodylitter=nonwoodylitter,
+                woodylitter=woodylitter,
+            )
+            state_mass, yr_out_mass = esom.run_yr(
+                params_mass, cc_mass, inputs_mass, state_mass
+            )
+            assert yr_out_mass.daily_cumulative_out is not None
+            doc_export = esom.compose_export(
+                yr_out_mass.daily_cumulative_out,
+                strip_diag,
+                df_peat_temperatures.iloc[:, 2].values,
+                spara.n,
+            )
+            out.write_esom(
+                n_ditch_scen, simulation_year, "Mass", state_mass, yr_out_mass
+            )
+
+            n_nonwoodylitter = (
+                stand_out.n_nonwoodylitter
+                + stand_out.n_nonwoody_lresid
+                + stand_out.n_non_woody_litter_mort
+                + gv_outputs.n_litter_nw
+            ) / 10000.0
+            n_woodylitter = (
+                stand_out.n_woodylitter
+                + stand_out.n_woody_lresid
+                + stand_out.n_woody_litter_mort
+                + stand_out.n_woody_litter_mort
+                + gv_outputs.n_litter_w
+            ) / 10000.0
+            inputs_N = esom.assemble_inputs(
+                tair_ts=weather_yr["T"].values,
+                tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                water_tables=dfwt.values,
+                nonwoodylitter=n_nonwoodylitter,
+                woodylitter=n_woodylitter,
+            )
+            state_N, yr_out_N = esom.run_yr(params_N, cc_N, inputs_N, state_N)
+            out.write_esom(n_ditch_scen, simulation_year, "N", state_N, yr_out_N)
+
+            p_nonwoodylitter = (
+                stand_out.p_nonwoodylitter
+                + stand_out.p_nonwoody_lresid
+                + stand_out.p_non_woody_litter_mort
+                + gv_outputs.p_litter_nw
+            ) / 10000.0
+            p_woodylitter = (
+                stand_out.p_woodylitter
+                + stand_out.p_woody_lresid
+                + stand_out.p_woody_litter_mort
+                + gv_outputs.p_litter_w
+            ) / 10000.0
+            inputs_P = esom.assemble_inputs(
+                tair_ts=weather_yr["T"].values,
+                tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                water_tables=dfwt.values,
+                nonwoodylitter=p_nonwoodylitter,
+                woodylitter=p_woodylitter,
+            )
+            state_P, yr_out_P = esom.run_yr(params_P, cc_P, inputs_P, state_P)
+            out.write_esom(n_ditch_scen, simulation_year, "P", state_P, yr_out_P)
+
+            k_nonwoodylitter = (
+                stand_out.k_nonwoodylitter
+                + stand_out.k_nonwoody_lresid
+                + stand_out.k_non_woody_litter_mort
+                + gv_outputs.k_litter_nw
+            ) / 10000.0
+            k_woodylitter = (
+                stand_out.k_woodylitter
+                + stand_out.k_woody_lresid
+                + stand_out.k_woody_litter_mort
+                + gv_outputs.k_litter_w
+            ) / 10000.0
+            inputs_K = esom.assemble_inputs(
+                tair_ts=weather_yr["T"].values,
+                tp_top_ts=df_peat_temperatures.iloc[:, 2].values,
+                tp_middle_ts=df_peat_temperatures.iloc[:, 8].values,
+                tp_bottom_ts=df_peat_temperatures.iloc[:, 9].values,
+                water_tables=dfwt.values,
+                nonwoodylitter=k_nonwoodylitter,
+                woodylitter=k_woodylitter,
+            )
+            state_K, yr_out_K = esom.run_yr(params_K, cc_K, inputs_K, state_K)
+            out.write_esom(n_ditch_scen, simulation_year, "K", state_K, yr_out_K)
+
+            _nut_inputs = replace(
+                _stand_inputs,
+                n_supply=yr_out_N.out_root_lyr
+                + susi_params.site_parameters.depoN
+                + fertilization_outputs.nutrient_release["N"],
+                p_supply=yr_out_P.out_root_lyr
+                + susi_params.site_parameters.depoP
+                + fertilization_outputs.nutrient_release["P"],
+                k_supply=yr_out_K.out_root_lyr
+                + susi_params.site_parameters.depoK
+                + fertilization_outputs.nutrient_release["K"],
+            )
+            stand_state = stand.update_nutrient_status(
+                stand_state, stand_out, _nut_inputs
+            )
+
+            _, ch4_outputs = methane.run_timestep(
+                inputs=methane.assemble_inputs(year=calendar_year, dfwt=dfwt),
+            )
+            out.write_methane(n_ditch_scen, simulation_year, ch4_outputs)
+
+            # BUG: OOP writes previous_nut_stat AFTER update_nutrient_status
+            #      (copy of nut_stat before update). Pass state.previous_nut_stat
+            #      which was set by update_nutrient_status to nut_stat from this year.
+            out.write_stand(
+                n_ditch_scen,
+                simulation_year,
+                stand_out,
+                stand_state,
+                previous_nut_stat=stand_state.previous_nut_stat,
+            )
+            out.write_canopy_layer(
+                n_ditch_scen,
+                simulation_year,
+                "dominant",
+                stand_state.dominant,
+                dom_out,
+            )
+            out.write_canopy_layer(
+                n_ditch_scen,
+                simulation_year,
+                "subdominant",
+                stand_state.subdominant,
+                sub_out,
+            )
+            out.write_canopy_layer(
+                n_ditch_scen, simulation_year, "under", stand_state.under, under_out
+            )
+            out.write_groundvegetation(
+                n_ditch_scen, simulation_year, gv_state, gv_outputs
+            )
+            out.write_export(n_ditch_scen, simulation_year, doc_export)
+
+            out.write_nutrient_balance(
+                n_ditch_scen,
+                simulation_year,
+                "N",
+                yr_out_N,
+                susi_params.site_parameters.depoN,
+                fertilization_outputs.nutrient_release["N"],
+                stand_out.n_demand + stand_out.Nleafdemand,
+                gv_outputs.nup,
+            )
+            out.write_nutrient_balance(
+                n_ditch_scen,
+                simulation_year,
+                "P",
+                yr_out_P,
+                susi_params.site_parameters.depoP,
+                fertilization_outputs.nutrient_release["P"],
+                stand_out.p_demand + stand_out.Pleafdemand,
+                gv_outputs.pup,
+            )
+            out.write_nutrient_balance(
+                n_ditch_scen,
+                simulation_year,
+                "K",
+                yr_out_K,
+                susi_params.site_parameters.depoK,
+                fertilization_outputs.nutrient_release["K"],
+                stand_out.k_demand + stand_out.Kleafdemand,
+                gv_outputs.kup,
+            )
+
+            out.write_carbon_balance(
+                n_ditch_scen,
+                simulation_year,
+                stand_out,
+                gv_outputs,
+                yr_out_mass,
+                doc_export,
+                ch4_outputs,
+            )
+            #
+            start = start + days  # starting point of the next year daily loop
+
+    out.close()
+    # del stand.dominant
+    # del stand.subdominant
+    # del stand.under
+    # del stand, gv_state, cpy, moss, stp, pt
+
+
+def _create_output_folder(simulation_metadata: SimulationMetaData) -> None:
+    assert simulation_metadata.experiment_folder_path is not None
+    assert not simulation_metadata.experiment_folder_path.is_dir()
+    assert not simulation_metadata.experiment_folder_path.exists()
+    io_utils.create_folder(path=simulation_metadata.experiment_folder_path)
+    return None
+
+
+def write_params_and_metadata(
+    simulation_metadata: SimulationMetaData, susi_params: SusiParams
+) -> None:
+    simulation_metadata.record_end_timestamp()
+    simulation_metadata.dump_json_to_file()
+    susi_params.dump_json_to_file(
+        filepath=simulation_metadata.parameter_output_filepath
+    )
+    return None
 
 
 def _build_params(susi_params: SusiParams) -> ModuleParams:

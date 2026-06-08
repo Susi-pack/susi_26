@@ -17,7 +17,7 @@ import shutil
 
 from supersusi.io.execution_config import SimulationParams
 from supersusi.io import load_output_data
-from supersusi.core.susi_main import Susi
+from supersusi.core import susi_main as susi
 from inputs.parameters import golden_supersusi_test
 from supersusi.io.metadata_model import SimulationMetaData, _app_settings
 
@@ -100,12 +100,8 @@ def test_golden_susi():
         susi_params=golden_supersusi_test.PARAMETERS,
     )
 
-    susi = Susi(
-        simulation_parameters=simulation_parameters,
-    )
-
     # Run susi
-    susi.run()
+    susi.run(simulation_params=simulation_parameters)
 
     test_passes = match_netcdf_files(
         new_netcdf_filepath=simulation_parameters.metadata.netcdf_output_filepath,
