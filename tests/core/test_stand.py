@@ -412,7 +412,7 @@ class TestComputeInitialState:
             "subdominant": np.full(ncols, 2.0),
             "under": np.full(ncols, 2.0),
         }
-        state, stand_out = compute_initial_state(params, cc, agearr, ncols)
+        state, stand_out, *_ = compute_initial_state(params, cc, agearr, ncols)
         assert isinstance(state, State)
         assert isinstance(stand_out, Outputs)
         assert state.nut_stat.shape == (ncols,)
@@ -427,7 +427,7 @@ class TestComputeInitialState:
             "subdominant": np.full(ncols, 2.0),
             "under": np.full(ncols, 2.0),
         }
-        state, stand_out = compute_initial_state(params, cc, agearr, ncols)
+        state, stand_out, *_ = compute_initial_state(params, cc, agearr, ncols)
         assert np.all(stand_out.biomassgrowth == 0)
         assert state.dominant.agearr.shape == (ncols,)
         assert state.subdominant.agearr.shape == (ncols,)
@@ -521,7 +521,7 @@ class TestGrowStand:
             calendar_year=2020,
         )
 
-        new_state, out = grow_stand(state, cc, inputs)
+        new_state, out, *_ = grow_stand(state, cc, inputs)
         assert isinstance(new_state, State)
         assert isinstance(out, Outputs)
         assert out.stems.shape == (ncols,)
@@ -559,7 +559,7 @@ class TestGrowStand:
             calendar_year=2020,
         )
 
-        _, out = grow_stand(state, cc, inputs)
+        _, out, *_ = grow_stand(state, cc, inputs)
         assert np.all(out.NPP >= 0) or np.isnan(out.NPP).any()
         assert np.all(out.volumegrowth >= 0) or np.isnan(out.volumegrowth).any()
 
