@@ -342,22 +342,18 @@ def run(simulation_params: SimulationParams):
     moss_state = mosslayer.compute_initial_state(
         module_params.mosslayer, computed_constants.mosslayer
     )
-
-    # ******** Soil and strip parameterization *************************
-
     peat_T_state = temperature.compute_initial_state(
         computed_constants=computed_constants.temperature
     )
 
-    ets = np.zeros(
-        (n_simulation_days, susi_params.site_parameters.n)
-    )  # Evapotranspiration, mm/day
+    # ******** Soil and strip parameterization *************************
+
+    # Evapotranspiration, mm/day
+    ets = np.zeros((n_simulation_days, susi_params.site_parameters.n))
 
     # ********initialize result arrays***************************
-    scen = susi_params.site_parameters.scenario_name  # scenario name for outputs
-    rounds = len(
-        susi_params.site_parameters.ditch_depth_east
-    )  # number of ditch depth scenarios (used in comparison of management)
+    # number of ditch depth scenarios (used in comparison of management)
+    rounds = len(susi_params.site_parameters.ditch_depth_east)
 
     n = susi_params.site_parameters.n
     stpout = {}
@@ -419,15 +415,6 @@ def run(simulation_params: SimulationParams):
         )  # compute daily values for drain bottom boundary condition
 
         # ---- Initialize integrative output arrays (outputs in nodewise sums) -------------------------------
-
-        print("***********************************")
-        print(
-            "Computing canopy and soil hydrology ",
-            n_simulation_days,
-            " days",
-            "scenario:",
-            scen[n_ditch_scen],
-        )
 
         stand_state, stand_out, dom_out_init, sub_out_init, under_out_init = (
             stand.compute_initial_state(
