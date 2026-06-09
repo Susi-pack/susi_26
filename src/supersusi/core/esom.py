@@ -31,7 +31,7 @@ from supersusi.core.strip import ResidenceTimeOutput
 
 
 @dataclass(frozen=True)
-class Params:
+class SubstanceParams:
     substance: str = field(
         doc="'Mass' — organic matter decomposition (combined CO2 and DOC), 'N' — nitrogen dynamics, 'P' — phosphorus dynamics, 'K' — potassium dynamics"
     )
@@ -91,7 +91,7 @@ class Params:
 
 
 @dataclass(frozen=True)
-class ComputedConstants:
+class SubstanceComputedConstants:
     z: Float[np.ndarray, " nLyrs"] = field(doc="depth of each layer center point (m)")
     idtop: np.ndarray = field(doc="indices of top peat layers (z < bound1)")
     idmiddle: np.ndarray = field(
@@ -120,6 +120,22 @@ class ComputedConstants:
     mu_k1: float = field(doc="woody decomposition modifier for k1 from lignin/N ratio")
     mu_k2: float = field(doc="woody decomposition modifier for k2 from lignin/N ratio")
     mu_k3: float = field(doc="woody decomposition modifier for k3 from lignin/N ratio")
+
+
+@dataclass(frozen=True)
+class Params:
+    mass: SubstanceParams
+    n: SubstanceParams
+    p: SubstanceParams
+    k: SubstanceParams
+
+
+@dataclass(frozen=True)
+class ComputedConstants:
+    mass: SubstanceComputedConstants
+    n: SubstanceComputedConstants
+    p: SubstanceComputedConstants
+    k: SubstanceComputedConstants
 
 
 @dataclass(frozen=True)
@@ -191,7 +207,7 @@ class DOCExportOutputs:
     lmw_to_east: float = field(doc="LMW DOC export to east ditch")
 
 
-def build_params(
+def _build_substance_params(
     substance: str,
     n: int,
     nLyrs: int,
@@ -204,23 +220,20 @@ def build_params(
     enable_peatmiddle: bool,
     enable_peatbottom: bool,
     peat_override: float | None = None,
-) -> Params:
+) -> SubstanceParams:
     nutcpara = {
         "Mass": {"k1": 1.05, "k2": 1.05, "k6": 1.05},
-        # modifiers for nutrient release in comparison to mass release
         "N": {"k1": 0.1, "k2": 0.5, "k6": 0.175},
         "P": {"k1": 1.1, "k2": 0.45, "k6": 0.3},
         "K": {"k1": 1.5, "k2": 1.5, "k6": 1.5},
     }
     contpara = {
-        # Content of mass, N, P, K in peat, unit gravimetric %
         "Mass": {
             2: {1: 100.0, 2: 100.0},
             3: {1: 100.0, 2: 100.0},
             4: {1: 100.0, 2: 100.0},
             5: {1: 100.0, 2: 100.0},
         },
-        # Unit gravimetric % Mese study
         "N": {
             2: {1: 1.9, 2: 1.9},
             3: {1: 1.6, 2: 1.6},
@@ -240,14 +253,12 @@ def build_params(
             5: {1: 0.032, 2: 0.032},
         },
     }
-    # Initial concentration of mass components in mor layer, gravimetric %, Tammjinen et al. Plant and Soil 259: 51–58, 2004
     contpara_mor = {
         "Mass": 100.0,
         "N": 1.5,
         "P": 0.099,
         "K": 0.089,
     }
-    # pH according to site fertility class
     dph = {
         1: 3.9,
         2: 3.8,
@@ -269,7 +280,7 @@ def build_params(
                 contp[s_int][1] = peat_override
                 contp[s_int][2] = peat_override
 
-    return Params(
+    return SubstanceParams(
         substance=substance,
         n=n,
         nLyrs=nLyrs,
@@ -288,6 +299,43 @@ def build_params(
         contpara_mor=cp_mor,
         dph=dph,
         contpara_override=peat_override,
+    )
+
+
+def build_params(
+    n: int,
+    nLyrs: int,
+    dzLyr: float,
+    vonP: bool,
+    vonP_top: list[int],
+    vonP_bottom: int,
+    bd_top: list[float] | None,
+    bd_bottom: float,
+    sfc: Float[np.ndarray, " n"],
+    h_mor: float,
+    rho_mor: float,
+    enable_peattop: bool,
+    enable_peatmiddle: bool,
+    enable_peatbottom: bool,
+    peatN: float | None,
+    peatP: float | None,
+    peatK: float | None,
+) -> Params:
+    dz = np.ones(nLyrs) * dzLyr
+    if vonP:
+        vpost = vonP_bottom * np.ones(nLyrs)
+        vpost[:len(vonP_top)] = vonP_top
+        bd = 0.035 + 0.0159 * vpost
+    else:
+        bd = bd_bottom * np.ones(nLyrs)
+        if bd_top is not None:
+            bd[:len(bd_top)] = bd_top
+
+    return Params(
+        mass=_build_substance_params("Mass", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom),
+        n=_build_substance_params("N", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatN),
+        p=_build_substance_params("P", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatP),
+        k=_build_substance_params("K", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatK),
     )
 
 
@@ -311,8 +359,8 @@ def _build_wt_to_vf_air(
 
 
 def _get_rates(
-    params: Params,
-    cc: ComputedConstants,
+    params: SubstanceParams,
+    cc: SubstanceComputedConstants,
     tair: float,
     tp_top: float,
     tp_middle: float,
@@ -371,8 +419,8 @@ def _get_rates(
 
 
 def _decompose(
-    params: Params,
-    cc: ComputedConstants,
+    params: SubstanceParams,
+    cc: SubstanceComputedConstants,
     k1: Float[np.ndarray, " n"],
     k2: Float[np.ndarray, " n"],
     k3: Float[np.ndarray, " n"],
@@ -461,10 +509,19 @@ def _decompose(
     return np.reshape(M_tmp, (1, params.n, 11))
 
 
+def compute_all_constants(params: Params) -> ComputedConstants:
+    return ComputedConstants(
+        mass=compute_constants(params.mass),
+        n=compute_constants(params.n),
+        p=compute_constants(params.p),
+        k=compute_constants(params.k),
+    )
+
+
 # ── Public API ───────────────────────────────────────────────────────────────────
 
 
-def compute_constants(params: Params) -> ComputedConstants:
+def compute_constants(params: SubstanceParams) -> SubstanceComputedConstants:
     z = np.cumsum(params.dz) - params.dz / 2.0
 
     idtop = np.where(z < params.bound1)[0]
@@ -545,7 +602,7 @@ def compute_constants(params: Params) -> ComputedConstants:
     mu_k2 = 0.0027 * ln_ratio**-0.3917 * params.adjust
     mu_k3 = 0.062 * ln_ratio**-0.3972 * params.adjust
 
-    return ComputedConstants(
+    return SubstanceComputedConstants(
         z=z,
         idtop=idtop,
         idmiddle=idmiddle,
@@ -569,7 +626,7 @@ def compute_constants(params: Params) -> ComputedConstants:
     )
 
 
-def compute_initial_state(params: Params, cc: ComputedConstants) -> State:
+def compute_initial_state(params: SubstanceParams, cc: SubstanceComputedConstants) -> State:
     M = np.zeros((1, params.n, 11))
 
     LL_mass = (
@@ -652,7 +709,7 @@ def compute_initial_state(params: Params, cc: ComputedConstants) -> State:
 
 def update_soil_pH(
     pH: Float[np.ndarray, "1 n"],
-    params: Params,
+    params: SubstanceParams,
     increment: float,
 ) -> Float[np.ndarray, "1 n"]:
     new_pH = pH.copy()
@@ -683,8 +740,8 @@ def assemble_inputs(
 
 
 def run_yr(
-    params: Params,
-    cc: ComputedConstants,
+    params: SubstanceParams,
+    cc: SubstanceComputedConstants,
     inputs: Inputs,
     state: State,
 ) -> tuple[State, YearOutputs]:

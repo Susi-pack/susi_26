@@ -50,7 +50,34 @@ class Outputs:
     def close(self):
         self.ncf.close()
 
-    def initialize_scens(self):
+    def initialize(
+        self,
+        strip_constants: strip.ComputedConstants,
+    ) -> None:
+
+        canopy_layer_names = ("dominant", "subdominant", "under")
+        esom_substances = ("Mass", "N", "P", "K")
+        nutrient_substances = ("N", "P", "K")
+        self._initialize_scens()
+        self._initialize_paras()
+        self._initialize_stand()
+        for name in canopy_layer_names:
+            self._initialize_canopy_layer(name)
+        self._initialize_strip(strip_constants)
+        self._initialize_gv()
+        for substance in esom_substances:
+            self._initialize_esom(substance)
+        self._initialize_fertilization()
+        for substance in nutrient_substances:
+            self._initialize_nutrient_balance(substance)
+        self._initialize_carbon_balance()
+        self._initialize_ojanen()
+        self._initialize_temperature()
+        self._initialize_methane()
+        self._initialize_export()
+        self._initialize_cpy()
+
+    def _initialize_scens(self):
         ditch_depths_mean = self.ncf.createVariable(
             "/scen/ditch_depths_mean", "f4", ("nscens",)
         )
@@ -64,7 +91,7 @@ class Outputs:
         )
         ditch_depths_west.units = "west ditch depth in meters, negative downwards"
 
-    def initialize_paras(self):
+    def _initialize_paras(self):
         # sitename = self.ncf.createVariable(self, 'scen/sitename', 'str', ('scalar',))
         # sitename.units ='site name is string'
         sfc = self.ncf.createVariable("/scen/sfc", "f4", ("ncols",))
@@ -90,7 +117,7 @@ class Outputs:
             "tree species, 1 Scots pine, 2 Norway spruce, from Motti"
         )
 
-    def initialize_stand(self):
+    def _initialize_stand(self):
         basalarea = self.ncf.createVariable(
             "/stand/basalarea",
             "f4",
@@ -630,7 +657,7 @@ class Outputs:
         )
         nut_stat.units = "nutrient supply/demand-ratio in ongoing year [-]"
 
-    def initialize_canopy_layer(self, name):
+    def _initialize_canopy_layer(self, name):
         basalarea = self.ncf.createVariable(
             "/stand/" + name + "/basalarea",
             "f4",
@@ -1212,7 +1239,7 @@ class Outputs:
         )  # stand basal area m2/ha
         Kleaf_litter.units = "K in leaf litterfall [kg/tree/yr]"
 
-    def initialize_gv(self):
+    def _initialize_gv(self):
         gv_tot = self.ncf.createVariable(
             "/groundvegetation/gv_tot",
             "f4",
@@ -1407,7 +1434,7 @@ class Outputs:
         )  # stand dry biomass kg/ha
         kup.units = "K uptake ground vegetation  [kg/ha/yr]"
 
-    def initialize_esom(self, substance):
+    def _initialize_esom(self, substance):
         L0L = self.ncf.createVariable(
             "/esom/" + substance + "/L0L",
             "f4",
@@ -1583,7 +1610,7 @@ class Outputs:
             )
             lmwdoc.units = "lmwdoc release [kg/ha/yr]"
 
-    def initialize_cpy(self):
+    def _initialize_cpy(self):
         interc = self.ncf.createVariable(
             "/cpy/interc",
             "f4",
@@ -1695,7 +1722,7 @@ class Outputs:
         )
         SWEmax.units = "Annual maximum snow water equivalent [mm]"
 
-    def initialize_strip(self, constants: strip.ComputedConstants):
+    def _initialize_strip(self, constants: strip.ComputedConstants):
         elevation = self.ncf.createVariable("/strip/elevation", "f4", ("ncols",))
         elevation.units = "soil surface elevation with respect to fixed datum, m"
         kmap = self.ncf.createVariable(
@@ -1845,7 +1872,7 @@ class Outputs:
         self.ncf["/strip/elevation"][:] = constants.ele
         self.ncf["/strip/kmap"][:, :] = constants.Kmap
 
-    def initialize_temperature(self):
+    def _initialize_temperature(self):
         T = self.ncf.createVariable(
             "/temperature/T",
             "f4",
@@ -1857,7 +1884,7 @@ class Outputs:
         )
         T.units = "peat temperature at different depth of the profile [deg C]"
 
-    def initialize_doc(self):
+    def _initialize_doc(self):
         DOC = self.ncf.createVariable(
             "/doc/DOC",
             "f4",
@@ -1889,7 +1916,7 @@ class Outputs:
         )
         HMW.units = "high molecular weight DOC release [kg/ha/yr]"
 
-    def initialize_methane(self):
+    def _initialize_methane(self):
         ch4 = self.ncf.createVariable(
             "/methane/ch4",
             "f4",
@@ -1911,7 +1938,7 @@ class Outputs:
         )
         ch4_in_co2.units = "methane emissions in CO2 equivalents [kg/ha/yr]"
 
-    def initialize_fertilization(self):
+    def _initialize_fertilization(self):
         fn = self.ncf.createVariable(
             "/fertilization/n_release",
             "f4",
@@ -1943,7 +1970,7 @@ class Outputs:
         )
         fk.units = "K release in fertilization [kg/ha/yr]"
 
-    def initialize_export(self):
+    def _initialize_export(self):
         hmwtoditch = self.ncf.createVariable(
             "/export/hmwtoditch",
             "f4",
@@ -2015,7 +2042,7 @@ class Outputs:
             "LMW doc export from a column reaching the east ditch [kg/ha/yr]"
         )
 
-    def initialize_nutrient_balance(self, substance):
+    def _initialize_nutrient_balance(self, substance):
         decomposition_tot = self.ncf.createVariable(
             "/balance/" + substance + "/decomposition_tot",
             "f4",
@@ -2113,7 +2140,7 @@ class Outputs:
         )
         to_water.units = "export to water course: release - use [kg/ha/yr]"
 
-    def initialize_carbon_balance(self):
+    def _initialize_carbon_balance(self):
         stand_litter_in = self.ncf.createVariable(
             "/balance/C/stand_litter_in",
             "f4",
@@ -2255,7 +2282,7 @@ class Outputs:
         )
         soil_c_balance_co2eq.units = "soil C balance in CO2-equivalents [kg/ha/yr]"
 
-    def initialize_ojanen(self):
+    def _initialize_ojanen(self):
         Rhet = self.ncf.createVariable(
             "/ojanen/Rhet",
             "f4",
@@ -2304,9 +2331,15 @@ class Outputs:
         self.ncf["stand"]["leafmass"][scen, year, :] = stand_out.leafmass
         self.ncf["stand"]["logvolume"][scen, year, :] = stand_out.logvolume
         self.ncf["stand"]["finerootlitter"][scen, year, :] = stand_out.finerootlitter
-        self.ncf["stand"]["n_finerootlitter"][scen, year, :] = stand_out.n_finerootlitter
-        self.ncf["stand"]["p_finerootlitter"][scen, year, :] = stand_out.p_finerootlitter
-        self.ncf["stand"]["k_finerootlitter"][scen, year, :] = stand_out.k_finerootlitter
+        self.ncf["stand"]["n_finerootlitter"][scen, year, :] = (
+            stand_out.n_finerootlitter
+        )
+        self.ncf["stand"]["p_finerootlitter"][scen, year, :] = (
+            stand_out.p_finerootlitter
+        )
+        self.ncf["stand"]["k_finerootlitter"][scen, year, :] = (
+            stand_out.k_finerootlitter
+        )
         self.ncf["stand"]["nonwoodylitter"][scen, year, :] = stand_out.nonwoodylitter
         self.ncf["stand"]["pulpvolume"][scen, year, :] = stand_out.pulpvolume
         self.ncf["stand"]["stems"][scen, year, :] = stand_out.stems
@@ -2322,7 +2355,9 @@ class Outputs:
         self.ncf["stand"]["previous_nut_stat"][scen, year, :] = previous_nut_stat
         self.ncf["stand"]["nut_stat"][scen, year, :] = stand_state.nut_stat
 
-        self.ncf["stand"]["woody_litter_mort"][scen, year, :] = stand_out.woody_litter_mort
+        self.ncf["stand"]["woody_litter_mort"][scen, year, :] = (
+            stand_out.woody_litter_mort
+        )
         self.ncf["stand"]["n_woody_litter_mort"][scen, year, :] = (
             stand_out.n_woody_litter_mort
         )
@@ -2352,18 +2387,28 @@ class Outputs:
         self.ncf["stand"]["k_woody_lresid"][scen, year, :] = stand_out.k_woody_lresid
 
         self.ncf["stand"]["nonwoody_lresid"][scen, year, :] = stand_out.woody_lresid
-        self.ncf["stand"]["n_nonwoody_lresid"][scen, year, :] = stand_out.n_nonwoody_lresid
-        self.ncf["stand"]["p_nonwoody_lresid"][scen, year, :] = stand_out.p_nonwoody_lresid
-        self.ncf["stand"]["k_nonwoody_lresid"][scen, year, :] = stand_out.k_nonwoody_lresid
+        self.ncf["stand"]["n_nonwoody_lresid"][scen, year, :] = (
+            stand_out.n_nonwoody_lresid
+        )
+        self.ncf["stand"]["p_nonwoody_lresid"][scen, year, :] = (
+            stand_out.p_nonwoody_lresid
+        )
+        self.ncf["stand"]["k_nonwoody_lresid"][scen, year, :] = (
+            stand_out.k_nonwoody_lresid
+        )
 
-        self.ncf["stand"]["harvested_volume"][scen, year, :] = stand_out.harvested_volume
+        self.ncf["stand"]["harvested_volume"][scen, year, :] = (
+            stand_out.harvested_volume
+        )
         self.ncf["stand"]["harvested_log_volume"][scen, year, :] = (
             stand_out.harvested_log_volume
         )
         self.ncf["stand"]["harvested_pulp_volume"][scen, year, :] = (
             stand_out.harvested_pulp_volume
         )
-        self.ncf["stand"]["harvested_biomass"][scen, year, :] = stand_out.harvested_biomass
+        self.ncf["stand"]["harvested_biomass"][scen, year, :] = (
+            stand_out.harvested_biomass
+        )
         self.ncf["stand"]["harvested_stems"][scen, year, :] = stand_out.harvested_stems
 
     def write_canopy_layer(self, scen, year, name, layer_state, layer_outputs):
@@ -2376,7 +2421,9 @@ class Outputs:
         self.ncf["stand"][name]["leafarea"][scen, year, :] = layer_outputs.leafarea
         self.ncf["stand"][name]["leafmass"][scen, year, :] = layer_outputs.leafmass
         self.ncf["stand"][name]["logvolume"][scen, year, :] = layer_outputs.logvolume
-        self.ncf["stand"][name]["finerootlitter"][scen, year, :] = layer_outputs.finerootlitter
+        self.ncf["stand"][name]["finerootlitter"][scen, year, :] = (
+            layer_outputs.finerootlitter
+        )
         self.ncf["stand"][name]["n_finerootlitter"][scen, year, :] = (
             layer_outputs.n_finerootlitter
         )
@@ -2386,32 +2433,60 @@ class Outputs:
         self.ncf["stand"][name]["k_finerootlitter"][scen, year, :] = (
             layer_outputs.k_finerootlitter
         )
-        self.ncf["stand"][name]["nonwoodylitter"][scen, year, :] = layer_outputs.nonwoodylitter
+        self.ncf["stand"][name]["nonwoodylitter"][scen, year, :] = (
+            layer_outputs.nonwoodylitter
+        )
         self.ncf["stand"][name]["pulpvolume"][scen, year, :] = layer_outputs.pulpvolume
         self.ncf["stand"][name]["stems"][scen, year, :] = layer_outputs.stems
         self.ncf["stand"][name]["volume"][scen, year, :] = layer_outputs.volume
-        self.ncf["stand"][name]["volumegrowth"][scen, year, :] = layer_outputs.volumegrowth
+        self.ncf["stand"][name]["volumegrowth"][scen, year, :] = (
+            layer_outputs.volumegrowth
+        )
 
-        self.ncf["stand"][name]["woodylitter"][scen, year, :] = layer_outputs.woodylitter
-        self.ncf["stand"][name]["n_woodylitter"][scen, year, :] = layer_outputs.n_woodylitter
-        self.ncf["stand"][name]["p_woodylitter"][scen, year, :] = layer_outputs.p_woodylitter
-        self.ncf["stand"][name]["k_woodylitter"][scen, year, :] = layer_outputs.k_woodylitter
+        self.ncf["stand"][name]["woodylitter"][scen, year, :] = (
+            layer_outputs.woodylitter
+        )
+        self.ncf["stand"][name]["n_woodylitter"][scen, year, :] = (
+            layer_outputs.n_woodylitter
+        )
+        self.ncf["stand"][name]["p_woodylitter"][scen, year, :] = (
+            layer_outputs.p_woodylitter
+        )
+        self.ncf["stand"][name]["k_woodylitter"][scen, year, :] = (
+            layer_outputs.k_woodylitter
+        )
         self.ncf["stand"][name]["yi"][scen, year, :] = layer_outputs.yi
 
         self.ncf["stand"][name]["new_lmass"][scen, year, :] = layer_outputs.new_lmass
-        self.ncf["stand"][name]["leaf_litter"][scen, year, :] = layer_outputs.leaf_litter
-        self.ncf["stand"][name]["C_consumption"][scen, year, :] = layer_outputs.C_consumption
+        self.ncf["stand"][name]["leaf_litter"][scen, year, :] = (
+            layer_outputs.leaf_litter
+        )
+        self.ncf["stand"][name]["C_consumption"][scen, year, :] = (
+            layer_outputs.C_consumption
+        )
         self.ncf["stand"][name]["leafmax"][scen, year, :] = layer_outputs.leafmax
         self.ncf["stand"][name]["leafmin"][scen, year, :] = layer_outputs.leafmin
 
         self.ncf["stand"][name]["NPP"][scen, year, :] = layer_outputs.NPP
         self.ncf["stand"][name]["NPP_pot"][scen, year, :] = layer_outputs.NPP_pot
-        self.ncf["stand"][name]["Nleafdemand"][scen, year, :] = layer_outputs.Nleafdemand
-        self.ncf["stand"][name]["Nleaf_litter"][scen, year, :] = layer_outputs.Nleaf_litter
-        self.ncf["stand"][name]["Pleafdemand"][scen, year, :] = layer_outputs.Pleafdemand
-        self.ncf["stand"][name]["Pleaf_litter"][scen, year, :] = layer_outputs.Pleaf_litter
-        self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = layer_outputs.Kleafdemand
-        self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = layer_outputs.Kleaf_litter
+        self.ncf["stand"][name]["Nleafdemand"][scen, year, :] = (
+            layer_outputs.Nleafdemand
+        )
+        self.ncf["stand"][name]["Nleaf_litter"][scen, year, :] = (
+            layer_outputs.Nleaf_litter
+        )
+        self.ncf["stand"][name]["Pleafdemand"][scen, year, :] = (
+            layer_outputs.Pleafdemand
+        )
+        self.ncf["stand"][name]["Pleaf_litter"][scen, year, :] = (
+            layer_outputs.Pleaf_litter
+        )
+        self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = (
+            layer_outputs.Kleafdemand
+        )
+        self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = (
+            layer_outputs.Kleaf_litter
+        )
 
     def write_groundvegetation(self, scen, year, gv_state, gv_outputs):
         self.ncf["groundvegetation"]["gv_tot"][scen, year, :] = gv_state.gv_tot
@@ -2458,14 +2533,22 @@ class Outputs:
         self.ncf["groundvegetation"]["kup"][scen, year, :] = gv_outputs.kup
 
     def write_esom(
-        self, scen, year, substance, state: State, outputs: YearOutputs | None = None, inivals: bool = False,
+        self,
+        scen,
+        year,
+        substance,
+        state: State,
+        outputs: YearOutputs | None = None,
+        inivals: bool = False,
     ):
         n = state.M.shape[1]
         if inivals:
             self.ncf["esom"][substance]["L0L"][scen, year, :] = np.zeros(n)
             self.ncf["esom"][substance]["L0W"][scen, year, :] = np.zeros(n)
             self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = np.zeros(n)
-            self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = np.zeros(n)
+            self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = np.zeros(
+                n
+            )
         elif outputs is not None:
             self.ncf["esom"][substance]["L0L"][scen, year, :] = (
                 outputs.nonwoodylitter * 10000.0
@@ -2483,7 +2566,9 @@ class Outputs:
         self.ncf["esom"][substance]["P2"][scen, year, :] = state.M[0, :, 8] * 10000.0
         self.ncf["esom"][substance]["P3"][scen, year, :] = state.M[0, :, 9] * 10000.0
         if outputs is not None:
-            self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = outputs.out_root_lyr
+            self.ncf["esom"][substance]["out_root_lyr"][scen, year, :] = (
+                outputs.out_root_lyr
+            )
             self.ncf["esom"][substance]["out_below_root_lyr"][scen, year, :] = (
                 outputs.out_below_root_lyr
             )
@@ -2524,7 +2609,16 @@ class Outputs:
         self.ncf["temperature"]["T"][scen, start : start + days, :] = T
 
     def write_strip(
-        self, scen, start, days, yr, year, dfwt, stpout, outpara, diag: strip.ResidenceTimeOutput
+        self,
+        scen,
+        start,
+        days,
+        yr,
+        year,
+        dfwt,
+        stpout,
+        outpara,
+        diag: strip.ResidenceTimeOutput,
     ):
         startdate = "-" + str(outpara.startmonth) + "-" + str(outpara.startday)
         enddate = "-" + str(outpara.endmonth) + "-" + str(outpara.endday)
@@ -2594,7 +2688,15 @@ class Outputs:
         self.ncf["export"]["lmwdoc_to_east"][scen, year] = doc_export.lmw_to_east
 
     def write_nutrient_balance(
-        self, scen, year, substance, outputs: YearOutputs, depo, ferti, stand_up, groundvegetation_up
+        self,
+        scen,
+        year,
+        substance,
+        outputs: YearOutputs,
+        depo,
+        ferti,
+        stand_up,
+        groundvegetation_up,
     ):
         self.ncf["balance"][substance]["decomposition_tot"][scen, year, :] = outputs.out
         self.ncf["balance"][substance]["decomposition_root_lyr"][scen, year, :] = (
@@ -2667,7 +2769,9 @@ class Outputs:
         )
         self.ncf["balance"]["C"]["co2c_release"][scen, year, :] = outputs.out * bm_to_c
         self.ncf["balance"]["C"]["ch4c_release"][scen, year, :] = c_in_ch4
-        self.ncf["balance"]["C"]["LMWdoc_to_water"][scen, year, :] = doc_export.lmwtoditch
+        self.ncf["balance"]["C"]["LMWdoc_to_water"][scen, year, :] = (
+            doc_export.lmwtoditch
+        )
         self.ncf["balance"]["C"]["LMWdoc_to_atm"][scen, year, :] = (
             doc_export.lmw - doc_export.lmwtoditch
         )
