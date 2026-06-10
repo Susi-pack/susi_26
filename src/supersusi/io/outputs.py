@@ -54,6 +54,9 @@ class Outputs:
         self,
         strip_constants: strip.ComputedConstants,
     ) -> None:
+        """
+        Initialize netcdf variable
+        """
 
         canopy_layer_names = ("dominant", "subdominant", "under")
         esom_substances = ("Mass", "N", "P", "K")
