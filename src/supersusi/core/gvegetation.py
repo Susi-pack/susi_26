@@ -378,7 +378,7 @@ def run_timestep(
     ba_ix = input.ba[ix]
     age_ix = input.age[ix]
     sfc_ix = params.site_fertility_class[ix]
-    ts = input.ts
+    ts_ix = input.ts[ix]
 
     gv_tot[ix] = (
         np.square(
@@ -410,7 +410,7 @@ def run_timestep(
             - 1.163 * drain**2
             + 1.515 * sfc_ix * drain
             - 2e-5 * vol_ix * stems_ix
-            + 8e-5 * ts * age_ix
+            + 8e-5 * ts_ix * age_ix
             + 1e-5 * stems_ix * dem_ix
         )
         - 0.5
@@ -448,7 +448,7 @@ def run_timestep(
     ba_ix = input.ba[ix]
     age_ix = input.age[ix]
     sfc_ix = params.site_fertility_class[ix]
-    ts = input.ts
+    ts_ix = input.ts[ix]
 
     gv_tot[ix] = (
         np.square(
@@ -456,7 +456,7 @@ def run_timestep(
             + 0.005 * lon * dem_ix
             - 1e-5 * vol_ix * stems_ix
             + 0.026 * sfc_ix * age_ix
-            - 1e-4 * dem_ix * ts
+            - 1e-4 * dem_ix * ts_ix
             - 0.014 * vol_ix * drain
         )
         - 0.5
@@ -476,7 +476,7 @@ def run_timestep(
     gv_field[ix] = (
         np.square(
             48.12
-            - 1e-5 * ts**2
+            - 1e-5 * ts_ix**2
             + 0.013 * sfc_ix * age_ix
             - 0.04 * vol_ix * drain
             + 0.026 * sfc_ix * vol_ix
