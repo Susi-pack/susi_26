@@ -516,13 +516,10 @@ class TestNoFertilization:
     """Tests for `supersusi.core.fertilization_models.no_fertilization`."""
 
     @pytest.mark.parametrize("n_cols", [1, 2, 5])
-    @pytest.mark.parametrize("t", [-1, 0, 100])
-    def test_run_timestep_always_returns_zeros(self, n_cols: int, t: int) -> None:
+    def test_run_timestep_always_returns_zeros(self, n_cols: int) -> None:
         """No fertilization: always `pH_increment=0` and zeros of the right shape."""
         params = no_fertilization.Params(n_cols=n_cols)
-        _, outputs = no_fertilization.run_timestep(
-            params=params, inputs=Inputs(years_since_fertilization=t)
-        )
+        _, outputs = no_fertilization.run_timestep(params=params)
         assert outputs.pH_increment == 0.0
         for nutrient in ("N", "P", "K"):
             assert outputs.nutrient_release[nutrient].shape == (n_cols,)

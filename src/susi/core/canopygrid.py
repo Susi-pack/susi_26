@@ -94,7 +94,6 @@ class CanopyGrid:
     def run_timestep(
         self,
         cpara,
-        doy,
         dt,
         Ta,
         Prec,
@@ -107,7 +106,6 @@ class CanopyGrid:
         CO2=380.0,
         Rew=1.0,
         beta=1.0,
-        P=101300.0,
     ):
         """
         Runs CanopyGrid instance for one timestep
@@ -828,7 +826,7 @@ def aerodynamics(LAI, hc, Uo, w=0.01, zm=2.0, zg=0.5, zos=0.01):
 #    return ga
 
 
-def wind_profile(LAI, hc, Uo, z, zm=2.0, zg=0.2):
+def wind_profile(LAI, hc, Uo, z, zm=2.0):
     """
     Computes wind speed at ground height assuming logarithmic profile above and
     hyperbolic cosine profile within canopy

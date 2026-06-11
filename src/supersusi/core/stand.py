@@ -15,7 +15,6 @@ import pandas as pd
 from supersusi.core import canopylayer
 
 
-
 @dataclass(frozen=True)
 class Params:
     dominant: canopylayer.Params
@@ -130,26 +129,70 @@ class Inputs:
 
 
 _PER_TREE_FIELDS: list[str] = [
-    "basalarea", "volume", "leafarea", "leafmass", "volumegrowth",
-    "logvolume", "pulpvolume", "yi",
-    "NPP", "NPP_pot", "new_lmass", "leaf_litter", "C_consumption",
-    "Nleafdemand", "Nleaf_litter", "N_leaf",
-    "Pleafdemand", "Pleaf_litter", "P_leaf",
-    "Kleafdemand", "Kleaf_litter", "K_leaf",
-    "finerootlitter", "n_finerootlitter", "p_finerootlitter", "k_finerootlitter",
-    "nonwoodylitter", "n_nonwoodylitter", "p_nonwoodylitter", "k_nonwoodylitter",
-    "woodylitter", "n_woodylitter", "p_woodylitter", "k_woodylitter",
-    "woody_litter_mort", "n_woody_litter_mort", "p_woody_litter_mort", "k_woody_litter_mort",
-    "non_woody_litter_mort", "n_non_woody_litter_mort", "p_non_woody_litter_mort", "k_non_woody_litter_mort",
-    "n_demand", "p_demand", "k_demand",
-    "basNdemand", "basPdemand", "basKdemand",
+    "basalarea",
+    "volume",
+    "leafarea",
+    "leafmass",
+    "volumegrowth",
+    "logvolume",
+    "pulpvolume",
+    "yi",
+    "NPP",
+    "NPP_pot",
+    "new_lmass",
+    "leaf_litter",
+    "C_consumption",
+    "Nleafdemand",
+    "Nleaf_litter",
+    "N_leaf",
+    "Pleafdemand",
+    "Pleaf_litter",
+    "P_leaf",
+    "Kleafdemand",
+    "Kleaf_litter",
+    "K_leaf",
+    "finerootlitter",
+    "n_finerootlitter",
+    "p_finerootlitter",
+    "k_finerootlitter",
+    "nonwoodylitter",
+    "n_nonwoodylitter",
+    "p_nonwoodylitter",
+    "k_nonwoodylitter",
+    "woodylitter",
+    "n_woodylitter",
+    "p_woodylitter",
+    "k_woodylitter",
+    "woody_litter_mort",
+    "n_woody_litter_mort",
+    "p_woody_litter_mort",
+    "k_woody_litter_mort",
+    "non_woody_litter_mort",
+    "n_non_woody_litter_mort",
+    "p_non_woody_litter_mort",
+    "k_non_woody_litter_mort",
+    "n_demand",
+    "p_demand",
+    "k_demand",
+    "basNdemand",
+    "basPdemand",
+    "basKdemand",
 ]
 
 _CUTTING_FIELDS: list[str] = [
-    "harvested_volume", "harvested_log_volume", "harvested_pulp_volume",
-    "harvested_biomass", "harvested_stems",
-    "nonwoody_lresid", "n_nonwoody_lresid", "p_nonwoody_lresid", "k_nonwoody_lresid",
-    "woody_lresid", "n_woody_lresid", "p_woody_lresid", "k_woody_lresid",
+    "harvested_volume",
+    "harvested_log_volume",
+    "harvested_pulp_volume",
+    "harvested_biomass",
+    "harvested_stems",
+    "nonwoody_lresid",
+    "n_nonwoody_lresid",
+    "p_nonwoody_lresid",
+    "k_nonwoody_lresid",
+    "woody_lresid",
+    "n_woody_lresid",
+    "p_woody_lresid",
+    "k_woody_lresid",
 ]
 
 
@@ -185,7 +228,10 @@ def _aggregate(
         + under_out.Dg * under_out.stems
     )
     kw["mean_diameter"] = np.divide(
-        numerator, total_stems, out=np.zeros_like(numerator), where=total_stems > 0,
+        numerator,
+        total_stems,
+        out=np.zeros_like(numerator),
+        where=total_stems > 0,
     )
 
     biomass_val = (
@@ -203,7 +249,6 @@ def _aggregate(
         kw[fname] = np.zeros_like(biomass_val)
 
     return Outputs(**kw)
-
 
 
 def _merge_cutting_outputs(
@@ -237,11 +282,13 @@ def _compute_lai_above(
     """
     heightarray = np.vstack([dom_allom.hdom, sub_allom.hdom, under_allom.hdom])
     h_order = np.argsort(heightarray * -1, axis=0)
-    laiarray = np.vstack([
-        dom_allom.leafarea * dom_allom.stems,
-        sub_allom.leafarea * sub_allom.stems,
-        under_allom.leafarea * under_allom.stems,
-    ])
+    laiarray = np.vstack(
+        [
+            dom_allom.leafarea * dom_allom.stems,
+            sub_allom.leafarea * sub_allom.stems,
+            under_allom.leafarea * under_allom.stems,
+        ]
+    )
 
     n = laiarray.shape[1]
     laiout = np.zeros((3, n))
@@ -267,13 +314,19 @@ def compute_constants(
 ) -> ComputedConstants:
     return ComputedConstants(
         dominant=canopylayer.compute_constants(
-            params.dominant, allometry_params.dominant_data, allometry_params.dominant_species_id,
+            params.dominant,
+            allometry_params.dominant_data,
+            allometry_params.dominant_species_id,
         ),
         subdominant=canopylayer.compute_constants(
-            params.subdominant, allometry_params.subdominant_data, allometry_params.subdominant_species_id,
+            params.subdominant,
+            allometry_params.subdominant_data,
+            allometry_params.subdominant_species_id,
         ),
         under=canopylayer.compute_constants(
-            params.under, allometry_params.under_data, allometry_params.under_species_id,
+            params.under,
+            allometry_params.under_data,
+            allometry_params.under_species_id,
         ),
     )
 
@@ -283,55 +336,96 @@ def compute_initial_state(
     cc: ComputedConstants,
     agearr: dict[str, np.ndarray],
     ncols: int,
-) -> tuple[State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs]:
+) -> tuple[
+    State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs
+]:
     nut_stat = np.ones(ncols)
     dom_state, dom_out = canopylayer.compute_initial_state(
-        params.dominant, cc.dominant, agearr["dominant"], nut_stat,
+        params.dominant,
+        cc.dominant,
+        agearr["dominant"],
+        nut_stat,
     )
     sub_state, sub_out = canopylayer.compute_initial_state(
-        params.subdominant, cc.subdominant, agearr["subdominant"], nut_stat,
+        params.subdominant,
+        cc.subdominant,
+        agearr["subdominant"],
+        nut_stat,
     )
     under_state, under_out = canopylayer.compute_initial_state(
-        params.under, cc.under, agearr["under"], nut_stat,
+        params.under,
+        cc.under,
+        agearr["under"],
+        nut_stat,
     )
     stand_out = _aggregate(
-        dom_out, sub_out, under_out,
-        dom_state.biomass, sub_state.biomass, under_state.biomass,
+        dom_out,
+        sub_out,
+        under_out,
+        dom_state.biomass,
+        sub_state.biomass,
+        under_state.biomass,
         previous_stand_biomass=None,
     )
     # BUG: OOP doesn't compute mean_diameter for year 0 (initial state write
     #      happens before Stand.update()). Zero it out to match golden.
     stand_out = replace(stand_out, mean_diameter=np.zeros(ncols))
-    return State(nut_stat=nut_stat, previous_nut_stat=nut_stat.copy(), dominant=dom_state, subdominant=sub_state, under=under_state), stand_out, dom_out, sub_out, under_out
+    return (
+        State(
+            nut_stat=nut_stat,
+            previous_nut_stat=nut_stat.copy(),
+            dominant=dom_state,
+            subdominant=sub_state,
+            under=under_state,
+        ),
+        stand_out,
+        dom_out,
+        sub_out,
+        under_out,
+    )
 
 
 def grow_stand(
     state: State,
     cc: ComputedConstants,
     inputs: Inputs,
-) -> tuple[State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs]:
+) -> tuple[
+    State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs
+]:
     dom_allom = canopylayer.apply_allometry(
-        state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant,
+        state.dominant.biomass,
+        state.dominant.remaining_share,
+        cc.dominant,
     )
     sub_allom = canopylayer.apply_allometry(
-        state.subdominant.biomass, state.subdominant.agearr, state.subdominant.remaining_share, cc.subdominant,
+        state.subdominant.biomass,
+        state.subdominant.remaining_share,
+        cc.subdominant,
     )
     under_allom = canopylayer.apply_allometry(
-        state.under.biomass, state.under.agearr, state.under.remaining_share, cc.under,
+        state.under.biomass,
+        state.under.remaining_share,
+        cc.under,
     )
 
     lai_dom, lai_sub, lai_under = _compute_lai_above(dom_allom, sub_allom, under_allom)
 
     dom_inputs = canopylayer.Inputs(
-        photopara=inputs.photopara, forc=inputs.forc, wt=inputs.wt, afp=inputs.afp,
-        previous_nut_stat=inputs.previous_nut_stat, nut_stat=state.nut_stat,
+        photopara=inputs.photopara,
+        forc=inputs.forc,
+        wt=inputs.wt,
+        afp=inputs.afp,
+        previous_nut_stat=inputs.previous_nut_stat,
+        nut_stat=state.nut_stat,
         lai_above=lai_dom,
     )
     sub_inputs = replace(dom_inputs, lai_above=lai_sub)
     under_inputs = replace(dom_inputs, lai_above=lai_under)
 
     dom_state, dom_out = canopylayer.grow_stand(state.dominant, cc.dominant, dom_inputs)
-    sub_state, sub_out = canopylayer.grow_stand(state.subdominant, cc.subdominant, sub_inputs)
+    sub_state, sub_out = canopylayer.grow_stand(
+        state.subdominant, cc.subdominant, sub_inputs
+    )
     under_state, under_out = canopylayer.grow_stand(state.under, cc.under, under_inputs)
 
     prev_biomass = (
@@ -341,12 +435,18 @@ def grow_stand(
     )
 
     stand_out = _aggregate(
-        dom_out, sub_out, under_out,
-        dom_state.biomass, sub_state.biomass, under_state.biomass,
+        dom_out,
+        sub_out,
+        under_out,
+        dom_state.biomass,
+        sub_state.biomass,
+        under_state.biomass,
         previous_stand_biomass=prev_biomass,
     )
 
-    new_stand_state = State(state.nut_stat, state.previous_nut_stat, dom_state, sub_state, under_state)
+    new_stand_state = State(
+        state.nut_stat, state.previous_nut_stat, dom_state, sub_state, under_state
+    )
     return new_stand_state, stand_out, dom_out, sub_out, under_out
 
 
@@ -369,8 +469,9 @@ def update_nutrient_status(
     stems = stand_out.stems
     safe = np.maximum(diameter, 1e-30)
     area_modifier = np.clip(
-        stems / ((safe / 2.54) ** _REINEKE_SLOPE * 10 ** _REINEKE_K),
-        _AREA_MOD_LOWER, _AREA_MOD_UPPER,
+        stems / ((safe / 2.54) ** _REINEKE_SLOPE * 10**_REINEKE_K),
+        _AREA_MOD_LOWER,
+        _AREA_MOD_UPPER,
     )
     n_ratio = (inputs.n_supply * area_modifier) / (
         stand_out.n_demand + stand_out.Nleafdemand + gv.nup + 1e-30
@@ -384,7 +485,9 @@ def update_nutrient_status(
     min_ratio = np.minimum(np.minimum(n_ratio, p_ratio), k_ratio)
     new_nut_stat = state.nut_stat + (min_ratio - state.nut_stat) / _TAU
     new_nut_stat = np.clip(new_nut_stat, _NUT_LOWER, _NUT_UPPER)
-    return replace(state, previous_nut_stat=state.nut_stat.copy(), nut_stat=new_nut_stat)
+    return replace(
+        state, previous_nut_stat=state.nut_stat.copy(), nut_stat=new_nut_stat
+    )
 
 
 def cut_stand(
@@ -394,11 +497,17 @@ def cut_stand(
     inputs: Inputs,
 ) -> tuple[State, Outputs, canopylayer.CuttingOutputs]:
     dom_out = canopylayer.apply_allometry(
-        state.dominant.biomass, state.dominant.agearr, state.dominant.remaining_share, cc.dominant,
+        state.dominant.biomass,
+        state.dominant.remaining_share,
+        cc.dominant,
     )
     assert inputs.cutting_to_ba is not None
     dom_state, dom_cut = canopylayer.cut_stand(
-        state.dominant, cc.dominant, dom_out, state.nut_stat, inputs.cutting_to_ba,
+        state.dominant,
+        cc.dominant,
+        dom_out,
+        state.nut_stat,
+        inputs.cutting_to_ba,
     )
     stand_out = _merge_cutting_outputs(stand_out, dom_cut=dom_cut)
     new_state = State(
@@ -422,7 +531,10 @@ def assimilate_stand(
         new_state, stand_out, cut_out = cut_stand(new_state, cc, stand_out, inputs)
     else:
         cut_out = canopylayer.CuttingOutputs(
-            *[np.zeros_like(state.nut_stat) for _ in dataclasses.fields(canopylayer.CuttingOutputs)],
+            *[
+                np.zeros_like(state.nut_stat)
+                for _ in dataclasses.fields(canopylayer.CuttingOutputs)
+            ],
         )
 
     new_state = update_nutrient_status(new_state, stand_out, inputs)
@@ -440,7 +552,6 @@ class Stand:
         sfc,
         agearr,
         allometry_params,
-        photopara,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -497,7 +608,6 @@ class Stand:
             allometry_params.dominant_data,
             allometry_params.dominant_species_id,
             ixdominants,
-            photopara,
             self.nut_stat,
         )
         self.subdominant = canopylayer.Canopylayer(
@@ -511,7 +621,6 @@ class Stand:
             allometry_params.subdominant_data,
             allometry_params.subdominant_species_id,
             ixsubdominants,
-            photopara,
             self.nut_stat,
         )
         self.under = canopylayer.Canopylayer(
@@ -525,7 +634,6 @@ class Stand:
             allometry_params.under_data,
             allometry_params.under_species_id,
             ixunder,
-            photopara,
             self.nut_stat,
         )
         self.clyrs = [

@@ -559,7 +559,7 @@ print(dfvols)
 
 # %% KUVA N: wt, biomass, vol
 """
-needed: 
+needed:
     grsim = vend - vini
     yrs
 """
@@ -639,8 +639,8 @@ plt.xlim([-1.0, 0.0])
 plt.ylim([-1.0, 0.0])
 plt.text(-0.9, -0.1, eq_wt, fontsize=AXIS_LABEL_FONTSIZE - 1)
 plt.text(-0.9, -0.15, "RMSE " + str(rmse), fontsize=AXIS_LABEL_FONTSIZE - 1)
-plt.xlabel("Observed $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
-plt.ylabel("Predicted $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
+plt.xlabel(r"Observed $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
+plt.ylabel(r"Predicted $\it{WT}$, m", fontsize=AXIS_LABEL_FONTSIZE)
 
 add_subplot_label(ax0, "a")
 
@@ -656,9 +656,9 @@ for c, site_label in enumerate(SITES):
     pre = dfvols.loc[site_label]["bmgr"]
     preerr = dfvols.loc[site_label]["bmgrsd"]
     plot_scatter_site(obs, pre, preerr, label=site_name, color=colors[c])
-plt.xlabel("Observed bm growth, $kg \ ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE)
+plt.xlabel(r"Observed bm growth, $kg \ ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE)
 plt.ylabel(
-    "Predicted bm growth, $kg \ ha^{-1} yr^{-1}$ ",
+    r"Predicted bm growth, $kg \ ha^{-1} yr^{-1}$ ",
     fontsize=AXIS_LABEL_FONTSIZE,
     labelpad=-7.5,
 )
@@ -714,10 +714,10 @@ plt.xlim([0, mval])
 plt.ylim([0, mval])
 
 plt.xlabel(
-    "Observed $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
+    r"Observed $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
 )
 plt.ylabel(
-    "Predicted $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
+    r"Predicted $\it{i_V}$, $m^{3} ha^{-1} yr^{-1}$ ", fontsize=AXIS_LABEL_FONTSIZE
 )
 
 obs_growths = dfvols["grobs"].values / dfvols["yrs"].values
@@ -801,7 +801,8 @@ site_names = [WT_MEASUREMENT_INFO[site_label].name for site_label in SITES]
 sfcs = list(SITE_FERTILITY_CLASSES)
 print("***********************")
 dfresid = pd.DataFrame(
-    list(zip(site_names, sfcs, obsvols, prevols)),     columns=pd.Index(["name", "sfc", "obs", "pre"])
+    list(zip(site_names, sfcs, obsvols, prevols)),
+    columns=pd.Index(["name", "sfc", "obs", "pre"]),
 )
 dfresid["residual"] = dfresid["pre"] - dfresid["obs"]
 print(dfresid)

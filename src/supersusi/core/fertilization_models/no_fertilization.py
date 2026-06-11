@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 import numpy as np
 
-from supersusi.core.fertilization_types import State, Inputs, Outputs
+from supersusi.core.fertilization_types import State, Outputs
 
 
 @dataclass(frozen=True)
@@ -18,5 +18,5 @@ def unfertilized_output(n_cols: int) -> Outputs:
     )
 
 
-def run_timestep(params: Params, inputs: Inputs) -> tuple[State, Outputs]:
+def run_timestep(params: Params) -> tuple[State, Outputs]:
     return State(), unfertilized_output(params.n_cols)

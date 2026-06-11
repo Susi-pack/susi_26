@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 
-
 def _create_profile_line(
     ax,
     wt,
@@ -503,7 +502,7 @@ def stand(ff, scen):
     )
 
     ax.set_title("Leaf mass")
-    ax.set_ylabel("$kg \ ha^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -636,7 +635,7 @@ def stand(ff, scen):
     )
 
     ax.set_title("N demand")
-    ax.set_ylabel("$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -2088,7 +2087,7 @@ def compare_scens(ff):
         standco2bal,
         standco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Stand $CO_2$ balance",
         "grey",
         facecolor,
@@ -2108,7 +2107,7 @@ def compare_scens(ff):
         soilco2bal,
         soilco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Soil $CO_2$ balance",
         "grey",
         facecolor,
@@ -2126,7 +2125,7 @@ def compare_scens(ff):
         ntowater,
         ntowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "N to water",
         "red",
         facecolor,
@@ -2144,7 +2143,7 @@ def compare_scens(ff):
         ptowater,
         ptowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "P to water",
         "orange",
         facecolor,
@@ -2153,15 +2152,15 @@ def compare_scens(ff):
     )
     """
     #ax = fig.add_subplot(gs[2,:2])
-    data = {'Name': ['Growth response', 'Water table', 'Stand CO2 balance', 'Soil CO2 balence', 'N export' , 'P export'], 
-            '0.3 -> 0.7': [grr[2]-grr[0], wt[2]-wt[0], standco2bal[2]-standco2bal[0], soilco2bal[2]-soilco2bal[0], 
-                           ntowater[2]-ntowater[0], ptowater[2]-ptowater[0] ], 
-            '0.5 -> 0.7': [grr[2]-grr[1], wt[2]-wt[1], standco2bal[2]-standco2bal[1], soilco2bal[2]-soilco2bal[1], 
-                           ntowater[2]-ntowater[1], ptowater[2]-ptowater[1] ], 
-            '0.3 -> 0.9': [grr[3]-grr[0], wt[3]-wt[0], standco2bal[3]-standco2bal[0], soilco2bal[3]-soilco2bal[0], 
+    data = {'Name': ['Growth response', 'Water table', 'Stand CO2 balance', 'Soil CO2 balence', 'N export' , 'P export'],
+            '0.3 -> 0.7': [grr[2]-grr[0], wt[2]-wt[0], standco2bal[2]-standco2bal[0], soilco2bal[2]-soilco2bal[0],
+                           ntowater[2]-ntowater[0], ptowater[2]-ptowater[0] ],
+            '0.5 -> 0.7': [grr[2]-grr[1], wt[2]-wt[1], standco2bal[2]-standco2bal[1], soilco2bal[2]-soilco2bal[1],
+                           ntowater[2]-ntowater[1], ptowater[2]-ptowater[1] ],
+            '0.3 -> 0.9': [grr[3]-grr[0], wt[3]-wt[0], standco2bal[3]-standco2bal[0], soilco2bal[3]-soilco2bal[0],
                            ntowater[3]-ntowater[0], ptowater[3]-ptowater[0] ],
-            '0.5 -> 0.9': [grr[3]-grr[1], wt[3]-wt[1], standco2bal[3]-standco2bal[1], soilco2bal[3]-soilco2bal[1], 
-                           ntowater[3]-ntowater[1], ptowater[3]-ptowater[1] ]}    
+            '0.5 -> 0.9': [grr[3]-grr[1], wt[3]-wt[1], standco2bal[3]-standco2bal[1], soilco2bal[3]-soilco2bal[1],
+                           ntowater[3]-ntowater[1], ptowater[3]-ptowater[1] ]}
     df = pd.DataFrame.from_dict(data = data)
     df = df.round(decimals=2)
     df.set_index('Name', inplace=True)
@@ -2182,5 +2181,3 @@ def compare_scens(ff):
 # stand(ff, 0)
 # mass(ff, 0)
 # nutrient_balance(ff, 'N', 0)
-
-

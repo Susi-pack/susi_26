@@ -78,9 +78,10 @@ exclude = [
     "src/analysis/figures.py",
 ]
 
-# Supresses annoying errors with jaxtyping
+
 [tool.ruff.lint]
-ignore = ["F722"]
+ignore = ["F722"]          # Supresses annoying errors with jaxtyping
+select = ["F", "W", "ARG"] # Include warnings and checks for function arguments
 
 exclude = ["src/analysis/figures.py", "src/analysis/scrapbook.py"]
 [tool.pytest]

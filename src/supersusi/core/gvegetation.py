@@ -229,7 +229,7 @@ def assemble_inputs(
 
 
 def compute_initial_state(
-    params: Params, computed_constants: ComputedConstants
+    params: Params,
 ) -> State:
     n = params.num_nodes
     return State(

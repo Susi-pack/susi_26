@@ -314,7 +314,7 @@ def stand(
     )
 
     ax.set_title("Leaf mass")
-    ax.set_ylabel("$kg \ ha^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -455,7 +455,7 @@ def stand(
     )
 
     ax.set_title("N demand")
-    ax.set_ylabel("$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)

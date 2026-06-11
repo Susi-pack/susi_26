@@ -30,7 +30,7 @@ def build_tree_nodes(variables: dict[NetcdfVariablePath, NetcdfVariableInfo]):
         current[var_name] = {"variable": (var_path, var_info)}
 
     # Convert to tree-select format
-    def dict_to_nodes(d, parent_path=""):
+    def dict_to_nodes(d):
         nodes = []
         for key, value in d.items():
             if "variable" in value:
@@ -47,7 +47,7 @@ def build_tree_nodes(variables: dict[NetcdfVariablePath, NetcdfVariableInfo]):
             else:
                 # Group node - use prefixed path to avoid conflicts with variables
                 full_path = value.get("full_path", key)
-                children = dict_to_nodes(value.get("children", {}), full_path)
+                children = dict_to_nodes(value.get("children", {}))
                 nodes.append(
                     {
                         "label": key,

@@ -127,7 +127,7 @@ class TestSusiMainFertilizationIntegration:
                 enable_peatmiddle=True,
                 enable_peatbottom=True,
                 rho_mor=90.0,
-                h_mor=lambda drain_age, rho_mor: 0.1,  # Simple callable for testing
+                h_mor=lambda *_: 0.1,  # Simple callable for testing
                 cutting_yr=2004,
                 cutting_to_ba=12,
                 depoN=4.0,
@@ -138,7 +138,7 @@ class TestSusiMainFertilizationIntegration:
             ),
         )
 
-    def test_fertilization_initialization_none(self, base_susi_params, test_data_path):
+    def test_fertilization_initialization_none(self):
         """Test that fertilization is initialized as NoFertilization when None."""
         from susi.core.fertilization import initialize_fertilization, NoFertilization
 
@@ -148,9 +148,7 @@ class TestSusiMainFertilizationIntegration:
         assert isinstance(result, NoFertilization)
         assert result.ncols == 4
 
-    def test_fertilization_initialization_standard_npk(
-        self, base_susi_params, test_data_path
-    ):
+    def test_fertilization_initialization_standard_npk(self):
         """Test that fertilization is initialized as StandardNPKFertilization when provided."""
         from susi.core.fertilization import (
             initialize_fertilization,
@@ -172,7 +170,7 @@ class TestSusiMainFertilizationIntegration:
         assert result.ncols == 4
         assert result.fpara == fert_params
 
-    def test_fertilization_initialization_ash(self, base_susi_params, test_data_path):
+    def test_fertilization_initialization_ash(self):
         """Test that fertilization is initialized as AshFertilization when provided."""
         from susi.core.fertilization import (
             initialize_fertilization,

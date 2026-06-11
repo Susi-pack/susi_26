@@ -324,18 +324,69 @@ def build_params(
     dz = np.ones(nLyrs) * dzLyr
     if vonP:
         vpost = vonP_bottom * np.ones(nLyrs)
-        vpost[:len(vonP_top)] = vonP_top
+        vpost[: len(vonP_top)] = vonP_top
         bd = 0.035 + 0.0159 * vpost
     else:
         bd = bd_bottom * np.ones(nLyrs)
         if bd_top is not None:
-            bd[:len(bd_top)] = bd_top
+            bd[: len(bd_top)] = bd_top
 
     return Params(
-        mass=_build_substance_params("Mass", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom),
-        n=_build_substance_params("N", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatN),
-        p=_build_substance_params("P", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatP),
-        k=_build_substance_params("K", n, nLyrs, dz, bd, sfc, h_mor, rho_mor, enable_peattop, enable_peatmiddle, enable_peatbottom, peat_override=peatK),
+        mass=_build_substance_params(
+            "Mass",
+            n,
+            nLyrs,
+            dz,
+            bd,
+            sfc,
+            h_mor,
+            rho_mor,
+            enable_peattop,
+            enable_peatmiddle,
+            enable_peatbottom,
+        ),
+        n=_build_substance_params(
+            "N",
+            n,
+            nLyrs,
+            dz,
+            bd,
+            sfc,
+            h_mor,
+            rho_mor,
+            enable_peattop,
+            enable_peatmiddle,
+            enable_peatbottom,
+            peat_override=peatN,
+        ),
+        p=_build_substance_params(
+            "P",
+            n,
+            nLyrs,
+            dz,
+            bd,
+            sfc,
+            h_mor,
+            rho_mor,
+            enable_peattop,
+            enable_peatmiddle,
+            enable_peatbottom,
+            peat_override=peatP,
+        ),
+        k=_build_substance_params(
+            "K",
+            n,
+            nLyrs,
+            dz,
+            bd,
+            sfc,
+            h_mor,
+            rho_mor,
+            enable_peattop,
+            enable_peatmiddle,
+            enable_peatbottom,
+            peat_override=peatK,
+        ),
     )
 
 
@@ -626,7 +677,9 @@ def compute_constants(params: SubstanceParams) -> SubstanceComputedConstants:
     )
 
 
-def compute_initial_state(params: SubstanceParams, cc: SubstanceComputedConstants) -> State:
+def compute_initial_state(
+    params: SubstanceParams, cc: SubstanceComputedConstants
+) -> State:
     M = np.zeros((1, params.n, 11))
 
     LL_mass = (

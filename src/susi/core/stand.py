@@ -19,7 +19,6 @@ class Stand:
         sfc,
         agearr,
         allometry_params,
-        photopara,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -35,7 +34,6 @@ class Stand:
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
             allometry_parameters: AllometryParams
-            photopara - photosynthesis parameters used in the assimilation model
         """
         self.n_cols = n_cols  # number of columns along the strip
         self.n_scenarios = (
@@ -76,7 +74,6 @@ class Stand:
             allometry_params.dominant_data,
             allometry_params.dominant_species_id,
             ixdominants,
-            photopara,
             self.nut_stat,
         )
         self.subdominant = Canopylayer(
@@ -90,7 +87,6 @@ class Stand:
             allometry_params.subdominant_data,
             allometry_params.subdominant_species_id,
             ixsubdominants,
-            photopara,
             self.nut_stat,
         )
         self.under = Canopylayer(
@@ -104,7 +100,6 @@ class Stand:
             allometry_params.under_data,
             allometry_params.under_species_id,
             ixunder,
-            photopara,
             self.nut_stat,
         )
         self.clyrs = [

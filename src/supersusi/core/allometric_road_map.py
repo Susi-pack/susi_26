@@ -204,7 +204,7 @@ class Growth_and_Yield_Table:
                 row["sp"], row["D"], row["H"]
             )
             foliage += row["Nd"] * foliage_biomass_1(row["sp"], row["D"], row["H"])
-            stump += row["Nd"] * stump_biomass_1(row["sp"], row["D"], row["H"])
+            stump += row["Nd"] * stump_biomass_1(row["sp"], row["D"])
             coarse_roots += row["Nd"] * roots_biomass_1(row["sp"], row["D"], row["H"])
 
         components = {

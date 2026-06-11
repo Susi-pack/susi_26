@@ -33,7 +33,6 @@ class Canopylayer:
         allometry_df_dict,
         species_id_dict,
         ixs,
-        photopara,
         nut_stat,
     ):
         self.name = (
@@ -496,7 +495,7 @@ class Canopylayer:
         self.NPP = (
             self.NPP * nut_stat / self.stems #* 1.1                            #This removed 05022026
         )  # returned back to tree basis unit
-        
+
         self.NPP_pot = (
             self.NPP_pot * nut_stat / self.stems #* 1.1
         )  # returned back to tree basis units
@@ -554,7 +553,6 @@ class Canopylayer:
                     current_leafmass[ixs[m]],
                     previous_nut_stat[ixs[m]],
                     nut_stat[ixs[m]],
-                    self.agearr[ixs[m]],
                     self.allodic[m].allometry_f,
                     self.species[ixs[m]],
                     printOpt=False,
@@ -582,7 +580,7 @@ class Canopylayer:
         self.leafmass = self.new_lmass
         vol_ini = self.volume.copy()
         """
-        if self.name=='dominant': 
+        if self.name=='dominant':
             print (np.round(np.mean(self.biomass),2), 'biomass ini' )
             print (np.round(np.mean(self.volume*self.stems),2), 'volume ini' )
             print (np.round(np.mean(self.stems),2), 'stems ini' )
@@ -609,7 +607,6 @@ class Canopylayer:
         current_leafmass,
         previous_nut_stat,
         nut_stat,
-        agenow,
         allometry_f,
         species,
         printOpt=False,

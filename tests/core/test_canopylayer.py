@@ -417,7 +417,7 @@ class TestDataclasses:
             remaining_share=np.ones(ncols),
             leafmass=np.full(ncols, 1.0),
         )
-        out = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
+        out = apply_allometry(state.biomass, state.remaining_share, cc)
         nuts = np.ones(ncols)
 
         new_state, cut = cut_stand(state, cc, out, nuts, to_ba=12.0)
@@ -436,7 +436,6 @@ class TestApplyAllometry:
     def test_returns_outputs_with_correct_shape(self):
         ncols = 5
         bm = np.arange(10.0, 10.0 + ncols)
-        age = np.full(ncols, 10.0)
         remaining = np.ones(ncols)
         mock_af = _make_mock_allometry()
         cc = ComputedConstants(
@@ -444,7 +443,7 @@ class TestApplyAllometry:
             ixs={1: np.arange(ncols)},
             tree_species=np.ones(ncols, dtype=np.int32),
         )
-        out = apply_allometry(bm, age, remaining, cc)
+        out = apply_allometry(bm, remaining, cc)
         assert isinstance(out, Outputs)
         for field_name in Outputs.__dataclass_fields__:
             val = getattr(out, field_name)
@@ -454,7 +453,6 @@ class TestApplyAllometry:
     def test_growth_fields_are_zero(self):
         ncols = 5
         bm = np.ones(ncols) * 20.0
-        age = np.full(ncols, 10.0)
         remaining = np.ones(ncols)
         mock_af = _make_mock_allometry()
         cc = ComputedConstants(
@@ -462,7 +460,7 @@ class TestApplyAllometry:
             ixs={1: np.arange(ncols)},
             tree_species=np.ones(ncols, dtype=np.int32),
         )
-        out = apply_allometry(bm, age, remaining, cc)
+        out = apply_allometry(bm, remaining, cc)
         assert np.all(out.NPP == 0.0)
         assert np.all(out.NPP_pot == 0.0)
         assert np.all(out.leaf_litter == 0.0)
@@ -481,7 +479,6 @@ class TestApplyAllometry:
     def test_multiple_zones(self):
         ncols = 10
         bm = np.arange(10.0, 10.0 + ncols)
-        age = np.full(ncols, 10.0)
         remaining = np.ones(ncols)
         mock_1 = _make_mock_allometry()
         mock_2 = _make_mock_allometry()
@@ -490,13 +487,12 @@ class TestApplyAllometry:
             ixs={1: np.arange(0, 5), 2: np.arange(5, 10)},
             tree_species=np.concatenate([np.ones(5), np.full(5, 2)]).astype(np.int32),
         )
-        out = apply_allometry(bm, age, remaining, cc)
+        out = apply_allometry(bm, remaining, cc)
         assert out.stems.shape == (ncols,)
 
     def test_nonwoodylitter_equals_finerootlitter(self):
         ncols = 5
         bm = np.ones(ncols) * 20.0
-        age = np.full(ncols, 10.0)
         remaining = np.ones(ncols)
         mock_af = _make_mock_allometry()
         cc = ComputedConstants(
@@ -504,7 +500,7 @@ class TestApplyAllometry:
             ixs={1: np.arange(ncols)},
             tree_species=np.ones(ncols, dtype=np.int32),
         )
-        out = apply_allometry(bm, age, remaining, cc)
+        out = apply_allometry(bm, remaining, cc)
         np.testing.assert_array_equal(out.nonwoodylitter, out.finerootlitter)
         np.testing.assert_array_equal(out.n_nonwoodylitter, out.n_finerootlitter)
         np.testing.assert_array_equal(out.p_nonwoodylitter, out.p_finerootlitter)

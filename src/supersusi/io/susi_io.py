@@ -514,13 +514,13 @@ def weather_fig(df):
     ax3.fill_between(
         df.index, df["T"], 0, where=df["T"] >= 0.0, facecolor="r", alpha=0.3
     )
-    ax3.set_ylabel("Air temperature, $^\circ$ C", fontsize=fs)
+    ax3.set_ylabel(r"Air temperature, $^\circ$ C", fontsize=fs)
 
     annual_temp = df["T"].resample("A").mean()
     t2 = (
         "Mean annual temperature "
         + str(np.round(np.mean(annual_temp.values), 2))
-        + "  $^\circ$ C"
+        + r"  $^\circ$ C"
     )
 
     ax4 = fig.add_axes((0.73, 0.08, 0.25, 0.35))
@@ -528,7 +528,7 @@ def weather_fig(df):
     y_pos = np.arange((len(annual_temp)))
     plt.bar(y_pos, annual_temp.values, align="center", alpha=0.5)
     plt.xticks(y_pos, annual_temp.index.year, rotation=45)
-    ax4.set_ylabel(" $^\circ$ C", fontsize=fs)
+    ax4.set_ylabel(r" $^\circ$ C", fontsize=fs)
     plt.show()
 
 
@@ -596,7 +596,7 @@ def print_scenario(r, co2release, deltas, h0ts, dwts, bmToYi, npps, bm, yi, ets)
 
 
 def print_scenario_nodes(
-    r, c_bals, deltas, ets, h0ts_west, h0ts_east, dwts, bmToYi, g_nuts, end_vols
+    r, deltas, ets, h0ts_west, h0ts_east, dwts, g_nuts
 ):
     print(
         "Scenario summary, ditch depth:", h0ts_west[0], h0ts_east[0], "m", "round ", r

@@ -89,7 +89,7 @@ def c_and_nut_to_excel(
 
 
 def output_dwt_growing_season(
-    dwt, length, start_yr, end_yr, start_date, outpara, wpara, scen
+    dwt, length, start_date, outpara, wpara, scen
 ):
     """
     Output for growing season water tables
@@ -201,7 +201,7 @@ def write_mese_scen(fout, nro, v_ini, v_end, gr, w, dw):
     wb.save(fout)
 
 
-def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, cb, dcb, w, dw, runo, druno):
+def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, w, dw, runo, druno):
     # from xlutils.copy import copy
     from xlutils import copy
     import xlrd
@@ -361,7 +361,7 @@ def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr
 
 
 def outfig(
-    summer_dwt, co2_respi, growth_response, ditch_depth, relative_response, rounds
+    summer_dwt, co2_respi, growth_response, ditch_depth, relative_response
 ):
     plt.figure(
         num="Susi drainage",
@@ -522,7 +522,7 @@ def fig_stand_growth_node_bck(
 
 
 def fig_stand_growth_node(
-    rounds, ageSim, start_yr, end_yr, ageToVol, agearray, vols, name, dwts
+    ageSim, start_yr, end_yr, ageToVol, agearray, vols, name, dwts
 ):
     sns.set()
     # yrs, cols = np.shape(agearray)
@@ -584,7 +584,6 @@ def fig_hydro(
     hts,
     spara,
     wpara,
-    wlocation,
     ets,
     Prec,
     T,
@@ -849,13 +848,13 @@ def weather_fig(df):
     ax3.fill_between(
         df.index, df["T"], 0, where=df["T"] >= 0.0, facecolor="r", alpha=0.3
     )
-    ax3.set_ylabel("Air temperature, $^\circ$ C", fontsize=fs)
+    ax3.set_ylabel(r"Air temperature, $^\circ$ C", fontsize=fs)
 
     annual_temp = df["T"].resample("A").mean()
     t2 = (
         "Mean annual temperature "
         + str(np.round(np.mean(annual_temp.values), 2))
-        + "  $^\circ$ C"
+        + r"  $^\circ$ C"
     )
 
     ax4 = fig.add_axes([0.73, 0.08, 0.25, 0.35])
@@ -863,7 +862,7 @@ def weather_fig(df):
     y_pos = np.arange((len(annual_temp)))
     plt.bar(y_pos, annual_temp.values, align="center", alpha=0.5)
     plt.xticks(y_pos, annual_temp.index.year, rotation=45)
-    ax4.set_ylabel(" $^\circ$ C", fontsize=fs)
+    ax4.set_ylabel(r" $^\circ$ C", fontsize=fs)
     plt.show()
 
 
@@ -931,7 +930,7 @@ def print_scenario(r, co2release, deltas, h0ts, dwts, bmToYi, npps, bm, yi, ets)
 
 
 def print_scenario_nodes(
-    r, c_bals, deltas, ets, h0ts_west, h0ts_east, dwts, bmToYi, g_nuts, end_vols
+    r, deltas, ets, h0ts_west, h0ts_east, dwts, g_nuts
 ):
     print(
         "Scenario summary, ditch depth:", h0ts_west[0], h0ts_east[0], "m", "round ", r

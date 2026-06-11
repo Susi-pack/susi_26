@@ -248,7 +248,7 @@ class NoFertilization(AbstractFertilization):
     def __init__(self, n_cols: int):
         super().__init__(n_cols=n_cols, fpara=None)
 
-    def is_active(self, years_since: int) -> bool:
+    def is_active(self, _years_since: int) -> bool:
         return False
 
     def _compute_active_effect(

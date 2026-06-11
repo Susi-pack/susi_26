@@ -105,7 +105,6 @@ class Susi:
             sfc=self.parameters.site_parameters.sfc,
             agearr=self.parameters.site_parameters.age,
             allometry_params=self.parameters.allometry_parameters,
-            photopara=self.parameters.photo_parameters,
         )  # create stand class
         stand.update()
 
@@ -135,7 +134,6 @@ class Susi:
             stand.basalarea,
             stand.stems,
             stand.volume,
-            stand.dominant.species,
             temperature_sun_days_degree,
             age=self.parameters.site_parameters.age["dominant"],
         )
@@ -294,7 +292,6 @@ class Susi:
                 stand.basalarea,
                 stand.stems,
                 stand.volume,
-                stand.dominant.species,
                 temperature_sun_days_degree,
                 age=self.parameters.site_parameters.age["dominant"],
             )
@@ -334,7 +331,6 @@ class Susi:
                     reww = rew_drylimit(
                         dwt
                     )  # for each column: moisture limitation from ground water level (Feddes-function)
-                    doy = self.weather_forcing.iloc[d, 14]  # day of the year
                     ta = self.weather_forcing.iloc[d, 4]  # air temperature deg C
                     vpd = self.weather_forcing.iloc[d, 13]  # vapor pressure deficit
                     rg = self.weather_forcing.iloc[d, 8]  # solar radiation
@@ -346,7 +342,6 @@ class Susi:
                     potinf, trfall, interc, evap, ET, transpi, efloor, MBE, SWE = (
                         cpy.run_timestep(
                             self.parameters.canopy_parameters,
-                            doy,
                             self.parameters.canopy_parameters.dt,
                             ta,
                             prec,
@@ -463,7 +458,6 @@ class Susi:
                     stand.basalarea,
                     stand.stems,
                     stand.volume,
-                    stand.dominant.species,
                     temperature_sun_days_degree,
                     age=self.parameters.site_parameters.age["dominant"],
                 )

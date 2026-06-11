@@ -3,11 +3,19 @@ import datetime
 import pytest
 
 from supersusi.io.susi_parameter_model import (
-    SusiParams, SiteParams, WeatherParams, SimulationConfig,
-    AllometryParams, CanopyParams, OrganicLayerParams, OutputParams,
+    SusiParams,
+    SiteParams,
+    WeatherParams,
+    SimulationConfig,
+    AllometryParams,
+    CanopyParams,
+    OrganicLayerParams,
+    OutputParams,
     PeatTemperatureParams,
-    PeatTypes, TreeSpecies,
-    get_photo_parameters_by_location, LocationsForPhotoParams,
+    PeatTypes,
+    TreeSpecies,
+    get_photo_parameters_by_location,
+    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     CanopyLayerAllometryPointers,
 )
@@ -47,37 +55,61 @@ def setup():
             location=LocationsForPhotoParams("All_data")
         ),
         site_parameters=SiteParams(
-            L=40.0, n=10,
+            L=40.0,
+            n=10,
             initial_dominant_stand_age_years=60.0,
             initial_subdominant_stand_age_years=0.0,
             initial_understorey_age_years=0.0,
             canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1] * 10, subdominant=[0] * 10, under=[0] * 10,
+                dominant=[1] * 10,
+                subdominant=[0] * 10,
+                under=[0] * 10,
             ),
-            site_fertility_class=4, sitename="test",
-            species=TreeSpecies("Pine"), sfc_specification=1,
-            hdom=None, vol=None, smc="Peatland",
-            nLyrs=60, dzLyr=0.05,
-            ditch_depth_west=[-0.5], ditch_depth_east=[-0.5],
-            ditch_depth_20y_west=[-0.5], ditch_depth_20y_east=[-0.5],
-            scenario_name=["test"], drain_age=100.0,
-            initial_h=-0.2, slope=0.0,
+            site_fertility_class=4,
+            sitename="test",
+            species=TreeSpecies("Pine"),
+            sfc_specification=1,
+            hdom=None,
+            vol=None,
+            smc="Peatland",
+            nLyrs=60,
+            dzLyr=0.05,
+            ditch_depth_west=[-0.5],
+            ditch_depth_east=[-0.5],
+            ditch_depth_20y_west=[-0.5],
+            ditch_depth_20y_east=[-0.5],
+            scenario_name=["test"],
+            drain_age=100.0,
+            initial_h=-0.2,
+            slope=0.0,
             peat_type=[PeatTypes.generic] * 8,
             peat_type_bottom=[PeatTypes.generic],
-            anisotropy=10.0, vonP=True,
-            vonP_top=[2, 5, 5, 5, 6, 6, 7, 7], vonP_bottom=8,
-            bd_top=None, bd_bottom=0.16,
-            peatN=None, peatP=None, peatK=None,
-            enable_peattop=True, enable_peatmiddle=True, enable_peatbottom=True,
-            rho_mor=90.0, h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2004, cutting_to_ba=12,
-            depoN=4.0, depoP=0.1, depoK=1.0,
+            anisotropy=10.0,
+            vonP=True,
+            vonP_top=[2, 5, 5, 5, 6, 6, 7, 7],
+            vonP_bottom=8,
+            bd_top=None,
+            bd_bottom=0.16,
+            peatN=None,
+            peatP=None,
+            peatK=None,
+            enable_peattop=True,
+            enable_peatmiddle=True,
+            enable_peatbottom=True,
+            rho_mor=90.0,
+            h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
+            cutting_yr=2004,
+            cutting_to_ba=12,
+            depoN=4.0,
+            depoP=0.1,
+            depoK=1.0,
             fertilization=None,
             peat_temperature=PeatTemperatureParams(),
         ),
     )
 
     from supersusi.io.forcing_weather import read_FMI_weather
+
     weather_data = read_FMI_weather(
         ID=0,
         start_date=sp.simulation_config.start_date,
@@ -93,27 +125,31 @@ def setup():
 class TestBuildAnnualForcings:
     def test_returns_list(self, setup):
         forcings = _build_annual_forcings(
-            setup["sp"], setup["params"], setup["weather_data"],
+            setup["sp"],
+            setup["weather_data"],
         )
         assert isinstance(forcings, list)
         assert len(forcings) > 0
 
     def test_single_year(self, setup):
         forcings = _build_annual_forcings(
-            setup["sp"], setup["params"], setup["weather_data"],
+            setup["sp"],
+            setup["weather_data"],
         )
         assert len(forcings) == 1
 
     def test_returns_annual_forcing(self, setup):
         forcings = _build_annual_forcings(
-            setup["sp"], setup["params"], setup["weather_data"],
+            setup["sp"],
+            setup["weather_data"],
         )
         assert isinstance(forcings[0], AnnualForcing)
 
     def test_correct_daily_shapes(self, setup):
         sp = setup["sp"]
         forcings = _build_annual_forcings(
-            sp, setup["params"], setup["weather_data"],
+            sp,
+            setup["weather_data"],
         )
         yr = forcings[0]
         ndays = yr.valid_days
@@ -128,20 +164,23 @@ class TestBuildAnnualForcings:
     def test_temp_sum_shape(self, setup):
         sp = setup["sp"]
         forcings = _build_annual_forcings(
-            sp, setup["params"], setup["weather_data"],
+            sp,
+            setup["weather_data"],
         )
         assert forcings[0].temp_sum.shape == (sp.site_parameters.n,)
 
     def test_cutting_flag(self, setup):
         forcings = _build_annual_forcings(
-            setup["sp"], setup["params"], setup["weather_data"],
+            setup["sp"],
+            setup["weather_data"],
         )
         assert forcings[0].do_cutting is True
         assert forcings[0].cutting_to_ba == 12.0
 
     def test_calendar_year(self, setup):
         forcings = _build_annual_forcings(
-            setup["sp"], setup["params"], setup["weather_data"],
+            setup["sp"],
+            setup["weather_data"],
         )
         assert forcings[0].calendar_year == 2004
 
@@ -160,13 +199,14 @@ class TestBuildAnnualForcings:
             site_parameters=setup["sp"].site_parameters,
         )
         from supersusi.io.forcing_weather import read_FMI_weather
+
         wd2 = read_FMI_weather(
             ID=0,
             start_date=sp_multi.simulation_config.start_date,
             end_date=sp_multi.simulation_config.end_date,
             sourcefile=setup["sp"].weather_parameters.FMI_weather_filepath,
         )
-        forcings = _build_annual_forcings(sp_multi, setup["params"], wd2)
+        forcings = _build_annual_forcings(sp_multi, wd2)
         assert len(forcings) == 2
         assert forcings[0].calendar_year == 2004
         assert forcings[1].calendar_year == 2005

@@ -49,7 +49,7 @@ class Gvegetation:
            - N and P storage in the each pixel
            - annual use of N and P due to litterfall
         Muukkonen Mäkipää 2005 upland sites: field layer contains dwarf shrubs and (herbs + grasses), see Fig 1
-            share     dwarf shrubs     herbs 
+            share     dwarf shrubs     herbs
             - Pine       91%            9%
             - Spruce     71%            29%
             - broad l    38%            62%
@@ -65,21 +65,21 @@ class Gvegetation:
             - upland mosses     1.25%        1.4 mg/g     4.3 mg/g
         Nutrient concentrations for sphagna (FIND):
                                 N              P     for N :(Bragazza et al Global Change Biology (2005) 11, 106–114, doi: 10.1111/j.1365-2486.2004.00886.x)
-            - sphagnum          0.6%           1.4 mg/g     (Palviainen et al 2005)   
+            - sphagnum          0.6%           1.4 mg/g     (Palviainen et al 2005)
         Annual litterfall proportions from above-ground biomass (Mälkönen 1974, Tamm 1953):
             - Dwarf shrubs          0.2
             - herbs & grasses        1
             - mosses                0.3
             Tamm, C.O. 1953. Growth, yield and nutrition in carpets of a forest moss (Hylocomium splendens). Meddelanden från Statens Skogsforsknings Institute 43 (1): 1-140.
-        
+
         We assume retranslocation of N and P away from senescing tissues before litterfall:
                                 N           P
             - Dwarf shrubs     0.5         0.5
             - Herbs & grasses  0.5         0.5
             - mossess          0.0         0.0
-        
+
         Turnover of total biomass including the belowground biomass is assumed to be 1.2 x above-ground biomass turnover
-        
+
         """
 
         self.fl_share = {
@@ -606,7 +606,7 @@ class Gvegetation:
             gv_leafmass,
         )
 
-    def run(self, ba, stems, vol, sp, ts, age):
+    def run(self, ba, stems, vol, ts, age):
         # ATTN! convert barea, stems, yi, standAge from time series to list containing start and end state (adjustment to annual call)
 
         # ---------------------------------------

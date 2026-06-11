@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
-import matplotlib.pylab as plt
 from scipy.interpolate import InterpolatedUnivariateSpline as interS
 from pyproj import CRS, Transformer
 
@@ -1229,7 +1228,7 @@ def rew_drylimit(dwt):
     return frew(dwt)
 
 
-def assimilation(photopara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hdom):
+def assimilation(photopara, rg, vpd, Ta, rew, LAI, Xk, hdom):
     """
     Computes photosynthesis and respiration of the stand in daily time step
     Mäkelä et al. 2008. Empirical model of stand GPP LUE approach. Global Change Biology 14: 92-108
@@ -1672,7 +1671,6 @@ def understory_uptake(
     # ------------- classify and map pixels--------------------------------------------------------
     ix_spruce_mire = np.where(np.equal(smc, 2))
     ix_pine_bog = np.where(np.equal(smc, 3))
-    ix_open_peat = np.where(np.equal(smc, 4))
 
     # ---------------------------------------
     inProj = CRS("epsg:3067")
@@ -1688,7 +1686,6 @@ def understory_uptake(
         n,
         ix_spruce_mire,
         ix_pine_bog,
-        ix_open_peat,
         latitude,
         longitude,
         dem,
@@ -2093,7 +2090,6 @@ def understory_uptake(
         n,
         ix_spruce_mire,
         ix_pine_bog,
-        ix_open_peat,
         latitude,
         longitude,
         dem,
@@ -2126,7 +2122,6 @@ def understory_uptake(
         n,
         ix_spruce_mire,
         ix_pine_bog,
-        ix_open_peat,
         latitude,
         longitude,
         dem,

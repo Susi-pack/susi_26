@@ -439,7 +439,7 @@ class Esom:
             self.pH[ix[0], ix[1]] = self.dph[scode] + increment
 
     def get_rates(
-        self, tair, tp_top, tp_middle, tp_bottom, wn, peat_w1, peat_w2, peat_w3, H_w
+        self, tair, tp_top, tp_middle, tp_bottom, wn, peat_w1, peat_w2, peat_w3
     ):
         """
         ash, ash content in gravimetric %
@@ -492,7 +492,7 @@ class Esom:
 
         return (k1, k2, k3, k4, k5, k6, k7, k8, k9)
 
-    def decompose(self, k1, k2, k3, k4, k5, k6, k7, k8, k9, M):
+    def decompose(self, k1, k2, k3, k4, k5, k6, k7, k8, k9):
         """
         Main matrix contains 11 storages
         0 - L0L input of leaf and fine root litter
@@ -643,7 +643,6 @@ class Esom:
             wn = (
                 wrc(self.pF[0], wts) / wrc(self.pF[0], -0.3)
             )  # Relative water content with respect to field capacity, pF[0] refers to water retention characterisitcs in the topmost layer
-            H_w = wrc(self.pF[0], 0.0) - wrc(self.pF[0], wts)  # Air filled pore space
             peat_w1 = self.wtToVfAir_top(
                 wts
             )  # Call interpolation function WT -> volume fraction of air
@@ -664,7 +663,6 @@ class Esom:
                     peat_w1,
                     peat_w2,
                     peat_w3,
-                    H_w,
                 )
             except Exception:
                 print("fail in rates, esom run_yr")
@@ -677,7 +675,7 @@ class Esom:
                     L0W  # woody litter branches and coarse roots, kg m-2, locate end of August
                 )
 
-            self.M = self.decompose(k1, k2, k3, k4, k5, k6, k7, k8, k9, self.M)
+            self.M = self.decompose(k1, k2, k3, k4, k5, k6, k7, k8, k9)
             self.mass[:, :, :, self.i] = self.M  # locate mass to output array
             self.i += 1  # day counter
         self.end_i = self.i

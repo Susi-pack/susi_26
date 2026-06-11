@@ -40,7 +40,9 @@ class State:
     agearr: np.ndarray = field(doc="years")
     biomass: np.ndarray = field(doc="kg/tree")
     remaining_share: np.ndarray = field(doc="thinning fraction 0..1")
-    leafmass: np.ndarray = field(doc="pre-growth leaf mass kg/tree (age-based at init, biomass-based after year 1)")
+    leafmass: np.ndarray = field(
+        doc="pre-growth leaf mass kg/tree (age-based at init, biomass-based after year 1)"
+    )
 
 
 @dataclass(frozen=True)
@@ -152,7 +154,6 @@ def _leaf_dynamics(
     current_leafmass,
     previous_nut_stat,
     nut_stat,
-    agenow,
     allometry_funcs,
     species,
     printOpt=False,
@@ -168,9 +169,7 @@ def _leaf_dynamics(
     # ******** Parameters *****************
     nuts = {
         "Pine": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [5.0, 6.5]}},
-        "Spruce": {
-            "Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}
-        },
+        "Spruce": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}},
         "Birch": {"Foliage": {"N": [10.0, 20.0], "P": [1.0, 2.2], "K": [3.5, 6.0]}},
     }
 
@@ -321,7 +320,6 @@ def _leaf_dynamics(
 
 def apply_allometry(
     biomass: np.ndarray,
-    agearr: np.ndarray,
     remaining_share: np.ndarray,
     cc: ComputedConstants,
 ) -> Outputs:
@@ -442,14 +440,14 @@ def apply_allometry(
         #      component, including only fine-root mortality.
         #      See OOP src/susi/core/canopylayer.py lines 419-422.
         non_woody_litter_mort[ixs] = mm.fine_root(bm)
-        + mm.leaves(bm)
+        +mm.leaves(bm)
         # BUG: Same pattern for N, P, K — the + term on the next line is a no-op.
         n_non_woody_litter_mort[ixs] = nm.n_mortality_fine_root(bm)
-        + nm.n_mortality_leaves(bm)
+        +nm.n_mortality_leaves(bm)
         p_non_woody_litter_mort[ixs] = nm.p_mortality_fine_root(bm)
-        + nm.p_mortality_leaves(bm)
+        +nm.p_mortality_leaves(bm)
         k_non_woody_litter_mort[ixs] = nm.k_mortality_fine_root(bm)
-        + nm.k_mortality_leaves(bm)
+        +nm.k_mortality_leaves(bm)
 
     return Outputs(
         stems=stems,
@@ -488,8 +486,8 @@ def apply_allometry(
         basNdemand=basNdemand,
         basPdemand=basPdemand,
         basKdemand=basKdemand,
-    **growth_zeros,
-)
+        **growth_zeros,
+    )
 
 
 def compute_constants(
@@ -537,7 +535,7 @@ def compute_initial_state(
     for z, ix in cc.ixs.items():
         biomass[ix] = cc.allodic[z].age_based.bm(agearr[ix])
 
-    out = apply_allometry(biomass, agearr, np.ones(params.ncols), cc)
+    out = apply_allometry(biomass, np.ones(params.ncols), cc)
 
     # Override fields where OOP init uses different formulas
     basalarea = np.zeros(params.ncols)
@@ -557,32 +555,64 @@ def compute_initial_state(
     zero = np.zeros(params.ncols)
 
     state = State(
-        agearr=agearr.copy(), biomass=biomass, remaining_share=np.ones(params.ncols),
+        agearr=agearr.copy(),
+        biomass=biomass,
+        remaining_share=np.ones(params.ncols),
         leafmass=init_leafmass.copy(),
     )
-    return state, replace(out,
-        basalarea=basalarea, hdom=hdom, leafmass=init_leafmass, leafarea=leafarea,
+    return state, replace(
+        out,
+        basalarea=basalarea,
+        hdom=hdom,
+        leafmass=init_leafmass,
+        leafarea=leafarea,
         # Litter
-        finerootlitter=zero, n_finerootlitter=zero,
-        p_finerootlitter=zero, k_finerootlitter=zero,
-        nonwoodylitter=zero, n_nonwoodylitter=zero,
-        p_nonwoodylitter=zero, k_nonwoodylitter=zero,
-        woodylitter=zero, n_woodylitter=zero,
-        p_woodylitter=zero, k_woodylitter=zero,
-        woody_litter_mort=zero, n_woody_litter_mort=zero,
-        p_woody_litter_mort=zero, k_woody_litter_mort=zero,
-        non_woody_litter_mort=zero, n_non_woody_litter_mort=zero,
-        p_non_woody_litter_mort=zero, k_non_woody_litter_mort=zero,
+        finerootlitter=zero,
+        n_finerootlitter=zero,
+        p_finerootlitter=zero,
+        k_finerootlitter=zero,
+        nonwoodylitter=zero,
+        n_nonwoodylitter=zero,
+        p_nonwoodylitter=zero,
+        k_nonwoodylitter=zero,
+        woodylitter=zero,
+        n_woodylitter=zero,
+        p_woodylitter=zero,
+        k_woodylitter=zero,
+        woody_litter_mort=zero,
+        n_woody_litter_mort=zero,
+        p_woody_litter_mort=zero,
+        k_woody_litter_mort=zero,
+        non_woody_litter_mort=zero,
+        n_non_woody_litter_mort=zero,
+        p_non_woody_litter_mort=zero,
+        k_non_woody_litter_mort=zero,
         # Growth fields
-        NPP=zero, NPP_pot=zero, new_lmass=zero, leaf_litter=zero, C_consumption=zero,
-        Nleafdemand=zero, Nleaf_litter=zero, N_leaf=zero,
-        Pleafdemand=zero, Pleaf_litter=zero, P_leaf=zero,
-        Kleafdemand=zero, Kleaf_litter=zero, K_leaf=zero,
+        NPP=zero,
+        NPP_pot=zero,
+        new_lmass=zero,
+        leaf_litter=zero,
+        C_consumption=zero,
+        Nleafdemand=zero,
+        Nleaf_litter=zero,
+        N_leaf=zero,
+        Pleafdemand=zero,
+        Pleaf_litter=zero,
+        P_leaf=zero,
+        Kleafdemand=zero,
+        Kleaf_litter=zero,
+        K_leaf=zero,
         # Nutrient demands (keep basN/P/Kdemand from apply_allometry)
-        n_demand=zero, p_demand=zero, k_demand=zero,
+        n_demand=zero,
+        p_demand=zero,
+        k_demand=zero,
         # Other
-        logvolume=zero, pulpvolume=zero, yi=zero, volumegrowth=zero,
-        leafmax=zero, leafmin=zero,
+        logvolume=zero,
+        pulpvolume=zero,
+        yi=zero,
+        volumegrowth=zero,
+        leafmax=zero,
+        leafmin=zero,
     )
 
 
@@ -599,7 +629,7 @@ def grow_stand(
     - nonwoodylitter = finerootlitter(new biomass) + leaf_litter
     """
     ncols = len(state.agearr)
-    prev = apply_allometry(state.biomass, state.agearr, state.remaining_share, cc)
+    prev = apply_allometry(state.biomass, state.remaining_share, cc)
 
     # NPP — assimilation_yr returns kg/ha/yr
     npp_ha, npp_pot_ha = assimilation_yr(
@@ -647,7 +677,6 @@ def grow_stand(
             state.leafmass[ix],
             inputs.previous_nut_stat[ix],
             inputs.nut_stat[ix],
-            state.agearr[ix],
             af,
             cc.tree_species[ix],
         )
@@ -672,7 +701,7 @@ def grow_stand(
     new_biomass = state.biomass + np.maximum(delta, 0.0)
     new_agearr = state.agearr + 1
 
-    out = apply_allometry(new_biomass, new_agearr, state.remaining_share, cc)
+    out = apply_allometry(new_biomass, state.remaining_share, cc)
 
     # OOP's self.leafmass = self.new_lmass aliases leafmass→new_lmass, then
     # self.update() overwrites both with allometry-based leafmass.
@@ -759,21 +788,33 @@ def cut_stand(
             harvested_log_volume[ix] = af.biomass_to_stand.log_vol(bm_z) * cut_stems
             harvested_pulp_volume[ix] = af.biomass_to_stand.pulp_vol(bm_z) * cut_stems
             harvested_biomass[ix] = (
-                af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z)
-            ) * cut_stems * wood_density[ix]
+                (af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z))
+                * cut_stems
+                * wood_density[ix]
+            )
             harvested_stems[ix] = cut_stems
 
-            nonwoody_lresid[ix] = (out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)) * cut_stems
-            n_nonwoody_lresid[ix] = (out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)) * cut_stems
-            p_nonwoody_lresid[ix] = (out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)) * cut_stems
-            k_nonwoody_lresid[ix] = (out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)) * cut_stems
+            nonwoody_lresid[ix] = (
+                out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)
+            ) * cut_stems
+            n_nonwoody_lresid[ix] = (
+                out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)
+            ) * cut_stems
+            p_nonwoody_lresid[ix] = (
+                out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)
+            ) * cut_stems
+            k_nonwoody_lresid[ix] = (
+                out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)
+            ) * cut_stems
 
             woody_lresid[ix] = af.logging_residues.woody(bm_z) * cut_stems
             n_woody_lresid[ix] = af.logging_residues.n_woody(bm_z) * cut_stems
             p_woody_lresid[ix] = af.logging_residues.p_woody(bm_z) * cut_stems
             k_woody_lresid[ix] = af.logging_residues.k_woody(bm_z) * cut_stems
 
-        new_state = State(new_agearr, state.biomass, new_remaining_share, state.leafmass)
+        new_state = State(
+            new_agearr, state.biomass, new_remaining_share, state.leafmass
+        )
     else:
         # Clear-cut: remove all stems, reset age to 1, re-init
         for zid, ix in cc.ixs.items():
@@ -787,14 +828,24 @@ def cut_stand(
             harvested_log_volume[ix] = af.biomass_to_stand.log_vol(bm_z) * cut_stems
             harvested_pulp_volume[ix] = af.biomass_to_stand.pulp_vol(bm_z) * cut_stems
             harvested_biomass[ix] = (
-                af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z)
-            ) * cut_stems * wood_density[ix]
+                (af.biomass_to_stand.log_vol(bm_z) + af.biomass_to_stand.pulp_vol(bm_z))
+                * cut_stems
+                * wood_density[ix]
+            )
             harvested_stems[ix] = cut_stems
 
-            nonwoody_lresid[ix] = (out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)) * cut_stems
-            n_nonwoody_lresid[ix] = (out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)) * cut_stems
-            p_nonwoody_lresid[ix] = (out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)) * cut_stems
-            k_nonwoody_lresid[ix] = (out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)) * cut_stems
+            nonwoody_lresid[ix] = (
+                out.new_lmass[ix] + af.fine_roots.fine_roots(bm_z)
+            ) * cut_stems
+            n_nonwoody_lresid[ix] = (
+                out.N_leaf[ix] + af.fine_roots.n_fine_roots(bm_z)
+            ) * cut_stems
+            p_nonwoody_lresid[ix] = (
+                out.P_leaf[ix] + af.fine_roots.p_fine_roots(bm_z)
+            ) * cut_stems
+            k_nonwoody_lresid[ix] = (
+                out.K_leaf[ix] + af.fine_roots.k_fine_roots(bm_z)
+            ) * cut_stems
 
             woody_lresid[ix] = af.logging_residues.woody(bm_z) * cut_stems
             n_woody_lresid[ix] = af.logging_residues.n_woody(bm_z) * cut_stems
@@ -806,7 +857,9 @@ def cut_stand(
         new_leafmass = z(ncols)
         for zid, ix in cc.ixs.items():
             new_biomass[ix] = cc.allodic[zid].age_based.bm(new_agearr[ix])
-            new_leafmass[ix] = cc.allodic[zid].age_based.leaves(new_agearr[ix]) * nut_stat[ix]
+            new_leafmass[ix] = (
+                cc.allodic[zid].age_based.leaves(new_agearr[ix]) * nut_stat[ix]
+            )
 
         new_state = State(new_agearr, new_biomass, new_remaining_share, new_leafmass)
 
@@ -851,7 +904,6 @@ class Canopylayer:
         allometry_df_dict,
         species_id_dict,
         ixs,
-        photopara,
         nut_stat,
     ):
         self.name = (
@@ -1302,7 +1354,7 @@ class Canopylayer:
         self.NPP = (
             self.NPP * nut_stat / self.stems #* 1.1                            #This removed 05022026
         )  # returned back to tree basis unit
-        
+
         self.NPP_pot = (
             self.NPP_pot * nut_stat / self.stems #* 1.1
         )  # returned back to tree basis units
@@ -1360,7 +1412,6 @@ class Canopylayer:
                     current_leafmass[ixs[m]],
                     previous_nut_stat[ixs[m]],
                     nut_stat[ixs[m]],
-                    self.agearr[ixs[m]],
                     self.allodic[m],
                     self.species[ixs[m]],
                     printOpt=False,
@@ -1388,7 +1439,7 @@ class Canopylayer:
         self.leafmass = self.new_lmass
         vol_ini = self.volume.copy()
         """
-        if self.name=='dominant': 
+        if self.name=='dominant':
             print (np.round(np.mean(self.biomass),2), 'biomass ini' )
             print (np.round(np.mean(self.volume*self.stems),2), 'volume ini' )
             print (np.round(np.mean(self.stems),2), 'stems ini' )
@@ -1415,7 +1466,6 @@ class Canopylayer:
         current_leafmass,
         previous_nut_stat,
         nut_stat,
-        agenow,
         allometry_funcs,
         species,
         printOpt=False,
@@ -1427,9 +1477,14 @@ class Canopylayer:
         P_leaf, Kdemand, Kleaf_litter, K_leaf, LAI).
         """
         ld = _leaf_dynamics(
-            bm, bm_increment, current_leafmass,
-            previous_nut_stat, nut_stat, agenow,
-            allometry_funcs, species, printOpt,
+            bm,
+            bm_increment,
+            current_leafmass,
+            previous_nut_stat,
+            nut_stat,
+            allometry_funcs,
+            species,
+            printOpt,
         )
 
         leafbase1 = allometry_funcs.biomass_to_stand.leaf_mass(bm + bm_increment)

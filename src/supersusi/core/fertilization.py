@@ -51,4 +51,4 @@ def run_timestep(
             return npk.run_timestep(params=params, inputs=inputs)
         case no_fertilization.Params():
             # This returns zero fertilization effects
-            return no_fertilization.run_timestep(params=params, inputs=inputs)
+            return no_fertilization.run_timestep(params=params)

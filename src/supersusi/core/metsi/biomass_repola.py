@@ -195,8 +195,8 @@ def foliage_biomass_1(species, DBH, height) -> float:
     return bm
 
 
-# Stump biomass f(d,h)
-def stump_biomass_1(species, DBH, height) -> float:
+# Stump biomass f(d)
+def stump_biomass_1(species, DBH) -> float:
     """
     Repola J. (2009) Silva Fennica 43(4) Biomass equations for Scots pine and Norway spruce in Finland p. 631-633
     Repola J. (2008) Silva Fennica 42(4) Biomass equations for birch in Finland p. 611-613
