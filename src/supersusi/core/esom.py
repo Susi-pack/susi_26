@@ -795,15 +795,15 @@ def assemble_inputs(
 def run_yr(
     params: SubstanceParams,
     cc: SubstanceComputedConstants,
+    previous_state: State,
     inputs: Inputs,
-    state: State,
 ) -> tuple[State, YearOutputs]:
     days = len(inputs.tair_ts)
 
-    M = state.M.copy()
-    i = state.i
-    previous_mass = state.previous_mass.copy()
-    pH = state.pH.copy()
+    M = previous_state.M.copy()
+    i = previous_state.i
+    previous_mass = previous_state.previous_mass.copy()
+    pH = previous_state.pH.copy()
 
     P2_ini = M[0, :, 8] * 10000.0  # middle layer peat mass at the beginning of yr
     P3_ini = M[0, :, 9] * 10000.0  # bottom layer peat mass at the beginning of yr

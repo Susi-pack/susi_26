@@ -340,8 +340,8 @@ def _fill_site_nutrients(
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
+    previous_state: State,
     input: Inputs,
-    state: State,
 ) -> tuple[State, Outputs]:
     n = params.num_nodes
     cc = computed_constants
@@ -527,15 +527,15 @@ def run_timestep(
     woody = ds_litterfall * 0.75
 
     # --- Nutrient uptake ---
-    nup_net = np.where(n_gv - state.n_gv > 0.0, n_gv - state.n_gv, 0.0)
-    pup_net = np.where(p_gv - state.p_gv > 0.0, p_gv - state.p_gv, 0.0)
-    kup_net = np.where(k_gv - state.k_gv > 0.0, k_gv - state.k_gv, 0.0)
+    nup_net = np.where(n_gv - previous_state.n_gv > 0.0, n_gv - previous_state.n_gv, 0.0)
+    pup_net = np.where(p_gv - previous_state.p_gv > 0.0, p_gv - previous_state.p_gv, 0.0)
+    kup_net = np.where(k_gv - previous_state.k_gv > 0.0, k_gv - previous_state.k_gv, 0.0)
 
     nup = nup_net + n_litter_nw + n_litter_w
     pup = pup_net + p_litter_nw + p_litter_w
     kup = kup_net + k_litter_nw + k_litter_w
 
-    gv_change = state.gv_tot - gv_tot
+    gv_change = previous_state.gv_tot - gv_tot
 
     return State(
         gv_tot=gv_tot,

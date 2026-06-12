@@ -797,6 +797,7 @@ def _get_initial_state(
     gv_state, gv_out = gvegetation.run_timestep(
         params.gvegetation,
         constants.gvegetation,
+        gv_state,
         gvegetation.assemble_inputs(
             ts=first_temp_sum,
             vol=stand_out.volume,
@@ -804,7 +805,6 @@ def _get_initial_state(
             ba=stand_out.basalarea,
             age=constants.age,
         ),
-        gv_state,
     )
     state = SimulationState(
         daily=DailyState(
@@ -829,128 +829,6 @@ def _get_initial_state(
         stand_sub=sub_out,
         stand_under=under_out,
         gv=gv_out,
-    )
-
-
-def _run_daily_step(
-    daily: DailyState,
-    forcing: DailyForcing,
-    hdom: np.ndarray,
-    leafarea: np.ndarray,
-    params: ModuleParams,
-    constants: ModuleComputedConstants,
-    buffer: strip.NumericalBuffer,
-) -> tuple[DailyState, DailyOutputs]:
-    n = params.strip.n
-    # TODO: dwt frozen at initial value (legacy behavior)
-    # dwt = daily.strip.H - constants.strip.ele  # ← should be this
-    dwt = params.strip.initial_h * np.ones(n)
-    rew = rew_drylimit(dwt)
-
-    # 1. Canopy hydrology
-    cpy_inputs = canopygrid.assemble_inputs(
-        WeatherForcings(
-            T=forcing.T,
-            Prec=forcing.Prec,
-            Rg=forcing.Rg,
-            Par=forcing.Par,
-            VPD=forcing.VPD,
-        ),
-        hc=hdom,
-        LAIconif=leafarea,
-        Rew=rew,
-        beta=daily.moss.Ree,
-    )
-    cpy_state, cpy_out = canopygrid.run_timestep(
-        params.canopygrid,
-        cpy_inputs,
-        daily.canopy,
-    )
-
-    # 2. Moss interception (modifies potinf, evap)
-    moss_state, moss_interc_out = mosslayer.run_interception(
-        constants.mosslayer,
-        mosslayer.assemble_interception_inputs(
-            potinf=cpy_out.potinf,
-            evap=cpy_out.efloor,
-        ),
-        daily.moss,
-    )
-
-    # 3. Coupling: water available for soil (uses moss-modified potinf)
-    moss_efloor = moss_interc_out.evap
-    delta = moss_interc_out.potinf - cpy_out.transpi
-
-    # 4. Strip exfil — cap by air volume
-    exfil_out = strip.compute_exfil(
-        daily.strip,
-        constants.strip,
-        forcing.h0ts_west,
-        forcing.h0ts_east,
-        delta,
-    )
-
-    # 5. Moss return flow
-    moss_state, moss_rf_out = mosslayer.run_returnflow(
-        params.mosslayer,
-        constants.mosslayer,
-        mosslayer.assemble_returnflow_inputs(
-            rflow=exfil_out.exfil,
-            interception_mbe=moss_interc_out.mbe,
-        ),
-        moss_state,
-    )
-
-    # 6. Strip PDE
-    strip_state, ts_out = strip.run_timestep(
-        params.strip,
-        constants.strip,
-        daily.strip,
-        strip.assemble_timestep_inputs(
-            h0ts_west=forcing.h0ts_west,
-            h0ts_east=forcing.h0ts_east,
-            exfil_out=exfil_out,
-            moss_rf_out=moss_rf_out,
-        ),
-        buffer=buffer,
-    )
-
-    # 7. Peat temperature (uses moss-modified efloor)
-    peat_T_state = temperature.run_timestep(
-        params.temperature,
-        constants.temperature,
-        temperature.assemble_inputs(
-            T_air=forcing.T,
-            swe=cpy_out.swe,
-            efloor=moss_efloor,
-        ),
-        daily.peat_T,
-    )[0]
-
-    n_hydro = params.temperature.n_layers_hydro
-    new_daily = replace(
-        daily,
-        canopy=cpy_state,
-        moss=moss_state,
-        strip=strip_state,
-        peat_T=peat_T_state,
-    )
-    return new_daily, DailyOutputs(
-        wtd=strip_state.H - constants.strip.ele,
-        afp=ts_out.afp,
-        T_soil_hydro=peat_T_state.T_soil[:n_hydro],
-        delta=delta,
-        total_runoff=np.asarray(ts_out.roff + np.mean(moss_rf_out.surface_runoff)),
-        surface_runoff=moss_rf_out.surface_runoff,
-        interc=cpy_out.interc,
-        evap=cpy_out.evap,
-        et=cpy_out.et,
-        transpi=cpy_out.transpi,
-        efloor=cpy_out.efloor,
-        swe=cpy_out.swe,
-        H=strip_state.H,
-        runoffwest=np.asarray(ts_out.roffwest),
-        roffeast=np.asarray(ts_out.roffeast),
     )
 
 
@@ -1045,14 +923,13 @@ def _run_annual_step(
         roffeast=roffeast_yr,
     )
 
-    # ── Aggregate daily outputs ──────────────────────────────────
     strip_diag = strip.compute_residence_time(
         params.strip,
         constants.strip,
         wtd_yr.mean(axis=0),
     )
 
-    # ── Annual biogeochemistry (DataFrames preserved — deferred) ─
+    # ── Annual biogeochemistry  ─
     sday = datetime.datetime(year.calendar_year, 1, 1)
     dfwt = pd.DataFrame(wtd_yr, index=pd.date_range(sday, periods=ndays))
     dfafp = pd.DataFrame(afp_yr, index=pd.date_range(sday, periods=ndays))
@@ -1062,7 +939,7 @@ def _run_annual_step(
     )
 
     # Heterotrophic respiration
-    _, _co2, Rhet = heterotrophic_respiration_yr(
+    _, _, Rhet = heterotrophic_respiration_yr(
         df_peat_temps,
         year.calendar_year,
         dfwt,
@@ -1081,6 +958,7 @@ def _run_annual_step(
     gv_state, gv_out = gvegetation.run_timestep(
         params.gvegetation,
         constants.gvegetation,
+        state.annual.gv,
         gvegetation.assemble_inputs(
             ts=year.temp_sum,
             vol=state.annual.stand_outputs.volume,
@@ -1088,7 +966,6 @@ def _run_annual_step(
             ba=state.annual.stand_outputs.basalarea,
             age=constants.age,
         ),
-        state.annual.gv,
     )
 
     # Stand growth
@@ -1170,8 +1047,8 @@ def _run_annual_step(
     state_mass, yr_out_mass = esom.run_yr(
         params.esom.mass,
         constants.esom.mass,
-        inputs_mass,
         state_mass,
+        inputs_mass,
     )
     assert yr_out_mass.daily_cumulative_out is not None
     doc_export = esom.compose_export(
@@ -1207,8 +1084,8 @@ def _run_annual_step(
     state_N, yr_out_N = esom.run_yr(
         params.esom.n,
         constants.esom.n,
-        inputs_N,
         state_N,
+        inputs_N,
     )
 
     # ── ESOM P ───────────────────────────────────────────────────
@@ -1236,8 +1113,8 @@ def _run_annual_step(
     state_P, yr_out_P = esom.run_yr(
         params.esom.p,
         constants.esom.p,
-        inputs_P,
         state_P,
+        inputs_P,
     )
 
     # ── ESOM K ───────────────────────────────────────────────────
@@ -1265,8 +1142,8 @@ def _run_annual_step(
     state_K, yr_out_K = esom.run_yr(
         params.esom.k,
         constants.esom.k,
-        inputs_K,
         state_K,
+        inputs_K,
     )
 
     # Nutrient status update
@@ -1317,4 +1194,126 @@ def _run_annual_step(
         soil_co2_balance=soil_co2_balance,
         doc_export=doc_export,
         strip_diag=strip_diag,
+    )
+
+
+def _run_daily_step(
+    daily: DailyState,
+    forcing: DailyForcing,
+    hdom: np.ndarray,
+    leafarea: np.ndarray,
+    params: ModuleParams,
+    constants: ModuleComputedConstants,
+    buffer: strip.NumericalBuffer,
+) -> tuple[DailyState, DailyOutputs]:
+    n = params.strip.n
+    # TODO: dwt frozen at initial value (legacy behavior)
+    # dwt = daily.strip.H - constants.strip.ele  # ← should be this
+    dwt = params.strip.initial_h * np.ones(n)
+    rew = rew_drylimit(dwt)
+
+    # 1. Canopy hydrology
+    cpy_inputs = canopygrid.assemble_inputs(
+        WeatherForcings(
+            T=forcing.T,
+            Prec=forcing.Prec,
+            Rg=forcing.Rg,
+            Par=forcing.Par,
+            VPD=forcing.VPD,
+        ),
+        hc=hdom,
+        LAIconif=leafarea,
+        Rew=rew,
+        beta=daily.moss.Ree,
+    )
+    cpy_state, cpy_out = canopygrid.run_timestep(
+        params.canopygrid,
+        daily.canopy,
+        cpy_inputs,
+    )
+
+    # 2. Moss interception (modifies potinf, evap)
+    moss_state, moss_interc_out = mosslayer.run_interception(
+        constants.mosslayer,
+        daily.moss,
+        mosslayer.assemble_interception_inputs(
+            potinf=cpy_out.potinf,
+            evap=cpy_out.efloor,
+        ),
+    )
+
+    # 3. Coupling: water available for soil (uses moss-modified potinf)
+    moss_efloor = moss_interc_out.evap
+    delta = moss_interc_out.potinf - cpy_out.transpi
+
+    # 4. Strip exfil — cap by air volume
+    exfil_out = strip.compute_exfil(
+        daily.strip,
+        constants.strip,
+        forcing.h0ts_west,
+        forcing.h0ts_east,
+        delta,
+    )
+
+    # 5. Moss return flow
+    moss_state, moss_rf_out = mosslayer.run_returnflow(
+        params.mosslayer,
+        constants.mosslayer,
+        moss_state,
+        mosslayer.assemble_returnflow_inputs(
+            rflow=exfil_out.exfil,
+            interception_mbe=moss_interc_out.mbe,
+        ),
+    )
+
+    # 6. Strip PDE
+    strip_state, ts_out = strip.run_timestep(
+        params.strip,
+        constants.strip,
+        daily.strip,
+        strip.assemble_timestep_inputs(
+            h0ts_west=forcing.h0ts_west,
+            h0ts_east=forcing.h0ts_east,
+            exfil_out=exfil_out,
+            moss_rf_out=moss_rf_out,
+        ),
+        buffer=buffer,
+    )
+
+    # 7. Peat temperature (uses moss-modified efloor)
+    peat_T_state = temperature.run_timestep(
+        params.temperature,
+        constants.temperature,
+        daily.peat_T,
+        temperature.assemble_inputs(
+            T_air=forcing.T,
+            swe=cpy_out.swe,
+            efloor=moss_efloor,
+        ),
+    )[0]
+
+    n_hydro = params.temperature.n_layers_hydro
+    new_daily = replace(
+        daily,
+        canopy=cpy_state,
+        moss=moss_state,
+        strip=strip_state,
+        peat_T=peat_T_state,
+    )
+    return new_daily, DailyOutputs(
+        wtd=strip_state.H - constants.strip.ele,
+        afp=ts_out.afp,
+        T_soil_hydro=peat_T_state.T_soil[:n_hydro],
+        delta=delta,
+        total_runoff=np.asarray(ts_out.roff + np.mean(moss_rf_out.surface_runoff)),
+        surface_runoff=moss_rf_out.surface_runoff,
+        interc=cpy_out.interc,
+        evap=cpy_out.evap,
+        et=cpy_out.et,
+        transpi=cpy_out.transpi,
+        efloor=cpy_out.efloor,
+        swe=cpy_out.swe,
+        H=strip_state.H,
+        runoffwest=np.asarray(ts_out.roffwest),
+        roffeast=np.asarray(ts_out.roffeast),
     )

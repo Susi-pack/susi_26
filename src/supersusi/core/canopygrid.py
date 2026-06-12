@@ -145,8 +145,8 @@ def assemble_inputs(
 
 def run_timestep(
     params: Params,
+    previous_state: State,
     input: Inputs,
-    state: State,
 ) -> tuple[State, Outputs]:
     # Deciduous LAI assumed constant (=lai_decid_max).
     # Seasonal dynamics (_lai_dynamics) not currently wired.
@@ -157,7 +157,7 @@ def run_timestep(
 
     Rn = np.maximum(2.57 * lai / (2.57 * lai + 0.57) - 0.2, 0.55) * input.Rg
 
-    X_new = state.X + 1.0 / params.tau * (input.Ta - state.X)
+    X_new = previous_state.X + 1.0 / params.tau * (input.Ta - previous_state.X)
     S = np.maximum(X_new - params.xo, 0.0)
     fPheno = np.maximum(params.fmin, np.minimum(S / params.smax, 1.0))
 
@@ -182,9 +182,9 @@ def run_timestep(
         Ra,
         lai,
         cf,
-        state.W,
-        state.SWEi,
-        state.SWEl,
+        previous_state.W,
+        previous_state.SWEi,
+        previous_state.SWEl,
     )
     SWE_new = SWEi_new + SWEl_new
 
@@ -193,7 +193,7 @@ def run_timestep(
         lai,
         params.lai_decid_max,
         input.LAIconif,
-        state.amax,
+        previous_state.amax,
         input.VPD,
         input.Par,
         Rn,
@@ -212,7 +212,7 @@ def run_timestep(
     et = transpi + efloor
 
     new_state = replace(
-        state,
+        previous_state,
         W=W_new,
         SWE=SWE_new,
         SWEi=SWEi_new,

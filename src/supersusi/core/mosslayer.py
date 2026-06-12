@@ -111,29 +111,29 @@ def assemble_returnflow_inputs(
 
 def run_interception(
     computed_constants: ComputedConstants,
+    previous_state: State,
     input: InterceptionInputs,
-    state: State,
 ) -> tuple[State, InterceptionOutputs]:
     Wsto_top_max = computed_constants.Wsto_top_max
 
     potinf0 = input.potinf.copy()
-    Wsto_top_ini = state.Wsto_top.copy()
-    pond_ini = state.h_pond.copy()
+    Wsto_top_ini = previous_state.Wsto_top.copy()
+    pond_ini = previous_state.h_pond.copy()
 
     potinf = input.potinf + pond_ini
-    h_pond = state.h_pond - pond_ini
+    h_pond = previous_state.h_pond - pond_ini
 
-    interc = np.maximum(0.0, Wsto_top_max - state.Wsto_top) * (
+    interc = np.maximum(0.0, Wsto_top_max - previous_state.Wsto_top) * (
         1.0 - np.exp(-(potinf / Wsto_top_max))
     )
     potinf -= interc
-    Wsto_top = state.Wsto_top + interc
+    Wsto_top = previous_state.Wsto_top + interc
     evap = np.minimum(input.evap, Wsto_top)
     Wsto_top -= evap
 
     mbe = (pond_ini - h_pond) + (Wsto_top_ini - Wsto_top) + potinf0 - potinf - evap
 
-    return State(Wsto_top=Wsto_top, h_pond=h_pond, Ree=state.Ree), InterceptionOutputs(
+    return State(Wsto_top=Wsto_top, h_pond=h_pond, Ree=previous_state.Ree), InterceptionOutputs(
         potinf=potinf,
         evap=evap,
         mbe=mbe,
@@ -143,16 +143,16 @@ def run_interception(
 def run_returnflow(
     params: Params,
     computed_constants: ComputedConstants,
+    previous_state: State,
     input: ReturnflowInputs,
-    state: State,
 ) -> tuple[State, ReturnflowOutputs]:
     Wsto_top_max = computed_constants.Wsto_top_max
     h_pond_max = computed_constants.h_pond_max
 
-    to_top_layer = np.minimum(input.rflow, Wsto_top_max - state.Wsto_top)
-    Wsto_top = state.Wsto_top + to_top_layer
-    to_pond = np.minimum(input.rflow - to_top_layer, h_pond_max - state.h_pond)
-    h_pond = state.h_pond + to_pond
+    to_top_layer = np.minimum(input.rflow, Wsto_top_max - previous_state.Wsto_top)
+    Wsto_top = previous_state.Wsto_top + to_top_layer
+    to_pond = np.minimum(input.rflow - to_top_layer, h_pond_max - previous_state.h_pond)
+    h_pond = previous_state.h_pond + to_pond
     surface_runoff = input.rflow - to_top_layer - to_pond
 
     mbe = input.interception_mbe + input.rflow - to_top_layer - to_pond - surface_runoff

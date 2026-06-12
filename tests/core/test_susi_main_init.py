@@ -217,6 +217,7 @@ class TestInitState:
         expected_gv, _ = gvegetation.run_timestep(
             params.gvegetation,
             constants.gvegetation,
+            raw_gv,
             gvegetation.assemble_inputs(
                 ts=first_temp_sum,
                 vol=stand_out.volume,
@@ -224,7 +225,6 @@ class TestInitState:
                 ba=stand_out.basalarea,
                 age=constants.age,
             ),
-            raw_gv,
         )
         np.testing.assert_array_equal(state.annual.gv.gv_tot, expected_gv.gv_tot)
 

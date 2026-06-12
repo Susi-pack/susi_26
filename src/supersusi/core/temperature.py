@@ -81,8 +81,8 @@ def compute_initial_state(computed_constants: ComputedConstants) -> State:
 def run_timestep(
     params: Params,
     computed_constants: ComputedConstants,
+    previous_state: State,
     inputs: Inputs,
-    state: State,
 ) -> tuple[State, Outputs]:
 
     # Cooling by evaporation
@@ -96,7 +96,7 @@ def run_timestep(
         T_air = inputs.T_air + T_cool
 
     u = np.zeros(computed_constants.n_layers + 1)
-    T_soil = state.T_soil.copy()
+    T_soil = previous_state.T_soil.copy()
     for _ in range(0, params.n_subtimesteps):
         b = T_soil.copy()
         b[0] = T_air  # top boundary condition
