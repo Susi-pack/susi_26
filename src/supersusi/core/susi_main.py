@@ -151,9 +151,6 @@ class AnnualForcing:
 class AnnualOutputs:
     daily: DailyOutputs
     stand: stand.Outputs
-    stand_dom: canopylayer.Outputs
-    stand_sub: canopylayer.Outputs
-    stand_under: canopylayer.Outputs
     gv: gvegetation.Outputs
     esom_mass: esom.YearOutputs
     esom_N: esom.YearOutputs
@@ -176,9 +173,6 @@ class SimulationState:
 @dataclass(frozen=True)
 class InitialOutputs:
     stand: stand.Outputs
-    stand_dom: canopylayer.Outputs
-    stand_sub: canopylayer.Outputs
-    stand_under: canopylayer.Outputs
     gv: gvegetation.Outputs
 
 
@@ -495,21 +489,21 @@ def _write_outputs(
         0,
         "dominant",
         initial_state.annual.stand.dominant,
-        initial_outputs.stand_dom,
+        initial_outputs.stand.dominant,
     )
     out.write_canopy_layer(
         0,
         0,
         "subdominant",
         initial_state.annual.stand.subdominant,
-        initial_outputs.stand_sub,
+        initial_outputs.stand.subdominant,
     )
     out.write_canopy_layer(
         0,
         0,
         "under",
         initial_state.annual.stand.under,
-        initial_outputs.stand_under,
+        initial_outputs.stand.under,
     )
     out.write_groundvegetation(
         0,
@@ -575,21 +569,21 @@ def _write_outputs(
             yr_idx + 1,
             "dominant",
             ann_state.stand.dominant,
-            ann_out.stand_dom,
+            ann_out.stand.dominant,
         )
         out.write_canopy_layer(
             0,
             yr_idx + 1,
             "subdominant",
             ann_state.stand.subdominant,
-            ann_out.stand_sub,
+            ann_out.stand.subdominant,
         )
         out.write_canopy_layer(
             0,
             yr_idx + 1,
             "under",
             ann_state.stand.under,
-            ann_out.stand_under,
+            ann_out.stand.under,
         )
         out.write_groundvegetation(
             0,
@@ -774,7 +768,7 @@ def _get_initial_state(
     susi_params: SusiParams,
     first_temp_sum: np.ndarray,
 ) -> tuple[SimulationState, InitialOutputs]:
-    stand_state, stand_out, dom_out, sub_out, under_out = stand.compute_initial_state(
+    stand_state, stand_out = stand.compute_initial_state(
         params.stand,
         constants.stand,
         susi_params.site_parameters.age,
@@ -825,9 +819,6 @@ def _get_initial_state(
     )
     return state, InitialOutputs(
         stand=stand_out,
-        stand_dom=dom_out,
-        stand_sub=sub_out,
-        stand_under=under_out,
         gv=gv_out,
     )
 
@@ -982,7 +973,7 @@ def _run_annual_step(
         previous_nut_stat=state.annual.stand.previous_nut_stat,
         calendar_year=year.calendar_year,
     )
-    stand_state, stand_out, dom_out, sub_out, under_out = stand.grow_stand(
+    stand_state, stand_out = stand.grow_stand(
         state.annual.stand,
         constants.stand,
         stand_inputs,
@@ -1180,9 +1171,6 @@ def _run_annual_step(
     return new_state, AnnualOutputs(
         daily=stacked_daily,
         stand=stand_out,
-        stand_dom=dom_out,
-        stand_sub=sub_out,
-        stand_under=under_out,
         gv=gv_out,
         esom_mass=yr_out_mass,
         esom_N=yr_out_N,

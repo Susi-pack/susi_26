@@ -120,6 +120,7 @@ class TestDataclasses:
     def test_outputs_instantiates(self):
         z = np.zeros
         n = 3
+        cl_out = _make_cl_output(z(n), z(n), z(n), 0.0, n)
         o = Outputs(
             basalarea=z(n),
             biomass=z(n),
@@ -187,6 +188,9 @@ class TestDataclasses:
             n_woody_lresid=z(n),
             p_woody_lresid=z(n),
             k_woody_lresid=z(n),
+            dominant=cl_out,
+            subdominant=cl_out,
+            under=cl_out,
         )
         assert o.basalarea.shape == (n,)
 
@@ -812,7 +816,15 @@ class TestGrowStand:
 
 def _make_stand_outputs(**overrides) -> Outputs:
     ncols = overrides.pop("_ncols", 3)
-    dflt = {f: np.zeros(ncols) for f in Outputs.__dataclass_fields__}
+    layer_fields = {"dominant", "subdominant", "under"}
+    dflt = {}
+    for f in Outputs.__dataclass_fields__:
+        if f in layer_fields:
+            dflt[f] = _make_cl_output(
+                np.zeros(ncols), np.zeros(ncols), np.zeros(ncols), 0.0, ncols
+            )
+        else:
+            dflt[f] = np.zeros(ncols)
     dflt.update(overrides)
     return Outputs(**dflt)
 

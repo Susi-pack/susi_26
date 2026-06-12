@@ -112,6 +112,11 @@ class Outputs:
     p_woody_lresid: np.ndarray
     k_woody_lresid: np.ndarray
 
+    # per-layer quantities
+    dominant: canopylayer.Outputs
+    subdominant: canopylayer.Outputs
+    under: canopylayer.Outputs
+
 
 @dataclass(frozen=True)
 class Inputs:
@@ -248,7 +253,7 @@ def _aggregate(
     for fname in _CUTTING_FIELDS:
         kw[fname] = np.zeros_like(biomass_val)
 
-    return Outputs(**kw)
+    return Outputs(**kw, dominant=dom_out, subdominant=sub_out, under=under_out)
 
 
 def _merge_cutting_outputs(
@@ -336,9 +341,7 @@ def compute_initial_state(
     cc: ComputedConstants,
     agearr: dict[str, np.ndarray],
     ncols: int,
-) -> tuple[
-    State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs
-]:
+) -> tuple[State, Outputs]:
     nut_stat = np.ones(ncols)
     dom_state, dom_out = canopylayer.compute_initial_state(
         params.dominant,
@@ -370,28 +373,20 @@ def compute_initial_state(
     # BUG: OOP doesn't compute mean_diameter for year 0 (initial state write
     #      happens before Stand.update()). Zero it out to match golden.
     stand_out = replace(stand_out, mean_diameter=np.zeros(ncols))
-    return (
-        State(
-            nut_stat=nut_stat,
-            previous_nut_stat=nut_stat.copy(),
-            dominant=dom_state,
-            subdominant=sub_state,
-            under=under_state,
-        ),
-        stand_out,
-        dom_out,
-        sub_out,
-        under_out,
-    )
+    return State(
+        nut_stat=nut_stat,
+        previous_nut_stat=nut_stat.copy(),
+        dominant=dom_state,
+        subdominant=sub_state,
+        under=under_state,
+    ), stand_out
 
 
 def grow_stand(
     state: State,
     cc: ComputedConstants,
     inputs: Inputs,
-) -> tuple[
-    State, Outputs, canopylayer.Outputs, canopylayer.Outputs, canopylayer.Outputs
-]:
+) -> tuple[State, Outputs]:
     dom_allom = canopylayer.apply_allometry(
         state.dominant.biomass,
         state.dominant.remaining_share,
@@ -447,7 +442,7 @@ def grow_stand(
     new_stand_state = State(
         state.nut_stat, state.previous_nut_stat, dom_state, sub_state, under_state
     )
-    return new_stand_state, stand_out, dom_out, sub_out, under_out
+    return new_stand_state, stand_out
 
 
 _TAU = 3.0
@@ -525,7 +520,7 @@ def assimilate_stand(
     cc: ComputedConstants,
     inputs: Inputs,
 ) -> tuple[State, Outputs, canopylayer.CuttingOutputs]:
-    new_state, stand_out, *_ = grow_stand(state, cc, inputs)
+    new_state, stand_out = grow_stand(state, cc, inputs)
 
     if inputs.cutting_to_ba is not None:
         new_state, stand_out, cut_out = cut_stand(new_state, cc, stand_out, inputs)
