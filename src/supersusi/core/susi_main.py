@@ -95,10 +95,7 @@ class AnnualState:
     stand: stand.State
     stand_outputs: stand.Outputs
     gv: gvegetation.State
-    esom_mass: esom.State
-    esom_N: esom.State
-    esom_P: esom.State
-    esom_K: esom.State
+    esom: esom.State
 
 
 @dataclass(frozen=True)
@@ -152,10 +149,7 @@ class AnnualOutputs:
     daily: DailyOutputs
     stand: stand.Outputs
     gv: gvegetation.Outputs
-    esom_mass: esom.YearOutputs
-    esom_N: esom.YearOutputs
-    esom_P: esom.YearOutputs
-    esom_K: esom.YearOutputs
+    esom: esom.YearOutputs
     methane: methane.Outputs
     fertilization: fertilization_types.Outputs
     Rhet: np.ndarray
@@ -512,13 +506,9 @@ def _write_outputs(
         initial_outputs.gv,
     )
     for sub in ("Mass", "N", "P", "K"):
-        state_map = {
-            "Mass": initial_state.annual.esom_mass,
-            "N": initial_state.annual.esom_N,
-            "P": initial_state.annual.esom_P,
-            "K": initial_state.annual.esom_K,
-        }
-        out.write_esom(0, 0, sub, state_map[sub], inivals=True)
+        out.write_esom(
+            0, 0, sub, getattr(initial_state.annual.esom, sub.lower()), inivals=True
+        )
 
     # ---- Pre-build stpout dict (full simulation) -----------------------------
     total_days = sum(ann_out.daily.wtd.shape[0] for ann_out in annual_outputs)
@@ -592,19 +582,14 @@ def _write_outputs(
             ann_out.gv,
         )
         for sub in ("Mass", "N", "P", "K"):
-            state_map = {
-                "Mass": ann_state.esom_mass,
-                "N": ann_state.esom_N,
-                "P": ann_state.esom_P,
-                "K": ann_state.esom_K,
-            }
-            out_map = {
-                "Mass": ann_out.esom_mass,
-                "N": ann_out.esom_N,
-                "P": ann_out.esom_P,
-                "K": ann_out.esom_K,
-            }
-            out.write_esom(0, yr_idx + 1, sub, state_map[sub], out_map[sub])
+            sub_key = sub.lower()
+            out.write_esom(
+                0,
+                yr_idx + 1,
+                sub,
+                getattr(ann_state.esom, sub_key),
+                getattr(ann_out.esom, sub_key),
+            )
 
         out.write_cpy(
             0,
@@ -652,7 +637,7 @@ def _write_outputs(
             0,
             yr_idx + 1,
             "N",
-            ann_out.esom_N,
+            ann_out.esom.n,
             susi_params.site_parameters.depoN,
             ann_out.fertilization.nutrient_release["N"],
             ann_out.stand.n_demand + ann_out.stand.Nleafdemand,
@@ -662,7 +647,7 @@ def _write_outputs(
             0,
             yr_idx + 1,
             "P",
-            ann_out.esom_P,
+            ann_out.esom.p,
             susi_params.site_parameters.depoP,
             ann_out.fertilization.nutrient_release["P"],
             ann_out.stand.p_demand + ann_out.stand.Pleafdemand,
@@ -672,7 +657,7 @@ def _write_outputs(
             0,
             yr_idx + 1,
             "K",
-            ann_out.esom_K,
+            ann_out.esom.k,
             susi_params.site_parameters.depoK,
             ann_out.fertilization.nutrient_release["K"],
             ann_out.stand.k_demand + ann_out.stand.Kleafdemand,
@@ -685,7 +670,7 @@ def _write_outputs(
             yr_idx + 1,
             ann_out.stand,
             ann_out.gv,
-            ann_out.esom_mass,
+            ann_out.esom.mass,
             ann_out.doc_export,
             ann_out.methane,
         )
@@ -782,10 +767,7 @@ def _get_initial_state(
     gv_state = gvegetation.compute_initial_state(
         params.gvegetation,
     )
-    esom_mass = esom.compute_initial_state(params.esom.mass, constants.esom.mass)
-    esom_N = esom.compute_initial_state(params.esom.n, constants.esom.n)
-    esom_P = esom.compute_initial_state(params.esom.p, constants.esom.p)
-    esom_K = esom.compute_initial_state(params.esom.k, constants.esom.k)
+    esom_state = esom.compute_initial_state_all(params.esom, constants.esom)
 
     # Ground vegetation outputs (needs year-0 stand outputs)
     gv_state, gv_out = gvegetation.run_timestep(
@@ -811,10 +793,7 @@ def _get_initial_state(
             stand=stand_state,
             stand_outputs=stand_out,
             gv=gv_state,
-            esom_mass=esom_mass,
-            esom_N=esom_N,
-            esom_P=esom_P,
-            esom_K=esom_K,
+            esom=esom_state,
         ),
     )
     return state, InitialOutputs(
@@ -997,156 +976,46 @@ def _run_annual_step(
     )
     pH_inc = fert_out.pH_increment
 
-    # ESOM pH update + run_yr for mass, N, P, K
-    def _update_pH(esom_state: esom.State, sub: str) -> esom.State:
-        return replace(
-            esom_state,
-            pH=esom.update_soil_pH(
-                esom_state.pH,
-                getattr(params.esom, sub),
-                pH_inc,
-            ),
-        )
-
-    state_mass = _update_pH(state.annual.esom_mass, "mass")
-    state_N = _update_pH(state.annual.esom_N, "n")
-    state_P = _update_pH(state.annual.esom_P, "p")
-    state_K = _update_pH(state.annual.esom_K, "k")
-
-    # ── ESOM mass ────────────────────────────────────────────────
-    nonwoodylitter = (
-        stand_out.nonwoodylitter
-        + stand_out.nonwoody_lresid
-        + stand_out.non_woody_litter_mort
-        + gv_out.nonwoodylitter
-    ) / 10000.0
-    woodylitter = (
-        stand_out.woodylitter
-        + stand_out.woody_lresid
-        + stand_out.woody_litter_mort
-        + gv_out.woodylitter
-    ) / 10000.0
-    inputs_mass = esom.assemble_inputs(
-        tair_ts=year.daily_T,
-        tp_top_ts=df_peat_temps.iloc[:, 2].values,
-        tp_middle_ts=df_peat_temps.iloc[:, 8].values,
-        tp_bottom_ts=df_peat_temps.iloc[:, 9].values,
-        water_tables=dfwt.values,
-        nonwoodylitter=nonwoodylitter,
-        woodylitter=woodylitter,
+    # ESOM: pH update
+    esom_state = esom.update_all_soil_pH(
+        state.annual.esom,
+        params.esom,
+        pH_inc,
     )
-    state_mass, yr_out_mass = esom.run_yr(
-        params.esom.mass,
-        constants.esom.mass,
-        state_mass,
-        inputs_mass,
+
+    # ESOM: run all substances
+    esom_state, esom_outputs = esom.run_all_yr(
+        params.esom,
+        constants.esom,
+        esom_state,
+        esom.Inputs(
+            tair_ts=year.daily_T,
+            tp_top_ts=df_peat_temps.iloc[:, 2].values,
+            tp_middle_ts=df_peat_temps.iloc[:, 8].values,
+            tp_bottom_ts=df_peat_temps.iloc[:, 9].values,
+            water_tables=dfwt.values,
+            stand_outputs=stand_out,
+            gv_outputs=gv_out,
+        ),
     )
-    assert yr_out_mass.daily_cumulative_out is not None
+    assert esom_outputs.mass.daily_cumulative_out is not None
     doc_export = esom.compose_export(
-        yr_out_mass.daily_cumulative_out,
+        esom_outputs.mass.daily_cumulative_out,
         strip_diag,
         df_peat_temps.iloc[:, 2].values,
         n,
     )
 
-    # ── ESOM N ───────────────────────────────────────────────────
-    n_nonwoodylitter = (
-        stand_out.n_nonwoodylitter
-        + stand_out.n_nonwoody_lresid
-        + stand_out.n_non_woody_litter_mort
-        + gv_out.n_litter_nw
-    ) / 10000.0
-    n_woodylitter = (
-        stand_out.n_woodylitter
-        + stand_out.n_woody_lresid
-        + stand_out.n_woody_litter_mort
-        + stand_out.n_woody_litter_mort  # intentional duplicate (legacy)
-        + gv_out.n_litter_w
-    ) / 10000.0
-    inputs_N = esom.assemble_inputs(
-        tair_ts=year.daily_T,
-        tp_top_ts=df_peat_temps.iloc[:, 2].values,
-        tp_middle_ts=df_peat_temps.iloc[:, 8].values,
-        tp_bottom_ts=df_peat_temps.iloc[:, 9].values,
-        water_tables=dfwt.values,
-        nonwoodylitter=n_nonwoodylitter,
-        woodylitter=n_woodylitter,
-    )
-    state_N, yr_out_N = esom.run_yr(
-        params.esom.n,
-        constants.esom.n,
-        state_N,
-        inputs_N,
-    )
-
-    # ── ESOM P ───────────────────────────────────────────────────
-    p_nonwoodylitter = (
-        stand_out.p_nonwoodylitter
-        + stand_out.p_nonwoody_lresid
-        + stand_out.p_non_woody_litter_mort
-        + gv_out.p_litter_nw
-    ) / 10000.0
-    p_woodylitter = (
-        stand_out.p_woodylitter
-        + stand_out.p_woody_lresid
-        + stand_out.p_woody_litter_mort
-        + gv_out.p_litter_w
-    ) / 10000.0
-    inputs_P = esom.assemble_inputs(
-        tair_ts=year.daily_T,
-        tp_top_ts=df_peat_temps.iloc[:, 2].values,
-        tp_middle_ts=df_peat_temps.iloc[:, 8].values,
-        tp_bottom_ts=df_peat_temps.iloc[:, 9].values,
-        water_tables=dfwt.values,
-        nonwoodylitter=p_nonwoodylitter,
-        woodylitter=p_woodylitter,
-    )
-    state_P, yr_out_P = esom.run_yr(
-        params.esom.p,
-        constants.esom.p,
-        state_P,
-        inputs_P,
-    )
-
-    # ── ESOM K ───────────────────────────────────────────────────
-    k_nonwoodylitter = (
-        stand_out.k_nonwoodylitter
-        + stand_out.k_nonwoody_lresid
-        + stand_out.k_non_woody_litter_mort
-        + gv_out.k_litter_nw
-    ) / 10000.0
-    k_woodylitter = (
-        stand_out.k_woodylitter
-        + stand_out.k_woody_lresid
-        + stand_out.k_woody_litter_mort
-        + gv_out.k_litter_w
-    ) / 10000.0
-    inputs_K = esom.assemble_inputs(
-        tair_ts=year.daily_T,
-        tp_top_ts=df_peat_temps.iloc[:, 2].values,
-        tp_middle_ts=df_peat_temps.iloc[:, 8].values,
-        tp_bottom_ts=df_peat_temps.iloc[:, 9].values,
-        water_tables=dfwt.values,
-        nonwoodylitter=k_nonwoodylitter,
-        woodylitter=k_woodylitter,
-    )
-    state_K, yr_out_K = esom.run_yr(
-        params.esom.k,
-        constants.esom.k,
-        state_K,
-        inputs_K,
-    )
-
     # Nutrient status update
     nut_inputs = replace(
         stand_inputs,
-        n_supply=yr_out_N.out_root_lyr
+        n_supply=esom_outputs.n.out_root_lyr
         + constants.depoN
         + fert_out.nutrient_release["N"],
-        p_supply=yr_out_P.out_root_lyr
+        p_supply=esom_outputs.p.out_root_lyr
         + constants.depoP
         + fert_out.nutrient_release["P"],
-        k_supply=yr_out_K.out_root_lyr
+        k_supply=esom_outputs.k.out_root_lyr
         + constants.depoK
         + fert_out.nutrient_release["K"],
     )
@@ -1159,23 +1028,17 @@ def _run_annual_step(
 
     new_annual = replace(
         state.annual,
+        esom=esom_state,
         stand=stand_state,
         stand_outputs=stand_out,
         gv=gv_state,
-        esom_mass=state_mass,
-        esom_N=state_N,
-        esom_P=state_P,
-        esom_K=state_K,
     )
     new_state = replace(state, daily=daily, annual=new_annual)
     return new_state, AnnualOutputs(
         daily=stacked_daily,
         stand=stand_out,
         gv=gv_out,
-        esom_mass=yr_out_mass,
-        esom_N=yr_out_N,
-        esom_P=yr_out_P,
-        esom_K=yr_out_K,
+        esom=esom_outputs,
         methane=ch4_out,
         fertilization=fert_out,
         Rhet=Rhet,
@@ -1200,27 +1063,24 @@ def _run_daily_step(
     dwt = params.strip.initial_h * np.ones(n)
     rew = rew_drylimit(dwt)
 
-    # 1. Canopy hydrology
-    cpy_inputs = canopygrid.assemble_inputs(
-        WeatherForcings(
-            T=forcing.T,
-            Prec=forcing.Prec,
-            Rg=forcing.Rg,
-            Par=forcing.Par,
-            VPD=forcing.VPD,
-        ),
-        hc=hdom,
-        LAIconif=leafarea,
-        Rew=rew,
-        beta=daily.moss.Ree,
-    )
     cpy_state, cpy_out = canopygrid.run_timestep(
         params.canopygrid,
         daily.canopy,
-        cpy_inputs,
+        canopygrid.assemble_inputs(
+            WeatherForcings(
+                T=forcing.T,
+                Prec=forcing.Prec,
+                Rg=forcing.Rg,
+                Par=forcing.Par,
+                VPD=forcing.VPD,
+            ),
+            hc=hdom,
+            LAIconif=leafarea,
+            Rew=rew,
+            beta=daily.moss.Ree,
+        ),
     )
 
-    # 2. Moss interception (modifies potinf, evap)
     moss_state, moss_interc_out = mosslayer.run_interception(
         constants.mosslayer,
         daily.moss,
@@ -1230,11 +1090,8 @@ def _run_daily_step(
         ),
     )
 
-    # 3. Coupling: water available for soil (uses moss-modified potinf)
-    moss_efloor = moss_interc_out.evap
     delta = moss_interc_out.potinf - cpy_out.transpi
 
-    # 4. Strip exfil — cap by air volume
     exfil_out = strip.compute_exfil(
         daily.strip,
         constants.strip,
@@ -1243,7 +1100,6 @@ def _run_daily_step(
         delta,
     )
 
-    # 5. Moss return flow
     moss_state, moss_rf_out = mosslayer.run_returnflow(
         params.mosslayer,
         constants.mosslayer,
@@ -1254,7 +1110,6 @@ def _run_daily_step(
         ),
     )
 
-    # 6. Strip PDE
     strip_state, ts_out = strip.run_timestep(
         params.strip,
         constants.strip,
@@ -1276,11 +1131,10 @@ def _run_daily_step(
         temperature.assemble_inputs(
             T_air=forcing.T,
             swe=cpy_out.swe,
-            efloor=moss_efloor,
+            efloor=moss_interc_out.evap,
         ),
     )[0]
 
-    n_hydro = params.temperature.n_layers_hydro
     new_daily = replace(
         daily,
         canopy=cpy_state,
@@ -1291,7 +1145,7 @@ def _run_daily_step(
     return new_daily, DailyOutputs(
         wtd=strip_state.H - constants.strip.ele,
         afp=ts_out.afp,
-        T_soil_hydro=peat_T_state.T_soil[:n_hydro],
+        T_soil_hydro=peat_T_state.T_soil[: params.temperature.n_layers_hydro],
         delta=delta,
         total_runoff=np.asarray(ts_out.roff + np.mean(moss_rf_out.surface_runoff)),
         surface_runoff=moss_rf_out.surface_runoff,

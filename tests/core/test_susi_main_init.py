@@ -153,10 +153,10 @@ class TestInitState:
         assert state.annual.stand is not None
         assert state.annual.stand_outputs is not None
         assert state.annual.gv is not None
-        assert state.annual.esom_mass is not None
-        assert state.annual.esom_N is not None
-        assert state.annual.esom_P is not None
-        assert state.annual.esom_K is not None
+        assert state.annual.esom.mass is not None
+        assert state.annual.esom.n is not None
+        assert state.annual.esom.p is not None
+        assert state.annual.esom.k is not None
         assert state.annual.stand_outputs.volume.shape == (n,)
 
     def test_canopy_amax_updated(self, params_and_constants):
@@ -229,9 +229,8 @@ class TestInitState:
         np.testing.assert_array_equal(state.annual.gv.gv_tot, expected_gv.gv_tot)
 
         # esom
-        esom_map = {"esom_mass": "mass", "esom_N": "n", "esom_P": "p", "esom_K": "k"}
-        for attr, sub in esom_map.items():
-            got = getattr(state.annual, attr)
+        for sub in ("mass", "n", "p", "k"):
+            got = getattr(state.annual.esom, sub)
             expected = esom.compute_initial_state(
                 getattr(params.esom, sub),
                 getattr(constants.esom, sub),

@@ -10,7 +10,7 @@ from datetime import datetime
 import numpy as np
 
 from supersusi.core import strip, methane
-from supersusi.core.esom import State, YearOutputs, DOCExportOutputs
+from supersusi.core.esom import SubstanceState, SubstanceYearOutputs, DOCExportOutputs
 
 
 class Outputs:
@@ -2540,8 +2540,8 @@ class Outputs:
         scen,
         year,
         substance,
-        state: State,
-        outputs: YearOutputs | None = None,
+        state: SubstanceState,
+        outputs: SubstanceYearOutputs | None = None,
         inivals: bool = False,
     ):
         n = state.M.shape[1]
@@ -2695,7 +2695,7 @@ class Outputs:
         scen,
         year,
         substance,
-        outputs: YearOutputs,
+        outputs: SubstanceYearOutputs,
         depo,
         ferti,
         stand_up,
@@ -2746,7 +2746,7 @@ class Outputs:
         year,
         stand_out,
         groundvegetation,
-        outputs: YearOutputs,
+        outputs: SubstanceYearOutputs,
         doc_export: DOCExportOutputs,
         ch4_outputs: methane.Outputs,
     ):

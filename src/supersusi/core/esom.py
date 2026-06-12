@@ -19,7 +19,8 @@ Added here to Mass instance release k1: L to out 0.1, k2 F to out 0.05 ; H to pe
 
 """
 
-from dataclasses import dataclass, field
+from typing import Any
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -139,7 +140,7 @@ class ComputedConstants:
 
 
 @dataclass(frozen=True)
-class State:
+class SubstanceState:
     M: Float[np.ndarray, "1 n 11"] = field(
         doc="mass matrix: 0=L0L leaf litter input, 1=L0W woody input, 2=LL leaf litter, 3=LW woody litter, 4=FL leaf F material, 5=FW woody F material, 6=H humus, 7=P1 peat 0-30cm, 8=P2 peat 30-60cm, 9=P3 peat 60cm-bottom, 10=Out cumulative output (kg m-2)"
     )
@@ -151,7 +152,7 @@ class State:
 
 
 @dataclass(frozen=True)
-class Inputs:
+class SubstanceInputs:
     tair_ts: Float[np.ndarray, " days"] = field(doc="daily air temperatures (deg C)")
     tp_top_ts: Float[np.ndarray, " days"] = field(
         doc="peat temperature at -0.125 m depth (deg C)"
@@ -172,7 +173,7 @@ class Inputs:
 
 
 @dataclass(frozen=True)
-class YearOutputs:
+class SubstanceYearOutputs:
     out: Float[np.ndarray, " n"] = field(doc="annual mass output (kg ha-1)")
     out_root_lyr: Float[np.ndarray, " n"] = field(
         doc="mass output from root layer (kg ha-1)"
@@ -189,6 +190,33 @@ class YearOutputs:
     daily_cumulative_out: Float[np.ndarray, "n days"] | None = field(
         default=None, doc="daily cumulative output (Mass only)"
     )
+
+
+@dataclass(frozen=True)
+class State:
+    mass: SubstanceState
+    n: SubstanceState
+    p: SubstanceState
+    k: SubstanceState
+
+
+@dataclass(frozen=True)
+class YearOutputs:
+    mass: SubstanceYearOutputs
+    n: SubstanceYearOutputs
+    p: SubstanceYearOutputs
+    k: SubstanceYearOutputs
+
+
+@dataclass(frozen=True)
+class Inputs:
+    tair_ts: Float[np.ndarray, " days"]
+    tp_top_ts: Float[np.ndarray, " days"]
+    tp_middle_ts: Float[np.ndarray, " days"]
+    tp_bottom_ts: Float[np.ndarray, " days"]
+    water_tables: Float[np.ndarray, "days n"]
+    stand_outputs: Any
+    gv_outputs: Any
 
 
 @dataclass(frozen=True)
@@ -679,7 +707,7 @@ def compute_constants(params: SubstanceParams) -> SubstanceComputedConstants:
 
 def compute_initial_state(
     params: SubstanceParams, cc: SubstanceComputedConstants
-) -> State:
+) -> SubstanceState:
     M = np.zeros((1, params.n, 11))
 
     LL_mass = (
@@ -752,7 +780,7 @@ def compute_initial_state(
         mask = params.sfc == scode
         pH[0, mask] = params.dph[scode_int]
 
-    return State(
+    return SubstanceState(
         M=M,
         i=0,
         previous_mass=np.zeros(params.n),
@@ -780,8 +808,8 @@ def assemble_inputs(
     water_tables: Float[np.ndarray, "days n"],
     nonwoodylitter: Float[np.ndarray, " n"],
     woodylitter: Float[np.ndarray, " n"],
-) -> Inputs:
-    return Inputs(
+) -> SubstanceInputs:
+    return SubstanceInputs(
         tair_ts=tair_ts,
         tp_top_ts=tp_top_ts,
         tp_middle_ts=tp_middle_ts,
@@ -795,9 +823,9 @@ def assemble_inputs(
 def run_yr(
     params: SubstanceParams,
     cc: SubstanceComputedConstants,
-    previous_state: State,
-    inputs: Inputs,
-) -> tuple[State, YearOutputs]:
+    previous_state: SubstanceState,
+    inputs: SubstanceInputs,
+) -> tuple[SubstanceState, SubstanceYearOutputs]:
     days = len(inputs.tair_ts)
 
     M = previous_state.M.copy()
@@ -869,8 +897,8 @@ def run_yr(
     out_root_lyr = out - P2_out - P3_out
     out_below_root_lyr = P2_out  # + self.P3_out
 
-    new_state = State(M=M, i=i, previous_mass=next_previous_mass, pH=pH)
-    outputs = YearOutputs(
+    new_state = SubstanceState(M=M, i=i, previous_mass=next_previous_mass, pH=pH)
+    outputs = SubstanceYearOutputs(
         out=out,
         out_root_lyr=out_root_lyr,
         out_below_root_lyr=out_below_root_lyr,
@@ -879,6 +907,89 @@ def run_yr(
         daily_cumulative_out=daily_cumulative_out if track_daily else None,
     )
     return new_state, outputs
+
+
+def compute_initial_state_all(
+    params: Params,
+    constants: ComputedConstants,
+) -> State:
+    return State(
+        mass=compute_initial_state(params.mass, constants.mass),
+        n=compute_initial_state(params.n, constants.n),
+        p=compute_initial_state(params.p, constants.p),
+        k=compute_initial_state(params.k, constants.k),
+    )
+
+
+def update_all_soil_pH(
+    state: State,
+    params: Params,
+    increment: float,
+) -> State:
+    return State(
+        mass=replace(state.mass, pH=update_soil_pH(state.mass.pH, params.mass, increment)),
+        n=replace(state.n, pH=update_soil_pH(state.n.pH, params.n, increment)),
+        p=replace(state.p, pH=update_soil_pH(state.p.pH, params.p, increment)),
+        k=replace(state.k, pH=update_soil_pH(state.k.pH, params.k, increment)),
+    )
+
+
+def _litter(so: Any, gv: Any, prefix: str) -> tuple[Any, Any]:
+    """Extract nonwoody/woody litter from stand_outputs and gv_outputs."""
+    if prefix == "":
+        return (
+            (so.nonwoodylitter + so.nonwoody_lresid + so.non_woody_litter_mort + gv.nonwoodylitter) / 10000.0,
+            (so.woodylitter + so.woody_lresid + so.woody_litter_mort + gv.woodylitter) / 10000.0,
+        )
+    nw = (getattr(so, f"{prefix}nonwoodylitter") + getattr(so, f"{prefix}nonwoody_lresid")
+          + getattr(so, f"{prefix}non_woody_litter_mort") + getattr(gv, f"{prefix}litter_nw")) / 10000.0
+    w = (getattr(so, f"{prefix}woodylitter") + getattr(so, f"{prefix}woody_lresid")
+         + getattr(so, f"{prefix}woody_litter_mort") + getattr(gv, f"{prefix}litter_w")) / 10000.0
+    return nw, w
+
+
+def _litter_n(so: Any, gv: Any) -> tuple[Any, Any]:
+    nw = (so.n_nonwoodylitter + so.n_nonwoody_lresid
+          + so.n_non_woody_litter_mort + gv.n_litter_nw) / 10000.0
+    w = (so.n_woodylitter + so.n_woody_lresid
+         + so.n_woody_litter_mort + so.n_woody_litter_mort  # intentional duplicate (legacy)
+         + gv.n_litter_w) / 10000.0
+    return nw, w
+
+
+def run_all_yr(
+    params: Params,
+    constants: ComputedConstants,
+    previous_state: State,
+    inputs: Inputs,
+) -> tuple[State, YearOutputs]:
+    so = inputs.stand_outputs
+    gv = inputs.gv_outputs
+
+    nw_mass, w_mass = _litter(so, gv, "")
+    nw_n, w_n = _litter_n(so, gv)
+    nw_p, w_p = _litter(so, gv, "p_")
+    nw_k, w_k = _litter(so, gv, "k_")
+
+    def _run(sub_params, sub_constants, sub_state, nw, w):
+        return run_yr(
+            sub_params, sub_constants, sub_state,
+            assemble_inputs(
+                tair_ts=inputs.tair_ts, tp_top_ts=inputs.tp_top_ts,
+                tp_middle_ts=inputs.tp_middle_ts, tp_bottom_ts=inputs.tp_bottom_ts,
+                water_tables=inputs.water_tables,
+                nonwoodylitter=nw, woodylitter=w,
+            ),
+        )
+
+    mass_state, mass_out = _run(params.mass, constants.mass, previous_state.mass, nw_mass, w_mass)
+    n_state, n_out = _run(params.n, constants.n, previous_state.n, nw_n, w_n)
+    p_state, p_out = _run(params.p, constants.p, previous_state.p, nw_p, w_p)
+    k_state, k_out = _run(params.k, constants.k, previous_state.k, nw_k, w_k)
+
+    return State(mass=mass_state, n=n_state, p=p_state, k=k_state), YearOutputs(
+        mass=mass_out, n=n_out, p=p_out, k=k_out
+    )
 
 
 def compose_export(
