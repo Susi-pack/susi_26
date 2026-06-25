@@ -400,8 +400,8 @@ def read_netcdf_files_for_selected_variables_from_metadatas(
     metadata_by_stand: dict[StandID, pd.DataFrame],
 ) -> OutputDataStore:
     """
-    A simpler API for the previous function
-    if we have metadata_by_stand
+    Read selected variables from
+    all available stands x scenarios for a project
     """
 
     scenarios_by_stand = {}
