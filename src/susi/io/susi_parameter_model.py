@@ -576,6 +576,71 @@ FertilizationParameters = Union[
 ]
 
 
+class ClearCutParams(StrictFrozenModel):
+    """
+    Parameters to define a clear- or strip-cut management intervention.
+    """
+
+    cutting_yr: int = Field(
+        description="Year for cutting. Must be inside the simulation period."
+    )
+    new_growth_allometry: AllometryParams = Field(
+        description="Allometry data to specify growth after clear cut."
+    )
+    strips_to_cut: list[bool] = Field(
+        description="Boolean mask specifying which strips to cut. The length of the list must be the number of columns `n`. Cutting all strips, specified by [True, ..., True], implements clearcutting. Choosing only some strips implements strip cutting."
+    )
+
+    @field_validator("strips_to_cut")
+    @classmethod
+    def must_have_at_least_one_true(cls, v: list[bool]) -> list[bool]:
+        if not any(v):
+            raise ValueError(
+                "strips_to_cut must contain at least one True entry. If you genuinely do not want to cut any strip, then set `cutting=None`."
+            )
+        return v
+
+    @model_validator(mode="after")
+    def new_allometry_includes_age_one(self) -> Self:
+        for layer_name in ("dominant", "subdominant", "under"):
+            data = getattr(self.new_growth_allometry, f"{layer_name}_data")
+            for zid, df in data.items():
+                if df["age"].min() > 1:
+                    raise ValueError(
+                        f"Post-clearcut allometry layer '{layer_name}' zone {zid} has a minimum age of {df['age'].min()} years, but must start from age=1 year."
+                    )
+        return self
+
+
+class ThinningParams(StrictFrozenModel):
+    """
+    Parameters to define a thinning intervention.
+    """
+
+    cutting_yr: int = Field(
+        description="Year for thinning. Must be inside the simulation period."
+    )
+
+    to_ba: float = Field(description="basal area after cutting, m2/ha")
+
+    @field_validator("to_ba")
+    @classmethod
+    def thinning_is_not_clearcut(cls, to_ba: float) -> float:
+        if to_ba < 1.0:
+            raise ValueError(
+                "`to_ba` must be higher than 1.0 m2/ha. A thinning that reaches a basal area of less than 1.0 m2/ha is here considered to be better modeled by a clear cut."
+            )
+        return to_ba
+
+
+class ContinuousCoverParams(StrictFrozenModel):
+    def __init__(self, **data):
+        raise NotImplementedError("Not yet implemented")
+
+
+CuttingManagementParams = Union[ClearCutParams | ContinuousCoverParams | ThinningParams]
+
+
 class PeatTemperatureParams(StrictFrozenModel):
     """
     Peat soil temperature parameters
@@ -684,10 +749,10 @@ class SiteParams(StrictFrozenModel):
     h_mor: NonNegativeFloat | Callable[..., float] = Field(
         description="depth of mor layer, m"
     )
-    cutting_yr: int = Field(
-        description="Year for cutting. Not used if year is outside the simulation period."
+    cutting: CuttingManagementParams | None = Field(
+        description="Implement management interventions involving cutting, such as clearcutting and thinning. Use `None` for no cutting during the simulation.",
+        default=None,
     )
-    cutting_to_ba: float = Field(description="basal area after cutting, m2/ha")
     depoN: float
     depoP: float
     depoK: float
@@ -738,6 +803,28 @@ class SiteParams(StrictFrozenModel):
                 )
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def check_old_cutting_api(cls, data: dict) -> dict:
+        if isinstance(data, dict) and ("cutting_yr" in data or "cutting_to_ba" in data):
+            raise ValueError(
+                "The `cutting_yr` and `cutting_to_ba` fields have been replaced by the `cutting` field.\n"
+                "Use `cutting=ThinningParams(cutting_yr=..., cutting_to_ba=...)` for thinning or\n"
+                "`cutting=ClearCutParams(cutting_yr=..., new_growth_allometry=..., strips_to_cut=...)` for clear-cutting.\n"
+                "See docs/cutting_management.md for the full migration guide."
+            )
+        return data
+
+    @model_validator(mode="after")
+    def clear_cut_elements_same_as_soil_columns(self) -> Self:
+        if isinstance(self.cutting, ClearCutParams):
+            if len(self.cutting.strips_to_cut) != self.n:
+                raise ValueError(
+                    f"ClearCutParams.strips_to_cut has {len(self.cutting.strips_to_cut)} elements, "
+                    f"but must have {self.n} elements (equal to the number of soil columns)"
+                )
+        return self
+
 
 class SusiParams(StrictFrozenModel):
     """
@@ -753,6 +840,24 @@ class SusiParams(StrictFrozenModel):
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+
+    @model_validator(mode="after")
+    def check_cutting_within_years(self) -> Self:
+        config = self.simulation_config
+        site = self.site_parameters
+
+        match site.cutting:
+            case None:
+                pass
+            case ContinuousCoverParams():
+                raise NotImplementedError("not implemented")
+            case ClearCutParams() | ThinningParams():
+                cut_year = site.cutting.cutting_yr
+                if not (config.start_date.year <= cut_year <= config.end_date.year):
+                    raise ValueError(
+                        f"Cutting year {cut_year} is out of bounds wrt the simulation years ({config.start_date.year} -- {config.end_date.year})! You cannot cut a forest before or after the simulation period."
+                    )
+        return self
 
     @model_validator(mode="after")
     def check_fertilization_within_bounds(self) -> Self:

@@ -22,6 +22,7 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     CanopyLayerAllometryPointers,
+    ThinningParams,
 )
 
 _app_settings = AppSettings()
@@ -90,22 +91,11 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_yr=2004,
-        cutting_to_ba=12,
+        cutting=ThinningParams(cutting_yr=2004, to_ba=12),
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
-        fertilization=StandardNPKFertilizationParameters(
-            application_year=2201,
-            N=NutrientFertilizationParameters(
-                dose=0.0,
-                decay_k=0.5,
-                eff=1.0,
-            ),  # fertilization dose in kg ha-1, decay_k in yr-1
-            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
-            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            pH_increment=1.0,
-        ),
+        fertilization=None,
         peat_temperature=PeatTemperatureParams(),
     ),
 )

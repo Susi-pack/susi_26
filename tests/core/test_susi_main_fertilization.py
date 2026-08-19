@@ -20,6 +20,7 @@ from susi.io.susi_parameter_model import (
     PeatTypes,
     StandardNPKFertilizationParameters,
     AshFertilizationParameters,
+    ThinningParams,
 )
 
 
@@ -128,8 +129,7 @@ class TestSusiMainFertilizationIntegration:
                 enable_peatbottom=True,
                 rho_mor=90.0,
                 h_mor=lambda drain_age, rho_mor: 0.1,  # Simple callable for testing
-                cutting_yr=2004,
-                cutting_to_ba=12,
+                cutting=ThinningParams(cutting_yr=2004, to_ba=12),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,

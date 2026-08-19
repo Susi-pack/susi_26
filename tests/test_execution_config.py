@@ -23,6 +23,7 @@ from susi.io.susi_parameter_model import (
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     PeatTemperatureParams,
+    ThinningParams,
 )
 
 
@@ -97,8 +98,7 @@ def valid_susi_params(test_data_path):
             enable_peatbottom=True,
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2004,
-            cutting_to_ba=12,
+            cutting=ThinningParams(cutting_yr=2004, to_ba=12),
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
@@ -184,8 +184,7 @@ def another_valid_susi_params(test_data_path):
             enable_peatbottom=True,
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2004,
-            cutting_to_ba=12,
+            cutting=ThinningParams(cutting_yr=2004, to_ba=12),
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
