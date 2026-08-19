@@ -581,9 +581,6 @@ class ClearCutParams(StrictFrozenModel):
     Parameters to define a clear- or strip-cut management intervention.
     """
 
-    cutting_yr: int = Field(
-        description="Year for cutting. Must be inside the simulation period."
-    )
     new_growth_allometry: AllometryParams = Field(
         description="Allometry data to specify growth after clear cut."
     )
@@ -617,10 +614,6 @@ class ThinningParams(StrictFrozenModel):
     Parameters to define a thinning intervention.
     """
 
-    cutting_yr: int = Field(
-        description="Year for thinning. Must be inside the simulation period."
-    )
-
     to_ba: float = Field(description="basal area after cutting, m2/ha")
 
     @field_validator("to_ba")
@@ -638,7 +631,18 @@ class ContinuousCoverParams(StrictFrozenModel):
         raise NotImplementedError("Not yet implemented")
 
 
-CuttingManagementParams = Union[ClearCutParams | ContinuousCoverParams | ThinningParams]
+class CuttingManagementParams(StrictFrozenModel):
+    """
+    Parameters to define a thinning, clear cut (including selected strip cut),
+    continuous cover management intervention.
+    """
+
+    application_yr: int = Field(
+        description="Year for cutting management application. Must be inside the simulation period."
+    )
+    management_type: Union[ClearCutParams | ContinuousCoverParams | ThinningParams] = (
+        Field(description="Type of cutting management selected.")
+    )
 
 
 class PeatTemperatureParams(StrictFrozenModel):
@@ -749,7 +753,7 @@ class SiteParams(StrictFrozenModel):
     h_mor: NonNegativeFloat | Callable[..., float] = Field(
         description="depth of mor layer, m"
     )
-    cutting: CuttingManagementParams | None = Field(
+    cutting_management: CuttingManagementParams | None = Field(
         description="Implement management interventions involving cutting, such as clearcutting and thinning. Use `None` for no cutting during the simulation.",
         default=None,
     )
@@ -817,12 +821,13 @@ class SiteParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
-        if isinstance(self.cutting, ClearCutParams):
-            if len(self.cutting.strips_to_cut) != self.n:
-                raise ValueError(
-                    f"ClearCutParams.strips_to_cut has {len(self.cutting.strips_to_cut)} elements, "
-                    f"but must have {self.n} elements (equal to the number of soil columns)"
-                )
+        if self.cutting_management is not None:
+            if isinstance(self.cutting_management.management_type, ClearCutParams):
+                if len(self.cutting_management.management_type.strips_to_cut) != self.n:
+                    raise ValueError(
+                        f"ClearCutParams.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
+                        f"but must have {self.n} elements (equal to the number of soil columns)"
+                    )
         return self
 
 
@@ -846,16 +851,14 @@ class SusiParams(StrictFrozenModel):
         config = self.simulation_config
         site = self.site_parameters
 
-        match site.cutting:
+        match site.cutting_management:
             case None:
                 pass
-            case ContinuousCoverParams():
-                raise NotImplementedError("not implemented")
-            case ClearCutParams() | ThinningParams():
-                cut_year = site.cutting.cutting_yr
+            case _any_other:
+                cut_year = site.cutting_management.application_yr
                 if not (config.start_date.year <= cut_year <= config.end_date.year):
                     raise ValueError(
-                        f"Cutting year {cut_year} is out of bounds wrt the simulation years ({config.start_date.year} -- {config.end_date.year})! You cannot cut a forest before or after the simulation period."
+                        f"Cutting management year {cut_year} is out of bounds wrt the simulation years ({config.start_date.year} -- {config.end_date.year})! You cannot cut a forest before or after the simulation period."
                     )
         return self
 
