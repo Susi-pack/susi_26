@@ -2176,12 +2176,12 @@ def compare_scens(ff):
     ncf.close()
 
 
-# ff = r'C:/Users/alauren/Documents/WinPython-64bit-2.7.10.3/Susi_8_3_py37/outputs/susi.nc'
+ff = r'/Users/sandeep/susi_26/outputs/ditch_depth_experiment/stand_01/deep_ditch/susi.nc'
 # ff = 'D:/Immala_simulations/Metsakeskus/immala__38304191_50vuotta_susi_lyr_0.nc'
-# compare_scens(ff)
-# hydrology(ff, 0)
-# stand(ff, 0)
-# mass(ff, 0)
-# nutrient_balance(ff, 'N', 0)
+compare_scens(ff)
+hydrology(ff, 0)
+stand(ff, 0)
+mass(ff, 0)
+nutrient_balance(ff, 'N', 0)
 
 

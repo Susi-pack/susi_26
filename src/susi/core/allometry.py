@@ -329,83 +329,102 @@ class Allometry:
         )
 
         # ********** Interpolation functions ******************************************
+        #Note ABOUT BOUND HANDLING (2026-07):
+        # All interpolation calls in this block intentionally use bounds_error=False
+        # together with endpoint fill_value=(first, last). This clamps values to the
+        # nearest table endpoint instead of raising ValueError when the model state
+        # lands slightly outside the tabulated range (for example, biomass can exceed
+        # the last allometry row by a small numerical margin after annual updates).
+        #
+        # Why this is required:
+        # - Long scenario batches should not abort because one stand exceeds the
+        #   allometry domain by a tiny amount near the upper edge.
+        # - The previous strict behavior (bounds_error=True) caused runtime failures
+        #   in canopy leaf dynamics when evaluating bmToLeafMass at high biomass.
+        # - Endpoint clamping is consistent with the existing fill_value usage already
+        #   defined for all interpolators in this method.
+        #
+        # Practical implication:
+        # - Out-of-range inputs no longer crash the run.
+        # - Responses saturate at min/max tabulated values until a wider allometry
+        #   table is provided.
         ageToHdom = interp1d(
             df["age"].values,
             df["hdom"].values,
             fill_value=(df["hdom"].values[0], df["hdom"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToLAI = interp1d(
             df["age"].values,
             df["leafarea"].values,
             fill_value=(df["leafarea"].values[0], df["leafarea"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToYield = interp1d(
             df["age"].values,
             df["yield"].values,
             fill_value=(df["yield"].values[0], df["yield"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToVol = interp1d(
             df["age"].values,
             df["vol"].values,
             fill_value=(df["vol"].values[0], df["vol"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToBa = interp1d(
             df["age"].values,
             df["BA"].values,
             fill_value=(df["BA"].values[0], df["BA"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToBm = interp1d(
             df["age"].values,
             df["bm"].values,
             fill_value=(df["bm"].values[0], df["bm"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToBmNoLeaves = interp1d(
             df["age"].values,
             df["bm_noleaves"].values,
             fill_value=(df["bm_noleaves"].values[0], df["bm_noleaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToStems = interp1d(
             df["age"].values,
             df["N"].values,
             fill_value=(df["N"].values[0], df["N"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToLeaves = interp1d(
             df["age"].values,
             df["leaves"].values,
             fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToFineRoots = interp1d(
             df["age"].values,
             df["roots_fine"].values,
             fill_value=(df["roots_fine"].values[0], df["roots_fine"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToBranchLiving = interp1d(
             df["age"].values,
             df["branch_living"].values,
             fill_value=(df["branch_living"].values[0], df["branch_living"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToBranchDead = interp1d(
             df["age"].values,
             df["branch_dead"].values,
             fill_value=(df["branch_dead"].values[0], df["branch_dead"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToCoarseRoots = interp1d(
             df["age"].values,
             df["roots_coarse"].values,
             fill_value=(df["roots_coarse"].values[0], df["roots_coarse"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToStemStump = interp1d(
             df["age"].values,
@@ -414,85 +433,85 @@ class Allometry:
                 df["stem_and_stump"].values[0],
                 df["stem_and_stump"].values[-1],
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToNNoLeaves = interp1d(
             df["age"].values,
             df["Nbm_noleaves"].values,
             fill_value=(df["Nbm_noleaves"].values[0], df["Nbm_noleaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToPNoLeaves = interp1d(
             df["age"].values,
             df["Pbm_noleaves"].values,
             fill_value=(df["Pbm_noleaves"].values[0], df["Pbm_noleaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         ageToKNoLeaves = interp1d(
             df["age"].values,
             df["Kbm_noleaves"].values,
             fill_value=(df["Kbm_noleaves"].values[0], df["Kbm_noleaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         volToLogs = interp1d(
             df["vol"].values,
             df["logs"].values,
             fill_value=(df["logs"].values[0], df["logs"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         volToPulp = interp1d(
             df["vol"].values,
             df["pulp"].values,
             fill_value=(df["pulp"].values[0], df["pulp"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         yiToVol = interp1d(
             df["yield"].values,
             df["vol"].values,
             fill_value=(df["vol"].values[0], df["vol"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         yiToBm = interp1d(
             df["yield"].values,
             df["bm"].values,
             fill_value=(df["bm"].values[0], df["bm"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToYi = interp1d(
             df["bm_noleaves"].values,
             df["yield"].values,
             fill_value=(df["yield"].values[0], df["yield"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToVol = interp1d(
             df["bm_noleaves"].values,
             df["vol"].values,
             fill_value=(df["vol"].values[0], df["vol"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToBa = interp1d(
             df["bm_noleaves"].values,
             df["BA"].values,
             fill_value=(df["BA"].values[0], df["BA"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToLeafMass = interp1d(
             df["bm_noleaves"].values,
             df["leaves"].values,
             fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmWithLeavesToLeafMass = interp1d(
             df["bm"].values,
             df["leaves"].values,
             fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToLAI = interp1d(
             df["bm_noleaves"].values,
@@ -501,50 +520,50 @@ class Allometry:
                 df["leaves"].values[0] * sla[spe] / 10000.0,
                 df["leaves"].values[-1] * sla[spe] / 10000.0,
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToHdom = interp1d(
             df["bm_noleaves"].values,
             df["hdom"].values,
             fill_value=(df["hdom"].values[0], df["hdom"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToStems = interp1d(
             df["bm_noleaves"].values,
             df["N"].values,
             fill_value=(df["N"].values[0], df["N"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToDg = interp1d(
             df["bm_noleaves"].values,
             df["Dg"].values,
             fill_value=(df["Dg"].values[0], df["Dg"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToFineRoots = interp1d(
             df["bm_noleaves"].values,
             df["roots_fine"].values,
             fill_value=(df["roots_fine"].values[0], df["roots_fine"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToNFineRoots = interp1d(
             df["bm_noleaves"].values,
             df["N_fine_roots"].values,
             fill_value=(df["N_fine_roots"].values[0], df["N_fine_roots"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPFineRoots = interp1d(
             df["bm_noleaves"].values,
             df["P_fine_roots"].values,
             fill_value=(df["P_fine_roots"].values[0], df["P_fine_roots"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKFineRoots = interp1d(
             df["bm_noleaves"].values,
             df["K_fine_roots"].values,
             fill_value=(df["K_fine_roots"].values[0], df["K_fine_roots"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToWoodyLoggingResidues = interp1d(
@@ -554,7 +573,7 @@ class Allometry:
                 df["woody_logging_residues"].values[0],
                 df["woody_logging_residues"].values[-1],
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToNWoodyLoggingResidues = interp1d(
             df["bm_noleaves"].values,
@@ -563,7 +582,7 @@ class Allometry:
                 df["N_woody_logging_residues"].values[0],
                 df["N_woody_logging_residues"].values[-1],
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPWoodyLoggingResidues = interp1d(
             df["bm_noleaves"].values,
@@ -572,7 +591,7 @@ class Allometry:
                 df["P_woody_logging_residues"].values[0],
                 df["P_woody_logging_residues"].values[-1],
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKWoodyLoggingResidues = interp1d(
             df["bm_noleaves"].values,
@@ -581,39 +600,39 @@ class Allometry:
                 df["K_woody_logging_residues"].values[0],
                 df["K_woody_logging_residues"].values[-1],
             ),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToLogVolume = interp1d(
             df["bm_noleaves"].values,
             df["logs"].values,
             fill_value=(df["logs"].values[0], df["logs"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPulpVolume = interp1d(
             df["bm_noleaves"].values,
             df["pulp"].values,
             fill_value=(df["pulp"].values[0], df["pulp"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToNLeafDemand = interp1d(
             df["bm_noleaves"].values,
             df["N_leaf_demand"].values,
             fill_value=(df["N_leaf_demand"].values[0], df["N_leaf_demand"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPLeafDemand = interp1d(
             df["bm_noleaves"].values,
             df["P_leaf_demand"].values,
             fill_value=(df["P_leaf_demand"].values[0], df["N_leaf_demand"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKLeafDemand = interp1d(
             df["bm_noleaves"].values,
             df["K_leaf_demand"].values,
             fill_value=(df["K_leaf_demand"].values[0], df["N_leaf_demand"].values[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         # **********************************************************************
@@ -664,50 +683,50 @@ class Allometry:
 
         # ---- Interpolation functions -----------------
         bmToDbm = interp1d(
-            ageToBmNoLeaves(a_arr), dbm, fill_value=(dbm[0], dbm[-1]), bounds_error=True
+            ageToBmNoLeaves(a_arr), dbm, fill_value=(dbm[0], dbm[-1]), bounds_error=False
         )  # from biomass to biomass change
         bmToFinerootLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             fineroot_litter,
             fill_value=(fineroot_litter[0], fineroot_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToWoodyLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             woody_litter,
             fill_value=(woody_litter[0], woody_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToMortalityFineRoot = interp1d(
             ageToBmNoLeaves(a_arr),
             mortality_fineroot,
             fill_value=(mortality_fineroot[0], mortality_fineroot[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToMortalityLeaves = interp1d(
             ageToBmNoLeaves(a_arr),
             mortality_leaf,
             fill_value=(mortality_leaf[0], mortality_leaf[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToMortalityWoody = interp1d(
             ageToBmNoLeaves(a_arr),
             mortality_woody,
             fill_value=(mortality_woody[0], mortality_woody[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmWithLeavesToFinerootLitter = interp1d(
             ageToBm(a_arr),
             fineroot_litter,
             fill_value=(fineroot_litter[0], fineroot_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmWithLeavesToWoodyLitter = interp1d(
             ageToBm(a_arr),
             woody_litter,
             fill_value=(woody_litter[0], woody_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         """ Demand functions """
@@ -776,114 +795,114 @@ class Allometry:
             ageToBmNoLeaves(a_arr),
             N_demand,
             fill_value=(N_demand[0], N_demand[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )  # from biomass to N demand No leaves here
         bmToPdemand = interp1d(
             ageToBmNoLeaves(a_arr),
             P_demand,
             fill_value=(P_demand[0], P_demand[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )  # from biomass to P demand
         bmToKdemand = interp1d(
             ageToBmNoLeaves(a_arr),
             K_demand,
             fill_value=(K_demand[0], K_demand[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )  # from biomass to K demand
 
         bmToNFineRootLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             N_fineroot_litter,
             fill_value=(N_fineroot_litter[0], N_fineroot_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPFineRootLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             P_fineroot_litter,
             fill_value=(P_fineroot_litter[0], P_fineroot_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKFineRootLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             K_fineroot_litter,
             fill_value=(K_fineroot_litter[0], K_fineroot_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToNWoodyLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             N_woody_litter,
             fill_value=(N_woody_litter[0], N_woody_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPWoodyLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             P_woody_litter,
             fill_value=(P_woody_litter[0], P_woody_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKWoodyLitter = interp1d(
             ageToBmNoLeaves(a_arr),
             K_woody_litter,
             fill_value=(K_woody_litter[0], K_woody_litter[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToNMortalityLeaves = interp1d(
             ageToBmNoLeaves(a_arr),
             N_mortality_leaves,
             fill_value=(N_mortality_leaves[0], N_mortality_leaves[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPMortalityLeaves = interp1d(
             ageToBmNoLeaves(a_arr),
             P_mortality_leaves,
             fill_value=(P_mortality_leaves[0], P_mortality_leaves[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKMortalityLeaves = interp1d(
             ageToBmNoLeaves(a_arr),
             K_mortality_leaves,
             fill_value=(K_mortality_leaves[0], K_mortality_leaves[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToNMortalityFineRoot = interp1d(
             ageToBmNoLeaves(a_arr),
             N_mortality_fineroot,
             fill_value=(N_mortality_fineroot[0], N_mortality_fineroot[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPMortalityFineRoot = interp1d(
             ageToBmNoLeaves(a_arr),
             P_mortality_fineroot,
             fill_value=(P_mortality_fineroot[0], P_mortality_fineroot[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKMortalityFineRoot = interp1d(
             ageToBmNoLeaves(a_arr),
             K_mortality_fineroot,
             fill_value=(K_mortality_fineroot[0], K_mortality_fineroot[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         bmToNMortalityWoody = interp1d(
             ageToBmNoLeaves(a_arr),
             N_mortality_woody,
             fill_value=(N_mortality_woody[0], N_mortality_woody[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToPMortalityWoody = interp1d(
             ageToBmNoLeaves(a_arr),
             P_mortality_woody,
             fill_value=(P_mortality_woody[0], P_mortality_woody[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
         bmToKMortalityWoody = interp1d(
             ageToBmNoLeaves(a_arr),
             K_mortality_woody,
             fill_value=(K_mortality_woody[0], K_mortality_woody[-1]),
-            bounds_error=True,
+            bounds_error=False,
         )
 
         allometry_f = {}

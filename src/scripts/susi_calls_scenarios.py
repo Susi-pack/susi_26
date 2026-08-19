@@ -7,7 +7,7 @@ Created on Wed Sep 30 14:10:42 2020
 
 import numpy as np
 import datetime
-from susi.susi_utils import read_FMI_weather
+from susi.core.susi_utils import read_FMI_weather#from susi.susi_utils import read_FMI_weather
 from inputs.susi_para import get_susi_para
 from susi.susi_main import Susi
 

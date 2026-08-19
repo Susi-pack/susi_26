@@ -94,6 +94,7 @@ class CanopyGrid:
     def run_timestep(
         self,
         cpara,
+        photopara,
         doy,
         dt,
         Ta,
@@ -162,6 +163,7 @@ class CanopyGrid:
         """--- dry-canopy evapotranspiration [mm s-1] --- """
         Transpi, Efloor, Gc = self.dry_canopy_et(
             cpara=cpara,
+            photopara=photopara,
             D=VPD,
             Qp=Par,
             AE=Rn,
@@ -275,6 +277,7 @@ class CanopyGrid:
     def dry_canopy_et(
         self,
         cpara,
+        photopara,
         D,
         Qp,
         AE,
@@ -357,9 +360,11 @@ class CanopyGrid:
         # Kelliher et al. 1995 AFM but the resulting equation is not exact integral of K95.
         # fQ = 1./ kp * np.log((Qp + q50) / (Qp*np.exp(-kp*self.LAI) + q50))
 
-        # soil moisture response: Lagergren & Lindroth, xxxx"""
-        #        fRew = np.minimum(1.0, np.maximum(Rew / rw, rwmin))
-        fRew = Rew
+        # Use the same nonlinear soil-moisture response as annual assimilation.
+        fRew = (
+            1.0 + ((1.0 - Rew) / photopara.alfa) ** photopara.nu
+        ) ** (-1.0)
+
 
         # CO2 -response of canopy conductance, derived from APES-simulations
         # (Launiainen et al. 2016, Global Change Biology). relative to 380 ppm

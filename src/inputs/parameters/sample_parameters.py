@@ -34,8 +34,8 @@ PARAMETERS = SusiParams(
         FMI_weather_filepath=_app_settings.input_folder.joinpath("weather/CFw.csv"),
     ),
     simulation_config=SimulationConfig(
-        start_date=datetime.datetime(2004, 1, 1),
-        end_date=datetime.datetime(2017, 12, 31),
+        start_date=datetime.datetime(2010, 1, 1),
+        end_date=datetime.datetime(2015, 12, 31),
     ),
     allometry_parameters=AllometryParams(
         allometry_dir_path=_app_settings.input_folder,
@@ -57,7 +57,7 @@ PARAMETERS = SusiParams(
         canopylayers=CanopyLayerAllometryPointers(
             dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
         ),
-        site_fertility_class=4,
+        site_fertility_class=5, #4
         sitename="susirun",
         species=TreeSpecies("Pine"),
         sfc_specification=1,
@@ -74,8 +74,8 @@ PARAMETERS = SusiParams(
         drain_age=50.0,
         initial_h=-0.2,
         slope=0.0,
-        peat_type=[PeatTypes.generic] * 8,
-        peat_type_bottom=[PeatTypes.generic],
+        peat_type=[PeatTypes.sphagnum] * 8,
+        peat_type_bottom=[PeatTypes.sphagnum],
         anisotropy=10.0,
         vonP=True,
         vonP_top=[2, 5, 5, 5, 6, 6, 7, 7],

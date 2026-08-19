@@ -35,6 +35,7 @@ class Canopylayer:
         ixs,
         photopara,
         nut_stat,
+        growth_mode,
     ):
         self.name = (
             name  # name of the canopy layer e.g. 'dominant', 'subdominant', etc.
@@ -45,6 +46,7 @@ class Canopylayer:
         self.agearr = agearr.copy()  # age of the canopy layer, yrs
         self.nscens = nscens  # number of scenarion in the simulation
         self.yrs = yrs  # number od years in the simulation
+        self.growth_mode = growth_mode
         self.remaining_share = np.ones(
             self.ncols
         )  # share of remaining stems after thinning 0...1
@@ -444,7 +446,10 @@ class Canopylayer:
                 self.basKdemand[ixs[m]] = self.allodic[m].allometry_f[
                     "bmToKLeafDemand"
                 ](bm[ixs[m]])
-                self.agearr[ixs[m]] = self.agearr[ixs[m]] + 1
+                # Dynamic runs retain the original annual age progression;
+                # fixed runs hold the allometric stand state at its initial age.
+                if self.growth_mode == "dynamic":
+                    self.agearr[ixs[m]] = self.agearr[ixs[m]] + 1
                 # print ('vol')
                 # print (self.volume)
                 # print ('n stems')
@@ -582,11 +587,12 @@ class Canopylayer:
             print (np.round(np.mean(self.allodic[1].allometry_f['bmToVol'](bm)*self.stems),2))
             #print (np.round(np.mean(self.allodic[1].allometry_f['ageToVol'](self.agearr)*self.stems), 2))
         """
-        self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
-
-        # if self.name=='dominant': print (np.round(np.mean(delta_bm_noleaves),2), 'delta no leaves' )
-
-        self.volumegrowth = self.volume - vol_ini
+        # Keep the existing fixed-stand behavior separate from the dynamic
+        # NPP-driven biomass update so paired simulations differ by one switch.
+        if self.growth_mode == "dynamic":
+            self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
+        else:
+            self.volumegrowth = self.volume - vol_ini
         """
         if self.name=='dominant':
             print (np.round(np.mean(self.volumegrowth*self.stems),2), 'volumegrowth')

@@ -1571,6 +1571,7 @@ def assimilation(photopara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hd
 
     """Eq 6"""  # Soil water content modifyer
     fREW = 1.0 / (1.0 + ((1.0 - rew) / photopara.alfa) ** photopara.nu)
+    # fREW = 1
 
     """ Beer-Lambert function: LAI function"""  # Fabrika 2013
     kext = 0.2
@@ -1682,6 +1683,7 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
             -1.0
         )
         fAFP = fafparr[:, column]
+        # fAFP = 1
         """ Beer-Lambert function: LAI function"""  # Fabrika 2013
         kext = 0.2
 

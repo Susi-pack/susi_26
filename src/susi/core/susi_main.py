@@ -106,6 +106,7 @@ class Susi:
             agearr=self.parameters.site_parameters.age,
             allometry_params=self.parameters.allometry_parameters,
             photopara=self.parameters.photo_parameters,
+            growth_mode=self.parameters.simulation_config.growth_mode,
         )  # create stand class
         stand.update()
 
@@ -343,6 +344,7 @@ class Susi:
                     potinf, trfall, interc, evap, ET, transpi, efloor, MBE, SWE = (
                         cpy.run_timestep(
                             self.parameters.canopy_parameters,
+                            self.parameters.photo_parameters,
                             doy,
                             self.parameters.canopy_parameters.dt,
                             ta,
@@ -364,9 +366,12 @@ class Susi:
                     potinf, efloor, MBE2 = moss.interception(
                         potinf, efloor
                     )  # ground vegetation and moss hydrology
+            
                     stpout["deltas"][r, d, :] = (
                         potinf - transpi
                     )  # water flux thru soil surface
+
+
                     ets[d] = efloor + transpi + interc  # evapotranspiration components
 
                     if d % 365 == 0:
@@ -386,6 +391,8 @@ class Susi:
                         d, h0ts_west[d], h0ts_east[d], stpout["deltas"][r, d, :], moss
                     )  # strip/peat hydrology
                     stpout = stp.update_outarrays(r, d, stpout)
+                    dwt = stp.dwt.copy() #update WTD for next day's REW
+                    #This is done to fix the broken feedback loop identified while fixing the growth
 
                     z, peat_temperature = pt.run_timestep(
                         ta, np.mean(SWE), np.mean(efloor)

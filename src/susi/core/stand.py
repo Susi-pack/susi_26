@@ -20,6 +20,7 @@ class Stand:
         agearr,
         allometry_params,
         photopara,
+        growth_mode,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -78,6 +79,7 @@ class Stand:
             ixdominants,
             photopara,
             self.nut_stat,
+            growth_mode,
         )
         self.subdominant = Canopylayer(
             "subdominant",
@@ -92,6 +94,7 @@ class Stand:
             ixsubdominants,
             photopara,
             self.nut_stat,
+            growth_mode,
         )
         self.under = Canopylayer(
             "under",
@@ -106,6 +109,7 @@ class Stand:
             ixunder,
             photopara,
             self.nut_stat,
+            growth_mode,
         )
         self.clyrs = [
             self.dominant,

@@ -2,6 +2,7 @@ from multiprocessing.sharedctypes import Value
 from numba.scripts.generate_lower_listing import description
 from functools import lru_cache
 import datetime
+from typing import Literal
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Self, TypedDict
@@ -47,10 +48,35 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
 
 
 @lru_cache()
-def read_allometry_info_from_excel(filepath: Path) -> tuple[pd.DataFrame, int]:
+def read_allometry_info_from_excel(
+    filepath: Path,
+    sheet_name: str = "StandData",
+) -> tuple[pd.DataFrame, int]:
     """
     Read allometry file, return allometry dataframe and species id.
     It is cached so that the same file is not read twice.
+
+    NEW (multi-stand format)
+    ------------------------
+    When ``sheet_name`` is anything other than ``"StandData"`` the function
+    reads from a **multi-stand combined xlsx** file where each stand has two
+    named data sheets and a shared species lookup:
+
+      Sheet  ``dom_{standid}``  — dominant-layer allometric road-map table
+      Sheet  ``sub_{standid}``  — subdominant-layer allometric road-map table
+      Sheet  ``Loggings``        — species lookup:
+                                   columns [standid, layer, Species_id]
+
+    ``sheet_name`` must follow the pattern ``"dom_{standid}"`` or
+    ``"sub_{standid}"`` so that the species id can be resolved from the
+    Loggings table.
+
+    ORIGINAL (single-stand format, default)
+    ----------------------------------------
+    When ``sheet_name == "StandData"`` the function uses the original
+    behaviour:
+      Sheet index 0 (``StandData``) — allometric road-map table (22 cols)
+      Sheet index 1 (``Loggings``)  — species id in row 0, column 4
     """
 
     cnames = [
@@ -76,29 +102,79 @@ def read_allometry_info_from_excel(filepath: Path) -> tuple[pd.DataFrame, int]:
         "roots_coarse",
         "roots_fine",
     ]
-    df = pd.read_excel(
-        filepath, sheet_name=0, usecols=range(22), skiprows=1, header=None
-    )
-    df = df.drop([0], axis=1)
-    df.columns = cnames
-    cname = ["idSpe"]
-    df2 = pd.read_excel(filepath, sheet_name=1, usecols=[4], skiprows=1, header=None)
-    df2.columns = cname
 
-    # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
+    if sheet_name == "StandData":
+        # ── ORIGINAL FORMAT ──────────────────────────────────────────────────
+        # Sheet 0: allometry data table (Finnish column headers, 22 cols).
+        #   Col 0 = Kasvatus / Schedule  (dropped below — not used by SUSI)
+        #   Cols 1-21 mapped to cnames above.
+        # Sheet 1: Loggings — species id at row 0, column 4 ("id Puulaji").
+        df = pd.read_excel(
+            filepath, sheet_name=0, usecols=range(22), skiprows=1, header=None
+        )
+        df = df.drop([0], axis=1)
+        df.columns = cnames
+
+        cname = ["idSpe"]
+        df2 = pd.read_excel(
+            filepath, sheet_name=1, usecols=[4], skiprows=1, header=None
+        )
+        df2.columns = cname
+        species_id = int(df2["idSpe"].iloc[0])
+
+    else:
+        # ── NEW MULTI-STAND FORMAT ────────────────────────────────────────────
+        # sheet_name pattern: "dom_{standid}"  or  "sub_{standid}"
+        # The data layout is identical to StandData (22 cols, same column
+        # order), so the same drop+rename logic applies.
+        df = pd.read_excel(
+            filepath, sheet_name=sheet_name, usecols=range(22), skiprows=1, header=None
+        )
+        df = df.drop([0], axis=1)
+        df.columns = cnames
+
+        # Parse layer and standid from sheet name for species lookup.
+        layer, standid_str = sheet_name.split("_", 1)
+
+        # Loggings sheet columns: standid | layer | Species_id
+        loggings = pd.read_excel(filepath, sheet_name="Loggings")
+        loggings["standid"] = loggings["standid"].astype(str).str.strip()
+        loggings["layer"]   = loggings["layer"].astype(str).str.strip()
+
+        match = loggings[
+            (loggings["standid"] == standid_str) &
+            (loggings["layer"]   == layer)
+        ]
+        if match.empty:
+            raise ValueError(
+                f"No species id found in Loggings sheet for "
+                f"standid='{standid_str}', layer='{layer}' in {filepath}"
+            )
+        species_id = int(match["Species_id"].iloc[0])
+
+    # ── COMMON POST-PROCESSING (both formats) ─────────────────────────────────
+    # Remove any rows where age == 0 (these are artefacts / thinning markers
+    # that should not be treated as real time steps).
     df = df.loc[df["age"] != 0]
 
+    # When a thinning occurs the next row has the same age as the previous one
+    # (age difference < 1 year).  Add a small fractional year (5/365 ≈ 0.014)
+    # so that interpolation inside SUSI works correctly.
     steps = np.array(np.diff(df["age"]), dtype=float)
     idx = np.ravel(np.argwhere(steps < 1.0)) + 1
     df.loc[idx, "age"] = df.loc[idx, "age"] + 5.0 / 365.0
 
-    return df, df2["idSpe"][0]
+    return df, species_id
 
 
 class SimulationConfig(StrictFrozenModel):
     # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
+    growth_mode: Literal["dynamic", "fixed"] = Field(
+        default="fixed",
+        description="Whether annual stand biomass is updated from NPP or held fixed.",
+    )
 
 
 class WeatherParams(StrictFrozenModel):
@@ -149,28 +225,51 @@ class AllometryParams(StrictFrozenModel):
         _under_data = {}
         _under_species_id = {}
 
-        for id, filename in self.dominant.items():
+        for id, file_spec in self.dominant.items():
             if id != 0:
+                # NEW: file_spec may be "filename.xlsx::sheet_name" for multi-stand
+                # combined xlsx files (see read_allometry_info_from_excel docstring).
+                # ORIGINAL: file_spec is just "filename.xlsx" → reads StandData sheet.
+                if "::" in file_spec:
+                    filename, sheet_name = file_spec.split("::", 1)
+                else:
+                    filename, sheet_name = file_spec, "StandData"
+
                 df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
+                    filepath=self.allometry_dir_path / filename,
+                    sheet_name=sheet_name,
                 )
 
                 _dominant_data[id] = df
                 _dominant_species_id[id] = species_id
 
-        for id, filename in self.subdominant.items():
+        for id, file_spec in self.subdominant.items():
             if id != 0:
+                # NEW: same "filename.xlsx::sheet_name" syntax supported here.
+                if "::" in file_spec:
+                    filename, sheet_name = file_spec.split("::", 1)
+                else:
+                    filename, sheet_name = file_spec, "StandData"
+
                 df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
+                    filepath=self.allometry_dir_path / filename,
+                    sheet_name=sheet_name,
                 )
 
                 _subdominant_data[id] = df
                 _subdominant_species_id[id] = species_id
 
-        for id, filename in self.under.items():
+        for id, file_spec in self.under.items():
             if id != 0:
+                # NEW: same "filename.xlsx::sheet_name" syntax supported here.
+                if "::" in file_spec:
+                    filename, sheet_name = file_spec.split("::", 1)
+                else:
+                    filename, sheet_name = file_spec, "StandData"
+
                 df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
+                    filepath=self.allometry_dir_path / filename,
+                    sheet_name=sheet_name,
                 )
 
                 _under_data[id] = df
