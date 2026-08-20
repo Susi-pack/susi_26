@@ -812,10 +812,13 @@ class SiteParams(StrictFrozenModel):
     def check_old_cutting_api(cls, data: dict) -> dict:
         if isinstance(data, dict) and ("cutting_yr" in data or "cutting_to_ba" in data):
             raise ValueError(
-                "The `cutting_yr` and `cutting_to_ba` fields have been replaced by the `cutting` field.\n"
-                "Use `cutting=ThinningParams(cutting_yr=..., cutting_to_ba=...)` for thinning or\n"
-                "`cutting=ClearCutParams(cutting_yr=..., new_growth_allometry=..., strips_to_cut=...)` for clear-cutting.\n"
-                "See docs/cutting_management.md for the full migration guide."
+                "The `cutting_yr` and `cutting_to_ba` fields have been replaced by the "
+                "`cutting_management` field.\n"
+                "Use `cutting_management=CuttingManagementParams(application_yr=..., "
+                "management_type=Thinning(to_ba=...))` for thinning or\n"
+                "`cutting_management=CuttingManagementParams(application_yr=..., "
+                "management_type=ClearCut(new_growth_allometry=..., strips_to_cut=...))` "
+                "for clear-cutting."
             )
         return data
 
@@ -825,7 +828,7 @@ class SiteParams(StrictFrozenModel):
             if isinstance(self.cutting_management.management_type, ClearCut):
                 if len(self.cutting_management.management_type.strips_to_cut) != self.n:
                     raise ValueError(
-                        f"ClearCutParams.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
+                        f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
                         f"but must have {self.n} elements (equal to the number of soil columns)"
                     )
         return self

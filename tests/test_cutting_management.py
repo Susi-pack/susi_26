@@ -199,17 +199,7 @@ class TestCuttingYearBounds:
 
 
 class TestClearCutStripsLength:
-    """strips_to_cut length must equal the number of soil columns n.
-
-    KNOWN BUG (flagging, not fixing): SiteParams.clear_cut_elements_same_as_soil_columns
-    still does `isinstance(self.cutting_management, ClearCutParams)`. Since the
-    CuttingManagementParams wrapper was introduced, self.cutting_management is a
-    CuttingManagementParams (or None) — never a ClearCutParams directly (that now
-    lives at self.cutting_management.management_type) — so this isinstance check is
-    always False and the length check never runs. test_clearcut_strips_length_mismatch
-    below is written to assert the *intended* behavior and will fail until that
-    validator is updated to check `self.cutting_management.management_type` instead.
-    """
+    """strips_to_cut length must equal the number of soil columns n."""
 
     def test_clearcut_strips_length_matches(self):
         sp = _make_susi_params(
@@ -224,9 +214,7 @@ class TestClearCutStripsLength:
         assert sp.site_parameters.cutting_management.application_yr == 2005
 
     def test_clearcut_strips_length_mismatch(self):
-        with pytest.raises(
-            ValueError, match="ClearCutParams.strips_to_cut has 3 elements"
-        ):
+        with pytest.raises(ValueError, match="ClearCut.strips_to_cut has 3 elements"):
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
                     application_yr=2005,
@@ -316,9 +304,13 @@ class TestOldApiRejection:
     field names."""
 
     def test_old_cutting_yr_rejected(self):
-        with pytest.raises(ValueError, match="replaced by the `cutting` field"):
+        with pytest.raises(
+            ValueError, match="replaced by the `cutting_management` field"
+        ):
             SiteParams(**_site_params_kwargs(cutting_yr=2005))
 
     def test_old_cutting_to_ba_rejected(self):
-        with pytest.raises(ValueError, match="replaced by the `cutting` field"):
+        with pytest.raises(
+            ValueError, match="replaced by the `cutting_management` field"
+        ):
             SiteParams(**_site_params_kwargs(cutting_to_ba=12))
