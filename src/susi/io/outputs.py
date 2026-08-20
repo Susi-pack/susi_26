@@ -2348,7 +2348,7 @@ class Outputs:
         self.ncf["stand"]["p_woody_lresid"][scen, year, :] = stand.p_woody_lresid
         self.ncf["stand"]["k_woody_lresid"][scen, year, :] = stand.k_woody_lresid
 
-        self.ncf["stand"]["nonwoody_lresid"][scen, year, :] = stand.woody_lresid
+        self.ncf["stand"]["nonwoody_lresid"][scen, year, :] = stand.nonwoody_lresid
         self.ncf["stand"]["n_nonwoody_lresid"][scen, year, :] = stand.n_nonwoody_lresid
         self.ncf["stand"]["p_nonwoody_lresid"][scen, year, :] = stand.p_nonwoody_lresid
         self.ncf["stand"]["k_nonwoody_lresid"][scen, year, :] = stand.k_nonwoody_lresid
