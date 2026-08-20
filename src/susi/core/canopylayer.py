@@ -715,6 +715,9 @@ class Canopylayer:
         """
         self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
 
+        # Increment year by one
+        self.agearr += 1
+
         # if self.name=='dominant': print (np.round(np.mean(delta_bm_noleaves),2), 'delta no leaves' )
 
         self.volumegrowth = self.volume - vol_ini
@@ -1074,13 +1077,13 @@ class Canopylayer:
                     )
                 )  # fine root logging residues
 
+                self._compute_residues(m=m, target_cols=ixs[m], removed_stems=cut_stems)
+
                 print("nonwoodylogging resids after adding")
                 print(np.mean(self.nonwoody_lresid[ixs[m]]))
 
                 print("woody logging residues")
                 print(np.mean(self.woody_lresid))
-
-                self._compute_residues(m=m, target_cols=ixs[m], removed_stems=cut_stems)
 
                 self._compute_harvest(m=m, target_cols=ixs[m], removed_stems=cut_stems)
 
