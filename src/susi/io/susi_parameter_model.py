@@ -833,6 +833,36 @@ class SiteParams(StrictFrozenModel):
                     )
         return self
 
+    @model_validator(mode="after")
+    def clearcut_provides_new_growth_allometry_for_every_real_layer(self) -> Self:
+        if self.cutting_management is None:
+            return self
+        management_type = self.cutting_management.management_type
+        if not isinstance(management_type, ClearCut):
+            return self
+
+        for layer_name in ("dominant", "subdominant", "under"):
+            layer_exists = any(p != 0 for p in getattr(self.canopylayers, layer_name))
+            if not layer_exists:
+                continue
+
+            new_growth_data = getattr(
+                management_type.new_growth_allometry, f"{layer_name}_data"
+            )
+            if len(new_growth_data) == 0:
+                raise ValueError(
+                    f"A clear-cut is scheduled and the '{layer_name}' layer exists, "
+                    f"but ClearCut.new_growth_allometry provides no post-clearcut "
+                    f"allometry for '{layer_name}'."
+                )
+            if len(new_growth_data) > 1:
+                raise ValueError(
+                    f"ClearCut.new_growth_allometry.{layer_name} defines "
+                    f"{len(new_growth_data)} zones, but only one post-clearcut "
+                    f"allometry zone per layer is currently supported."
+                )
+        return self
+
 
 class SusiParams(StrictFrozenModel):
     """
