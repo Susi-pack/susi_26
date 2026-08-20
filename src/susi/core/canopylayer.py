@@ -575,7 +575,6 @@ class Canopylayer:
                 self.basKdemand[ixs[m]] = self.allodic[m].allometry_f[
                     "bmToKLeafDemand"
                 ](bm[ixs[m]])
-                self.agearr[ixs[m]] = self.agearr[ixs[m]] + 1
                 # print ('vol')
                 # print (self.volume)
                 # print ('n stems')
