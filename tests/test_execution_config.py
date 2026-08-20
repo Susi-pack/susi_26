@@ -19,12 +19,12 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     CanopyLayerAllometryPointers,
-    CuttingManagementParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     PeatTemperatureParams,
-    ThinningParams,
+    Thinning,
+    CuttingManagementParams,
 )
 
 
@@ -100,7 +100,7 @@ def valid_susi_params(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
+                application_yr=2004, management_type=Thinning(to_ba=12)
             ),
             depoN=4.0,
             depoP=0.1,
@@ -188,7 +188,7 @@ def another_valid_susi_params(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
+                application_yr=2004, management_type=Thinning(to_ba=12)
             ),
             depoN=4.0,
             depoP=0.1,

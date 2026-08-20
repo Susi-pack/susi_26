@@ -7,6 +7,12 @@ Created on Tue Feb  1 18:59:52 2022
 
 import numpy as np
 from susi.core.canopylayer import Canopylayer
+from susi.io.susi_parameter_model import (
+    CuttingManagementParams,
+    Thinning,
+    ClearCut,
+    ContinuousCover,
+)
 
 
 class Stand:
@@ -640,6 +646,23 @@ class Stand:
         self.nut_stat = np.clip(
             self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much
+
+    def apply_cutting_management(
+        self, cutting_management: CuttingManagementParams, yr: int
+    ) -> None:
+        match cutting_management.management_type:
+            case Thinning(to_ba=to_ba):
+                # TODO: let user choose which layers to thin. Now only thinning dominant.
+                self.dominant.do_thinning(yr=yr, nut_stat=self.nut_stat, to_ba=to_ba)
+            case ClearCut(strips_to_cut=strips_to_cut):
+                for layer in [self.dominant, self.subdominant, self.under]:
+                    layer.do_clearcut(
+                        yr=yr, nut_stat=self.nut_stat, strips_to_cut=strips_to_cut
+                    )
+            case ContinuousCover():
+                raise NotImplementedError(
+                    "Continuous-cover forestry is not implemented yet."
+                )
 
     def update_logging(self):
         for cl in self.clyrs:

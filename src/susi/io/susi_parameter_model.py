@@ -576,7 +576,7 @@ FertilizationParameters = Union[
 ]
 
 
-class ClearCutParams(StrictFrozenModel):
+class ClearCut(StrictFrozenModel):
     """
     Parameters to define a clear- or strip-cut management intervention.
     """
@@ -609,7 +609,7 @@ class ClearCutParams(StrictFrozenModel):
         return self
 
 
-class ThinningParams(StrictFrozenModel):
+class Thinning(StrictFrozenModel):
     """
     Parameters to define a thinning intervention.
     """
@@ -626,7 +626,7 @@ class ThinningParams(StrictFrozenModel):
         return to_ba
 
 
-class ContinuousCoverParams(StrictFrozenModel):
+class ContinuousCover(StrictFrozenModel):
     def __init__(self, **data):
         raise NotImplementedError("Not yet implemented")
 
@@ -640,8 +640,8 @@ class CuttingManagementParams(StrictFrozenModel):
     application_yr: int = Field(
         description="Year for cutting management application. Must be inside the simulation period."
     )
-    management_type: Union[ClearCutParams | ContinuousCoverParams | ThinningParams] = (
-        Field(description="Type of cutting management selected.")
+    management_type: Union[ClearCut | ContinuousCover | Thinning] = Field(
+        description="Type of cutting management selected."
     )
 
 
@@ -822,7 +822,7 @@ class SiteParams(StrictFrozenModel):
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
         if self.cutting_management is not None:
-            if isinstance(self.cutting_management.management_type, ClearCutParams):
+            if isinstance(self.cutting_management.management_type, ClearCut):
                 if len(self.cutting_management.management_type.strips_to_cut) != self.n:
                     raise ValueError(
                         f"ClearCutParams.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "

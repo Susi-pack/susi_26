@@ -21,7 +21,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    ThinningParams,
+    Thinning,
 )
 
 
@@ -97,7 +97,7 @@ def valid_susi_params(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
+                application_yr=2004, management_type=Thinning(to_ba=12)
             ),
             depoN=4.0,
             depoP=0.1,
@@ -185,7 +185,7 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
+                application_yr=2004, management_type=Thinning(to_ba=12)
             ),
             depoN=4.0,
             depoP=0.1,
@@ -277,8 +277,8 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
@@ -374,8 +374,8 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
@@ -463,8 +463,8 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
@@ -552,8 +552,8 @@ def test_subdominant_layer_validation(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
@@ -641,8 +641,8 @@ def test_under_layer_validation(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,
@@ -729,7 +729,7 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
+                application_yr=2004, management_type=Thinning(to_ba=12)
             ),
             depoN=4.0,
             depoP=0.1,
@@ -821,8 +821,8 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=ThinningParams(to_ba=12)
-            ),
+                    application_yr=2004, management_type=Thinning(to_ba=12)
+                ),
                 depoN=4.0,
                 depoP=0.1,
                 depoK=1.0,

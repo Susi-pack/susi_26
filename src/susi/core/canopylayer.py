@@ -784,198 +784,195 @@ class Canopylayer:
             LAI,
         )
 
-    def cutting(self, yr, nut_stat, to_ba=0.5):
+    def _compute_residues(self, m, target_cols, removed_stems) -> None:
+        """
+        Helper for do_thinning() and do_clearcutting().
+        - for thinning:
+            - target_cols=ixs[m] (all columns are thinned).
+            - removed_stems= fraction of stems depending on objective basal area (to_ba).
+        - for clear cutting:
+            - target_cols=columns selected for strip cutting.
+            - removed_stems= all stems
+
+        Modifies:
+        nonwoody_lresid, n/p/k_nonwoody_lresid, woody_lresid, n/p/k_woody_lresid
+        """
+
+        # stemwise fineroot biomass multipled by number of cut stems
+        self.nonwoody_lresid[target_cols] = (
+            self.new_lmass[target_cols]
+            + self.allodic[m].allometry_f["bmToFineRoots"](self.biomass[target_cols])
+        ) * removed_stems[target_cols]
+
+        self.n_nonwoody_lresid[target_cols] = (
+            self.N_leaf[target_cols]
+            + self.allodic[m].allometry_f["bmToNFineRoots"](self.biomass[target_cols])
+        ) * removed_stems[target_cols]
+        self.p_nonwoody_lresid[target_cols] = (
+            self.P_leaf[target_cols]
+            + self.allodic[m].allometry_f["bmToPFineRoots"](self.biomass[target_cols])
+        ) * removed_stems[target_cols]
+        self.k_nonwoody_lresid[target_cols] = (
+            self.K_leaf[target_cols]
+            + self.allodic[m].allometry_f["bmToKFineRoots"](self.biomass[target_cols])
+        ) * removed_stems[target_cols]
+
+        self.woody_lresid[target_cols] = (
+            self.allodic[m].allometry_f["bmToWoodyLoggingResidues"](
+                self.biomass[target_cols]
+            )
+            * removed_stems[target_cols]
+        )
+        self.n_woody_lresid[target_cols] = (
+            self.allodic[m].allometry_f["bmToNWoodyLoggingResidues"](
+                self.biomass[target_cols]
+            )
+            * removed_stems[target_cols]
+        )
+        self.p_woody_lresid[target_cols] = (
+            self.allodic[m].allometry_f["bmToPWoodyLoggingResidues"](
+                self.biomass[target_cols]
+            )
+            * removed_stems[target_cols]
+        )
+        self.k_woody_lresid[target_cols] = (
+            self.allodic[m].allometry_f["bmToKWoodyLoggingResidues"](
+                self.biomass[target_cols]
+            )
+            * removed_stems[target_cols]
+        )
+
+    def _compute_harvest(self, m, target_cols, removed_stems) -> None:
+        """
+        Helper for do_thinning() and do_clearcutting().
+        - for thinning:
+            - target_cols=ixs[m] (all columns are thinned).
+            - removed_stems= fraction of stems depending on objective basal area (to_ba).
+        - for clear cutting:
+            - target_cols=columns selected for strip cutting.
+            - removed_stems= all stems
+
+        Modifies:
+        harvested_volume, harvested_log_volume, harvested_pulp_volume,
+        harvested_biomass, harvested_stems
+        """
+        wood_density = {1: 420.0, 2: 400.0, 3: 450.0}
+        wood_density_node = [wood_density[s] for s in self.species[target_cols]]
+
+        self.harvested_volume[target_cols] = (
+            self.allodic[m].allometry_f["bmToVol"](self.biomass[target_cols])
+            * removed_stems[target_cols]
+        )  # harvested volume m3/tree
+        self.harvested_log_volume[target_cols] = (
+            self.allodic[m].allometry_f["bmToLogVol"](self.biomass[target_cols])
+            * removed_stems[target_cols]
+        )  # harvested saw log volume m3/tree
+        self.harvested_pulp_volume[target_cols] = (
+            self.allodic[m].allometry_f["bmToPulpVol"](self.biomass[target_cols])
+            * removed_stems[target_cols]
+        )  # harvsted pulp volume m3/tree
+        self.harvested_biomass[target_cols] = (
+            (
+                self.allodic[m].allometry_f["bmToLogVol"](self.biomass[target_cols])
+                + self.allodic[m].allometry_f["bmToPulpVol"](self.biomass[target_cols])
+            )
+            * removed_stems[target_cols]
+            * wood_density_node
+        )  # saw biomass kg/tree
+        self.harvested_stems[target_cols] = removed_stems[
+            target_cols
+        ]  # number of harvested stems/tree
+
+    def do_thinning(self, yr: int, nut_stat: np.ndarray, to_ba: float) -> None:
         """Unit here /ha"""
         # OBS! All cutting is taken from uniformly from the canopy layer
         # You can locate cutting also to subdominant or lower suppressed canopy layer
 
-        wood_density = {1: 420.0, 2: 400.0, 3: 450.0}
-        wood_density_node = [wood_density[s] for s in self.species]
+        for m in self.nlyrs:
+            if m > 0:
+                print("******** Now cutting to: ", to_ba)
+                print(self.name)
+                print("basal area")
+                print(np.mean(self.basalarea * self.stems))
+                print("n stems")
+                print(np.mean(self.stems))
+                print("cut stems")
+                cut_stems = (
+                    1.0 - to_ba / (self.basalarea * self.stems)
+                ) * self.stems  # stems harvested from all dimater classes
+                print(np.mean(cut_stems))
+                print("remaining stems")
+                remaining_stems = (
+                    to_ba / (self.basalarea * self.stems)
+                ) * self.stems  # transferred to stem number
+                print(np.mean(remaining_stems))
 
-        if to_ba < 1.0:
-            agearr = self.agearr
-            ixs = self.ixs
-            for m in self.nlyrs:
-                if m > 0:
-                    self.nonwoody_lresid[ixs[m]] = (
-                        self.new_lmass[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToFineRoots"](self.biomass)
-                    ) * self.stems
-                    self.n_nonwoody_lresid[ixs[m]] = (
-                        self.N_leaf
-                        + self.allodic[m].allometry_f["bmToNFineRoots"](self.biomass)
-                    ) * self.stems
-                    self.p_nonwoody_lresid[ixs[m]] = (
-                        self.P_leaf
-                        + self.allodic[m].allometry_f["bmToPFineRoots"](self.biomass)
-                    ) * self.stems
-                    self.k_nonwoody_lresid[ixs[m]] = (
-                        self.K_leaf
-                        + self.allodic[m].allometry_f["bmToKFineRoots"](self.biomass)
-                    ) * self.stems
+                print("Harvested volume ", np.mean(self.volume * cut_stems))
 
-                    self.woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToWoodyLoggingResidues"](
-                            self.biomass
-                        )
-                        * self.stems
-                    )
-                    self.n_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToNWoodyLoggingResidues"](
-                            self.biomass
-                        )
-                        * self.stems
-                    )
-                    self.p_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPWoodyLoggingResidues"](
-                            self.biomass
-                        )
-                        * self.stems
-                    )
-                    self.k_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToKWoodyLoggingResidues"](
-                            self.biomass
-                        )
-                        * self.stems
-                    )
+                self.remaining_share = to_ba / (
+                    self.allodic[m].allometry_f["bmToBa"](self.biomass) * self.stems
+                )  # shate of stems remaining
 
-                    agearr[ixs[m]] = np.ones(self.ncols)[ixs[m]]
-                    self.initialize_domain(agearr, nut_stat)
-                    print("+        cutting in " + self.name + " year " + str(yr))
-        else:
-            for m in self.nlyrs:
-                if m > 0:
-                    print("******** Now cutting to: ", to_ba)
-                    print(self.name)
-                    print("basal area")
-                    print(np.mean(self.basalarea * self.stems))
-                    print("n stems")
-                    print(np.mean(self.stems))
-                    print("cut stems")
-                    cut_stems = (
-                        1.0 - to_ba / (self.basalarea * self.stems)
-                    ) * self.stems  # stems harvested from all dimater classes
-                    print(np.mean(cut_stems))
-                    print("remaining stems")
-                    remaining_stems = (
-                        to_ba / (self.basalarea * self.stems)
-                    ) * self.stems  # transferred to stem number
-                    print(np.mean(remaining_stems))
+                print("remaining share")
+                print(np.mean(self.remaining_share))
+                # agearr = self.agearr
+                ixs = self.ixs
 
-                    print("Harvested volume ", np.mean(self.volume * cut_stems))
-
-                    self.remaining_share = to_ba / (
-                        self.allodic[m].allometry_f["bmToBa"](self.biomass) * self.stems
-                    )  # shate of stems remaining
-
-                    print("remaining share")
-                    print(np.mean(self.remaining_share))
-                    agearr = self.agearr
-                    ixs = self.ixs
-
-                    print("nonwoody logging residues")
-                    print(
-                        np.mean(self.new_lmass[ixs[m]] * cut_stems[ixs[m]])
-                    )  # leaf logging residues
-                    print(
-                        np.mean(
-                            self.allodic[m].allometry_f["bmToFineRoots"](
-                                self.biomass[ixs[m]]
-                            )
-                            * cut_stems[ixs[m]]
-                        )
-                    )  # fine root logging residues
-
-                    self.nonwoody_lresid[ixs[m]] = (
-                        self.new_lmass[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
-                    ) * cut_stems[
-                        ixs[m]
-                    ]  # stemwise fineroot biomass multipled by number of cut stems
-
-                    self.n_nonwoody_lresid[ixs[m]] = (
-                        self.N_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToNFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
-                    ) * cut_stems[ixs[m]]
-                    self.p_nonwoody_lresid[ixs[m]] = (
-                        self.P_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToPFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
-                    ) * cut_stems[ixs[m]]
-                    self.k_nonwoody_lresid[ixs[m]] = (
-                        self.K_leaf[ixs[m]]
-                        + self.allodic[m].allometry_f["bmToKFineRoots"](
-                            self.biomass[ixs[m]]
-                        )
-                    ) * cut_stems[ixs[m]]
-
-                    self.woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToWoodyLoggingResidues"](
+                print("nonwoody logging residues")
+                print(
+                    np.mean(self.new_lmass[ixs[m]] * cut_stems[ixs[m]])
+                )  # leaf logging residues
+                print(
+                    np.mean(
+                        self.allodic[m].allometry_f["bmToFineRoots"](
                             self.biomass[ixs[m]]
                         )
                         * cut_stems[ixs[m]]
                     )
-                    self.n_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToNWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
-                        * cut_stems[ixs[m]]
-                    )
-                    self.p_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
-                        * cut_stems[ixs[m]]
-                    )
-                    self.k_woody_lresid[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToKWoodyLoggingResidues"](
-                            self.biomass[ixs[m]]
-                        )
-                        * cut_stems[ixs[m]]
-                    )
+                )  # fine root logging residues
 
-                    print("nonwoodylogging resids after adding")
-                    print(np.mean(self.nonwoody_lresid[ixs[m]]))
+                print("nonwoodylogging resids after adding")
+                print(np.mean(self.nonwoody_lresid[ixs[m]]))
 
-                    print("woody logging residues")
-                    print(np.mean(self.woody_lresid))
+                print("woody logging residues")
+                print(np.mean(self.woody_lresid))
 
-                    self.harvested_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToVol"](self.biomass[ixs[m]])
-                        * cut_stems[ixs[m]]
-                    )  # harvested volume m3/tree
-                    self.harvested_log_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToLogVol"](self.biomass[ixs[m]])
-                        * cut_stems[ixs[m]]
-                    )  # harvested saw log volume m3/tree
-                    self.harvested_pulp_volume[ixs[m]] = (
-                        self.allodic[m].allometry_f["bmToPulpVol"](self.biomass[ixs[m]])
-                        * cut_stems[ixs[m]]
-                    )  # harvsted pulp volume m3/tree
-                    self.harvested_biomass[ixs[m]] = (
-                        (
-                            self.allodic[m].allometry_f["bmToLogVol"](
-                                self.biomass[ixs[m]]
-                            )
-                            + self.allodic[m].allometry_f["bmToPulpVol"](
-                                self.biomass[ixs[m]]
-                            )
-                        )
-                        * cut_stems[ixs[m]]
-                        * wood_density_node
-                    )  # saw biomass kg/tree
-                    self.harvested_stems[ixs[m]] = cut_stems[
-                        ixs[m]
-                    ]  # number of harvested stems/tree
+                self._compute_residues(m=m, target_cols=ixs[m], removed_stems=cut_stems)
 
-                    print("harvested logs", np.mean(self.harvested_log_volume))
-                    print("harvested pulp", np.mean(self.harvested_pulp_volume))
-                    print("harvested biomass", np.mean(self.harvested_biomass))
+                self._compute_harvest(m=m, target_cols=ixs[m], removed_stems=cut_stems)
 
-                    self.update(self.biomass)
-                    """This update to stand or to main????? """
+                print("harvested logs", np.mean(self.harvested_log_volume))
+                print("harvested pulp", np.mean(self.harvested_pulp_volume))
+                print("harvested biomass", np.mean(self.harvested_biomass))
+
+                self.update(self.biomass)
+                """This update to stand or to main????? """
+
+    def do_clearcut(
+        self, yr: int, nut_stat: np.ndarray, strips_to_cut: list[bool]
+    ) -> None:
+        """Unit here /ha"""
+        # OBS! All cutting is taken from uniformly from the canopy layer
+        # You can locate cutting also to subdominant or lower suppressed canopy layer
+
+        strips_to_cut_arr = np.asarray(
+            strips_to_cut, dtype=bool
+        )  # shape (n_cols,), True==cut; False==don't cut.
+        agearr = self.agearr
+        for m in self.nlyrs:
+            if m > 0:
+                zone_cols = self.ixs[m][0]  # columns belonging to each allometry "zone"
+                # subset of those marked True, i.e., to be cut
+                cut_cols = zone_cols[strips_to_cut_arr[zone_cols]]
+
+                self._compute_residues(
+                    m=m, target_cols=cut_cols, removed_stems=self.stems
+                )
+                self._compute_harvest(
+                    m=m, target_cols=cut_cols, removed_stems=self.stems
+                )
+
+                agearr[cut_cols] = 1.0
+
+        self.initialize_domain(agearr, nut_stat)
+        print("+        cutting in " + self.name + " year " + str(yr))

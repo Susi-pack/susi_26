@@ -22,7 +22,7 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     CanopyLayerAllometryPointers,
-    ThinningParams,
+    Thinning,
     CuttingManagementParams,
 )
 
@@ -93,7 +93,7 @@ PARAMETERS = SusiParams(
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
         cutting_management=CuttingManagementParams(
-            application_yr=2004, management_type=ThinningParams(to_ba=12)
+            application_yr=2004, management_type=Thinning(to_ba=12)
         ),
         depoN=4.0,
         depoP=0.1,

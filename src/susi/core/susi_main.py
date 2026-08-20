@@ -15,6 +15,9 @@ from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
+    Thinning,
+    ClearCut,
+    ContinuousCover,
 )
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
@@ -478,22 +481,14 @@ class Susi:
 
                 # --------- Locate cuttings here--------------------
                 print("calculating year " + str(yr))
-                if yr == self.parameters.site_parameters.cutting_yr:
-                    print("xxxxxxxxxxxx   VOL before cutting xxxxxxxxxxxxxxxx")
-                    print(str(np.round(np.mean(stand.volume), 1)))
-                    print(
-                        "cutting now "
-                        + str(yr)
-                        + " from basal area "
-                        + str(np.round(np.mean(stand.basalarea), 1))
-                        + " to "
-                        + str(self.parameters.site_parameters.cutting_to_ba)
-                    )
 
-                    stand.dominant.cutting(
-                        yr,
-                        nut_stat=stand.nut_stat,
-                        to_ba=self.parameters.site_parameters.cutting_to_ba,
+                cutting_management = self.parameters.site_parameters.cutting_management
+                if (
+                    cutting_management is not None
+                    and yr == cutting_management.application_yr
+                ):
+                    stand.apply_cutting_management(
+                        yr=yr, cutting_management=cutting_management
                     )
                     stand.update_logging()
 
