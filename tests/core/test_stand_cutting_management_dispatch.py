@@ -1,11 +1,12 @@
 # Tests for Stand.apply_cutting_management — the cutting-management dispatch
 # (issue #171). Scope: verify routing/dispatch only (right Canopylayer method
 # called with the right args, right exceptions for not-yet-implemented
-# management types). Does NOT test Canopylayer.cutting()'s own behavior, and
-# does NOT go through Susi.run() — there's no full-simulation integration
-# test for cutting yet (see the TODO in susi_main.py's ClearCut/ContinuousCover
-# arms; add one once those are implemented, mirroring supersusi's
-# TestClearCutIntegration in test_susi_main_run.py).
+# management types). Does NOT test do_thinning()/do_clearcut()'s own
+# behavior (see test_canopylayer.py for that), and does NOT go through
+# Susi.run() — there's no full-simulation integration test for cutting yet
+# (see the TODO in susi_main.py's ContinuousCover arm; add one once that's
+# implemented, mirroring supersusi's TestClearCutIntegration in
+# test_susi_main_run.py).
 #
 # Note: apply_cutting_management is only ever called by susi_main.py's
 # `if cutting_management is not None and yr == cutting_management.application_yr:`
@@ -77,16 +78,16 @@ def _regeneration_allometry() -> AllometryParams:
 
 class TestApplyCuttingManagement:
     def test_thinning_dispatches_to_dominant_cutting(self, monkeypatch):
-        """Thinning routes to stand.dominant.cutting(yr, nut_stat=stand.nut_stat, to_ba=...)."""
+        """Thinning routes to stand.dominant.do_thinning(yr, nut_stat=stand.nut_stat, to_ba=...)."""
         stand = _make_stand()
         calls = {}
 
-        def fake_cutting(yr, nut_stat, to_ba):
+        def fake_do_thinning(yr, nut_stat, to_ba):
             calls["yr"] = yr
             calls["nut_stat"] = nut_stat
             calls["to_ba"] = to_ba
 
-        monkeypatch.setattr(stand.dominant, "cutting", fake_cutting)
+        monkeypatch.setattr(stand.dominant, "do_thinning", fake_do_thinning)
 
         cutting_management = CuttingManagementParams(
             application_yr=2005, management_type=Thinning(to_ba=12)
@@ -103,27 +104,49 @@ class TestApplyCuttingManagement:
         for layer in (stand.subdominant, stand.under):
             monkeypatch.setattr(
                 layer,
-                "cutting",
+                "do_thinning",
                 lambda *a, **k: pytest.fail(f"{layer.name} should not be cut"),
             )
-        monkeypatch.setattr(stand.dominant, "cutting", lambda *a, **k: None)
+        monkeypatch.setattr(stand.dominant, "do_thinning", lambda *a, **k: None)
 
         cutting_management = CuttingManagementParams(
             application_yr=2005, management_type=Thinning(to_ba=12)
         )
         stand.apply_cutting_management(cutting_management, yr=2005)  # should not raise
 
-    def test_clearcut_raises_not_implemented(self):
+    def test_clearcut_dispatches_to_all_three_layers(self, monkeypatch):
+        """Unlike Thinning, ClearCut routes to do_clearcut(yr, nut_stat=stand.nut_stat,
+        strips_to_cut=...) on dominant, subdominant, AND under."""
         stand = _make_stand()
+        calls = {}
+
+        def make_fake_do_clearcut(layer_name):
+            def fake_do_clearcut(yr, nut_stat, strips_to_cut):
+                calls[layer_name] = {
+                    "yr": yr,
+                    "nut_stat": nut_stat,
+                    "strips_to_cut": strips_to_cut,
+                }
+
+            return fake_do_clearcut
+
+        for layer in (stand.dominant, stand.subdominant, stand.under):
+            monkeypatch.setattr(layer, "do_clearcut", make_fake_do_clearcut(layer.name))
+
+        strips_to_cut = [True] * N
         cutting_management = CuttingManagementParams(
             application_yr=2005,
             management_type=ClearCut(
                 new_growth_allometry=_regeneration_allometry(),
-                strips_to_cut=[True] * N,
+                strips_to_cut=strips_to_cut,
             ),
         )
-        with pytest.raises(NotImplementedError):
-            stand.apply_cutting_management(cutting_management, yr=2005)
+        stand.apply_cutting_management(cutting_management, yr=2005)
+
+        for layer_name in ("dominant", "subdominant", "under"):
+            assert calls[layer_name]["yr"] == 2005
+            assert calls[layer_name]["strips_to_cut"] == strips_to_cut
+            assert calls[layer_name]["nut_stat"] is stand.nut_stat
 
     def test_continuous_cover_cannot_even_be_constructed(self):
         """ContinuousCover raises on construction (model-level stub), so

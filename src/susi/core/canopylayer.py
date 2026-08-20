@@ -71,23 +71,35 @@ class Canopylayer:
                     sfc=self.sfc,
                 )
                 self.tree_species[self.ixs[ncanopy]] = int(self.allodic[ncanopy].sp)
-        self.initialize_domain(
-            agearr, nut_stat
-        )  # create variables and set initial values
+
+        # One-time, whole-layer array creation. Must run before
+        # initialize_domain() (or anything else) touches self.stems,
+        # self.biomass, etc. — see initial_array_allocation()'s docstring for why
+        # this can never be repeated or scoped to a subset of columns.
+        self.initial_array_allocation()
+
+        # create variables and set initial values
+        self.initialize_domain(agearr, nut_stat)
 
         print(self.name, "initialized")
 
-    def initialize_domain(self, agearr, nut_stat):
-        self.agearr = agearr.copy()
-        self.remaining_share = np.ones(
-            self.ncols
-        )  # share of remaining stems after thinning 0...1, in initialization should be one
-        nlyrs = self.nlyrs  # number of different canopy layers along the strip
-        ixs = self.ixs  # indices for the canopy layers along the strip
+    def initial_array_allocation(self) -> None:
+        """Create every per-column state array as np.zeros(self.ncols), once.
 
-        ncols = self.ncols  # number of columns along the strip
+        This is a ONE-TIME, WHOLE-LAYER allocation, not a "reset" — it must
+        only ever be called from __init__, before self.stems/self.biomass/
+        etc. exist as attributes at all. It must never be called again
+        after that, and never with a target_cols subset: fancy-indexing
+        into an attribute that doesn't exist yet (self.stems[target_cols])
+        is exactly what used to crash here. Every later "reset to zero for
+        some columns" need is handled by _reset_growth_cycle_fields (for
+        growth-cycle fields) or by calling _compute_residues/_compute_harvest
+        with removed_stems=0 (for harvest/residue fields) — both of those
+        mutate slices of the arrays this method creates, in place.
+        """
+        ncols = self.ncols
+
         self.stems = np.zeros(ncols, dtype=float)  # stocking number of trees per ha
-
         self.basalarea = np.zeros(
             ncols, dtype=float
         )  # basal area in the canopy layer m2/tree
@@ -268,50 +280,169 @@ class Canopylayer:
             ncols, dtype=float
         )  # basic K demand kg/tree, in table growth conditions, used in nutrient status calculation
 
-        # ---------- Initial values from age -------------------------------------------------------
+    def _reset_growth_cycle_fields(self, target_cols) -> None:
+        """Zero NPP, leaf dynamics, litter/mortality streams, log/pulp
+        volume, yi, volumegrowth and N/P/K demand for target_cols.
+
+        Unlike stand structure, none of these have an age-based formula —
+        a column that hasn't been through a growth cycle yet (a brand-new
+        Canopylayer, or a column that was just clear-cut back to age 1)
+        unambiguously has zero NPP, zero leaf litter, etc.: there's nothing
+        to "derive," only something to zero out until the next
+        assimilate()/update() populates it for real.
+        """
+        # Fields with no age-based formula at all — they're only ever populated
+        # by a real growth cycle (assimilate()/update()), never derived from
+        # age the way stand structure is. So "reset" is their only operation;
+        # there's no separate "recompute" counterpart the way
+        # _recompute_structure_from_age is the recompute counterpart to
+        # allocation. Kept as one explicit list (rather than e.g. introspecting
+        # self.__dict__) so it's auditable at a glance, and so it can be the
+        # single source of truth shared with tests/core/test_canopylayer.py's
+        # GROUP_B_FIELDS, which pins down this exact contract.
+
+        GROWTH_CYCLE_FIELDS = (
+            "n_demand",
+            "p_demand",
+            "k_demand",
+            "lai_above",
+            "logvolume",
+            "finerootlitter",
+            "n_finerootlitter",
+            "p_finerootlitter",
+            "k_finerootlitter",
+            "pulpvolume",
+            "NPP",
+            "NPP_pot",
+            "nonwoodylitter",
+            "n_nonwoodylitter",
+            "p_nonwoodylitter",
+            "k_nonwoodylitter",
+            "volumegrowth",
+            "woodylitter",
+            "n_woodylitter",
+            "p_woodylitter",
+            "k_woodylitter",
+            "yi",
+            "woody_litter_mort",
+            "n_woody_litter_mort",
+            "p_woody_litter_mort",
+            "k_woody_litter_mort",
+            "non_woody_litter_mort",
+            "n_non_woody_litter_mort",
+            "p_non_woody_litter_mort",
+            "k_non_woody_litter_mort",
+            "new_lmass",
+            "leaf_litter",
+            "C_consumption",
+            "leafmax",
+            "leafmin",
+            "Nleafdemand",
+            "Nleaf_litter",
+            "N_leaf",
+            "Pleafdemand",
+            "Pleaf_litter",
+            "P_leaf",
+            "Kleafdemand",
+            "Kleaf_litter",
+            "K_leaf",
+        )
+        for field in GROWTH_CYCLE_FIELDS:
+            getattr(self, field)[target_cols] = 0.0
+
+    def _recompute_structure_from_age(self, m, target_cols, age, nut_stat) -> None:
+        """Recompute stand-structure fields — biomass, stems, basal area,
+        hdom, Dg, leaf area/mass, species, volume, N/P/K leaf demand — for
+        `target_cols` in allometry zone `m`, purely as a function of `age`.
+
+        `age` is passed in explicitly (rather than this method reading
+        `self.agearr[target_cols]` itself) so each call site states plainly
+        what age it's recomputing at: initialize_domain passes whatever
+        agearr it was given, do_clearcut passes age=1 for the columns it
+        just cut.
+        """
+        self.biomass[target_cols] = self.allodic[m].allometry_f["ageToBm"](
+            age
+        )  # stem biomass from age kg/tree
+        self.stems[target_cols] = (
+            self.allodic[m].allometry_f["bmToStems"](self.biomass[target_cols])
+            * self.remaining_share[target_cols]
+        )  # number of stems /ha from the biomass of tree
+
+        self.basalarea[target_cols] = self.allodic[m].allometry_f["ageToBa"](
+            age
+        )  # stem basal area from age m2/tree
+        self.hdom[target_cols] = self.allodic[m].allometry_f["ageToHdom"](
+            age
+        )  # dominant height m
+        self.Dg[target_cols] = self.allodic[m].allometry_f["bmToDg"](
+            self.biomass[target_cols]
+        )  # mean diameter height m
+
+        self.leafarea[target_cols] = (
+            self.allodic[m].allometry_f["bmToLAI"](self.biomass[target_cols])
+            * nut_stat[target_cols]
+        )  # one sided LAI from the stem biomass M2/m2/tree
+        self.leafmass[target_cols] = (
+            self.allodic[m].allometry_f["ageToLeaves"](age) * nut_stat[target_cols]
+        )
+        self.species[target_cols] = self.allodic[m].sp
+        # self.volume[target_cols] = self.allodic[m].allometry_f['ageToVol'](age)         # stem volume m3/tree
+        self.volume[target_cols] = self.allodic[m].allometry_f["bmToVol"](
+            self.biomass[target_cols]
+        )  # stem volume m3/tree
+
+        self.basNdemand[target_cols] = self.allodic[m].allometry_f["bmToNLeafDemand"](
+            self.biomass[target_cols]
+        )
+        self.basPdemand[target_cols] = self.allodic[m].allometry_f["bmToPLeafDemand"](
+            self.biomass[target_cols]
+        )
+        self.basKdemand[target_cols] = self.allodic[m].allometry_f["bmToKLeafDemand"](
+            self.biomass[target_cols]
+        )
+
+    def initialize_domain(self, agearr, nut_stat):
+        """(Re)derive the entire layer from scratch, for every column.
+
+        Called at construction and once per scenario (in Stand.reset_domain).
+        Unlike do_clearcut(), there's no "preserve
+        some columns" concern here: every column gets the same treatment.
+        """
+        self.agearr = agearr.copy()
+        self.remaining_share = np.ones(self.ncols)  # fresh stand: nothing thinned yet
+        nlyrs = self.nlyrs  # number of different canopy layers along the strip
+
         for m in nlyrs:
             if m > 0:
-                self.biomass[ixs[m]] = self.allodic[m].allometry_f["ageToBm"](
-                    self.agearr[ixs[m]]
-                )  # stem biomass from age kg/tree
-                self.stems[ixs[m]] = (
-                    self.allodic[m].allometry_f["bmToStems"](self.biomass[ixs[m]])
-                    * self.remaining_share[ixs[m]]
-                )  # number of stems /ha from the biomass of tree
+                # Target soil columns = all columns
+                target_cols = self.ixs[m]
 
-                self.basalarea[ixs[m]] = self.allodic[m].allometry_f["ageToBa"](
-                    self.agearr[ixs[m]]
-                )  # stem basal area from age m2/tree
-                self.hdom[ixs[m]] = self.allodic[m].allometry_f["ageToHdom"](
-                    self.agearr[ixs[m]]
-                )  # dominant height m
-                self.Dg[ixs[m]] = self.allodic[m].allometry_f["bmToDg"](
-                    self.biomass[ixs[m]]
-                )  # mean diameter height m
-
-                self.leafarea[ixs[m]] = (
-                    self.allodic[m].allometry_f["bmToLAI"](self.biomass[ixs[m]])
-                    * nut_stat[ixs[m]]
-                )  # one sided LAI from the stem biomass M2/m2/tree
-                self.leafmass[ixs[m]] = (
-                    self.allodic[m].allometry_f["ageToLeaves"](self.agearr[ixs[m]])
-                    * nut_stat[ixs[m]]
+                # Must be recomputed before the harvest/residue
+                # calls below: _compute_harvest looks up wood density by
+                # self.species[target_cols], which this call sets.
+                self._recompute_structure_from_age(
+                    m,
+                    target_cols=target_cols,
+                    age=self.agearr[target_cols],
+                    nut_stat=nut_stat,
                 )
-                self.species[ixs[m]] = self.allodic[m].sp
-                # self.volume[ixs[m]] = self.allodic[m].allometry_f['ageToVol'](self.agearr[ixs[m]])         # stem volume m3/tree
-                self.volume[ixs[m]] = self.allodic[m].allometry_f["bmToVol"](
-                    self.biomass[ixs[m]]
-                )  # stem volume m3/tree
+                # Growth-cycle fields (NPP, leaf dynamics, litter/mortality
+                # streams, ...) have no age-formula — they're only ever
+                # modified by assimilate()/update() during a real growth year
+                self._reset_growth_cycle_fields(target_cols=target_cols)
 
-                self.basNdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToNLeafDemand"
-                ](self.biomass[ixs[m]])
-                self.basPdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToPLeafDemand"
-                ](self.biomass[ixs[m]])
-                self.basKdemand[ixs[m]] = self.allodic[m].allometry_f[
-                    "bmToKLeafDemand"
-                ](self.biomass[ixs[m]])
+                # There is no harvest event at construction/scenario-reset.
+                # We here reuse the harvest/residue functions with removed_stems=0,
+                # which makes every output zero instead of duplicating a
+                # separate zeroing step for these fields elsewhere.
+                zero_stems = np.zeros(self.ncols)
+                self._compute_residues(
+                    m=m, target_cols=target_cols, removed_stems=zero_stems
+                )
+                self._compute_harvest(
+                    m=m, target_cols=target_cols, removed_stems=zero_stems
+                )
 
     def update(self, bm):
         # bm in kg in a mean stem
@@ -786,13 +917,19 @@ class Canopylayer:
 
     def _compute_residues(self, m, target_cols, removed_stems) -> None:
         """
-        Helper for do_thinning() and do_clearcutting().
+        Helper for do_thinning(), do_clearcut(), and initialize_domain().
         - for thinning:
             - target_cols=ixs[m] (all columns are thinned).
             - removed_stems= fraction of stems depending on objective basal area (to_ba).
         - for clear cutting:
             - target_cols=columns selected for strip cutting.
             - removed_stems= all stems
+        - for initialize_domain (construction / new scenario):
+            - target_cols=ixs[m] (the whole zone).
+            - removed_stems=0 for every column — there's no harvest event
+              here, and since every term below is a product against
+              removed_stems[target_cols], this naturally yields zero for
+              every residue field without any separate zeroing code.
 
         Modifies:
         nonwoody_lresid, n/p/k_nonwoody_lresid, woody_lresid, n/p/k_woody_lresid
@@ -844,13 +981,19 @@ class Canopylayer:
 
     def _compute_harvest(self, m, target_cols, removed_stems) -> None:
         """
-        Helper for do_thinning() and do_clearcutting().
+        Helper for do_thinning(), do_clearcut(), and initialize_domain().
         - for thinning:
             - target_cols=ixs[m] (all columns are thinned).
             - removed_stems= fraction of stems depending on objective basal area (to_ba).
         - for clear cutting:
             - target_cols=columns selected for strip cutting.
             - removed_stems= all stems
+        - for initialize_domain (construction / new scenario):
+            - target_cols=ixs[m] (the whole zone).
+            - removed_stems=0 for every column, same reasoning as
+              _compute_residues above. Note self.species[target_cols] must
+              already be set (by _recompute_structure_from_age) before this
+              runs — the wood-density lookup below indexes by species id.
 
         Modifies:
         harvested_volume, harvested_log_volume, harvested_pulp_volume,
@@ -958,13 +1101,21 @@ class Canopylayer:
         strips_to_cut_arr = np.asarray(
             strips_to_cut, dtype=bool
         )  # shape (n_cols,), True==cut; False==don't cut.
-        agearr = self.agearr
+
         for m in self.nlyrs:
             if m > 0:
-                zone_cols = self.ixs[m][0]  # columns belonging to each allometry "zone"
-                # subset of those marked True, i.e., to be cut
-                cut_cols = zone_cols[strips_to_cut_arr[zone_cols]]
+                zone_cols = self.ixs[m][
+                    0
+                ]  # all columns belonging to this allometry zone
+                cut_cols = zone_cols[
+                    strips_to_cut_arr[zone_cols]
+                ]  # subset actually cut this call
 
+                # Harvest/residues first: these read self.biomass/self.stems/
+                # self.new_lmass/etc., which at this point still describe the
+                # felled, mature stand about to be replaced below. Computing
+                # them after the age reset would compute residues for a
+                # sapling that hasn't grown anything yet.
                 self._compute_residues(
                     m=m, target_cols=cut_cols, removed_stems=self.stems
                 )
@@ -972,7 +1123,18 @@ class Canopylayer:
                     m=m, target_cols=cut_cols, removed_stems=self.stems
                 )
 
-                agearr[cut_cols] = 1.0
+                # Now replace cut_cols with a fresh, unthinned, age-1 stand.
+                self.agearr[cut_cols] = 1.0
+                self.remaining_share[cut_cols] = (
+                    1.0  # Nothing thinned for the newly grown saplings yet
+                )
+                self._recompute_structure_from_age(
+                    m,
+                    target_cols=cut_cols,
+                    age=self.agearr[cut_cols],
+                    nut_stat=nut_stat,
+                )
+                # A brand-new sapling hasn't been through a growth cycle yet
+                self._reset_growth_cycle_fields(target_cols=cut_cols)
 
-        self.initialize_domain(agearr, nut_stat)
         print("+        cutting in " + self.name + " year " + str(yr))
