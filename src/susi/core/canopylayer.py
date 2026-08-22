@@ -592,6 +592,7 @@ class Canopylayer:
         if self.growth_mode == "dynamic":
             self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
         else:
+            self.update(self.biomass) #recomputes biomass at fixed biomass without growing
             self.volumegrowth = self.volume - vol_ini
         """
         if self.name=='dominant':

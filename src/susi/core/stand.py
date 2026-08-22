@@ -374,8 +374,8 @@ class Stand:
         )  # basic K demand kg/tree, in table growth conditions, used in nutrient status calculation
 
         self.n_leaf_demand = self.n_leaf_demand * 0.0
-        self.p_leaf_demand = self.n_leaf_demand * 0.0
-        self.k_leaf_demand = self.n_leaf_demand * 0.0
+        self.p_leaf_demand = self.p_leaf_demand * 0.0
+        self.k_leaf_demand = self.k_leaf_demand * 0.0
 
         self.harvested_volume = self.harvested_volume * 0.0  # harvested volume m3/ha
         self.harvested_log_volume = (
@@ -470,7 +470,9 @@ class Stand:
             self.p_non_woody_litter_mort = (
                 self.p_non_woody_litter_mort + cl.p_non_woody_litter_mort * cl.stems
             )
-            self.k_non_woody_litter_mort = self.k_non_woody_litter_mort
+            self.k_non_woody_litter_mort = (
+                self.k_non_woody_litter_mort + cl.k_non_woody_litter_mort * cl.stems
+            )
 
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
