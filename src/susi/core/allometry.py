@@ -5,9 +5,111 @@ Created on Sun Jan 30 10:44:18 2022
 @author: alauren
 """
 
+from dataclasses import dataclass
+from typing import Callable
+
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
+
+
+@dataclass(frozen=True)
+class AllometryFunctions:
+    """One fitted allometry file's interpolation functions, one field per curve.
+
+    Built once by `Allometry.allometry_development()` and read from
+    `Canopylayer` (`self.allodic[m].functions.<field>(...)`). Replaces the old
+    `allometry_f` string-keyed dict: a typo in a dict key used to fail at
+    runtime with a `KeyError` inside a numeric loop; a typo in a field name
+    now fails at authoring time as an `AttributeError` any linter catches.
+    Same curves, same cardinality — this is a mechanical key -> attribute
+    rename, not a behavior change.
+    """
+
+    # age [yrs] -> ...
+    age_to_hdom: Callable[[np.ndarray], np.ndarray]
+    age_to_ba: Callable[[np.ndarray], np.ndarray]
+    age_to_vol: Callable[[np.ndarray], np.ndarray]
+    age_to_yield: Callable[[np.ndarray], np.ndarray]
+    age_to_bm: Callable[[np.ndarray], np.ndarray]
+    age_to_bm_no_leaves: Callable[[np.ndarray], np.ndarray]
+    age_to_leaves: Callable[[np.ndarray], np.ndarray]
+
+    # biomass [kg dry mass/tree] -> ...
+    bm_to_leaf_mass: Callable[[np.ndarray], np.ndarray]
+    bm_with_leaves_to_leaf_mass: Callable[[np.ndarray], np.ndarray]
+    bm_to_lai: Callable[[np.ndarray], np.ndarray]
+    bm_to_hdom: Callable[[np.ndarray], np.ndarray]
+    bm_to_dg: Callable[[np.ndarray], np.ndarray]
+    bm_to_yi: Callable[[np.ndarray], np.ndarray]
+    bm_to_vol: Callable[[np.ndarray], np.ndarray]
+    bm_to_log_vol: Callable[[np.ndarray], np.ndarray]
+    bm_to_pulp_vol: Callable[[np.ndarray], np.ndarray]
+    bm_to_ba: Callable[[np.ndarray], np.ndarray]
+    bm_to_dbm: Callable[[np.ndarray], np.ndarray]
+    bm_to_stems: Callable[[np.ndarray], np.ndarray]
+
+    # volume/yield -> ...
+    yi_to_vol: Callable[[np.ndarray], np.ndarray]
+    yi_to_bm: Callable[[np.ndarray], np.ndarray]
+    vol_to_logs: Callable[[np.ndarray], np.ndarray]
+    vol_to_pulp: Callable[[np.ndarray], np.ndarray]
+
+    # litter and mortality
+    bm_to_fineroot_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_woody_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
+    bm_to_mortality_woody: Callable[[np.ndarray], np.ndarray]
+    bm_to_mortality_leaves: Callable[[np.ndarray], np.ndarray]
+    bm_with_leaves_to_fineroot_litter: Callable[[np.ndarray], np.ndarray]
+    bm_with_leaves_to_woody_litter: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K demand
+    bm_to_n_demand: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_demand: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_demand: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K fine-root litter
+    bm_to_n_fine_root_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_fine_root_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_fine_root_litter: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K woody litter
+    bm_to_n_woody_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_woody_litter: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_woody_litter: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K leaf mortality
+    bm_to_n_mortality_leaves: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_mortality_leaves: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_mortality_leaves: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K fine-root mortality
+    bm_to_n_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K woody mortality
+    bm_to_n_mortality_woody: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_mortality_woody: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_mortality_woody: Callable[[np.ndarray], np.ndarray]
+
+    # woody logging residues, and N/P/K
+    bm_to_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
+    bm_to_n_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
+
+    # fine roots, and N/P/K
+    bm_to_fine_roots: Callable[[np.ndarray], np.ndarray]
+    bm_to_n_fine_roots: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_fine_roots: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_fine_roots: Callable[[np.ndarray], np.ndarray]
+
+    # N/P/K leaf demand
+    bm_to_n_leaf_demand: Callable[[np.ndarray], np.ndarray]
+    bm_to_p_leaf_demand: Callable[[np.ndarray], np.ndarray]
+    bm_to_k_leaf_demand: Callable[[np.ndarray], np.ndarray]
 
 
 class Allometry:
@@ -885,83 +987,68 @@ class Allometry:
             bounds_error=True,
         )
 
-        allometry_f = {}
-        allometry_f["ageToHdom"] = ageToHdom
-        allometry_f["ageToBa"] = ageToBa
-        allometry_f["ageToVol"] = ageToVol
-        allometry_f["ageToYield"] = ageToYield
-        allometry_f["ageToBm"] = ageToBm
-        allometry_f["ageToBmNoLeaves"] = ageToBmNoLeaves
-        allometry_f["ageToLeaves"] = ageToLeaves
-
-        allometry_f["bmToLeafMass"] = bmToLeafMass
-        allometry_f["bmWithLeavesToLeafMass"] = bmWithLeavesToLeafMass
-        allometry_f["bmToLAI"] = bmToLAI
-        allometry_f["bmToHdom"] = bmToHdom
-        allometry_f["bmToDg"] = bmToDg
-
-        allometry_f["bmToYi"] = bmToYi
-        allometry_f["bmToVol"] = bmToVol
-
-        allometry_f["bmToLogVol"] = bmToLogVolume
-        allometry_f["bmToPulpVol"] = bmToPulpVolume
-
-        allometry_f["bmToBa"] = bmToBa
-        allometry_f["bmToDbm"] = bmToDbm
-
-        allometry_f["bmToStems"] = bmToStems
-        allometry_f["yiToVol"] = yiToVol
-        allometry_f["yiToBm"] = yiToBm
-        allometry_f["volToLogs"] = volToLogs
-        allometry_f["volToPulp"] = volToPulp
-
-        # allometry_f['bmToDbm'] = bmToDbm
-        allometry_f["bmToFinerootLitter"] = bmToFinerootLitter
-        allometry_f["bmToWoodyLitter"] = bmToWoodyLitter
-        allometry_f["bmToMortalityFineRoot"] = bmToMortalityFineRoot
-        allometry_f["bmToMortalityWoody"] = bmToMortalityWoody
-        allometry_f["bmToMortalityLeaves"] = bmToMortalityLeaves
-
-        allometry_f["bmWithLeavesToFinerootLitter"] = bmWithLeavesToFinerootLitter
-        allometry_f["bmWithLeavesToWoodyLitter"] = bmWithLeavesToWoodyLitter
-
-        allometry_f["bmToNdemand"] = bmToNdemand
-        allometry_f["bmToPdemand"] = bmToPdemand
-        allometry_f["bmToKdemand"] = bmToKdemand
-        allometry_f["bmToNFineRootLitter"] = bmToNFineRootLitter
-        allometry_f["bmToPFineRootLitter"] = bmToPFineRootLitter
-        allometry_f["bmToKFineRootLitter"] = bmToKFineRootLitter
-
-        allometry_f["bmToNWoodyLitter"] = bmToNWoodyLitter
-        allometry_f["bmToPWoodyLitter"] = bmToPWoodyLitter
-        allometry_f["bmToKWoodyLitter"] = bmToKWoodyLitter
-
-        allometry_f["bmToNMortalityLeaves"] = bmToNMortalityLeaves
-        allometry_f["bmToPMortalityLeaves"] = bmToPMortalityLeaves
-        allometry_f["bmToKMortalityLeaves"] = bmToKMortalityLeaves
-
-        allometry_f["bmToNMortalityFineRoot"] = bmToNMortalityFineRoot
-        allometry_f["bmToPMortalityFineRoot"] = bmToPMortalityFineRoot
-        allometry_f["bmToKMortalityFineRoot"] = bmToKMortalityFineRoot
-
-        allometry_f["bmToNMortalityWoody"] = bmToNMortalityWoody
-        allometry_f["bmToPMortalityWoody"] = bmToPMortalityWoody
-        allometry_f["bmToKMortalityWoody"] = bmToKMortalityWoody
-
-        allometry_f["bmToWoodyLoggingResidues"] = bmToWoodyLoggingResidues
-        allometry_f["bmToNWoodyLoggingResidues"] = bmToNWoodyLoggingResidues
-        allometry_f["bmToPWoodyLoggingResidues"] = bmToPWoodyLoggingResidues
-        allometry_f["bmToKWoodyLoggingResidues"] = bmToKWoodyLoggingResidues
-
-        allometry_f["bmToFineRoots"] = bmToFineRoots
-        allometry_f["bmToNFineRoots"] = bmToNFineRoots
-        allometry_f["bmToPFineRoots"] = bmToPFineRoots
-        allometry_f["bmToKFineRoots"] = bmToKFineRoots
-
-        allometry_f["bmToNLeafDemand"] = bmToNLeafDemand
-        allometry_f["bmToPLeafDemand"] = bmToPLeafDemand
-        allometry_f["bmToKLeafDemand"] = bmToKLeafDemand
-
-        self.allometry_f = allometry_f
+        self.functions = AllometryFunctions(
+            age_to_hdom=ageToHdom,
+            age_to_ba=ageToBa,
+            age_to_vol=ageToVol,
+            age_to_yield=ageToYield,
+            age_to_bm=ageToBm,
+            age_to_bm_no_leaves=ageToBmNoLeaves,
+            age_to_leaves=ageToLeaves,
+            bm_to_leaf_mass=bmToLeafMass,
+            bm_with_leaves_to_leaf_mass=bmWithLeavesToLeafMass,
+            bm_to_lai=bmToLAI,
+            bm_to_hdom=bmToHdom,
+            bm_to_dg=bmToDg,
+            bm_to_yi=bmToYi,
+            bm_to_vol=bmToVol,
+            bm_to_log_vol=bmToLogVolume,
+            bm_to_pulp_vol=bmToPulpVolume,
+            bm_to_ba=bmToBa,
+            bm_to_dbm=bmToDbm,
+            bm_to_stems=bmToStems,
+            yi_to_vol=yiToVol,
+            yi_to_bm=yiToBm,
+            vol_to_logs=volToLogs,
+            vol_to_pulp=volToPulp,
+            bm_to_fineroot_litter=bmToFinerootLitter,
+            bm_to_woody_litter=bmToWoodyLitter,
+            bm_to_mortality_fine_root=bmToMortalityFineRoot,
+            bm_to_mortality_woody=bmToMortalityWoody,
+            bm_to_mortality_leaves=bmToMortalityLeaves,
+            bm_with_leaves_to_fineroot_litter=bmWithLeavesToFinerootLitter,
+            bm_with_leaves_to_woody_litter=bmWithLeavesToWoodyLitter,
+            bm_to_n_demand=bmToNdemand,
+            bm_to_p_demand=bmToPdemand,
+            bm_to_k_demand=bmToKdemand,
+            bm_to_n_fine_root_litter=bmToNFineRootLitter,
+            bm_to_p_fine_root_litter=bmToPFineRootLitter,
+            bm_to_k_fine_root_litter=bmToKFineRootLitter,
+            bm_to_n_woody_litter=bmToNWoodyLitter,
+            bm_to_p_woody_litter=bmToPWoodyLitter,
+            bm_to_k_woody_litter=bmToKWoodyLitter,
+            bm_to_n_mortality_leaves=bmToNMortalityLeaves,
+            bm_to_p_mortality_leaves=bmToPMortalityLeaves,
+            bm_to_k_mortality_leaves=bmToKMortalityLeaves,
+            bm_to_n_mortality_fine_root=bmToNMortalityFineRoot,
+            bm_to_p_mortality_fine_root=bmToPMortalityFineRoot,
+            bm_to_k_mortality_fine_root=bmToKMortalityFineRoot,
+            bm_to_n_mortality_woody=bmToNMortalityWoody,
+            bm_to_p_mortality_woody=bmToPMortalityWoody,
+            bm_to_k_mortality_woody=bmToKMortalityWoody,
+            bm_to_woody_logging_residues=bmToWoodyLoggingResidues,
+            bm_to_n_woody_logging_residues=bmToNWoodyLoggingResidues,
+            bm_to_p_woody_logging_residues=bmToPWoodyLoggingResidues,
+            bm_to_k_woody_logging_residues=bmToKWoodyLoggingResidues,
+            bm_to_fine_roots=bmToFineRoots,
+            bm_to_n_fine_roots=bmToNFineRoots,
+            bm_to_p_fine_roots=bmToPFineRoots,
+            bm_to_k_fine_roots=bmToKFineRoots,
+            bm_to_n_leaf_demand=bmToNLeafDemand,
+            bm_to_p_leaf_demand=bmToPLeafDemand,
+            bm_to_k_leaf_demand=bmToKLeafDemand,
+        )
         self.sp = sp
-        self.df = df
+        # self.df (the fully-transformed working DataFrame) used to be kept
+        # here too, but had no reader anywhere outside this method — dropped
+        # as confirmed-dead state (see issue #187).
