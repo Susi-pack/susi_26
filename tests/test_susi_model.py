@@ -3,8 +3,8 @@ import pytest
 from pathlib import Path
 
 from susi.io.susi_parameter_model import (
-    AllometryParams,
-    CanopyLayerAllometryPointers,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     CuttingManagementParams,
     StandardNPKFertilizationParameters,
@@ -40,11 +40,14 @@ def valid_susi_params(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={0: "test_allometry.xlsx"},
-            under={0: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -55,14 +58,11 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1, 1, 1, 1, 1],
-                subdominant=[0, 0, 0, 0, 0],
-                under=[0, 0, 0, 0, 0],
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test",
             species=TreeSpecies("Pine"),
@@ -128,11 +128,14 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={0: "test_allometry.xlsx"},
-            under={0: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -143,14 +146,11 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1, 1, 1, 1, 1],
-                subdominant=[0, 0, 0, 0, 0],
-                under=[0, 0, 0, 0, 0],
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test",
             species=TreeSpecies("Pine"),
@@ -220,11 +220,14 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={1: "test_allometry.xlsx"},
-                subdominant={0: "test_allometry.xlsx"},
-                under={0: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -235,14 +238,11 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=70.0,
-                initial_subdominant_stand_age_years=70.0,
-                initial_understorey_age_years=70.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1, 1, 1],
-                    subdominant=[0, 0, 0],
-                    under=[0, 0, 0],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),
@@ -301,9 +301,10 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
 def test_valid_stand_age_all_layers(valid_susi_params):
     """Test that valid stand ages within allometry range pass validation."""
     params = valid_susi_params
-    assert params.site_parameters.initial_dominant_stand_age_years == 70.0
-    assert params.site_parameters.initial_subdominant_stand_age_years == 70.0
-    assert params.site_parameters.initial_understorey_age_years == 70.0
+    ages = params.site_parameters.initial_canopylayer_age_years
+    assert ages[CanopyLayerName.dominant] == 70.0
+    assert ages[CanopyLayerName.subdominant] == 70.0
+    assert ages[CanopyLayerName.under] == 70.0
 
 
 def test_initial_dominant_age_below_minimum(test_data_path):
@@ -317,11 +318,14 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={1: "test_allometry.xlsx"},
-                subdominant={0: "test_allometry.xlsx"},
-                under={0: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -332,14 +336,11 @@ def test_initial_dominant_age_below_minimum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=1.0,
-                initial_subdominant_stand_age_years=20.0,
-                initial_understorey_age_years=10.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1, 1, 1, 1, 1],
-                    subdominant=[0, 0, 0, 0, 0],
-                    under=[0, 0, 0, 0, 0],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 1.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),
@@ -406,11 +407,14 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2100, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={1: "test_allometry.xlsx"},
-                subdominant={0: "test_allometry.xlsx"},
-                under={0: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -421,14 +425,11 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=80.0,
-                initial_subdominant_stand_age_years=20.0,
-                initial_understorey_age_years=10.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1, 1, 1, 1, 1],
-                    subdominant=[0, 0, 0, 0, 0],
-                    under=[0, 0, 0, 0, 0],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 80.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),
@@ -495,11 +496,14 @@ def test_subdominant_layer_validation(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={0: "test_allometry.xlsx"},
-                subdominant={1: "test_allometry.xlsx"},
-                under={0: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: None,
+                    CanopyLayerName.subdominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -510,14 +514,11 @@ def test_subdominant_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=40.0,
-                initial_subdominant_stand_age_years=1.0,
-                initial_understorey_age_years=10.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1, 1, 1, 1, 1],
-                    subdominant=[1, 1, 1, 1, 1],
-                    under=[0, 0, 0, 0, 0],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 1.0,
+                    CanopyLayerName.under: 10.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),
@@ -584,11 +585,14 @@ def test_under_layer_validation(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={0: "test_allometry.xlsx"},
-                subdominant={0: "test_allometry.xlsx"},
-                under={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: None,
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: [1, 1, 1, 1, 1],
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -599,14 +603,11 @@ def test_under_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=40.0,
-                initial_subdominant_stand_age_years=20.0,
-                initial_understorey_age_years=1.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1, 1, 1, 1, 1],
-                    subdominant=[0, 0, 0, 0, 0],
-                    under=[1, 1, 1, 1, 1],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 1.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),
@@ -672,11 +673,18 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={2: "test_allometry.xlsx"},
-            under={3: "test_allometry.xlsx"},
+            allometry_file_registry={
+                1: "test_allometry.xlsx",
+                2: "test_allometry.xlsx",
+                3: "test_allometry.xlsx",
+            },
+            pointers={
+                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                CanopyLayerName.subdominant: [2, 2, 2, 2, 2],
+                CanopyLayerName.under: [3, 3, 3, 3, 3],
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -687,14 +695,11 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1, 1, 1, 1, 1],
-                subdominant=[2, 2, 2, 2, 2],
-                under=[3, 3, 3, 3, 3],
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test",
             species=TreeSpecies("Pine"),
@@ -764,11 +769,14 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                dominant={1: "test_allometry.xlsx"},
-                subdominant={0: "test_allometry.xlsx"},
-                under={0: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.xlsx"},
+                pointers={
+                    CanopyLayerName.dominant: [99, 99, 99, 99, 99],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -779,14 +787,11 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_dominant_stand_age_years=70.0,
-                initial_subdominant_stand_age_years=70.0,
-                initial_understorey_age_years=70.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[99, 99, 99, 99, 99],
-                    subdominant=[0, 0, 0, 0, 0],
-                    under=[0, 0, 0, 0, 0],
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
+                },
                 site_fertility_class=4,
                 sitename="test",
                 species=TreeSpecies("Pine"),

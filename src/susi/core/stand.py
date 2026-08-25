@@ -8,6 +8,7 @@ Created on Tue Feb  1 18:59:52 2022
 import numpy as np
 from susi.core.canopylayer import Canopylayer
 from susi.io.susi_parameter_model import (
+    CanopyLayerName,
     CuttingManagementParams,
     Thinning,
     ClearCut,
@@ -20,7 +21,6 @@ class Stand:
         self,
         n_scenarios,
         n_yrs,
-        canopylayers,
         n_cols,
         sfc,
         agearr,
@@ -36,11 +36,13 @@ class Stand:
         Input:
             nscens , int, number of scenarios in the simulation
             yrs, int, number of years in the simulation
-            canopylayers, CanopyLayerAllometryPointers in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
             ncols, int, number of columns along the strip
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
-            allometry_parameters: AllometryParams
+            allometry_params: CanopyLayerAllometry, holds the zone registry (which
+                allometry files exist, keyed by AllometryRegistryNumber) and, per canopy
+                layer, either None (layer absent everywhere) or a list of zone ids,
+                one per soil column
             photopara - photosynthesis parameters used in the assimilation model
         """
         self.n_cols = n_cols  # number of columns along the strip
@@ -52,67 +54,40 @@ class Stand:
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
-        ndominants = np.unique(canopylayers.dominant)
-        nsubdominants = np.unique(canopylayers.subdominant)
-        nunder = np.unique(canopylayers.under)
+        zone_ids = {}  # CanopyLayerName -> sorted list of zone ids present in the layer
+        ixs = {}  # CanopyLayerName -> {zone_id: location indices along the transect}
+        for layer in CanopyLayerName:
+            layer_pointers = allometry_params.pointers.get(layer)
+            if layer_pointers is None:
+                zone_ids[layer] = []
+                ixs[layer] = {}
+                continue
 
-        ixdominants = {}  # location indices for dominant canopy layers, along the transect
-        for m in ndominants:
-            if m > 0:
-                ixdominants[m] = np.where(canopylayers.dominant == m)
+            pointer_arr = np.array(layer_pointers)
+            zone_ids[layer] = sorted(set(layer_pointers))
+            ixs[layer] = {
+                zone_id: np.where(pointer_arr == zone_id) for zone_id in zone_ids[layer]
+            }
 
-        ixsubdominants = {}  # location indices for subdominant canopy layers
-        for m in nsubdominants:
-            if m > 0:
-                ixsubdominants[m] = np.where(canopylayers.subdominant == m)
-
-        ixunder = {}  # location indices for undersmost canopy layer
-        for m in nunder:
-            if m > 0:
-                ixunder[m] = np.where(canopylayers.under == m)
-
-        self.dominant = Canopylayer(
-            "dominant",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            ndominants,
-            sfc,
-            agearr["dominant"],
-            allometry_params.dominant_data,
-            allometry_params.dominant_species_id,
-            ixdominants,
-            photopara,
-            self.nut_stat,
-        )
-        self.subdominant = Canopylayer(
-            "subdominant",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            nsubdominants,
-            sfc,
-            agearr["subdominant"],
-            allometry_params.subdominant_data,
-            allometry_params.subdominant_species_id,
-            ixsubdominants,
-            photopara,
-            self.nut_stat,
-        )
-        self.under = Canopylayer(
-            "under",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            nunder,
-            sfc,
-            agearr["under"],
-            allometry_params.under_data,
-            allometry_params.under_species_id,
-            ixunder,
-            photopara,
-            self.nut_stat,
-        )
+        canopylayers = {}
+        for layer in CanopyLayerName:
+            canopylayers[layer] = Canopylayer(
+                layer.value,
+                n_scenarios,
+                n_yrs,
+                n_cols,
+                zone_ids[layer],
+                sfc,
+                agearr[layer.value],
+                allometry_params.zones_data,
+                allometry_params.zones_species_id,
+                ixs[layer],
+                photopara,
+                self.nut_stat,
+            )
+        self.dominant = canopylayers[CanopyLayerName.dominant]
+        self.subdominant = canopylayers[CanopyLayerName.subdominant]
+        self.under = canopylayers[CanopyLayerName.under]
         self.clyrs = [
             self.dominant,
             self.subdominant,

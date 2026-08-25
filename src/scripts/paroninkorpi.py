@@ -36,7 +36,8 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    AllometryParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -44,7 +45,6 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerAllometryPointers,
 )
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
@@ -333,11 +333,18 @@ def prepare_susi_params(
                 start_date=start_date,
                 end_date=datetime.datetime(2024, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=allometry_files_directory_path,
-                dominant={1: allometry_filename_from_stand_number(stand_number)},
-                subdominant={0: "susi_motti_input_lyr_1.xlsx"},
-                under={0: "susi_motti_input_lyr_2.xlsx"},
+                allometry_file_registry={
+                    1: allometry_filename_from_stand_number(stand_number),
+                    2: "susi_motti_input_lyr_1.xlsx",
+                    3: "susi_motti_input_lyr_2.xlsx",
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1] * 20,
+                    CanopyLayerName.subdominant: [2] * 20,
+                    CanopyLayerName.under: [3] * 20,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -348,15 +355,14 @@ def prepare_susi_params(
             site_parameters=SiteParams(
                 L=40.0,
                 n=20,
-                initial_dominant_stand_age_years=read_initial_dominant_stand_age_from_allometry_file(
-                    stand_number=stand_number,
-                    allometry_files_folder=allometry_files_directory_path,
-                ),
-                initial_subdominant_stand_age_years=0.0,
-                initial_understorey_age_years=0.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: read_initial_dominant_stand_age_from_allometry_file(
+                        stand_number=stand_number,
+                        allometry_files_folder=allometry_files_directory_path,
+                    ),
+                    CanopyLayerName.subdominant: 0.0,
+                    CanopyLayerName.under: 0.0,
+                },
                 site_fertility_class=fertility_class,
                 sitename="susirun",
                 species=TreeSpecies("Pine"),

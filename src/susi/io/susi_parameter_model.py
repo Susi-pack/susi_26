@@ -2,7 +2,7 @@ from functools import lru_cache
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Self, Union
+from typing import Callable, Self, Union, TypeAlias
 import numpy as np
 import pandas as pd
 
@@ -107,106 +107,77 @@ class WeatherParams(StrictFrozenModel):
     FMI_weather_filepath: FilePath = Field(description="Path to weather files.")
 
 
-class AllometryParams(StrictFrozenModel):
+class CanopyLayerName(str, Enum):
+    dominant = "dominant"
+    subdominant = "subdominant"
+    under = "under"
+
+
+AllometryRegistryNumber: TypeAlias = PositiveInt
+
+
+class CanopyLayerAllometry(StrictFrozenModel):
     """
-    Allometry .xlsx files to read
+    Allometry parameters
     """
 
     allometry_dir_path: DirectoryPath = Field(
         description="Folder where to look for the allometry files."
     )
-    dominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the dominant layer."
+    allometry_file_registry: dict[AllometryRegistryNumber, str] = Field(
+        description="Map: allometry registry number -> allometry file. Example: {1:'pines.csv', 2:'spruces.csv'}"
     )
-    subdominant: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the subdominant layer."
-    )
-    under: dict[int, str] = Field(
-        description="int: 0 if not in use. str: Name of the allometry file in `allometry_dir_path` for the understorey layer."
+    pointers: dict[CanopyLayerName, list[AllometryRegistryNumber] | None] = Field(
+        description="Map: canopy layer name-> list of pointers, length ncols. Example: {'dominant': [1,1,1,1,2,2,2], 'subdominant': None, 'under': None}"
     )
 
     # Information read from the excel file, not serialized
-    _dominant_data: dict[int, pd.DataFrame] = PrivateAttr()
-    _dominant_species_id: dict[int, int] = PrivateAttr()
+    # Map: Allometry registry number -> allometry path dataframe read from file
+    _zones_data: dict[AllometryRegistryNumber, pd.DataFrame] = PrivateAttr()
+    # Map: Allometry registry number -> species ID
+    _zones_species_id: dict[AllometryRegistryNumber, int] = PrivateAttr()
 
-    _subdominant_data: dict[int, pd.DataFrame] = PrivateAttr()
-    _subdominant_species_id: dict[int, int] = PrivateAttr()
+    @model_validator(mode="after")
+    def pointers_must_reference_declared_zones(self) -> Self:
+        for layer_name, layer_pointers in self.pointers.items():
+            if layer_pointers is None:
+                continue
 
-    _under_data: dict[int, pd.DataFrame] = PrivateAttr()
-    _under_species_id: dict[int, int] = PrivateAttr()
+            declared = self.allometry_file_registry.keys()
+            missing = set(layer_pointers) - declared
+            if missing:
+                raise ValueError(
+                    f"Allometry pointer(s) {missing} in '{layer_name}' layer do not exist "
+                    f"in allometry_file_registry keys {set(declared)}"
+                )
+        return self
 
     @model_validator(mode="after")
     def parse_excels(self) -> Self:
-        _dominant_data = {}
-        _dominant_species_id = {}
+        _zones_data = {}
+        _zones_species_id = {}
 
-        _subdominant_data = {}
-        _subdominant_species_id = {}
+        for allometry_registry_number, filename in self.allometry_file_registry.items():
+            df, species_id = read_allometry_info_from_excel(
+                filepath=self.allometry_dir_path / filename
+            )
+            _zones_data[allometry_registry_number] = df
+            _zones_species_id[allometry_registry_number] = species_id
 
-        _under_data = {}
-        _under_species_id = {}
-
-        for id, filename in self.dominant.items():
-            if id != 0:
-                df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
-                )
-
-                _dominant_data[id] = df
-                _dominant_species_id[id] = species_id
-
-        for id, filename in self.subdominant.items():
-            if id != 0:
-                df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
-                )
-
-                _subdominant_data[id] = df
-                _subdominant_species_id[id] = species_id
-
-        for id, filename in self.under.items():
-            if id != 0:
-                df, species_id = read_allometry_info_from_excel(
-                    filepath=self.allometry_dir_path / filename
-                )
-
-                _under_data[id] = df
-                _under_species_id[id] = species_id
-
-        self._dominant_data = _dominant_data
-        self._dominant_species_id = _dominant_species_id
-
-        self._subdominant_data = _subdominant_data
-        self._subdominant_species_id = _subdominant_species_id
-
-        self._under_data = _under_data
-        self._under_species_id = _under_species_id
+        self._zones_data = _zones_data
+        self._zones_species_id = _zones_species_id
 
         return self
 
     @property
-    def dominant_data(self) -> dict[int, pd.DataFrame]:
-        return self._dominant_data
+    def zones_data(
+        self,
+    ) -> dict[AllometryRegistryNumber, pd.DataFrame]:
+        return self._zones_data
 
     @property
-    def dominant_species_id(self) -> dict[int, int]:
-        return self._dominant_species_id
-
-    @property
-    def subdominant_data(self) -> dict[int, pd.DataFrame]:
-        return self._subdominant_data
-
-    @property
-    def subdominant_species_id(self) -> dict[int, int]:
-        return self._subdominant_species_id
-
-    @property
-    def under_data(self) -> dict[int, pd.DataFrame]:
-        return self._under_data
-
-    @property
-    def under_species_id(self) -> dict[int, int]:
-        return self._under_species_id
+    def zones_species_id(self) -> dict[AllometryRegistryNumber, int]:
+        return self._zones_species_id
 
 
 class CanopyStateParams(StrictFrozenModel):
@@ -581,7 +552,7 @@ class ClearCut(StrictFrozenModel):
     Parameters to define a clear- or strip-cut management intervention.
     """
 
-    new_growth_allometry: AllometryParams = Field(
+    new_growth_allometry: CanopyLayerAllometry = Field(
         description="Allometry data to specify growth after clear cut."
     )
     strips_to_cut: list[bool] = Field(
@@ -599,13 +570,30 @@ class ClearCut(StrictFrozenModel):
 
     @model_validator(mode="after")
     def new_allometry_includes_age_one(self) -> Self:
-        for layer_name in ("dominant", "subdominant", "under"):
-            data = getattr(self.new_growth_allometry, f"{layer_name}_data")
-            for zid, df in data.items():
-                if df["age"].min() > 1:
-                    raise ValueError(
-                        f"Post-clearcut allometry layer '{layer_name}' zone {zid} has a minimum age of {df['age'].min()} years, but must start from age=1 year."
-                    )
+        for zid, df in self.new_growth_allometry.zones_data.items():
+            if df["age"].min() > 1:
+                raise ValueError(
+                    f"Post-clearcut allometry zone {zid} has a minimum age of {df['age'].min()} years, but must start from age=1 year."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def new_growth_allometry_matches_cut_column_count(self) -> Self:
+        """new_growth_allometry provides one allometry pointer per *cut* soil
+        column (True entries in strips_to_cut), not one per soil column in
+        the full stand -- uncut columns keep growing under the pre-cut
+        allometry and don't need a post-clearcut pointer."""
+        n_cut_columns = sum(self.strips_to_cut)
+        for layer, post_cut_pointers in self.new_growth_allometry.pointers.items():
+            if post_cut_pointers is None:
+                continue
+            if len(post_cut_pointers) != n_cut_columns:
+                raise ValueError(
+                    f"ClearCut.new_growth_allometry.pointers['{layer.value}'] has "
+                    f"{len(post_cut_pointers)} elements, but must have {n_cut_columns} "
+                    f"elements, i.e., one per cut soil column (True entries in "
+                    f"strips_to_cut) -- not one per soil column in the full stand."
+                )
         return self
 
 
@@ -665,19 +653,6 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
-class CanopyLayerAllometryPointers(StrictFrozenModel):
-    """
-    Pointers to the allometry files for all canopy layers: dominant, subdominant, understorey
-    Each list must contain one non-negative integer per soil column.
-    Integers in the list reference the keys in the `AllometryParams` dictionaries.
-    0 implies that layer is not present for that soil column.
-    """
-
-    dominant: list[NonNegativeInt]
-    subdominant: list[NonNegativeInt]
-    under: list[NonNegativeInt]
-
-
 class SiteParams(StrictFrozenModel):
     """
     Soil and stand parameters
@@ -685,16 +660,9 @@ class SiteParams(StrictFrozenModel):
 
     # Forest
     # Age of different forest layers at the beginning of the simulation
-    initial_dominant_stand_age_years: NonNegativeFloat = Field(
-        description="Age of the dominant stand at the beginning of the simulation. This is set to all nodes in the strip."
+    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
+        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
     )
-    initial_subdominant_stand_age_years: NonNegativeFloat = Field(
-        description="Age of the subdominant layer at the beginning of the simulation. This is set to all nodes in the strip."
-    )
-    initial_understorey_age_years: NonNegativeFloat = Field(
-        description="Age of the understorey at the beginning of the simulation. This is set to all nodes in the strip."
-    )
-    canopylayers: CanopyLayerAllometryPointers
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -766,12 +734,11 @@ class SiteParams(StrictFrozenModel):
     peat_temperature: PeatTemperatureParams
 
     @property
-    def age(self) -> SkipValidation[dict[str, np.ndarray]]:
+    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
         """Age of stand for all nodes along the strip"""
         return {
-            "dominant": self.initial_dominant_stand_age_years * np.ones(self.n),
-            "subdominant": self.initial_subdominant_stand_age_years * np.ones(self.n),
-            "under": self.initial_understorey_age_years * np.ones(self.n),
+            layer_name: self.initial_canopylayer_age_years[layer_name] * np.ones(self.n)
+            for layer_name in CanopyLayerName
         }
 
     @property
@@ -794,18 +761,6 @@ class SiteParams(StrictFrozenModel):
             except Exception as e:
                 raise ValueError(f"Failed to compute h_mor: {e}")
         return hmor
-
-    @model_validator(mode="after")
-    def canopy_layer_elements(self) -> Self:
-        n = self.n
-        for layer_name in ["dominant", "subdominant", "under"]:
-            layer_list = getattr(self.canopylayers, layer_name)
-            if len(layer_list) != n:
-                raise ValueError(
-                    f"CanopyLayerAllometryPointers.{layer_name} has {len(layer_list)} elements, "
-                    f"but must have {n} elements"
-                )
-        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -833,36 +788,6 @@ class SiteParams(StrictFrozenModel):
                     )
         return self
 
-    @model_validator(mode="after")
-    def clearcut_provides_new_growth_allometry_for_every_real_layer(self) -> Self:
-        if self.cutting_management is None:
-            return self
-        management_type = self.cutting_management.management_type
-        if not isinstance(management_type, ClearCut):
-            return self
-
-        for layer_name in ("dominant", "subdominant", "under"):
-            layer_exists = any(p != 0 for p in getattr(self.canopylayers, layer_name))
-            if not layer_exists:
-                continue
-
-            new_growth_data = getattr(
-                management_type.new_growth_allometry, f"{layer_name}_data"
-            )
-            if len(new_growth_data) == 0:
-                raise ValueError(
-                    f"A clear-cut is scheduled and the '{layer_name}' layer exists, "
-                    f"but ClearCut.new_growth_allometry provides no post-clearcut "
-                    f"allometry for '{layer_name}'."
-                )
-            if len(new_growth_data) > 1:
-                raise ValueError(
-                    f"ClearCut.new_growth_allometry.{layer_name} defines "
-                    f"{len(new_growth_data)} zones, but only one post-clearcut "
-                    f"allometry zone per layer is currently supported."
-                )
-        return self
-
 
 class SusiParams(StrictFrozenModel):
     """
@@ -871,7 +796,7 @@ class SusiParams(StrictFrozenModel):
 
     params_schema_version: int = 1
     weather_parameters: WeatherParams
-    allometry_parameters: AllometryParams
+    allometry_parameters: CanopyLayerAllometry
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams
@@ -919,77 +844,92 @@ class SusiParams(StrictFrozenModel):
             - self.simulation_config.start_date.year
         )
 
-        self._validate_layer_age(
-            layer_name="dominant",
-            initial_age=self.site_parameters.initial_dominant_stand_age_years,
-            allometry_data=self.allometry_parameters.dominant_data,
-            simulation_duration=simulation_duration_years,
-        )
-
-        self._validate_layer_age(
-            layer_name="subdominant",
-            initial_age=self.site_parameters.initial_subdominant_stand_age_years,
-            allometry_data=self.allometry_parameters.subdominant_data,
-            simulation_duration=simulation_duration_years,
-        )
-
-        self._validate_layer_age(
-            layer_name="under",
-            initial_age=self.site_parameters.initial_understorey_age_years,
-            allometry_data=self.allometry_parameters.under_data,
-            simulation_duration=simulation_duration_years,
-        )
+        # Each layer might have a different initial stand age
+        for canopy_layer in CanopyLayerName:
+            layer_pointers = self.allometry_parameters.pointers.get(canopy_layer)
+            if layer_pointers is None:
+                continue
+            layer_zones = {
+                zone_id: self.allometry_parameters.zones_data[zone_id]
+                for zone_id in set(layer_pointers)
+            }
+            self._validate_layer_age(
+                layer_name=canopy_layer.value,
+                initial_age=self.site_parameters.initial_canopylayer_age_years[
+                    canopy_layer
+                ],
+                allometry_data=layer_zones,
+                simulation_duration=simulation_duration_years,
+            )
 
         return self
 
     @model_validator(mode="after")
-    def allometry_files_pointers(self) -> Self:
-        for layer_name in ["dominant", "subdominant", "under"]:
-            layer_pointers = getattr(self.site_parameters.canopylayers, layer_name)
-            layer_keys = getattr(self.allometry_parameters, layer_name).keys()
-            non_zero_pointers = set(p for p in layer_pointers if p != 0)
-            # only check non-zero pointers. 0 means no tree in the layer.
-            if non_zero_pointers:
-                missing_keys = non_zero_pointers - layer_keys
-                if missing_keys:
-                    raise ValueError(
-                        f"Allometry pointer(s) {missing_keys} in {layer_name} layer "
-                        f"do not exist in AllometryParams.{layer_name} keys {set(layer_keys)}"
-                    )
+    def canopy_layers_must_have_number_of_soil_columns(self) -> Self:
+        n_soil_cols = self.site_parameters.n
+        for (
+            layer_name,
+            pointer_column_list,
+        ) in self.allometry_parameters.pointers.items():
+            if pointer_column_list is None:
+                continue
+
+            pointer_list_length = len(pointer_column_list)
+            if pointer_list_length != n_soil_cols:
+                raise ValueError(
+                    f"CanopyLayerAllometry.pointers[{layer_name}] has {pointer_list_length} elements, "
+                    f"but must have {n_soil_cols} elements, i.e., same elements as number of soil columns"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def clearcut_provides_new_growth_allometry_for_every_real_layer(self) -> Self:
+        cutting_management = self.site_parameters.cutting_management
+        if cutting_management is None:
+            return self
+
+        management_type = cutting_management.management_type
+        if not isinstance(management_type, ClearCut):
+            return self
+
+        for layer, pre_cut_pointers in self.allometry_parameters.pointers.items():
+            if pre_cut_pointers is None:
+                continue
+
+            post_cut_pointers = management_type.new_growth_allometry.pointers.get(layer)
+            if not post_cut_pointers:
+                raise ValueError(
+                    f"A clear-cut is scheduled and the '{layer.value}' layer exists, "
+                    f"but ClearCut.new_growth_allometry provides no post-clearcut "
+                    f"allometry pointers for '{layer.value}'."
+                )
         return self
 
     def _validate_layer_age(
         self,
         layer_name: str,
         initial_age: float,
-        allometry_data: dict[int, pd.DataFrame],
+        allometry_data: dict[AllometryRegistryNumber, pd.DataFrame],
         simulation_duration: float,
     ) -> None:
         """Helper method to validate age for a single canopy layer."""
-        if not allometry_data:
-            # This convers the case of no stand in the canopy layer
-            return
 
-        # Compute the minimum and maximum of all dataframes
-        min_age = float("inf")
-        max_age = float("-inf")
+        for registry_number, df in allometry_data.items():
+            min_age_in_dataframe = df["age"].min()
+            max_age_in_dataframe = df["age"].max()
 
-        for df in allometry_data.values():
-            min_age = min(min_age, df["age"].min())
-            max_age = max(max_age, df["age"].max())
+            if initial_age < min_age_in_dataframe:
+                raise ValueError(
+                    f"Initial {layer_name} stand age ({initial_age}) is below "
+                    f"minimum age ({min_age_in_dataframe}) in the allometry file corresponding to registry number {registry_number}."
+                )
 
-        if initial_age < min_age:
-            raise ValueError(
-                f"Initial {layer_name} stand age ({initial_age}) is below "
-                f"minimum age ({min_age}) in allometry file"
-            )
-
-        if initial_age + simulation_duration > max_age:
-            raise ValueError(
-                f"Initial {layer_name} stand age ({initial_age}) plus simulation "
-                f"duration ({simulation_duration:.1f} years) exceeds maximum age "
-                f"({max_age}) in allometry file"
-            )
+            if initial_age + simulation_duration > max_age_in_dataframe:
+                raise ValueError(
+                    f"Initial {layer_name} stand age ({initial_age}) plus simulation "
+                    f"duration ({simulation_duration:.1f} years) exceeds maximum age "
+                    f"({max_age_in_dataframe}) in allometry file corresponding to registry number {registry_number}."
+                )
 
     def dump_json_to_file(self, filepath: Path) -> None:
         with open(filepath, "w") as f:

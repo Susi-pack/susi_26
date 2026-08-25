@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 
 from susi.io.susi_parameter_model import (
-    AllometryParams,
-    CanopyLayerAllometryPointers,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     ClearCut,
     CuttingManagementParams,
@@ -59,11 +59,14 @@ def _make_susi_params(*, cutting_management, n: int = 5):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=DATA_DIR,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={0: "test_allometry.xlsx"},
-            under={0: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1] * n,
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -74,14 +77,11 @@ def _make_susi_params(*, cutting_management, n: int = 5):
         site_parameters=SiteParams(
             L=10.0,
             n=n,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1] * n,
-                subdominant=[0] * n,
-                under=[0] * n,
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test",
             species=TreeSpecies("Pine"),
@@ -125,15 +125,18 @@ def _make_susi_params(*, cutting_management, n: int = 5):
     )
 
 
-def _make_regeneration_allometry():
+def _make_regeneration_allometry(n: int = 5):
     """Post-clearcut allometry: age must start at 1 (see ClearCutParams's
     new_allometry_includes_age_one validator). test_allometry.xlsx does NOT
     qualify (it starts at age 60) — post_clearcut_allom.xlsx does."""
-    return AllometryParams(
+    return CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        dominant={1: "post_clearcut_allom.xlsx"},
-        subdominant={0: "post_clearcut_allom.xlsx"},
-        under={0: "post_clearcut_allom.xlsx"},
+        allometry_file_registry={1: "post_clearcut_allom.xlsx"},
+        pointers={
+            CanopyLayerName.dominant: [1] * n,
+            CanopyLayerName.subdominant: None,
+            CanopyLayerName.under: None,
+        },
     )
 
 
@@ -219,7 +222,7 @@ class TestClearCutStripsLength:
                 cutting_management=CuttingManagementParams(
                     application_yr=2005,
                     management_type=ClearCut(
-                        new_growth_allometry=_make_regeneration_allometry(),
+                        new_growth_allometry=_make_regeneration_allometry(n=3),
                         strips_to_cut=[True] * 3,
                     ),
                 ),
@@ -245,14 +248,11 @@ def _site_params_kwargs(n: int = 5, **overrides):
     kwargs = dict(
         L=10.0,
         n=n,
-        initial_dominant_stand_age_years=70.0,
-        initial_subdominant_stand_age_years=70.0,
-        initial_understorey_age_years=70.0,
-        canopylayers=CanopyLayerAllometryPointers(
-            dominant=[1] * n,
-            subdominant=[0] * n,
-            under=[0] * n,
-        ),
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 70.0,
+            CanopyLayerName.subdominant: 70.0,
+            CanopyLayerName.under: 70.0,
+        },
         site_fertility_class=4,
         sitename="test",
         species=TreeSpecies("Pine"),

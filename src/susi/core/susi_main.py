@@ -15,9 +15,6 @@ from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
-    Thinning,
-    ClearCut,
-    ContinuousCover,
 )
 from susi.core.canopygrid import CanopyGrid
 from susi.core.mosslayer import MossLayer
@@ -103,7 +100,6 @@ class Susi:
         stand = Stand(
             n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
             n_yrs=n_simulation_years,
-            canopylayers=self.parameters.site_parameters.canopylayers,
             n_cols=self.parameters.site_parameters.n,
             sfc=self.parameters.site_parameters.sfc,
             agearr=self.parameters.site_parameters.age,

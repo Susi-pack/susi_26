@@ -13,7 +13,7 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    AllometryParams,
+    CanopyLayerAllometry,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -21,11 +21,12 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerAllometryPointers,
+    CanopyLayerName,
 )
 
 _app_settings = AppSettings()
 
+_N_SOIL_COLS = 20
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
@@ -35,11 +36,14 @@ PARAMETERS = SusiParams(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2017, 12, 31),
     ),
-    allometry_parameters=AllometryParams(
+    allometry_parameters=CanopyLayerAllometry(
         allometry_dir_path=_app_settings.input_folder,
-        dominant={1: "CF_41.xlsx"},
-        subdominant={0: "susi_motti_input_lyr_1.xlsx"},
-        under={0: "susi_motti_input_lyr_2.xlsx"},
+        allometry_file_registry={1: "CF_41.xlsx"},
+        pointers={
+            CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
+            CanopyLayerName.subdominant: None,
+            CanopyLayerName.under: None,
+        },
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -49,13 +53,12 @@ PARAMETERS = SusiParams(
     ),
     site_parameters=SiteParams(
         L=40.0,
-        n=20,
-        initial_dominant_stand_age_years=60.0,
-        initial_subdominant_stand_age_years=0.0,
-        initial_understorey_age_years=0.0,
-        canopylayers=CanopyLayerAllometryPointers(
-            dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
-        ),
+        n=_N_SOIL_COLS,
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 60.0,
+            CanopyLayerName.subdominant: 0.0,
+            CanopyLayerName.under: 0.0,
+        },
         site_fertility_class=4,
         sitename="susirun",
         species=TreeSpecies("Pine"),

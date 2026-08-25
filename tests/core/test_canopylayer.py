@@ -14,12 +14,11 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from susi.core.stand import Stand
 from susi.io.susi_parameter_model import (
-    AllometryParams,
-    CanopyLayerAllometryPointers,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     LocationsForPhotoParams,
     get_photo_parameters_by_location,
 )
@@ -85,16 +84,14 @@ GROUP_B_FIELDS = (
 
 
 def _make_stand() -> Stand:
-    allometry_params = AllometryParams(
+    allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        dominant={1: "test_allometry.xlsx"},
-        subdominant={0: "test_allometry.xlsx"},
-        under={0: "test_allometry.xlsx"},
-    )
-    canopylayers = CanopyLayerAllometryPointers(
-        dominant=[1] * N,
-        subdominant=[0] * N,
-        under=[0] * N,
+        allometry_file_registry={1: "test_allometry.xlsx"},
+        pointers={
+            CanopyLayerName.dominant: [1] * N,
+            CanopyLayerName.subdominant: None,
+            CanopyLayerName.under: None,
+        },
     )
     agearr = {
         "dominant": np.full(N, 70.0),
@@ -104,7 +101,6 @@ def _make_stand() -> Stand:
     stand = Stand(
         n_scenarios=1,
         n_yrs=4,
-        canopylayers=canopylayers,
         n_cols=N,
         sfc=np.ones(N, dtype=int) * 4,
         agearr=agearr,
@@ -178,7 +174,9 @@ class TestDoClearcutStripSelectivity:
             "k_woody_lresid",
         ):
             arr = getattr(stand.dominant, field)
-            assert (arr[self.CUT_COLS] > 0).all(), f"{field} should be > 0 for cut columns"
+            assert (arr[self.CUT_COLS] > 0).all(), (
+                f"{field} should be > 0 for cut columns"
+            )
             assert (arr[self.UNCUT_COLS] == 0).all(), (
                 f"{field} should be 0 for uncut columns"
             )
@@ -239,7 +237,9 @@ class TestDoClearcutHarvestFields:
         ):
             arr = getattr(stand.dominant, field)
             assert (arr[CUT_COLS] > 0).all(), f"{field} should be > 0 for cut columns"
-            assert (arr[UNCUT_COLS] == 0).all(), f"{field} should be 0 for uncut columns"
+            assert (arr[UNCUT_COLS] == 0).all(), (
+                f"{field} should be 0 for uncut columns"
+            )
 
 
 class TestDoClearcutGroupBFields:
