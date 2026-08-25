@@ -7,10 +7,10 @@
 # the pending zone re-partitioning work).
 #
 # TestDoClearcutGroupBFields.test_group_b_fields_untouched_for_uncut_columns
-# documents a known, currently-failing bug: do_clearcut calls
-# initialize_domain() unscoped over the whole layer, so it silently zeroes
-# NPP/leaf-litter/demand/etc. for columns that were never cut. Left failing
-# on purpose (see canopylayer.py initialize_domain fix, in progress).
+# pins down the fix for a bug that used to exist here: do_clearcut used to
+# call initialize_domain() unscoped over the whole layer, silently zeroing
+# NPP/leaf-litter/demand/etc. for columns that were never cut. do_clearcut
+# is now correctly scoped to cut_cols, and this test passes.
 from pathlib import Path
 
 import numpy as np
@@ -273,11 +273,10 @@ class TestDoClearcutGroupBFields:
             )
 
     def test_group_b_fields_untouched_for_uncut_columns(self):
-        """Known bug, surfaced while designing the initialize_domain fix:
-        do_clearcut currently calls initialize_domain() unscoped, over the
-        whole layer, so *every* clear-cut silently zeroes NPP/leaf-litter/
-        demand/etc. for columns that were never cut. This documents the
-        intended behavior and is expected to fail until that fix lands.
+        """do_clearcut used to call initialize_domain() unscoped, over the
+        whole layer, so *every* clear-cut silently zeroed NPP/leaf-litter/
+        demand/etc. for columns that were never cut. do_clearcut is now
+        scoped to cut_cols, so uncut columns are correctly left alone.
         """
         stand = self._stand_with_group_b_fields_set()
 
