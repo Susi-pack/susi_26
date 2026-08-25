@@ -2284,12 +2284,6 @@ class Outputs:
         self.ncf["scen"]["ditch_depths_east"][scen] = ditch_depth_east
         self.ncf["scen"]["ditch_depths_west"][scen] = ditch_depth_west
 
-    def write_paras(self, sfc, dominant_sp, subdominant_sp, under_sp):
-        self.ncf["scen"]["sfc"][:] = sfc
-        self.ncf["scen"]["tree_species_dominant"][:] = dominant_sp
-        self.ncf["scen"]["tree_species_subdominant"][:] = subdominant_sp
-        self.ncf["scen"]["tree_species_under"][:] = under_sp
-
     def write_stand(self, scen, year, stand):
         self.ncf["stand"]["basalarea"][scen, year, :] = stand.basalarea
         self.ncf["stand"]["biomass"][scen, year, :] = stand.biomass

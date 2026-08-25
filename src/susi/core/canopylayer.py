@@ -63,21 +63,6 @@ class Canopylayer:
             self.ncols
         )  # share of remaining stems after thinning 0...1
 
-        # Species at the moment this Canopylayer was constructed — a
-        # once-per-run snapshot consumed by susi_main.py's write_paras()
-        # per-run metadata output. Deliberately NOT merged with self.species
-        # (set in initial_array_allocation/_recompute_structure_from_age),
-        # which is recomputed every growth cycle and reflects the *current*
-        # species — the two coincide today only because nothing changes a
-        # layer's species after construction. See devlog/changelogs/
-        # 2026-08-25_canopylayer_zone_consolidation.md for why merging them
-        # would be wrong.
-        self.species_at_construction = np.zeros(
-            self.ncols, dtype=np.int8
-        )  # tree species 1 Scots pine, 2 Norway spruce, 3 Deciduous
-        for zone in self.zones:
-            self.species_at_construction[zone.cols] = int(zone.allometry.sp)
-
         # One-time, whole-layer array creation. Must run before
         # initialize_domain() (or anything else) touches self.stems,
         # self.biomass, etc. — see initial_array_allocation()'s docstring for why

@@ -12,6 +12,7 @@ import datetime
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
+    CanopyLayerName,
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
@@ -112,13 +113,6 @@ class Susi:
         out.initialize_canopy_layer("dominant")  # output variables of trees
         out.initialize_canopy_layer("subdominant")
         out.initialize_canopy_layer("under")
-
-        out.write_paras(
-            sfc=self.parameters.site_parameters.sfc,
-            dominant_sp=stand.dominant.species_at_construction,
-            subdominant_sp=stand.subdominant.species_at_construction,
-            under_sp=stand.under.species_at_construction,
-        )
 
         # describe site parameters for user
         susi_io.print_site_description(self.parameters.site_parameters)
