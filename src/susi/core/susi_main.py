@@ -115,9 +115,9 @@ class Susi:
 
         out.write_paras(
             sfc=self.parameters.site_parameters.sfc,
-            dominant_sp=stand.dominant.tree_species,
-            subdominant_sp=stand.subdominant.tree_species,
-            under_sp=stand.under.tree_species,
+            dominant_sp=stand.dominant.species_at_construction,
+            subdominant_sp=stand.subdominant.species_at_construction,
+            under_sp=stand.under.species_at_construction,
         )
 
         # describe site parameters for user

@@ -6,7 +6,8 @@ Created on Tue Feb  1 18:59:52 2022
 """
 
 import numpy as np
-from susi.core.canopylayer import Canopylayer
+from susi.core.allometry import Allometry
+from susi.core.canopylayer import Canopylayer, Zone
 from susi.io.susi_parameter_model import (
     CanopyLayerName,
     CuttingManagementParams,
@@ -54,20 +55,31 @@ class Stand:
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
-        zone_ids = {}  # CanopyLayerName -> sorted list of zone ids present in the layer
-        ixs = {}  # CanopyLayerName -> {zone_id: location indices along the transect}
+        # Build each layer's allometry zones once: fit an Allometry instance
+        # per (layer, zone id) pair present in that layer's pointers, and
+        # pair it with the plain 1D column-index array it applies to. See
+        # canopylayer.Zone — this replaces the old nlyrs/ixs/allodic triple
+        # that Canopylayer used to build (and cross-reference by id) itself.
+        zones_by_layer: dict[CanopyLayerName, list[Zone]] = {}
         for layer in CanopyLayerName:
             layer_pointers = allometry_params.pointers.get(layer)
             if layer_pointers is None:
-                zone_ids[layer] = []
-                ixs[layer] = {}
+                zones_by_layer[layer] = []
                 continue
 
             pointer_arr = np.array(layer_pointers)
-            zone_ids[layer] = sorted(set(layer_pointers))
-            ixs[layer] = {
-                zone_id: np.where(pointer_arr == zone_id) for zone_id in zone_ids[layer]
-            }
+            zones = []
+            for zone_id in sorted(set(layer_pointers)):
+                cols = np.where(pointer_arr == zone_id)[0]
+                zone_sfc = int(np.median(sfc[cols]))  # site fertility class
+                allometry = Allometry()
+                allometry.allometry_development(
+                    df=allometry_params.zones_data[zone_id],
+                    sp=allometry_params.zones_species_id[zone_id],
+                    sfc=zone_sfc,
+                )
+                zones.append(Zone(id=zone_id, cols=cols, allometry=allometry))
+            zones_by_layer[layer] = zones
 
         canopylayers = {}
         for layer in CanopyLayerName:
@@ -76,12 +88,8 @@ class Stand:
                 n_scenarios,
                 n_yrs,
                 n_cols,
-                zone_ids[layer],
-                sfc,
+                zones_by_layer[layer],
                 agearr[layer.value],
-                allometry_params.zones_data,
-                allometry_params.zones_species_id,
-                ixs[layer],
                 photopara,
                 self.nut_stat,
             )
