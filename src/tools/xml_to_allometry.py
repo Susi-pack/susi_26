@@ -172,28 +172,89 @@ def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[float, float], .
 def get_tree_strata_data(
     tree_strata_xml_data: list,
 ) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
-    tree_strata_list = []
+    """
+    Map strata into fixed species slots:
+    
+    index 0 -> TreeSpecies 1
+    index 1 -> TreeSpecies 2
+    index 2 -> TreeSpecies >= 3
+    
+    Missing species are represented by empty strata.
+    """
+    
+    if isinstance(tree_strata_xml_data, dict):
+        tree_strata_xml_data = [tree_strata_xml_data]
+
+    empty_stratum = TreeStratum(
+        age=0,
+        basal_area=0,
+        stem_count=0,
+        mean_diameter=0,
+        mean_height=0,
+    )
+
+    strata = [
+        empty_stratum.model_copy(),
+        empty_stratum.model_copy(),
+        empty_stratum.model_copy(),
+    ]
+    
     for stratum in tree_strata_xml_data:
-        tree_strata_list.append(
-            TreeStratum(
-                age=int(stratum["tst:Age"]),
-                basal_area=float(stratum["tst:BasalArea"]),
-                stem_count=int(stratum["tst:StemCount"]),
-                mean_diameter=float(stratum["tst:MeanDiameter"]),
-                mean_height=float(stratum["tst:MeanHeight"]),
-            )
+        tree_species = int(stratum["tst:TreeSpecies"])
+        
+        tree_stratum = TreeStratum(
+            age=float(stratum["tst:Age"]),
+            basal_area=float(stratum["tst:BasalArea"]),
+            stem_count=float(stratum["tst:StemCount"]),
+            mean_diameter=float(stratum["tst:MeanDiameter"]),
+            mean_height=float(stratum["tst:MeanHeight"]),
         )
-    return tuple(tree_strata_list)
+
+        if tree_species == 1:
+            strata[0] = tree_stratum
+        elif tree_species == 2:
+            strata[1] = tree_stratum
+        else:
+            strata[2] = tree_stratum
+        
+    return tuple(strata)
 
 
 def get_stand_data_from_xml(stand: dict) -> StandData:
     stand_basic_data = stand["st:StandBasicData"]
-    tree_stand_summary = stand["ts:TreeStandData"]["ts:TreeStandDataDate"][
-        "tss:TreeStandSummary"
-    ]
-    tree_strata_xml_data = stand["ts:TreeStandData"]["ts:TreeStandDataDate"][
-        "tst:TreeStrata"
-    ]["tst:TreeStratum"]
+    
+    tree_stand_data = stand.get("ts:TreeStandData")
+    if tree_stand_data is None:
+        raise ValueError(
+            f"Stand {stand['@id']} has no ts:TreeStandData"
+        )
+    
+    tree_stand_data_date = tree_stand_data.get("ts:TreeStandDataDate")
+    if tree_stand_data_date is None:
+        raise ValueError(
+            f"Stand {stand['@id']} has no ts:TreeStandDataDate"
+        )
+
+    tree_stand_summary = tree_stand_data_date.get("tss:TreeStandSummary")
+    if tree_stand_summary is None:
+        raise ValueError(
+            f"Stand {stand['@id']} has no tss:TreeStandSummary"
+        )
+
+    tree_strata_container = tree_stand_data_date.get("tst:TreeStrata")
+
+    # Skip stands if tree strata information is missing.
+    if tree_strata_container is None:
+        f"Skipping stand {stand['@id']}: no TreeStrata"
+        return None
+
+    tree_strata_xml_data = tree_strata_container.get("tst:TreeStratum")
+
+    if tree_strata_xml_data is None:
+        raise ValueError(
+            f"Stand {stand['@id']} has no TreeStratum"
+        )
+    
     tree_strata = get_tree_strata_data(tree_strata_xml_data)
 
     strata_basal_areas_per_stratum = []
@@ -203,11 +264,10 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
         strata_stem_counts_per_stratum.append(tree_stratum.stem_count)
 
     # The main species is the one with the largest basal area
-    # THe +1 is there to agree with Mikko's nomenclature starting at 1.
-    # I (Iñaki) don't know if that is more fundamental than that, i.e.,
-    # I do not know if it is a choice by Mikko or if the number of the
-    # species actually means something else.
-    # NOTE: in Mikko's script the species are {1,2,4}. Here they are {1,2,3}
+    #           index 0 -> TreeSpecies 1 (Pine)
+    #           index 1 -> TreeSpecies 2 (Spruce)
+    #           index 2 -> TreeSpecies >= 3 (Deciduous trees)
+    # The +1 is there to convert index number to tree species code
     main_species = (
         strata_basal_areas_per_stratum.index(max(strata_basal_areas_per_stratum)) + 1
     )
@@ -312,12 +372,12 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
         N_3=strata_stem_counts_per_stratum[2],
         Dg_3=stand_data.tree_strata[2].mean_diameter,
         Hg_3=stand_data.tree_strata[2].mean_height,
-        DDY=1300,  # Temperature sum, degree days
+        DDY=1050,  # Temperature sum, degree days, AEMES Lestijarvi = 1050
         fertility_class=stand_data.fertility_class,
         peat=PEAT,
         y=y,
         x=x,
-        altitude=123,  # Altitude above the sea level
+        altitude=160,  # Altitude above the sea level, AEMES Lestijarvi = 160
         n_trees=20,  # Number of reference trees per stratum
     )
     page_1 = gy.get_table(start_year=5, end_year=80, step_years=5)
@@ -354,7 +414,14 @@ def main():
 
     stands = read_stands_from_xml_file(cli_args.xml_filepath)
 
-    stand_datas = [get_stand_data_from_xml(stand) for stand in stands]
+    stand_datas = [
+        stand_data
+        for stand_data in (
+            get_stand_data_from_xml(stand)
+            for stand in stands
+        )
+        if stand_data is not None
+    ]
 
     # PEAT=1 assumes all sites are peatland sites.
     print("Assuming all sites are peatland sites!")
