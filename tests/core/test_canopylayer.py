@@ -289,3 +289,93 @@ class TestDoClearcutGroupBFields:
             assert (arr[UNCUT_COLS] == self.PRESET_VALUE).all(), (
                 f"{field} should be untouched for uncut columns, got {arr[UNCUT_COLS]}"
             )
+
+
+class TestMultiZoneCanopylayer:
+    """Issue #193.
+
+    `Canopylayer.sfc` used to be a per-column array (`self.sfc =
+    sfc.copy()`) that the per-zone loop overwrote with a bare
+    `int(np.median(...))` on its first iteration. A second real zone in
+    the same layer would then do `self.sfc[self.ixs[ncanopy]]` on an int
+    -> TypeError. Zero existing config anywhere in the repo configured
+    more than one non-zero zone id per layer, so this path was never
+    exercised.
+
+    The `Zone` consolidation (#189) removed the shared `self.sfc` field
+    outright: each zone now computes a local `zone_sfc` in `Stand.__init__`
+    and consumes it immediately, never writing it back anywhere shared.
+    This test exercises a layer with 2 real zone ids directly against
+    that current shape: it doesn't crash, and (more than that) each
+    zone's allometry is actually fitted from that zone's own sfc, not
+    another zone's.
+    """
+
+    N = 5
+    ZONE1_COLS = [0, 1]
+    ZONE2_COLS = [2, 3, 4]
+    # dominant layer has 2 real zone ids (1 and 2) instead of the single
+    # zone every other test/config in this repo uses.
+    POINTERS = [1, 1, 2, 2, 2]
+    # zone 1's columns all have sfc=1, zone 2's all have sfc=4 -- distinct
+    # medians per zone, so the two zones must fit distinct allometries.
+    SFC = np.array([1, 1, 4, 4, 4])
+
+    def _make_multizone_stand(self) -> Stand:
+        allometry_params = CanopyLayerAllometry(
+            allometry_dir_path=DATA_DIR,
+            # Same underlying file registered under two different zone
+            # ids: both zones are the same species/growth-and-yield data,
+            # differing only in sfc.
+            allometry_file_registry={1: "test_allometry.xlsx", 2: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: self.POINTERS,
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
+        )
+        agearr = {
+            "dominant": np.full(self.N, 70.0),
+            "subdominant": np.full(self.N, 70.0),
+            "under": np.full(self.N, 70.0),
+        }
+        return Stand(
+            n_scenarios=1,
+            n_yrs=4,
+            n_cols=self.N,
+            sfc=self.SFC,
+            agearr=agearr,
+            allometry_params=allometry_params,
+            photopara=get_photo_parameters_by_location(
+                location=LocationsForPhotoParams("All_data")
+            ),
+        )
+
+    def test_construction_does_not_crash_with_multiple_zones(self):
+        # Regression test for the TypeError described above: a second
+        # real zone in the same layer must not blow up at construction.
+        self._make_multizone_stand()
+
+    def test_each_zone_built_from_its_own_sfc(self):
+        stand = self._make_multizone_stand()
+
+        # test_allometry.xlsx is Pine (species id 1). Pine's leaf_scale is
+        # 1.0 at sfc=1 and 1.4 at sfc=4 (allometry.py's allometry_development:
+        # `df["leaves"] / leaf_scale[sfc]`), and both zones share every other
+        # input (species, growth-and-yield table, age). So if each zone
+        # really was fitted from its own sfc rather than the other zone's
+        # (or an int-overwritten shared field), zone 1's leafmass must come
+        # out ~1.4x zone 2's leafmass at the same age -- not equal, and not
+        # crashed/garbage.
+        leafmass = stand.dominant.leafmass
+        zone1_leafmass = leafmass[self.ZONE1_COLS]
+        zone2_leafmass = leafmass[self.ZONE2_COLS]
+
+        assert (zone1_leafmass > 0).all()
+        assert (zone2_leafmass > 0).all()
+        # Same age within each zone -> same leafmass within that zone.
+        np.testing.assert_allclose(zone1_leafmass, zone1_leafmass[0])
+        np.testing.assert_allclose(zone2_leafmass, zone2_leafmass[0])
+
+        ratio = zone1_leafmass[0] / zone2_leafmass[0]
+        np.testing.assert_allclose(ratio, 1.4, rtol=1e-6)
