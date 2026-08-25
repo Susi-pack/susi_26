@@ -385,15 +385,13 @@ class Canopylayer:
             self.biomass[target_cols]
         )  # stem volume m3/tree
 
-        self.basNdemand[target_cols] = zone.allometry.functions.bm_to_n_leaf_demand(
-            self.biomass[target_cols]
-        )
-        self.basPdemand[target_cols] = zone.allometry.functions.bm_to_p_leaf_demand(
-            self.biomass[target_cols]
-        )
-        self.basKdemand[target_cols] = zone.allometry.functions.bm_to_k_leaf_demand(
-            self.biomass[target_cols]
-        )
+        leaf_demand = zone.allometry.functions.leaf_demand
+        for target, curve in (
+            (self.basNdemand, leaf_demand.N),
+            (self.basPdemand, leaf_demand.P),
+            (self.basKdemand, leaf_demand.K),
+        ):
+            target[target_cols] = curve(self.biomass[target_cols])
 
     def initialize_domain(self, agearr, nut_stat):
         """(Re)derive the entire layer from scratch, for every column.
@@ -462,14 +460,20 @@ class Canopylayer:
             self.leafmass[cols] = f.bm_to_leaf_mass(bm[cols])
             # self.volume[cols] = f.bm_to_yi(bm[cols])
             self.volume[cols] = f.bm_to_vol(bm[cols])
-            self.n_demand[cols] = f.bm_to_n_demand(bm[cols])
-            self.p_demand[cols] = f.bm_to_p_demand(bm[cols])
-            self.k_demand[cols] = f.bm_to_k_demand(bm[cols])
+            for target, curve in (
+                (self.n_demand, f.demand.N),
+                (self.p_demand, f.demand.P),
+                (self.k_demand, f.demand.K),
+            ):
+                target[cols] = curve(bm[cols])
             self.logvolume[cols] = f.vol_to_logs(self.volume[cols])
             self.finerootlitter[cols] = f.bm_to_fineroot_litter(bm[cols])
-            self.n_finerootlitter[cols] = f.bm_to_n_fine_root_litter(bm[cols])
-            self.p_finerootlitter[cols] = f.bm_to_p_fine_root_litter(bm[cols])
-            self.k_finerootlitter[cols] = f.bm_to_k_fine_root_litter(bm[cols])
+            for target, curve in (
+                (self.n_finerootlitter, f.fineroot_litter.N),
+                (self.p_finerootlitter, f.fineroot_litter.P),
+                (self.k_finerootlitter, f.fineroot_litter.K),
+            ):
+                target[cols] = curve(bm[cols])
 
             self.nonwoodylitter[cols] = (
                 self.finerootlitter[cols] + self.leaf_litter[cols]
@@ -486,29 +490,54 @@ class Canopylayer:
 
             self.pulpvolume[cols] = f.vol_to_pulp(self.volume[cols])
             self.woodylitter[cols] = f.bm_to_woody_litter(bm[cols])
-            self.n_woodylitter[cols] = f.bm_to_n_woody_litter(bm[cols])
-            self.p_woodylitter[cols] = f.bm_to_p_woody_litter(bm[cols])
-            self.k_woodylitter[cols] = f.bm_to_k_woody_litter(bm[cols])
+            for target, curve in (
+                (self.n_woodylitter, f.woody_litter.N),
+                (self.p_woodylitter, f.woody_litter.P),
+                (self.k_woodylitter, f.woody_litter.K),
+            ):
+                target[cols] = curve(bm[cols])
 
             self.woody_litter_mort[cols] = f.bm_to_mortality_woody(bm[cols])
-            self.n_woody_litter_mort[cols] = f.bm_to_n_mortality_woody(bm[cols])
-            self.p_woody_litter_mort[cols] = f.bm_to_p_mortality_woody(bm[cols])
-            self.k_woody_litter_mort[cols] = f.bm_to_k_mortality_woody(bm[cols])
+            for target, curve in (
+                (self.n_woody_litter_mort, f.mortality_woody.N),
+                (self.p_woody_litter_mort, f.mortality_woody.P),
+                (self.k_woody_litter_mort, f.mortality_woody.K),
+            ):
+                target[cols] = curve(bm[cols])
 
             self.non_woody_litter_mort[cols] = f.bm_to_mortality_fine_root(bm[cols])
             +f.bm_to_mortality_leaves(bm[cols])
-            self.n_non_woody_litter_mort[cols] = f.bm_to_n_mortality_fine_root(bm[cols])
-            +f.bm_to_n_mortality_leaves(bm[cols])
-            self.p_non_woody_litter_mort[cols] = f.bm_to_p_mortality_fine_root(bm[cols])
-            +f.bm_to_p_mortality_leaves(bm[cols])
-            self.k_non_woody_litter_mort[cols] = f.bm_to_k_mortality_fine_root(bm[cols])
-            +f.bm_to_k_mortality_leaves(bm[cols])
+            for target, curve_fineroot, curve_leaves in (
+                (
+                    self.n_non_woody_litter_mort,
+                    f.mortality_fineroot.N,
+                    f.mortality_leaves.N,
+                ),
+                (
+                    self.p_non_woody_litter_mort,
+                    f.mortality_fineroot.P,
+                    f.mortality_leaves.P,
+                ),
+                (
+                    self.k_non_woody_litter_mort,
+                    f.mortality_fineroot.K,
+                    f.mortality_leaves.K,
+                ),
+            ):
+                # NOTE: the second term below is a no-op (missing `+=`) —
+                # preserved from the pre-existing code as-is; fixing it is
+                # out of scope for #191 (pure structural extraction).
+                target[cols] = curve_fineroot(bm[cols])
+                +curve_leaves(bm[cols])
 
             self.yi[cols] = f.bm_to_yi(bm[cols])
 
-            self.basNdemand[cols] = f.bm_to_n_leaf_demand(bm[cols])
-            self.basPdemand[cols] = f.bm_to_p_leaf_demand(bm[cols])
-            self.basKdemand[cols] = f.bm_to_k_leaf_demand(bm[cols])
+            for target, curve in (
+                (self.basNdemand, f.leaf_demand.N),
+                (self.basPdemand, f.leaf_demand.P),
+                (self.basKdemand, f.leaf_demand.K),
+            ):
+                target[cols] = curve(bm[cols])
             # print ('vol')
             # print (self.volume)
             # print ('n stems')
@@ -876,32 +905,27 @@ class Canopylayer:
             self.new_lmass[target_cols] + f.bm_to_fine_roots(self.biomass[target_cols])
         ) * removed_stems[target_cols]
 
-        self.n_nonwoody_lresid[target_cols] = (
-            self.N_leaf[target_cols] + f.bm_to_n_fine_roots(self.biomass[target_cols])
-        ) * removed_stems[target_cols]
-        self.p_nonwoody_lresid[target_cols] = (
-            self.P_leaf[target_cols] + f.bm_to_p_fine_roots(self.biomass[target_cols])
-        ) * removed_stems[target_cols]
-        self.k_nonwoody_lresid[target_cols] = (
-            self.K_leaf[target_cols] + f.bm_to_k_fine_roots(self.biomass[target_cols])
-        ) * removed_stems[target_cols]
+        for target, leaf, curve in (
+            (self.n_nonwoody_lresid, self.N_leaf, f.fine_roots.N),
+            (self.p_nonwoody_lresid, self.P_leaf, f.fine_roots.P),
+            (self.k_nonwoody_lresid, self.K_leaf, f.fine_roots.K),
+        ):
+            target[target_cols] = (
+                leaf[target_cols] + curve(self.biomass[target_cols])
+            ) * removed_stems[target_cols]
 
         self.woody_lresid[target_cols] = (
             f.bm_to_woody_logging_residues(self.biomass[target_cols])
             * removed_stems[target_cols]
         )
-        self.n_woody_lresid[target_cols] = (
-            f.bm_to_n_woody_logging_residues(self.biomass[target_cols])
-            * removed_stems[target_cols]
-        )
-        self.p_woody_lresid[target_cols] = (
-            f.bm_to_p_woody_logging_residues(self.biomass[target_cols])
-            * removed_stems[target_cols]
-        )
-        self.k_woody_lresid[target_cols] = (
-            f.bm_to_k_woody_logging_residues(self.biomass[target_cols])
-            * removed_stems[target_cols]
-        )
+        for target, curve in (
+            (self.n_woody_lresid, f.woody_logging_residues.N),
+            (self.p_woody_lresid, f.woody_logging_residues.P),
+            (self.k_woody_lresid, f.woody_logging_residues.K),
+        ):
+            target[target_cols] = (
+                curve(self.biomass[target_cols]) * removed_stems[target_cols]
+            )
 
     def _compute_harvest(self, zone: Zone, target_cols, removed_stems) -> None:
         """

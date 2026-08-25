@@ -6,11 +6,28 @@ Created on Sun Jan 30 10:44:18 2022
 """
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Generic, TypeVar
 
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class PerNutrient(Generic[T]):
+    """One value per macronutrient, for the ~15 places `Allometry` fits the
+    same curve shape three times over — once per nutrient. Replaces three
+    independently-spelled fields (e.g. `bm_to_n_demand`/`bm_to_p_demand`/
+    `bm_to_k_demand`) with one `PerNutrient[Callable]` field, so a call site
+    needing all three loops over `("N", "P", "K")` instead of hand-repeating
+    the same statement three times.
+    """
+
+    N: T
+    P: T
+    K: T
 
 
 @dataclass(frozen=True)
@@ -18,12 +35,13 @@ class AllometryFunctions:
     """One fitted allometry file's interpolation functions, one field per curve.
 
     Built once by `Allometry.allometry_development()` and read from
-    `Canopylayer` (`self.allodic[m].functions.<field>(...)`). Replaces the old
+    `Canopylayer` (`zone.allometry.functions.<field>(...)`). Replaces the old
     `allometry_f` string-keyed dict: a typo in a dict key used to fail at
     runtime with a `KeyError` inside a numeric loop; a typo in a field name
     now fails at authoring time as an `AttributeError` any linter catches.
-    Same curves, same cardinality — this is a mechanical key -> attribute
-    rename, not a behavior change.
+    Same curves, same values — this is a structural regrouping (a mechanical
+    key -> attribute rename, then folding N/P/K triplicates into
+    `PerNutrient` fields), not a behavior change.
     """
 
     # age [yrs] -> ...
@@ -64,52 +82,34 @@ class AllometryFunctions:
     bm_with_leaves_to_fineroot_litter: Callable[[np.ndarray], np.ndarray]
     bm_with_leaves_to_woody_litter: Callable[[np.ndarray], np.ndarray]
 
-    # N/P/K demand
-    bm_to_n_demand: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_demand: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_demand: Callable[[np.ndarray], np.ndarray]
+    # N/P/K demand — was bm_to_n_demand/bm_to_p_demand/bm_to_k_demand
+    demand: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K fine-root litter
-    bm_to_n_fine_root_litter: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_fine_root_litter: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_fine_root_litter: Callable[[np.ndarray], np.ndarray]
+    # N/P/K fine-root litter — was bm_to_{n,p,k}_fine_root_litter
+    fineroot_litter: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K woody litter
-    bm_to_n_woody_litter: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_woody_litter: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_woody_litter: Callable[[np.ndarray], np.ndarray]
+    # N/P/K woody litter — was bm_to_{n,p,k}_woody_litter
+    woody_litter: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K leaf mortality
-    bm_to_n_mortality_leaves: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_mortality_leaves: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_mortality_leaves: Callable[[np.ndarray], np.ndarray]
+    # N/P/K leaf mortality — was bm_to_{n,p,k}_mortality_leaves
+    mortality_leaves: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K fine-root mortality
-    bm_to_n_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_mortality_fine_root: Callable[[np.ndarray], np.ndarray]
+    # N/P/K fine-root mortality — was bm_to_{n,p,k}_mortality_fine_root
+    mortality_fineroot: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K woody mortality
-    bm_to_n_mortality_woody: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_mortality_woody: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_mortality_woody: Callable[[np.ndarray], np.ndarray]
+    # N/P/K woody mortality — was bm_to_{n,p,k}_mortality_woody
+    mortality_woody: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # woody logging residues, and N/P/K
+    # woody logging residues, and N/P/K — was bm_to_{n,p,k}_woody_logging_residues
     bm_to_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
-    bm_to_n_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_woody_logging_residues: Callable[[np.ndarray], np.ndarray]
+    woody_logging_residues: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # fine roots, and N/P/K
+    # fine roots, and N/P/K — was bm_to_{n,p,k}_fine_roots
     bm_to_fine_roots: Callable[[np.ndarray], np.ndarray]
-    bm_to_n_fine_roots: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_fine_roots: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_fine_roots: Callable[[np.ndarray], np.ndarray]
+    fine_roots: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
-    # N/P/K leaf demand
-    bm_to_n_leaf_demand: Callable[[np.ndarray], np.ndarray]
-    bm_to_p_leaf_demand: Callable[[np.ndarray], np.ndarray]
-    bm_to_k_leaf_demand: Callable[[np.ndarray], np.ndarray]
+    # N/P/K leaf demand — was bm_to_{n,p,k}_leaf_demand
+    leaf_demand: PerNutrient[Callable[[np.ndarray], np.ndarray]]
 
 
 class Allometry:
@@ -1018,35 +1018,39 @@ class Allometry:
             bm_to_mortality_leaves=bmToMortalityLeaves,
             bm_with_leaves_to_fineroot_litter=bmWithLeavesToFinerootLitter,
             bm_with_leaves_to_woody_litter=bmWithLeavesToWoodyLitter,
-            bm_to_n_demand=bmToNdemand,
-            bm_to_p_demand=bmToPdemand,
-            bm_to_k_demand=bmToKdemand,
-            bm_to_n_fine_root_litter=bmToNFineRootLitter,
-            bm_to_p_fine_root_litter=bmToPFineRootLitter,
-            bm_to_k_fine_root_litter=bmToKFineRootLitter,
-            bm_to_n_woody_litter=bmToNWoodyLitter,
-            bm_to_p_woody_litter=bmToPWoodyLitter,
-            bm_to_k_woody_litter=bmToKWoodyLitter,
-            bm_to_n_mortality_leaves=bmToNMortalityLeaves,
-            bm_to_p_mortality_leaves=bmToPMortalityLeaves,
-            bm_to_k_mortality_leaves=bmToKMortalityLeaves,
-            bm_to_n_mortality_fine_root=bmToNMortalityFineRoot,
-            bm_to_p_mortality_fine_root=bmToPMortalityFineRoot,
-            bm_to_k_mortality_fine_root=bmToKMortalityFineRoot,
-            bm_to_n_mortality_woody=bmToNMortalityWoody,
-            bm_to_p_mortality_woody=bmToPMortalityWoody,
-            bm_to_k_mortality_woody=bmToKMortalityWoody,
+            demand=PerNutrient(N=bmToNdemand, P=bmToPdemand, K=bmToKdemand),
+            fineroot_litter=PerNutrient(
+                N=bmToNFineRootLitter, P=bmToPFineRootLitter, K=bmToKFineRootLitter
+            ),
+            woody_litter=PerNutrient(
+                N=bmToNWoodyLitter, P=bmToPWoodyLitter, K=bmToKWoodyLitter
+            ),
+            mortality_leaves=PerNutrient(
+                N=bmToNMortalityLeaves,
+                P=bmToPMortalityLeaves,
+                K=bmToKMortalityLeaves,
+            ),
+            mortality_fineroot=PerNutrient(
+                N=bmToNMortalityFineRoot,
+                P=bmToPMortalityFineRoot,
+                K=bmToKMortalityFineRoot,
+            ),
+            mortality_woody=PerNutrient(
+                N=bmToNMortalityWoody, P=bmToPMortalityWoody, K=bmToKMortalityWoody
+            ),
             bm_to_woody_logging_residues=bmToWoodyLoggingResidues,
-            bm_to_n_woody_logging_residues=bmToNWoodyLoggingResidues,
-            bm_to_p_woody_logging_residues=bmToPWoodyLoggingResidues,
-            bm_to_k_woody_logging_residues=bmToKWoodyLoggingResidues,
+            woody_logging_residues=PerNutrient(
+                N=bmToNWoodyLoggingResidues,
+                P=bmToPWoodyLoggingResidues,
+                K=bmToKWoodyLoggingResidues,
+            ),
             bm_to_fine_roots=bmToFineRoots,
-            bm_to_n_fine_roots=bmToNFineRoots,
-            bm_to_p_fine_roots=bmToPFineRoots,
-            bm_to_k_fine_roots=bmToKFineRoots,
-            bm_to_n_leaf_demand=bmToNLeafDemand,
-            bm_to_p_leaf_demand=bmToPLeafDemand,
-            bm_to_k_leaf_demand=bmToKLeafDemand,
+            fine_roots=PerNutrient(
+                N=bmToNFineRoots, P=bmToPFineRoots, K=bmToKFineRoots
+            ),
+            leaf_demand=PerNutrient(
+                N=bmToNLeafDemand, P=bmToPLeafDemand, K=bmToKLeafDemand
+            ),
         )
         self.sp = sp
         # self.df (the fully-transformed working DataFrame) used to be kept
