@@ -31,6 +31,9 @@ from susi.io.susi_parameter_model import (
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 N = 5
+SFC = np.ones(N, dtype=int) * 4  # reused for both Stand construction and
+# apply_cutting_management's `sfc` param -- must match, since a ClearCut fits
+# post-cut allometry zones from the same site fertility class array.
 
 
 def _make_stand() -> Stand:
@@ -52,7 +55,7 @@ def _make_stand() -> Stand:
         n_scenarios=1,
         n_yrs=4,
         n_cols=N,
-        sfc=np.ones(N, dtype=int) * 4,
+        sfc=SFC,
         agearr=agearr,
         allometry_params=allometry_params,
         photopara=get_photo_parameters_by_location(
@@ -92,7 +95,7 @@ class TestApplyCuttingManagement:
         cutting_management = CuttingManagementParams(
             application_yr=2005, management_type=Thinning(to_ba=12)
         )
-        stand.apply_cutting_management(cutting_management, yr=2005)
+        stand.apply_cutting_management(cutting_management, yr=2005, sfc=SFC)
 
         assert calls["yr"] == 2005
         assert calls["to_ba"] == 12
@@ -112,20 +115,23 @@ class TestApplyCuttingManagement:
         cutting_management = CuttingManagementParams(
             application_yr=2005, management_type=Thinning(to_ba=12)
         )
-        stand.apply_cutting_management(cutting_management, yr=2005)  # should not raise
+        stand.apply_cutting_management(
+            cutting_management, yr=2005, sfc=SFC
+        )  # should not raise
 
     def test_clearcut_dispatches_to_all_three_layers(self, monkeypatch):
         """Unlike Thinning, ClearCut routes to do_clearcut(yr, nut_stat=stand.nut_stat,
-        strips_to_cut=...) on dominant, subdominant, AND under."""
+        strips_to_cut=..., new_zones=...) on dominant, subdominant, AND under."""
         stand = _make_stand()
         calls = {}
 
         def make_fake_do_clearcut(layer_name):
-            def fake_do_clearcut(yr, nut_stat, strips_to_cut):
+            def fake_do_clearcut(yr, nut_stat, strips_to_cut, new_zones):
                 calls[layer_name] = {
                     "yr": yr,
                     "nut_stat": nut_stat,
                     "strips_to_cut": strips_to_cut,
+                    "new_zones": new_zones,
                 }
 
             return fake_do_clearcut
@@ -141,12 +147,19 @@ class TestApplyCuttingManagement:
                 strips_to_cut=strips_to_cut,
             ),
         )
-        stand.apply_cutting_management(cutting_management, yr=2005)
+        stand.apply_cutting_management(cutting_management, yr=2005, sfc=SFC)
 
         for layer_name in ("dominant", "subdominant", "under"):
             assert calls[layer_name]["yr"] == 2005
             assert calls[layer_name]["strips_to_cut"] == strips_to_cut
             assert calls[layer_name]["nut_stat"] is stand.nut_stat
+
+        # dominant is the only real layer here (subdominant/under pointers are
+        # None), so it's the only one that should get real post-cut zones --
+        # the other two get new_zones=[] since _build_zones(None, ...) == [].
+        assert len(calls["dominant"]["new_zones"]) == 1
+        assert calls["subdominant"]["new_zones"] == []
+        assert calls["under"]["new_zones"] == []
 
     def test_continuous_cover_cannot_even_be_constructed(self):
         """ContinuousCover raises on construction (model-level stub), so

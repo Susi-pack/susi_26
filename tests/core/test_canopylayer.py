@@ -1,10 +1,17 @@
-# Tests for Canopylayer.do_clearcut's strip-selectivity (issue #171).
-# Scope: verify the strips_to_cut boolean mask correctly partitions columns
-# within a single allometry zone into "cut" (residues + harvest populated,
-# age reset to 1, biomass recomputed, flow/derived fields reset to zero) vs
-# "uncut" (completely untouched). Does NOT test post-clearcut allometry
-# switch-over (new_growth_allometry isn't wired into do_clearcut yet — see
-# the pending zone re-partitioning work).
+# Tests for Canopylayer.do_clearcut (issue #171, and issue #181's allometry
+# switch-over). Scope: verify the strips_to_cut boolean mask correctly
+# partitions columns within a single allometry zone into "cut" (residues +
+# harvest populated, age reset to 1, biomass recomputed under new_zones'
+# allometry, flow/derived fields reset to zero) vs "uncut" (completely
+# untouched).
+#
+# new_zones is a required parameter of do_clearcut (#181): every clearcut
+# must say what allometry cut columns regrow under. Most tests below don't
+# care about an actual allometry-file switch -- they're exercising cutting
+# mechanics only -- so they use _same_allometry_new_zones() to reuse each
+# pre-cut zone's own allometry, reproducing do_clearcut's pre-#181 behavior
+# explicitly rather than via a hidden default. TestDoClearcutAllometrySwitchover
+# is the one class that actually exercises a real allometry-file switch.
 #
 # TestDoClearcutGroupBFields.test_group_b_fields_untouched_for_uncut_columns
 # pins down the fix for a bug that used to exist here: do_clearcut used to
@@ -15,7 +22,8 @@ from pathlib import Path
 
 import numpy as np
 
-from susi.core.stand import Stand
+from susi.core.canopylayer import Canopylayer, Zone
+from susi.core.stand import Stand, _build_zones
 from susi.io.susi_parameter_model import (
     CanopyLayerAllometry,
     CanopyLayerName,
@@ -25,6 +33,7 @@ from susi.io.susi_parameter_model import (
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 N = 5
+SFC = np.ones(N, dtype=int) * 4
 
 # cols 0, 2 cut; 1, 3, 4 left standing
 STRIPS_TO_CUT = [True, False, True, False, False]
@@ -102,7 +111,7 @@ def _make_stand() -> Stand:
         n_scenarios=1,
         n_yrs=4,
         n_cols=N,
-        sfc=np.ones(N, dtype=int) * 4,
+        sfc=SFC,
         agearr=agearr,
         allometry_params=allometry_params,
         photopara=get_photo_parameters_by_location(
@@ -113,6 +122,22 @@ def _make_stand() -> Stand:
     return stand
 
 
+def _same_allometry_new_zones(
+    layer: Canopylayer, strips_to_cut: list[bool]
+) -> list[Zone]:
+    """new_zones that reuse each pre-cut zone's own allometry, scoped to
+    that zone's cut columns -- for tests that only exercise do_clearcut's
+    cutting mechanics, not an actual allometry-file switch. Reproduces
+    do_clearcut's pre-#181 behavior explicitly."""
+    strips_to_cut_arr = np.asarray(strips_to_cut, dtype=bool)
+    return [
+        Zone(id=zone.id, cols=cut_cols, allometry=zone.allometry)
+        for zone in layer.zones
+        for cut_cols in [zone.cols[strips_to_cut_arr[zone.cols]]]
+        if cut_cols.size
+    ]
+
+
 class TestDoClearcutStripSelectivity:
     STRIPS_TO_CUT = STRIPS_TO_CUT
     CUT_COLS = CUT_COLS
@@ -121,7 +146,10 @@ class TestDoClearcutStripSelectivity:
     def test_only_cut_columns_get_age_reset(self):
         stand = _make_stand()
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=self.STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=self.STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, self.STRIPS_TO_CUT),
         )
         assert (stand.dominant.agearr[self.CUT_COLS] == 1.0).all()
         assert (stand.dominant.agearr[self.UNCUT_COLS] == 70.0).all()
@@ -132,7 +160,10 @@ class TestDoClearcutStripSelectivity:
         stems_before = stand.dominant.stems.copy()
 
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=self.STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=self.STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, self.STRIPS_TO_CUT),
         )
 
         np.testing.assert_array_equal(
@@ -147,12 +178,17 @@ class TestDoClearcutStripSelectivity:
         biomass_before = stand.dominant.biomass.copy()
 
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=self.STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=self.STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, self.STRIPS_TO_CUT),
         )
 
-        # Regrowth is a fresh age-1 stand — biomass must actually change,
-        # and (until new_growth_allometry is wired in) currently comes from
-        # the *same* allometry data, just evaluated at age 1.
+        # Regrowth is a fresh age-1 stand — biomass must actually change.
+        # This test's new_zones deliberately reuse the *same* allometry data
+        # as before the cut (see _same_allometry_new_zones) -- it's only
+        # checking the age-1 reset, not an allometry-file switch (see
+        # TestDoClearcutAllometrySwitchover for that).
         assert (
             stand.dominant.biomass[self.CUT_COLS] != biomass_before[self.CUT_COLS]
         ).all()
@@ -160,7 +196,10 @@ class TestDoClearcutStripSelectivity:
     def test_residues_populated_only_for_cut_columns(self):
         stand = _make_stand()
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=self.STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=self.STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, self.STRIPS_TO_CUT),
         )
 
         for field in (
@@ -184,8 +223,12 @@ class TestDoClearcutStripSelectivity:
     def test_full_strip_cut_resets_every_column(self):
         """strips_to_cut=[True]*n behaves like the old uniform clear-cut."""
         stand = _make_stand()
+        full_cut = [True] * N
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=[True] * N
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=full_cut,
+            new_zones=_same_allometry_new_zones(stand.dominant, full_cut),
         )
         assert (stand.dominant.agearr == 1.0).all()
 
@@ -195,8 +238,12 @@ class TestDoClearcutStripSelectivity:
         agearr_before = stand.dominant.agearr.copy()
         biomass_before = stand.dominant.biomass.copy()
 
+        no_cut = [False] * N
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=[False] * N
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=no_cut,
+            new_zones=_same_allometry_new_zones(stand.dominant, no_cut),
         )
 
         np.testing.assert_array_equal(stand.dominant.agearr, agearr_before)
@@ -211,7 +258,10 @@ class TestDoClearcutStripSelectivity:
         under_before = stand.under.agearr.copy()
 
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=self.STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=self.STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, self.STRIPS_TO_CUT),
         )
 
         np.testing.assert_array_equal(stand.subdominant.agearr, subdominant_before)
@@ -225,7 +275,10 @@ class TestDoClearcutHarvestFields:
     def test_harvest_populated_only_for_cut_columns(self):
         stand = _make_stand()
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, STRIPS_TO_CUT),
         )
 
         for field in (
@@ -262,7 +315,10 @@ class TestDoClearcutGroupBFields:
         stand = self._stand_with_group_b_fields_set()
 
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, STRIPS_TO_CUT),
         )
 
         for field in GROUP_B_FIELDS:
@@ -281,7 +337,10 @@ class TestDoClearcutGroupBFields:
         stand = self._stand_with_group_b_fields_set()
 
         stand.dominant.do_clearcut(
-            yr=2005, nut_stat=stand.nut_stat, strips_to_cut=STRIPS_TO_CUT
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=_same_allometry_new_zones(stand.dominant, STRIPS_TO_CUT),
         )
 
         for field in GROUP_B_FIELDS:
@@ -289,6 +348,152 @@ class TestDoClearcutGroupBFields:
             assert (arr[UNCUT_COLS] == self.PRESET_VALUE).all(), (
                 f"{field} should be untouched for uncut columns, got {arr[UNCUT_COLS]}"
             )
+
+
+class TestDoClearcutAllometrySwitchover:
+    """Issue #181: cut columns must actually regrow under the post-clearcut
+    allometry file (new_zones), not silently keep using the pre-cut zone's
+    own allometry -- and must keep using it in every later growth year too,
+    not just at the moment of cutting."""
+
+    def _new_zones(self, cut_cols_global: np.ndarray) -> list[Zone]:
+        """Build new_zones straight from a CanopyLayerAllometry, exactly the
+        way Stand.apply_cutting_management does in production."""
+        new_growth_allometry = CanopyLayerAllometry(
+            allometry_dir_path=DATA_DIR,
+            allometry_file_registry={1: "post_clearcut_allom.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1] * len(cut_cols_global),
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
+        )
+        return _build_zones(
+            new_growth_allometry.pointers[CanopyLayerName.dominant],
+            cut_cols_global,
+            new_growth_allometry.zones_data,
+            new_growth_allometry.zones_species_id,
+            SFC,
+        )
+
+    def test_cut_columns_pick_up_the_new_allometrys_curves(self):
+        stand = _make_stand()
+        old_zone = stand.dominant.zones[0]  # pre-cut zone, test_allometry.xlsx
+        new_zones = self._new_zones(np.array(CUT_COLS))
+
+        stand.dominant.do_clearcut(
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=new_zones,
+        )
+
+        # Ground truth: the *new* allometry's own age-to-biomass curve at
+        # age 1 -- not the old zone's.
+        expected = new_zones[0].allometry.functions.age_to_bm(np.array([1.0]))[0]
+        np.testing.assert_allclose(stand.dominant.biomass[CUT_COLS], expected)
+
+        # And it must actually differ from what the *old* allometry would
+        # have given at age 1 -- otherwise this wouldn't be exercising a
+        # real switch (test_allometry.xlsx and post_clearcut_allom.xlsx are
+        # different growth-and-yield tables).
+        old_bm_at_age_1 = old_zone.allometry.functions.age_to_bm(np.array([1.0]))[0]
+        assert not np.isclose(expected, old_bm_at_age_1)
+
+    def test_self_zones_correctly_repartitioned(self):
+        stand = _make_stand()
+        new_zones = self._new_zones(np.array(CUT_COLS))
+
+        stand.dominant.do_clearcut(
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=new_zones,
+        )
+
+        # Uncut columns still belong to a zone using the pre-cut allometry;
+        # cut columns now belong to (one of) new_zones.
+        cols_by_zone = {
+            tuple(sorted(zone.cols.tolist())): zone for zone in stand.dominant.zones
+        }
+        assert tuple(sorted(UNCUT_COLS)) in cols_by_zone
+        assert tuple(sorted(CUT_COLS)) in cols_by_zone
+        assert cols_by_zone[tuple(sorted(CUT_COLS))].allometry is new_zones[0].allometry
+
+    def test_new_allometry_still_used_in_a_later_growth_year(self):
+        """Regression test for the bug this design avoids: without
+        repartitioning self.zones, a later update() call would silently
+        recompute cut columns from the *pre-cut* allometry's curves again."""
+        stand = _make_stand()
+        new_zones = self._new_zones(np.array(CUT_COLS))
+
+        stand.dominant.do_clearcut(
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=new_zones,
+        )
+
+        # Advance one growth year via the same path assimilate() uses.
+        bm_after = stand.dominant.biomass + 0.5  # pretend some growth happened
+        stand.dominant.update(bm_after)
+
+        # stems is recomputed from biomass via zone.allometry.functions --
+        # if the cut columns were still (silently) attached to the pre-cut
+        # zone, this would use the *old* allometry's bm_to_stems curve
+        # instead of the new one's.
+        expected_stems = new_zones[0].allometry.functions.bm_to_stems(
+            bm_after[CUT_COLS]
+        )
+        np.testing.assert_allclose(stand.dominant.stems[CUT_COLS], expected_stems)
+
+    def test_strip_cut_supports_multiple_disjoint_post_cut_zones(self):
+        """Two cut columns, mapped to two different post-cut zones from two
+        different allometry files -- pointers are interpreted as one entry
+        per cut column, in strip order."""
+        stand = _make_stand()
+        cut_cols_global = np.array(CUT_COLS)  # [0, 2]
+
+        new_growth_allometry = CanopyLayerAllometry(
+            allometry_dir_path=DATA_DIR,
+            allometry_file_registry={
+                1: "post_clearcut_allom.xlsx",
+                2: "test_allometry.xlsx",
+            },
+            pointers={
+                # col 0 -> zone 1, col 2 -> zone 2 (order matches strip order
+                # of True entries in STRIPS_TO_CUT, i.e. CUT_COLS itself).
+                CanopyLayerName.dominant: [1, 2],
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
+        )
+        new_zones = _build_zones(
+            new_growth_allometry.pointers[CanopyLayerName.dominant],
+            cut_cols_global,
+            new_growth_allometry.zones_data,
+            new_growth_allometry.zones_species_id,
+            SFC,
+        )
+        assert len(new_zones) == 2
+        assert set(z.id for z in new_zones) == {1, 2}
+        assert list(new_zones[0].cols) == [CUT_COLS[0]]
+        assert list(new_zones[1].cols) == [CUT_COLS[1]]
+
+        stand.dominant.do_clearcut(
+            yr=2005,
+            nut_stat=stand.nut_stat,
+            strips_to_cut=STRIPS_TO_CUT,
+            new_zones=new_zones,
+        )
+
+        assert (stand.dominant.agearr[CUT_COLS] == 1.0).all()
+        assert len(stand.dominant.zones) == 3  # 1 surviving pre-cut + 2 new
+        # The two post-cut zones' distinct allometry files must show up as
+        # distinct biomass for their respective columns.
+        assert not np.isclose(
+            stand.dominant.biomass[CUT_COLS[0]], stand.dominant.biomass[CUT_COLS[1]]
+        )
 
 
 class TestMultiZoneCanopylayer:

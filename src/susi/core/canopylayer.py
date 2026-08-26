@@ -1032,9 +1032,19 @@ class Canopylayer:
         """This update to stand or to main????? """
 
     def do_clearcut(
-        self, yr: int, nut_stat: np.ndarray, strips_to_cut: list[bool]
+        self,
+        yr: int,
+        nut_stat: np.ndarray,
+        strips_to_cut: list[bool],
+        new_zones: list[Zone],
     ) -> None:
-        """Unit here /ha"""
+        """Unit here /ha
+
+        `new_zones` are the allometry zones cut columns are switched onto
+        (issue #181): already fitted from the post-clearcut allometry file(s)
+        and scoped to just the columns each applies to. Every real clearcut
+        must supply these -- there's no "keep the old allometry" fallback.
+        """
         # OBS! All cutting is taken from uniformly from the canopy layer
         # You can locate cutting also to subdominant or lower suppressed canopy layer
 
@@ -1044,15 +1054,16 @@ class Canopylayer:
 
         for zone in self.zones:
             zone_cols = zone.cols  # all columns belonging to this allometry zone
-            cut_cols = zone_cols[
-                strips_to_cut_arr[zone_cols]
-            ]  # subset actually cut this call
+            # subset actually cut this call:
+            cut_cols = zone_cols[strips_to_cut_arr[zone_cols]]
 
             # Harvest/residues first: these read self.biomass/self.stems/
             # self.new_lmass/etc., which at this point still describe the
             # felled, mature stand about to be replaced below. Computing
             # them after the age reset would compute residues for a
-            # sapling that hasn't grown anything yet.
+            # sapling that hasn't grown anything yet. This must use the
+            # zone's own (pre-cut) allometry, since it's valuing what's
+            # being felled -- not what gets planted next.
             self._compute_residues(
                 zone=zone, target_cols=cut_cols, removed_stems=self.stems
             )
@@ -1060,7 +1071,11 @@ class Canopylayer:
                 zone=zone, target_cols=cut_cols, removed_stems=self.stems
             )
 
-            # Now replace cut_cols with a fresh, unthinned, age-1 stand.
+        for zone in new_zones:
+            cut_cols = zone.cols  # already scoped to just the columns this zone plants
+
+            # Replace cut_cols with a fresh, unthinned, age-1 stand under
+            # the new post-clearcut allometry.
             self.agearr[cut_cols] = 1.0
             self.remaining_share[cut_cols] = (
                 1.0  # Nothing thinned for the newly grown saplings yet
@@ -1073,5 +1088,29 @@ class Canopylayer:
             )
             # A brand-new sapling hasn't been through a growth cycle yet
             self._reset_growth_cycle_fields(target_cols=cut_cols)
+
+        # Every column ends up owned by exactly one zone below:
+        # - cut columns move to their new post-cut zone (`new_zones`, already
+        #   scoped to just those columns);
+        # - uncut columns stay in their existing pre-cut zone -- we just have
+        #   to drop the (now-departed) cut columns from that zone's own
+        #   column list, and drop the zone entirely if nothing is left in it.
+        # Without this, update()/assimilate() in later years would keep
+        # growing the regrown columns under the *pre-cut* allometry.
+        was_cut = strips_to_cut_arr  # length n_cols; True = this column was just cut
+
+        surviving_zones = []
+        for zone in self.zones:
+            cols_still_growing_here = [col for col in zone.cols if not was_cut[col]]
+            if cols_still_growing_here:
+                surviving_zones.append(
+                    Zone(
+                        id=zone.id,
+                        cols=np.array(cols_still_growing_here),
+                        allometry=zone.allometry,
+                    )
+                )
+
+        self.zones = surviving_zones + new_zones
 
         print("+        cutting in " + self.name + " year " + str(yr))

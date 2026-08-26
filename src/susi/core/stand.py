@@ -6,15 +6,45 @@ Created on Tue Feb  1 18:59:52 2022
 """
 
 import numpy as np
+import pandas as pd
 from susi.core.allometry import Allometry
 from susi.core.canopylayer import Canopylayer, Zone
 from susi.io.susi_parameter_model import (
+    AllometryRegistryNumber,
     CanopyLayerName,
     CuttingManagementParams,
     Thinning,
     ClearCut,
     ContinuousCover,
 )
+
+
+def _build_zones(
+    pointers: list[AllometryRegistryNumber] | None,
+    cols_for_position: np.ndarray,
+    zones_data: dict[AllometryRegistryNumber, pd.DataFrame],
+    zones_species_id: dict[AllometryRegistryNumber, int],
+    sfc: np.ndarray,
+) -> list[Zone]:
+    """Fit one Allometry per distinct zone id in `pointers`, paired with the
+    global columns it applies to. `pointers[i]` is the zone id for global
+    column `cols_for_position[i]` -- for initial setup, `cols_for_position`
+    is `np.arange(n_cols)`; for post-clearcut regrowth, it's the subset of
+    globally cut columns (pointers there are scoped to *cut* columns only).
+    `pointers=None` means the layer has no presence here at all -> []."""
+    if pointers is None:
+        return []
+    pointer_arr = np.array(pointers)
+    zones = []
+    for zone_id in sorted(set(pointers)):
+        cols = cols_for_position[np.where(pointer_arr == zone_id)[0]]
+        zone_sfc = int(np.median(sfc[cols]))  # site fertility class
+        allometry = Allometry()
+        allometry.allometry_development(
+            df=zones_data[zone_id], sp=zones_species_id[zone_id], sfc=zone_sfc
+        )
+        zones.append(Zone(id=zone_id, cols=cols, allometry=allometry))
+    return zones
 
 
 class Stand:
@@ -60,26 +90,16 @@ class Stand:
         # pair it with the plain 1D column-index array it applies to. See
         # canopylayer.Zone — this replaces the old nlyrs/ixs/allodic triple
         # that Canopylayer used to build (and cross-reference by id) itself.
-        zones_by_layer: dict[CanopyLayerName, list[Zone]] = {}
-        for layer in CanopyLayerName:
-            layer_pointers = allometry_params.pointers.get(layer)
-            if layer_pointers is None:
-                zones_by_layer[layer] = []
-                continue
-
-            pointer_arr = np.array(layer_pointers)
-            zones = []
-            for zone_id in sorted(set(layer_pointers)):
-                cols = np.where(pointer_arr == zone_id)[0]
-                zone_sfc = int(np.median(sfc[cols]))  # site fertility class
-                allometry = Allometry()
-                allometry.allometry_development(
-                    df=allometry_params.zones_data[zone_id],
-                    sp=allometry_params.zones_species_id[zone_id],
-                    sfc=zone_sfc,
-                )
-                zones.append(Zone(id=zone_id, cols=cols, allometry=allometry))
-            zones_by_layer[layer] = zones
+        zones_by_layer: dict[CanopyLayerName, list[Zone]] = {
+            layer: _build_zones(
+                allometry_params.pointers.get(layer),
+                np.arange(n_cols),
+                allometry_params.zones_data,
+                allometry_params.zones_species_id,
+                sfc,
+            )
+            for layer in CanopyLayerName
+        }
 
         canopylayers = {}
         for layer in CanopyLayerName:
@@ -631,16 +651,32 @@ class Stand:
         )  # Too high nutstat increases transpiration too much
 
     def apply_cutting_management(
-        self, cutting_management: CuttingManagementParams, yr: int
+        self,
+        cutting_management: CuttingManagementParams,
+        yr: int,
+        sfc: np.ndarray,
     ) -> None:
         match cutting_management.management_type:
             case Thinning(to_ba=to_ba):
                 # TODO: let user choose which layers to thin. Now only thinning dominant.
                 self.dominant.do_thinning(yr=yr, nut_stat=self.nut_stat, to_ba=to_ba)
-            case ClearCut(strips_to_cut=strips_to_cut):
-                for layer in [self.dominant, self.subdominant, self.under]:
+            case ClearCut(
+                strips_to_cut=strips_to_cut, new_growth_allometry=new_growth_allometry
+            ):
+                cut_cols_global = np.where(np.asarray(strips_to_cut, dtype=bool))[0]
+                for layer_name, layer in zip(CanopyLayerName, self.clyrs):
+                    new_zones = _build_zones(
+                        new_growth_allometry.pointers.get(layer_name),
+                        cut_cols_global,
+                        new_growth_allometry.zones_data,
+                        new_growth_allometry.zones_species_id,
+                        sfc,
+                    )
                     layer.do_clearcut(
-                        yr=yr, nut_stat=self.nut_stat, strips_to_cut=strips_to_cut
+                        yr=yr,
+                        nut_stat=self.nut_stat,
+                        strips_to_cut=strips_to_cut,
+                        new_zones=new_zones,
                     )
             case ContinuousCover():
                 raise NotImplementedError(

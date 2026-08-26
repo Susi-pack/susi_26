@@ -478,7 +478,9 @@ class Susi:
                     and yr == cutting_management.application_yr
                 ):
                     stand.apply_cutting_management(
-                        yr=yr, cutting_management=cutting_management
+                        yr=yr,
+                        cutting_management=cutting_management,
+                        sfc=self.parameters.site_parameters.sfc,
                     )
                     stand.update_logging()
 
