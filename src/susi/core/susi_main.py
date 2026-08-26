@@ -130,7 +130,7 @@ class Susi:
             stand.volume,
             stand.dominant.species,
             temperature_sun_days_degree,
-            age=self.parameters.site_parameters.age["dominant"],
+            age=stand.dominant.agearr,
         )
         out.initialize_gv()  # output variables to netCDF
 
@@ -289,7 +289,7 @@ class Susi:
                 stand.volume,
                 stand.dominant.species,
                 temperature_sun_days_degree,
-                age=self.parameters.site_parameters.age["dominant"],
+                age=stand.dominant.agearr,
             )
             out.write_groundvegetation(r, 0, groundvegetation)
 
@@ -458,7 +458,7 @@ class Susi:
                     stand.volume,
                     stand.dominant.species,
                     temperature_sun_days_degree,
-                    age=self.parameters.site_parameters.age["dominant"],
+                    age=stand.dominant.agearr,
                 )
 
                 stand.assimilate(
