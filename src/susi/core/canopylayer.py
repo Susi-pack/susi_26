@@ -995,9 +995,10 @@ class Canopylayer:
 
             print("Harvested volume ", np.mean(self.volume * cut_stems))
 
-            self.remaining_share[zone.cols] = to_ba / (
-                zone.allometry.functions.bm_to_ba(self.biomass) * self.stems
-            )  # shate of stems remaining
+            # share of stems remaining
+            self.remaining_share[cols] = to_ba / (
+                zone.allometry.functions.bm_to_ba(self.biomass[cols]) * self.stems[cols]
+            )
 
             print("remaining share")
             print(np.mean(self.remaining_share))
