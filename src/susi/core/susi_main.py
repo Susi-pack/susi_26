@@ -12,6 +12,7 @@ import datetime
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
+    CanopyLayerName,
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
@@ -100,7 +101,6 @@ class Susi:
         stand = Stand(
             n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
             n_yrs=n_simulation_years,
-            canopylayers=self.parameters.site_parameters.canopylayers,
             n_cols=self.parameters.site_parameters.n,
             sfc=self.parameters.site_parameters.sfc,
             agearr=self.parameters.site_parameters.age,
@@ -114,12 +114,7 @@ class Susi:
         out.initialize_canopy_layer("subdominant")
         out.initialize_canopy_layer("under")
 
-        out.write_paras(
-            sfc=self.parameters.site_parameters.sfc,
-            dominant_sp=stand.dominant.tree_species,
-            subdominant_sp=stand.subdominant.tree_species,
-            under_sp=stand.under.tree_species,
-        )
+        out.write_sfc(sfc=self.parameters.site_parameters.sfc)
 
         # describe site parameters for user
         susi_io.print_site_description(self.parameters.site_parameters)
@@ -137,7 +132,7 @@ class Susi:
             stand.volume,
             stand.dominant.species,
             temperature_sun_days_degree,
-            age=self.parameters.site_parameters.age["dominant"],
+            age=stand.dominant.agearr,
         )
         out.initialize_gv()  # output variables to netCDF
 
@@ -296,7 +291,7 @@ class Susi:
                 stand.volume,
                 stand.dominant.species,
                 temperature_sun_days_degree,
-                age=self.parameters.site_parameters.age["dominant"],
+                age=stand.dominant.agearr,
             )
             out.write_groundvegetation(r, 0, groundvegetation)
 
@@ -465,7 +460,7 @@ class Susi:
                     stand.volume,
                     stand.dominant.species,
                     temperature_sun_days_degree,
-                    age=self.parameters.site_parameters.age["dominant"],
+                    age=stand.dominant.agearr,
                 )
 
                 stand.assimilate(
@@ -478,22 +473,16 @@ class Susi:
 
                 # --------- Locate cuttings here--------------------
                 print("calculating year " + str(yr))
-                if yr == self.parameters.site_parameters.cutting_yr:
-                    print("xxxxxxxxxxxx   VOL before cutting xxxxxxxxxxxxxxxx")
-                    print(str(np.round(np.mean(stand.volume), 1)))
-                    print(
-                        "cutting now "
-                        + str(yr)
-                        + " from basal area "
-                        + str(np.round(np.mean(stand.basalarea), 1))
-                        + " to "
-                        + str(self.parameters.site_parameters.cutting_to_ba)
-                    )
 
-                    stand.dominant.cutting(
-                        yr,
-                        nut_stat=stand.nut_stat,
-                        to_ba=self.parameters.site_parameters.cutting_to_ba,
+                cutting_management = self.parameters.site_parameters.cutting_management
+                if (
+                    cutting_management is not None
+                    and yr == cutting_management.application_yr
+                ):
+                    stand.apply_cutting_management(
+                        yr=yr,
+                        cutting_management=cutting_management,
+                        sfc=self.parameters.site_parameters.sfc,
                     )
                     stand.update_logging()
 

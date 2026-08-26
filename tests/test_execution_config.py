@@ -9,7 +9,8 @@ from susi.io.susi_parameter_model import (
     SusiParams,
     WeatherParams,
     SimulationConfig,
-    AllometryParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -18,11 +19,12 @@ from susi.io.susi_parameter_model import (
     TreeSpecies,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
-    CanopyLayerAllometryPointers,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     PeatTemperatureParams,
+    Thinning,
+    CuttingManagementParams,
 )
 
 
@@ -41,11 +43,14 @@ def valid_susi_params(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={0: "test_allometry.xlsx"},
-            under={0: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -56,14 +61,11 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1, 1, 1, 1, 1],
-                subdominant=[0, 0, 0, 0, 0],
-                under=[0, 0, 0, 0, 0],
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test",
             species=TreeSpecies("Pine"),
@@ -97,8 +99,9 @@ def valid_susi_params(test_data_path):
             enable_peatbottom=True,
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2004,
-            cutting_to_ba=12,
+            cutting_management=CuttingManagementParams(
+                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+            ),
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,
@@ -128,11 +131,14 @@ def another_valid_susi_params(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            dominant={1: "test_allometry.xlsx"},
-            subdominant={0: "test_allometry.xlsx"},
-            under={0: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.xlsx"},
+            pointers={
+                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -143,14 +149,11 @@ def another_valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_dominant_stand_age_years=70.0,
-            initial_subdominant_stand_age_years=70.0,
-            initial_understorey_age_years=70.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1, 1, 1, 1, 1],
-                subdominant=[0, 0, 0, 0, 0],
-                under=[0, 0, 0, 0, 0],
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
             site_fertility_class=4,
             sitename="test2",
             species=TreeSpecies("Pine"),
@@ -184,8 +187,9 @@ def another_valid_susi_params(test_data_path):
             enable_peatbottom=True,
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2004,
-            cutting_to_ba=12,
+            cutting_management=CuttingManagementParams(
+                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+            ),
             depoN=4.0,
             depoP=0.1,
             depoK=1.0,

@@ -17,7 +17,8 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    AllometryParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -25,7 +26,6 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerAllometryPointers,
 )
 
 _app_settings = AppSettings()
@@ -485,11 +485,14 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             start_date=site_params.start_date,
             end_date=site_params.end_date,
         ),
-        allometry_parameters=AllometryParams(
+        allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=data_folder / "motti_files",
-            dominant={1: site_params.mottifile},
-            subdominant={0: "susi_motti_input_lyr_1.xlsx"},
-            under={0: "susi_motti_input_lyr_2.xlsx"},
+            allometry_file_registry={1: site_params.mottifile},
+            pointers={
+                CanopyLayerName.dominant: [1] * n,
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -500,12 +503,11 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
         site_parameters=SiteParams(
             L=L,
             n=n,
-            initial_dominant_stand_age_years=site_params.Aini,
-            initial_subdominant_stand_age_years=0.0,
-            initial_understorey_age_years=0.0,
-            canopylayers=CanopyLayerAllometryPointers(
-                dominant=[1] * n, subdominant=[0] * n, under=[0] * n
-            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: site_params.Aini,
+                CanopyLayerName.subdominant: 0.0,
+                CanopyLayerName.under: 0.0,
+            },
             site_fertility_class=site_params.sfc,
             sitename="susirun",
             species=TreeSpecies("Pine"),
@@ -542,8 +544,7 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             enable_peatbottom=True,
             rho_mor=_rho_mor_from_sfc(site_params.sfc),
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-            cutting_yr=2058,
-            cutting_to_ba=12,
+            cutting_management=None,
             depoN=site_params.depoN,
             depoP=site_params.depoP,
             depoK=site_params.depoK * 1.1,

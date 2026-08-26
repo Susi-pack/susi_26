@@ -6,7 +6,6 @@ Created on Tue Feb 15 17:37:58 2022
 
 import matplotlib.pylab as plt
 import matplotlib.gridspec as gridspec
-import matplotlib.figure
 from netCDF4 import Dataset
 import numpy as np
 import pandas as pd

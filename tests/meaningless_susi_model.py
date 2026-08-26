@@ -7,13 +7,12 @@ from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
     TreeSpecies,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
     SiteParams,
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    AllometryParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -21,11 +20,13 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerAllometryPointers,
+    Thinning,
+    CuttingManagementParams,
 )
 
 _app_settings = AppSettings()
 
+_N_SOIL_COLS = 5
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
@@ -35,11 +36,14 @@ PARAMETERS = SusiParams(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2007, 12, 31),
     ),
-    allometry_parameters=AllometryParams(
+    allometry_parameters=CanopyLayerAllometry(
         allometry_dir_path=_app_settings.input_folder,
-        dominant={1: "CF_41.xlsx"},
-        subdominant={0: "susi_motti_input_lyr_1.xlsx"},
-        under={0: "susi_motti_input_lyr_2.xlsx"},
+        allometry_file_registry={1: "CF_41.xlsx"},
+        pointers={
+            CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
+            CanopyLayerName.subdominant: None,
+            CanopyLayerName.under: None,
+        },
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -50,13 +54,12 @@ PARAMETERS = SusiParams(
     # The meaninglessness is only here.
     site_parameters=SiteParams(
         L=10.0,
-        n=5,
-        initial_dominant_stand_age_years=60.0,
-        initial_subdominant_stand_age_years=0.0,
-        initial_understorey_age_years=0.0,
-        canopylayers=CanopyLayerAllometryPointers(
-            dominant=[1] * 5, subdominant=[0] * 5, under=[0] * 5
-        ),
+        n=_N_SOIL_COLS,
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 60.0,
+            CanopyLayerName.subdominant: 0.0,
+            CanopyLayerName.under: 0.0,
+        },
         site_fertility_class=4,
         sitename="susirun",
         species=TreeSpecies("Pine"),
@@ -90,22 +93,13 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_yr=2004,
-        cutting_to_ba=12,
+        cutting_management=CuttingManagementParams(
+            application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+        ),
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
-        fertilization=StandardNPKFertilizationParameters(
-            application_year=2201,
-            N=NutrientFertilizationParameters(
-                dose=0.0,
-                decay_k=0.5,
-                eff=1.0,
-            ),  # fertilization dose in kg ha-1, decay_k in yr-1
-            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
-            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            pH_increment=1.0,
-        ),
+        fertilization=None,
         peat_temperature=PeatTemperatureParams(),
     ),
 )

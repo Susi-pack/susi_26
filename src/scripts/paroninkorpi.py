@@ -36,15 +36,17 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
-    AllometryParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
+    Thinning,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerAllometryPointers,
 )
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
@@ -57,7 +59,7 @@ from susi.io.metadata_model import SimulationMetaData
 def load_file_pointers() -> dict:
     """Load file paths from the external configuration file."""
     config_path = (
-        AppSettings().project_root_path / "inputs/Paroninkorpi/file_pointers.json"
+        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
     )
 
     if not config_path.exists():
@@ -300,9 +302,20 @@ def prepare_susi_params(
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
-    fertilization_application_year = (
-        start_date.year if scenario == "fertilized" else 2200
-    )
+    if scenario == "fertilized":
+        fertilization_management = StandardNPKFertilizationParameters(
+            application_year=start_date.year,
+            N=NutrientFertilizationParameters(
+                dose=0.0,
+                decay_k=0.5,
+                eff=1.0,
+            ),  # fertilization dose in kg ha-1, decay_k in yr-1
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
+            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
+            pH_increment=1.0,
+        )
+    else:
+        fertilization_management = None
 
     # Partial blocking
     if scenario == "partialblocking":
@@ -333,11 +346,16 @@ def prepare_susi_params(
                 start_date=start_date,
                 end_date=datetime.datetime(2024, 12, 31),
             ),
-            allometry_parameters=AllometryParams(
+            allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=allometry_files_directory_path,
-                dominant={1: allometry_filename_from_stand_number(stand_number)},
-                subdominant={0: "susi_motti_input_lyr_1.xlsx"},
-                under={0: "susi_motti_input_lyr_2.xlsx"},
+                allometry_file_registry={
+                    1: allometry_filename_from_stand_number(stand_number),
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1] * 20,
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -348,15 +366,14 @@ def prepare_susi_params(
             site_parameters=SiteParams(
                 L=40.0,
                 n=20,
-                initial_dominant_stand_age_years=read_initial_dominant_stand_age_from_allometry_file(
-                    stand_number=stand_number,
-                    allometry_files_folder=allometry_files_directory_path,
-                ),
-                initial_subdominant_stand_age_years=0.0,
-                initial_understorey_age_years=0.0,
-                canopylayers=CanopyLayerAllometryPointers(
-                    dominant=[1] * 20, subdominant=[0] * 20, under=[0] * 20
-                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: read_initial_dominant_stand_age_from_allometry_file(
+                        stand_number=stand_number,
+                        allometry_files_folder=allometry_files_directory_path,
+                    ),
+                    CanopyLayerName.subdominant: 0.0,
+                    CanopyLayerName.under: 0.0,
+                },
                 site_fertility_class=fertility_class,
                 sitename="susirun",
                 species=TreeSpecies("Pine"),
@@ -390,22 +407,11 @@ def prepare_susi_params(
                 enable_peatbottom=True,
                 rho_mor=rho_mor,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-                cutting_yr=2200,  # out of the simulation period
-                cutting_to_ba=12,
+                cutting_management=None,
                 depoN=3.5,  # Lestijärvi
                 depoP=1.0,  # Lestijärvi
                 depoK=0.6,  # Lestijärvi
-                fertilization=StandardNPKFertilizationParameters(
-                    application_year=fertilization_application_year,
-                    N=NutrientFertilizationParameters(
-                        dose=0.0,
-                        decay_k=0.5,
-                        eff=1.0,
-                    ),  # fertilization dose in kg ha-1, decay_k in yr-1
-                    P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
-                    K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-                    pH_increment=1.0,
-                ),
+                fertilization=fertilization_management,
                 peat_temperature=PeatTemperatureParams(),
             ),
         ),
@@ -413,7 +419,7 @@ def prepare_susi_params(
 
 
 def create_thinning_parameters(
-    base_params: SimulationParams, cutting_yr: float, cutting_to_ba: float
+    base_params: SimulationParams, cutting_yr: int, cutting_to_ba: float
 ) -> SimulationParams:
     """
     Create new parameter models based on another one.
@@ -429,8 +435,12 @@ def create_thinning_parameters(
     thinning_scenario_name = f"{base_scenario_name}_thinning_at_yr_{cutting_yr}"
 
     # Modify the Python dictionary
-    params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
-    params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
+    params["susi_params"]["site_parameters"]["cutting_management"] = (
+        CuttingManagementParams(
+            application_yr=cutting_yr,
+            management_type=Thinning(target_basal_area={"dominant": cutting_to_ba}),
+        )
+    )
 
     params["susi_params"]["site_parameters"]["scenario_name"] = [thinning_scenario_name]
 

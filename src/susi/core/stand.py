@@ -6,7 +6,45 @@ Created on Tue Feb  1 18:59:52 2022
 """
 
 import numpy as np
-from susi.core.canopylayer import Canopylayer
+import pandas as pd
+from susi.core.allometry import Allometry
+from susi.core.canopylayer import Canopylayer, Zone
+from susi.io.susi_parameter_model import (
+    AllometryRegistryNumber,
+    CanopyLayerName,
+    CuttingManagementParams,
+    Thinning,
+    ClearCut,
+    ContinuousCover,
+)
+
+
+def _build_zones(
+    pointers: list[AllometryRegistryNumber] | None,
+    cols_for_position: np.ndarray,
+    zones_data: dict[AllometryRegistryNumber, pd.DataFrame],
+    zones_species_id: dict[AllometryRegistryNumber, int],
+    sfc: np.ndarray,
+) -> list[Zone]:
+    """Fit one Allometry per distinct zone id in `pointers`, paired with the
+    global columns it applies to. `pointers[i]` is the zone id for global
+    column `cols_for_position[i]` -- for initial setup, `cols_for_position`
+    is `np.arange(n_cols)`; for post-clearcut regrowth, it's the subset of
+    globally cut columns (pointers there are scoped to *cut* columns only).
+    `pointers=None` means the layer has no presence here at all -> []."""
+    if pointers is None:
+        return []
+    pointer_arr = np.array(pointers)
+    zones = []
+    for zone_id in sorted(set(pointers)):
+        cols = cols_for_position[np.where(pointer_arr == zone_id)[0]]
+        zone_sfc = int(np.median(sfc[cols]))  # site fertility class
+        allometry = Allometry()
+        allometry.allometry_development(
+            df=zones_data[zone_id], sp=zones_species_id[zone_id], sfc=zone_sfc
+        )
+        zones.append(Zone(id=zone_id, cols=cols, allometry=allometry))
+    return zones
 
 
 class Stand:
@@ -14,7 +52,6 @@ class Stand:
         self,
         n_scenarios,
         n_yrs,
-        canopylayers,
         n_cols,
         sfc,
         agearr,
@@ -30,11 +67,13 @@ class Stand:
         Input:
             nscens , int, number of scenarios in the simulation
             yrs, int, number of years in the simulation
-            canopylayers, CanopyLayerAllometryPointers in spara, contains integer arrays (len(ncols)) for each canopy layer pointing to specific Motti file
             ncols, int, number of columns along the strip
             sfc, site fertility class
             agearr, dict of float arrays (len(ncols)) for stand age in the particular column and canopylayer
-            allometry_parameters: AllometryParams
+            allometry_params: CanopyLayerAllometry, holds the zone registry (which
+                allometry files exist, keyed by AllometryRegistryNumber) and, per canopy
+                layer, either None (layer absent everywhere) or a list of zone ids,
+                one per soil column
             photopara - photosynthesis parameters used in the assimilation model
         """
         self.n_cols = n_cols  # number of columns along the strip
@@ -46,67 +85,37 @@ class Stand:
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
 
-        ndominants = np.unique(canopylayers.dominant)
-        nsubdominants = np.unique(canopylayers.subdominant)
-        nunder = np.unique(canopylayers.under)
+        # Build each layer's allometry zones once: fit an Allometry instance
+        # per (layer, zone id) pair present in that layer's pointers, and
+        # pair it with the plain 1D column-index array it applies to. See
+        # canopylayer.Zone — this replaces the old nlyrs/ixs/allodic triple
+        # that Canopylayer used to build (and cross-reference by id) itself.
+        zones_by_layer: dict[CanopyLayerName, list[Zone]] = {
+            layer: _build_zones(
+                allometry_params.pointers.get(layer),
+                np.arange(n_cols),
+                allometry_params.zones_data,
+                allometry_params.zones_species_id,
+                sfc,
+            )
+            for layer in CanopyLayerName
+        }
 
-        ixdominants = {}  # location indices for dominant canopy layers, along the transect
-        for m in ndominants:
-            if m > 0:
-                ixdominants[m] = np.where(canopylayers.dominant == m)
-
-        ixsubdominants = {}  # location indices for subdominant canopy layers
-        for m in nsubdominants:
-            if m > 0:
-                ixsubdominants[m] = np.where(canopylayers.subdominant == m)
-
-        ixunder = {}  # location indices for undersmost canopy layer
-        for m in nunder:
-            if m > 0:
-                ixunder[m] = np.where(canopylayers.under == m)
-
-        self.dominant = Canopylayer(
-            "dominant",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            ndominants,
-            sfc,
-            agearr["dominant"],
-            allometry_params.dominant_data,
-            allometry_params.dominant_species_id,
-            ixdominants,
-            photopara,
-            self.nut_stat,
-        )
-        self.subdominant = Canopylayer(
-            "subdominant",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            nsubdominants,
-            sfc,
-            agearr["subdominant"],
-            allometry_params.subdominant_data,
-            allometry_params.subdominant_species_id,
-            ixsubdominants,
-            photopara,
-            self.nut_stat,
-        )
-        self.under = Canopylayer(
-            "under",
-            n_scenarios,
-            n_yrs,
-            n_cols,
-            nunder,
-            sfc,
-            agearr["under"],
-            allometry_params.under_data,
-            allometry_params.under_species_id,
-            ixunder,
-            photopara,
-            self.nut_stat,
-        )
+        canopylayers = {}
+        for layer in CanopyLayerName:
+            canopylayers[layer] = Canopylayer(
+                layer.value,
+                n_scenarios,
+                n_yrs,
+                n_cols,
+                zones_by_layer[layer],
+                agearr[layer.value],
+                photopara,
+                self.nut_stat,
+            )
+        self.dominant = canopylayers[CanopyLayerName.dominant]
+        self.subdominant = canopylayers[CanopyLayerName.subdominant]
+        self.under = canopylayers[CanopyLayerName.under]
         self.clyrs = [
             self.dominant,
             self.subdominant,
@@ -640,6 +649,52 @@ class Stand:
         self.nut_stat = np.clip(
             self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much
+
+    def apply_cutting_management(
+        self,
+        cutting_management: CuttingManagementParams,
+        yr: int,
+        sfc: np.ndarray,
+    ) -> None:
+        map_layer_name_to_layer_object = {
+            name: obj for name, obj in zip(CanopyLayerName, self.clyrs)
+        }
+
+        match cutting_management.management_type:
+            case Thinning(target_basal_area=target_basal_area):
+                for layer_name, to_ba in target_basal_area.items():
+                    layer = map_layer_name_to_layer_object[layer_name]
+                    layer.do_thinning(yr=yr, nut_stat=self.nut_stat, to_ba=to_ba)
+
+            case ClearCut(
+                strips_to_cut=strips_to_cut, new_growth_allometry=new_growth_allometry
+            ):
+                cut_cols_global = np.where(np.asarray(strips_to_cut, dtype=bool))[0]
+                for layer_name, layer in map_layer_name_to_layer_object.items():
+                    new_zones = _build_zones(
+                        new_growth_allometry.pointers.get(layer_name),
+                        cut_cols_global,
+                        new_growth_allometry.zones_data,
+                        new_growth_allometry.zones_species_id,
+                        sfc,
+                    )
+                    layer.do_clearcut(
+                        yr=yr,
+                        nut_stat=self.nut_stat,
+                        strips_to_cut=strips_to_cut,
+                        new_zones=new_zones,
+                    )
+            case ContinuousCover():
+                raise NotImplementedError(
+                    "Continuous-cover forestry is not implemented yet."
+                )
+
+        # do_thinning/do_clearcut only update the affected Canopylayer's own
+        # state (stems, biomass, hdom, ...) -- nothing re-sums that into the
+        # stand-level aggregates (self.hdom, self.leafarea, self.n_demand,
+        # ...) that Stand.update().
+        # To do that, we need to run:
+        self.update()
 
     def update_logging(self):
         for cl in self.clyrs:
