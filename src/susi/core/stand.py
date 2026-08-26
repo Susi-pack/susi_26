@@ -689,6 +689,13 @@ class Stand:
                     "Continuous-cover forestry is not implemented yet."
                 )
 
+        # do_thinning/do_clearcut only update the affected Canopylayer's own
+        # state (stems, biomass, hdom, ...) -- nothing re-sums that into the
+        # stand-level aggregates (self.hdom, self.leafarea, self.n_demand,
+        # ...) that Stand.update().
+        # To do that, we need to run:
+        self.update()
+
     def update_logging(self):
         for cl in self.clyrs:
             self.nonwoody_lresid = (
