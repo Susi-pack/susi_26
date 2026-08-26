@@ -998,7 +998,7 @@ class Canopylayer:
 
             print("Harvested volume ", np.mean(self.volume * cut_stems))
 
-            self.remaining_share = to_ba / (
+            self.remaining_share[zone.cols] = to_ba / (
                 zone.allometry.functions.bm_to_ba(self.biomass) * self.stems
             )  # shate of stems remaining
 
@@ -1031,8 +1031,8 @@ class Canopylayer:
             print("harvested pulp", np.mean(self.harvested_pulp_volume))
             print("harvested biomass", np.mean(self.harvested_biomass))
 
-            self.update(self.biomass)
-            """This update to stand or to main????? """
+        self.update(self.biomass)
+        """This update to stand or to main????? """
 
     def do_clearcut(
         self, yr: int, nut_stat: np.ndarray, strips_to_cut: list[bool]
