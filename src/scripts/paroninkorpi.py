@@ -39,9 +39,11 @@ from susi.io.susi_parameter_model import (
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
+    Thinning,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
@@ -57,7 +59,7 @@ from susi.io.metadata_model import SimulationMetaData
 def load_file_pointers() -> dict:
     """Load file paths from the external configuration file."""
     config_path = (
-        AppSettings().project_root_path / "inputs/Paroninkorpi/file_pointers.json"
+        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
     )
 
     if not config_path.exists():
@@ -300,9 +302,20 @@ def prepare_susi_params(
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
     # Else, not fertilized (out of the simulation period)
-    fertilization_application_year = (
-        start_date.year if scenario == "fertilized" else 2200
-    )
+    if scenario == "fertilized":
+        fertilization_management = StandardNPKFertilizationParameters(
+            application_year=start_date.year,
+            N=NutrientFertilizationParameters(
+                dose=0.0,
+                decay_k=0.5,
+                eff=1.0,
+            ),  # fertilization dose in kg ha-1, decay_k in yr-1
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
+            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
+            pH_increment=1.0,
+        )
+    else:
+        fertilization_management = None
 
     # Partial blocking
     if scenario == "partialblocking":
@@ -337,13 +350,11 @@ def prepare_susi_params(
                 allometry_dir_path=allometry_files_directory_path,
                 allometry_file_registry={
                     1: allometry_filename_from_stand_number(stand_number),
-                    2: "susi_motti_input_lyr_1.xlsx",
-                    3: "susi_motti_input_lyr_2.xlsx",
                 },
                 pointers={
                     CanopyLayerName.dominant: [1] * 20,
-                    CanopyLayerName.subdominant: [2] * 20,
-                    CanopyLayerName.under: [3] * 20,
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -396,22 +407,11 @@ def prepare_susi_params(
                 enable_peatbottom=True,
                 rho_mor=rho_mor,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-                cutting_yr=2200,  # out of the simulation period
-                cutting_to_ba=12,
+                cutting_management=None,
                 depoN=3.5,  # Lestijärvi
                 depoP=1.0,  # Lestijärvi
                 depoK=0.6,  # Lestijärvi
-                fertilization=StandardNPKFertilizationParameters(
-                    application_year=fertilization_application_year,
-                    N=NutrientFertilizationParameters(
-                        dose=0.0,
-                        decay_k=0.5,
-                        eff=1.0,
-                    ),  # fertilization dose in kg ha-1, decay_k in yr-1
-                    P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
-                    K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-                    pH_increment=1.0,
-                ),
+                fertilization=fertilization_management,
                 peat_temperature=PeatTemperatureParams(),
             ),
         ),
@@ -419,7 +419,7 @@ def prepare_susi_params(
 
 
 def create_thinning_parameters(
-    base_params: SimulationParams, cutting_yr: float, cutting_to_ba: float
+    base_params: SimulationParams, cutting_yr: int, cutting_to_ba: float
 ) -> SimulationParams:
     """
     Create new parameter models based on another one.
@@ -435,8 +435,12 @@ def create_thinning_parameters(
     thinning_scenario_name = f"{base_scenario_name}_thinning_at_yr_{cutting_yr}"
 
     # Modify the Python dictionary
-    params["susi_params"]["site_parameters"]["cutting_yr"] = cutting_yr
-    params["susi_params"]["site_parameters"]["cutting_to_ba"] = cutting_to_ba
+    params["susi_params"]["site_parameters"]["cutting_management"] = (
+        CuttingManagementParams(
+            application_yr=cutting_yr,
+            management_type=Thinning(to_ba=cutting_to_ba),
+        )
+    )
 
     params["susi_params"]["site_parameters"]["scenario_name"] = [thinning_scenario_name]
 
