@@ -505,8 +505,9 @@ class Canopylayer:
             ):
                 target[cols] = curve(bm[cols])
 
-            self.non_woody_litter_mort[cols] = f.bm_to_mortality_fine_root(bm[cols])
-            +f.bm_to_mortality_leaves(bm[cols])
+            self.non_woody_litter_mort[cols] = f.bm_to_mortality_fine_root(
+                bm[cols]
+            ) + f.bm_to_mortality_leaves(bm[cols])
             for target, curve_fineroot, curve_leaves in (
                 (
                     self.n_non_woody_litter_mort,
@@ -524,11 +525,7 @@ class Canopylayer:
                     f.mortality_leaves.K,
                 ),
             ):
-                # NOTE: the second term below is a no-op (missing `+=`) —
-                # preserved from the pre-existing code as-is; fixing it is
-                # out of scope for #191 (pure structural extraction).
-                target[cols] = curve_fineroot(bm[cols])
-                +curve_leaves(bm[cols])
+                target[cols] = curve_fineroot(bm[cols]) + curve_leaves(bm[cols])
 
             self.yi[cols] = f.bm_to_yi(bm[cols])
 
