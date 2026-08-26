@@ -2284,6 +2284,9 @@ class Outputs:
         self.ncf["scen"]["ditch_depths_east"][scen] = ditch_depth_east
         self.ncf["scen"]["ditch_depths_west"][scen] = ditch_depth_west
 
+    def write_sfc(self, sfc):
+        self.ncf["scen"]["sfc"][:] = sfc
+
     def write_stand(self, scen, year, stand):
         self.ncf["stand"]["basalarea"][scen, year, :] = stand.basalarea
         self.ncf["stand"]["biomass"][scen, year, :] = stand.biomass

@@ -114,6 +114,8 @@ class Susi:
         out.initialize_canopy_layer("subdominant")
         out.initialize_canopy_layer("under")
 
+        out.write_sfc(sfc=self.parameters.site_parameters.sfc)
+
         # describe site parameters for user
         susi_io.print_site_description(self.parameters.site_parameters)
 
