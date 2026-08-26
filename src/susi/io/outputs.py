@@ -1209,6 +1209,63 @@ class Outputs:
         )  # stand basal area m2/ha
         Kleaf_litter.units = "K in leaf litterfall [kg/tree/yr]"
 
+        harvested_volume = self.ncf.createVariable(
+            "/stand/" + name + "/harvested_volume",
+            "f4",
+            (
+                "nscens",
+                "nyrs",
+                "ncols",
+            ),
+        )
+        harvested_volume.units = "canopy layer harvested stem volume [m3/tree]"
+        harvested_log_volume = self.ncf.createVariable(
+            "/stand/" + name + "/harvested_log_volume",
+            "f4",
+            (
+                "nscens",
+                "nyrs",
+                "ncols",
+            ),
+        )
+        harvested_log_volume.units = (
+            "canopy layer volume of harvested saw logs [m3/tree]"
+        )
+        harvested_pulp_volume = self.ncf.createVariable(
+            "/stand/" + name + "/harvested_pulp_volume",
+            "f4",
+            (
+                "nscens",
+                "nyrs",
+                "ncols",
+            ),
+        )
+        harvested_pulp_volume.units = (
+            "canopy layer volume of harvested pulp wood [m3/tree]"
+        )
+        harvested_biomass = self.ncf.createVariable(
+            "/stand/" + name + "/harvested_biomass",
+            "f4",
+            (
+                "nscens",
+                "nyrs",
+                "ncols",
+            ),
+        )
+        harvested_biomass.units = (
+            "canopy layer biomass of harvested stemwood: logs + pulpwood [kg/tree]"
+        )
+        harvested_stems = self.ncf.createVariable(
+            "/stand/" + name + "/harvested_stems",
+            "f4",
+            (
+                "nscens",
+                "nyrs",
+                "ncols",
+            ),
+        )  # number of harvested stems/tree
+        harvested_stems.units = "canopy layer number of harvested stems [stems/tree]"
+
     def initialize_gv(self):
         gv_tot = self.ncf.createVariable(
             "/groundvegetation/gv_tot",
@@ -2406,6 +2463,40 @@ class Outputs:
         self.ncf["stand"][name]["Pleaf_litter"][scen, year, :] = layer.Pleaf_litter
         self.ncf["stand"][name]["Kleafdemand"][scen, year, :] = layer.Kleafdemand
         self.ncf["stand"][name]["Kleaf_litter"][scen, year, :] = layer.Kleaf_litter
+
+        self.ncf["stand"][name]["woody_lresid"][scen, year, :] = layer.woody_lresid
+        self.ncf["stand"][name]["n_woody_lresid"][scen, year, :] = layer.n_woody_lresid
+        self.ncf["stand"][name]["p_woody_lresid"][scen, year, :] = layer.p_woody_lresid
+        self.ncf["stand"][name]["k_woody_lresid"][scen, year, :] = layer.k_woody_lresid
+
+        self.ncf["stand"][name]["nonwoody_lresid"][scen, year, :] = (
+            layer.nonwoody_lresid
+        )
+        self.ncf["stand"][name]["n_nonwoody_lresid"][scen, year, :] = (
+            layer.n_nonwoody_lresid
+        )
+        self.ncf["stand"][name]["p_nonwoody_lresid"][scen, year, :] = (
+            layer.p_nonwoody_lresid
+        )
+        self.ncf["stand"][name]["k_nonwoody_lresid"][scen, year, :] = (
+            layer.k_nonwoody_lresid
+        )
+
+        self.ncf["stand"][name]["harvested_volume"][scen, year, :] = (
+            layer.harvested_volume
+        )
+        self.ncf["stand"][name]["harvested_log_volume"][scen, year, :] = (
+            layer.harvested_log_volume
+        )
+        self.ncf["stand"][name]["harvested_pulp_volume"][scen, year, :] = (
+            layer.harvested_pulp_volume
+        )
+        self.ncf["stand"][name]["harvested_biomass"][scen, year, :] = (
+            layer.harvested_biomass
+        )
+        self.ncf["stand"][name]["harvested_stems"][scen, year, :] = (
+            layer.harvested_stems
+        )
 
     def write_groundvegetation(self, scen, year, gv):
         self.ncf["groundvegetation"]["gv_tot"][scen, year, :] = gv.gv_tot
