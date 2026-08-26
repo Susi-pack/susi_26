@@ -656,15 +656,21 @@ class Stand:
         yr: int,
         sfc: np.ndarray,
     ) -> None:
+        map_layer_name_to_layer_object = {
+            name: obj for name, obj in zip(CanopyLayerName, self.clyrs)
+        }
+
         match cutting_management.management_type:
-            case Thinning(to_ba=to_ba):
-                # TODO: let user choose which layers to thin. Now only thinning dominant.
-                self.dominant.do_thinning(yr=yr, nut_stat=self.nut_stat, to_ba=to_ba)
+            case Thinning(target_basal_area=target_basal_area):
+                for layer_name, to_ba in target_basal_area.items():
+                    layer = map_layer_name_to_layer_object[layer_name]
+                    layer.do_thinning(yr=yr, nut_stat=self.nut_stat, to_ba=to_ba)
+
             case ClearCut(
                 strips_to_cut=strips_to_cut, new_growth_allometry=new_growth_allometry
             ):
                 cut_cols_global = np.where(np.asarray(strips_to_cut, dtype=bool))[0]
-                for layer_name, layer in zip(CanopyLayerName, self.clyrs):
+                for layer_name, layer in map_layer_name_to_layer_object.items():
                     new_zones = _build_zones(
                         new_growth_allometry.pointers.get(layer_name),
                         cut_cols_global,

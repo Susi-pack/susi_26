@@ -147,7 +147,7 @@ class TestCuttingYearBounds:
     def test_cut_within_bounds(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2005, management_type=Thinning(to_ba=12)
+                application_yr=2005, management_type=Thinning(target_basal_area={'dominant': 12})
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2005
@@ -156,7 +156,7 @@ class TestCuttingYearBounds:
         with pytest.raises(ValueError, match="out of bounds"):
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
-                    application_yr=2003, management_type=Thinning(to_ba=12)
+                    application_yr=2003, management_type=Thinning(target_basal_area={'dominant': 12})
                 )
             )
 
@@ -164,14 +164,14 @@ class TestCuttingYearBounds:
         with pytest.raises(ValueError, match="out of bounds"):
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
-                    application_yr=2008, management_type=Thinning(to_ba=12)
+                    application_yr=2008, management_type=Thinning(target_basal_area={'dominant': 12})
                 )
             )
 
     def test_cut_on_start_year(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=Thinning(to_ba=12)
+                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2004
@@ -179,7 +179,7 @@ class TestCuttingYearBounds:
     def test_cut_on_end_year(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2007, management_type=Thinning(to_ba=12)
+                application_yr=2007, management_type=Thinning(target_basal_area={'dominant': 12})
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2007
@@ -231,12 +231,57 @@ class TestClearCutStripsLength:
     def test_thinning_skips_strips_check(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2005, management_type=Thinning(to_ba=12)
+                application_yr=2005, management_type=Thinning(target_basal_area={'dominant': 12})
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2005
 
     def test_no_cut_skips_strips_check(self):
+        sp = _make_susi_params(cutting_management=None)
+        assert sp.site_parameters.cutting_management is None
+
+
+class TestThinningTargetsExistingLayers:
+    """Thinning.target_basal_area must only name layers that have allometry
+    (non-None pointers in allometry_parameters) -- see
+    SusiParams.thinning_only_targets_layers_with_allometry. In
+    _make_susi_params, only the 'dominant' layer has allometry; subdominant
+    and under are both None."""
+
+    def test_thinning_existing_layer(self):
+        sp = _make_susi_params(
+            cutting_management=CuttingManagementParams(
+                application_yr=2005,
+                management_type=Thinning(target_basal_area={"dominant": 12}),
+            )
+        )
+        assert sp.site_parameters.cutting_management.application_yr == 2005
+
+    def test_thinning_nonexistent_layer_rejected(self):
+        with pytest.raises(
+            ValueError, match="'subdominant' layer, but that layer does not exist"
+        ):
+            _make_susi_params(
+                cutting_management=CuttingManagementParams(
+                    application_yr=2005,
+                    management_type=Thinning(target_basal_area={"subdominant": 12}),
+                )
+            )
+
+    def test_thinning_mix_of_existing_and_nonexistent_layer_rejected(self):
+        with pytest.raises(
+            ValueError, match="'under' layer, but that layer does not exist"
+        ):
+            _make_susi_params(
+                cutting_management=CuttingManagementParams(
+                    application_yr=2005,
+                    management_type=Thinning(
+                        target_basal_area={"dominant": 12, "under": 8}
+                    ),
+                )
+            )
+
+    def test_no_cut_skips_existing_layer_check(self):
         sp = _make_susi_params(cutting_management=None)
         assert sp.site_parameters.cutting_management is None
 

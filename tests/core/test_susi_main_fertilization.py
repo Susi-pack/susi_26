@@ -131,7 +131,7 @@ class TestSusiMainFertilizationIntegration:
                 rho_mor=90.0,
                 h_mor=lambda drain_age, rho_mor: 0.1,  # Simple callable for testing
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(to_ba=12)
+                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
                 ),
                 depoN=4.0,
                 depoP=0.1,

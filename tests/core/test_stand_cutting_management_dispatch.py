@@ -81,7 +81,8 @@ def _regeneration_allometry() -> CanopyLayerAllometry:
 
 class TestApplyCuttingManagement:
     def test_thinning_dispatches_to_dominant_cutting(self, monkeypatch):
-        """Thinning routes to stand.dominant.do_thinning(yr, nut_stat=stand.nut_stat, to_ba=...)."""
+        """Thinning routes to stand.dominant.do_thinning(yr, nut_stat=stand.nut_stat, to_ba=...)
+        when only the dominant layer appears in target_basal_area."""
         stand = _make_stand()
         calls = {}
 
@@ -93,7 +94,8 @@ class TestApplyCuttingManagement:
         monkeypatch.setattr(stand.dominant, "do_thinning", fake_do_thinning)
 
         cutting_management = CuttingManagementParams(
-            application_yr=2005, management_type=Thinning(to_ba=12)
+            application_yr=2005,
+            management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
         )
         stand.apply_cutting_management(cutting_management, yr=2005, sfc=SFC)
 
@@ -101,8 +103,8 @@ class TestApplyCuttingManagement:
         assert calls["to_ba"] == 12
         assert calls["nut_stat"] is stand.nut_stat
 
-    def test_thinning_does_not_touch_subdominant_or_under(self, monkeypatch):
-        """Documents current (issue-flagged) behavior: only dominant is cut."""
+    def test_thinning_only_touches_layers_named_in_target_basal_area(self, monkeypatch):
+        """Layers omitted from target_basal_area are left untouched (#173)."""
         stand = _make_stand()
         for layer in (stand.subdominant, stand.under):
             monkeypatch.setattr(
@@ -113,11 +115,53 @@ class TestApplyCuttingManagement:
         monkeypatch.setattr(stand.dominant, "do_thinning", lambda *a, **k: None)
 
         cutting_management = CuttingManagementParams(
-            application_yr=2005, management_type=Thinning(to_ba=12)
+            application_yr=2005,
+            management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
         )
         stand.apply_cutting_management(
             cutting_management, yr=2005, sfc=SFC
         )  # should not raise
+
+    def test_thinning_dispatches_to_multiple_named_layers(self, monkeypatch):
+        """#173: the user can choose which layers to thin, and each gets its
+        own target basal area."""
+        stand = _make_stand()
+        calls = {}
+
+        def make_fake_do_thinning(layer_name):
+            def fake_do_thinning(yr, nut_stat, to_ba):
+                calls[layer_name] = {"yr": yr, "nut_stat": nut_stat, "to_ba": to_ba}
+
+            return fake_do_thinning
+
+        monkeypatch.setattr(
+            stand.dominant, "do_thinning", make_fake_do_thinning("dominant")
+        )
+        monkeypatch.setattr(
+            stand.subdominant, "do_thinning", make_fake_do_thinning("subdominant")
+        )
+        monkeypatch.setattr(
+            stand.under,
+            "do_thinning",
+            lambda *a, **k: pytest.fail("under should not be cut"),
+        )
+
+        cutting_management = CuttingManagementParams(
+            application_yr=2005,
+            management_type=Thinning(
+                target_basal_area={
+                    CanopyLayerName.dominant: 12,
+                    CanopyLayerName.subdominant: 8,
+                }
+            ),
+        )
+        stand.apply_cutting_management(cutting_management, yr=2005, sfc=SFC)
+
+        assert calls["dominant"]["to_ba"] == 12
+        assert calls["subdominant"]["to_ba"] == 8
+        for layer_name in ("dominant", "subdominant"):
+            assert calls[layer_name]["yr"] == 2005
+            assert calls[layer_name]["nut_stat"] is stand.nut_stat
 
     def test_clearcut_dispatches_to_all_three_layers(self, monkeypatch):
         """Unlike Thinning, ClearCut routes to do_clearcut(yr, nut_stat=stand.nut_stat,

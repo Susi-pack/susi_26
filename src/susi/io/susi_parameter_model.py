@@ -603,16 +603,23 @@ class Thinning(StrictFrozenModel):
     Parameters to define a thinning intervention.
     """
 
-    to_ba: float = Field(description="basal area after cutting, m2/ha")
+    target_basal_area: dict[CanopyLayerName, PositiveFloat] = Field(
+        description="Basal area after thinning (m2/ha) for each canopy layer. If a given canopy layer does not appear in the dictionary, it is omitted and no thinning is applied to it. Example: {'dominant': 2.0, 'subdominant': 3.0} -> This omits thinning to the 'under' layer."
+    )
 
-    @field_validator("to_ba")
+    @field_validator("target_basal_area")
     @classmethod
-    def thinning_is_not_clearcut(cls, to_ba: float) -> float:
-        if to_ba < 1.0:
-            raise ValueError(
-                "`to_ba` must be higher than 1.0 m2/ha. A thinning that reaches a basal area of less than 1.0 m2/ha is here considered to be better modeled by a clear cut."
-            )
-        return to_ba
+    def thinning_is_not_clearcut(
+        cls, target_basal_area: dict[CanopyLayerName, float]
+    ) -> dict[CanopyLayerName, float]:
+        for layer_name, to_ba in target_basal_area.items():
+            if to_ba < 1.0:
+                raise ValueError(
+                    f"`target_basal_area['{layer_name.value}']` must be higher than 1.0 m2/ha. "
+                    "A thinning that reaches a basal area of less than 1.0 m2/ha is here "
+                    "considered to be better modeled by a clear cut."
+                )
+        return target_basal_area
 
 
 class ContinuousCover(StrictFrozenModel):
@@ -771,7 +778,7 @@ class SiteParams(StrictFrozenModel):
                 "The `cutting_yr` and `cutting_to_ba` fields have been replaced by the "
                 "`cutting_management` field.\n"
                 "Use `cutting_management=CuttingManagementParams(application_yr=..., "
-                "management_type=Thinning(to_ba=...))` for thinning or\n"
+                "management_type=Thinning(target_basal_area=...))` for thinning or\n"
                 "`cutting_management=CuttingManagementParams(application_yr=..., "
                 "management_type=ClearCut(new_growth_allometry=..., strips_to_cut=...))` "
                 "for clear-cutting."
@@ -903,6 +910,28 @@ class SusiParams(StrictFrozenModel):
                     f"A clear-cut is scheduled and the '{layer.value}' layer exists, "
                     f"but ClearCut.new_growth_allometry provides no post-clearcut "
                     f"allometry pointers for '{layer.value}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def thinning_only_targets_layers_with_allometry(self) -> Self:
+        """A canopy layer with pointers=None in allometry_parameters has no
+        real stand growing in it -- Thinning.target_basal_area must not name
+        a layer that doesn't exist."""
+        cutting_management = self.site_parameters.cutting_management
+        if cutting_management is None:
+            return self
+
+        management_type = cutting_management.management_type
+        if not isinstance(management_type, Thinning):
+            return self
+
+        for layer in management_type.target_basal_area:
+            if self.allometry_parameters.pointers.get(layer) is None:
+                raise ValueError(
+                    f"Thinning.target_basal_area targets the '{layer.value}' layer, "
+                    f"but that layer does not exist (allometry_parameters.pointers"
+                    f"['{layer.value}'] is None) -- there is no stand there to thin."
                 )
         return self
 

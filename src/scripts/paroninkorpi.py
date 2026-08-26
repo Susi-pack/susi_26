@@ -438,7 +438,7 @@ def create_thinning_parameters(
     params["susi_params"]["site_parameters"]["cutting_management"] = (
         CuttingManagementParams(
             application_yr=cutting_yr,
-            management_type=Thinning(to_ba=cutting_to_ba),
+            management_type=Thinning(target_basal_area={"dominant": cutting_to_ba}),
         )
     )
 

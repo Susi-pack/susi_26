@@ -94,7 +94,7 @@ PARAMETERS = SusiParams(
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
         cutting_management=CuttingManagementParams(
-            application_yr=2004, management_type=Thinning(to_ba=12)
+            application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
         ),
         depoN=4.0,
         depoP=0.1,
