@@ -4,6 +4,7 @@
 # %% Imports
 from susi.io.load_output_data import StandID
 from typing import Optional
+import math
 import pandas as pd
 import xmltodict
 from pydantic import BaseModel, computed_field, Field
@@ -14,12 +15,24 @@ from pyproj import Transformer
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 
 
+# %% Constants
+
+# Typical value ranges for Finnish forest land, used to warn/block on likely
+# mistyped --altitude / --ddy input. See issue #194 / PR #174 discussion.
+ALTITUDE_MIN = 0.0  # metres above sea level
+ALTITUDE_MAX = 1000.0
+DDY_MIN = 500.0  # temperature sum, degree days per year
+DDY_MAX = 2000.0
+
+
 # %% dataclasses
 @dataclass
 class CLIArguments:
     xml_filepath: Path
     output_folder: Path
     do_thinning: bool
+    altitude: float
+    ddy: float
 
 
 class TreeStratum(BaseModel):
@@ -91,6 +104,21 @@ def valid_xml_path(value: str) -> Path:
     return path
 
 
+def out_of_range_message(
+    name: str, value: float, min_value: float, max_value: float
+) -> Optional[str]:
+    """
+    Return a human-readable message if value falls outside [min_value, max_value],
+    or None if it is within range (bounds are inclusive).
+    """
+    if value < min_value or value > max_value:
+        return (
+            f"{name}={value} is outside the enforced range "
+            f"[{min_value}, {max_value}]"
+        )
+    return None
+
+
 def valid_directory(value: str) -> Path:
     path = Path(value)
 
@@ -122,12 +150,85 @@ def parse_CLI_arguments() -> CLIArguments:
         "--do-thinning", action="store_true", help="Do thinning. Default: False"
     )
 
+    parser.add_argument(
+        "--altitude",
+        type=float,
+        required=True,
+        help=(
+            "Altitude above sea level, in metres, applied to every stand in this run "
+            "(example: --altitude=150 -- Finnish forest land altitude is typically "
+            "sea level to 700 m). "
+            f"Blocked if outside the enforced range [{ALTITUDE_MIN}, {ALTITUDE_MAX}] "
+            "unless --allow-out-of-range-values is given."
+        ),
+    )
+
+    parser.add_argument(
+        "--ddy",
+        type=float,
+        required=True,
+        help=(
+            "Temperature sum (degree days per year, DDY), applied to every stand in "
+            "this run (example: --ddy=1200 -- Finnish DDY is typically ~600 in "
+            "Lapland to ~1500 in southern Finland). "
+            f"Blocked if outside the enforced range [{DDY_MIN}, {DDY_MAX}] unless "
+            "--allow-out-of-range-values is given."
+        ),
+    )
+
+    parser.add_argument(
+        "--allow-out-of-range-values",
+        action="store_true",
+        help=(
+            "Allow --altitude/--ddy values outside their enforced range instead of "
+            "blocking. Out-of-range values are still printed as a warning."
+        ),
+    )
+
     args = parser.parse_args()
+
+    # NaN is not a physically meaningful altitude/DDY value under any
+    # circumstances (unlike an out-of-range-but-real number), so it is
+    # rejected outright -- --allow-out-of-range-values does not apply.
+    nan_names = [
+        name
+        for name, value in (("altitude", args.altitude), ("ddy", args.ddy))
+        if math.isnan(value)
+    ]
+    if nan_names:
+        parser.error(f"{', '.join(nan_names)} must be a real number, not NaN.")
+
+    # Collect every out-of-range violation before reporting, so the user
+    # learns about all of them in one run instead of fixing them one at a
+    # time across repeated invocations.
+    out_of_range_messages = [
+        message
+        for message in (
+            out_of_range_message(name, value, min_value, max_value)
+            for name, value, min_value, max_value in (
+                ("altitude", args.altitude, ALTITUDE_MIN, ALTITUDE_MAX),
+                ("ddy", args.ddy, DDY_MIN, DDY_MAX),
+            )
+        )
+        if message is not None
+    ]
+
+    if out_of_range_messages:
+        if args.allow_out_of_range_values:
+            for message in out_of_range_messages:
+                print(f"Warning: {message}; proceeding due to --allow-out-of-range-values")
+        else:
+            parser.error(
+                "; ".join(out_of_range_messages)
+                + ". Pass --allow-out-of-range-values to override."
+            )
 
     return CLIArguments(
         xml_filepath=args.xml_file,
         output_folder=args.output_dir,
         do_thinning=args.do_thinning,
+        altitude=args.altitude,
+        ddy=args.ddy,
     )
 
 
@@ -372,12 +473,12 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
         N_3=strata_stem_counts_per_stratum[2],
         Dg_3=stand_data.tree_strata[2].mean_diameter,
         Hg_3=stand_data.tree_strata[2].mean_height,
-        DDY=1050,  # Temperature sum, degree days, AEMES Lestijarvi = 1050
+        DDY=cli_args.ddy,  # Temperature sum, degree days
         fertility_class=stand_data.fertility_class,
         peat=PEAT,
         y=y,
         x=x,
-        altitude=160,  # Altitude above the sea level, AEMES Lestijarvi = 160
+        altitude=cli_args.altitude,  # Altitude above the sea level
         n_trees=20,  # Number of reference trees per stratum
     )
     page_1 = gy.get_table(start_year=5, end_year=80, step_years=5)
@@ -399,6 +500,8 @@ def main():
 
     print("Tool initialized with:")
     print(f"    - thinning = {cli_args.do_thinning}")
+    print(f"    - altitude = {cli_args.altitude}")
+    print(f"    - ddy = {cli_args.ddy}")
 
     stands = read_stands_from_xml_file(cli_args.xml_filepath)
 
