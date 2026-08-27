@@ -381,24 +381,12 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
         n_trees=20,  # Number of reference trees per stratum
     )
     page_1 = gy.get_table(start_year=5, end_year=80, step_years=5)
+    page_1.insert(0, "Species_ID", stand_data.main_species)
 
-    # Write to Excel with two sheets
-    page2 = pd.DataFrame(
-        {
-            "StandID": [1],
-            "Schedule": [1],
-            "Year": [0],
-            "HarvestType": ["no_loggings"],
-            "Species_id": [stand_data.main_species],
-        }
+    page_1.to_csv(
+        cli_args.output_folder / f"susi_input_{stand_data.id}.csv",
+        index=False,
     )
-
-    with pd.ExcelWriter(
-        cli_args.output_folder / f"susi_input_{stand_data.id}.xlsx",
-        # engine="xlsxwriter",
-    ) as writer:
-        page_1.to_excel(writer, sheet_name="StandData", index=False)
-        page2.to_excel(writer, sheet_name="Loggings", index=False)
 
     print(f"Allometric road map successfully generated for stand {stand_data.id}")
 

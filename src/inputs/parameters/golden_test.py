@@ -38,7 +38,7 @@ PARAMETERS = SusiParams(
     ),
     allometry_parameters=CanopyLayerAllometry(
         allometry_dir_path=_app_settings.input_folder,
-        allometry_file_registry={1: "CF_41.xlsx"},
+        allometry_file_registry={1: "CF_41.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
             CanopyLayerName.subdominant: None,

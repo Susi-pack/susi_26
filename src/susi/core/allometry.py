@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 
+from susi.core.allometry_columns import ALLOMETRY_COLUMNS
+
 T = TypeVar("T")
 
 
@@ -156,29 +158,7 @@ class Allometry:
             litter: woody, nonwoody, locate to interpolation function
             locate interpolation functions to dictionaty
         """
-        cnames = [
-            "yr",
-            "age",
-            "N",
-            "BA",
-            "Hg",
-            "Dg",
-            "hdom",
-            "vol",
-            "logs",
-            "pulp",
-            "loss",
-            "yield",
-            "mortality",
-            "stem",
-            "stemloss",
-            "branch_living",
-            "branch_dead",
-            "leaves",
-            "stump",
-            "roots_coarse",
-            "roots_fine",
-        ]
+        cnames = [c.name for c in ALLOMETRY_COLUMNS]
         species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
         sp = sp if sp < 4 else 3
         spe = species_codes[sp]
@@ -214,24 +194,24 @@ class Allometry:
         df.at[0, "N"] = df.at[1, "N"]  # modify stem number at 0 yrs
         df[
             [
-                "stem",
-                "branch_living",
-                "branch_dead",
-                "leaves",
-                "stump",
-                "roots_coarse",
-                "roots_fine",
+                "Stem_wood",
+                "Living_branches",
+                "Dead_branches",
+                "Foliage",
+                "Stump",
+                "Coarse_roots",
+                "Fine_roots",
             ]
         ] = (
             df[
                 [
-                    "stem",
-                    "branch_living",
-                    "branch_dead",
-                    "leaves",
-                    "stump",
-                    "roots_coarse",
-                    "roots_fine",
+                    "Stem_wood",
+                    "Living_branches",
+                    "Dead_branches",
+                    "Foliage",
+                    "Stump",
+                    "Coarse_roots",
+                    "Fine_roots",
                 ]
             ]
             * 1000.0
@@ -242,37 +222,37 @@ class Allometry:
         df[
             [
                 "BA",
-                "vol",
-                "logs",
-                "pulp",
-                "loss",
-                "yield",
-                "mortality",
-                "stem",
-                "branch_living",
-                "branch_dead",
-                "leaves",
-                "stump",
-                "roots_coarse",
-                "roots_fine",
+                "Volume",
+                "Logs",
+                "Pulp",
+                "Loss",
+                "Yield",
+                "Mortality",
+                "Stem_wood",
+                "Living_branches",
+                "Dead_branches",
+                "Foliage",
+                "Stump",
+                "Coarse_roots",
+                "Fine_roots",
             ]
         ] = (
             df[
                 [
                     "BA",
-                    "vol",
-                    "logs",
-                    "pulp",
-                    "loss",
-                    "yield",
-                    "mortality",
-                    "stem",
-                    "branch_living",
-                    "branch_dead",
-                    "leaves",
-                    "stump",
-                    "roots_coarse",
-                    "roots_fine",
+                    "Volume",
+                    "Logs",
+                    "Pulp",
+                    "Loss",
+                    "Yield",
+                    "Mortality",
+                    "Stem_wood",
+                    "Living_branches",
+                    "Dead_branches",
+                    "Foliage",
+                    "Stump",
+                    "Coarse_roots",
+                    "Fine_roots",
                 ]
             ].values
             / df[
@@ -285,7 +265,7 @@ class Allometry:
         # attn, attn, attn, attn, attn, attn, attn, attn, attn, attn, attn,
         # **********************************************************************
         a_arr = np.arange(
-            0, max(df["age"].values), 1.0
+            0, max(df["Age"].values), 1.0
         )  # stand age array from 0 to max in Motti simulation, time step year
 
         # ---Nutrient concentrations in tree biomass components: Palviainen & Finer 2012 Eur J For Res 131: 945-964
@@ -340,70 +320,70 @@ class Allometry:
         }  # assumption as branches
 
         # ********** Interpolation data ****************************************
-        df["leaves"] = (
-            df["leaves"] / leaf_scale[sfc]
+        df["Foliage"] = (
+            df["Foliage"] / leaf_scale[sfc]
         )  # adjusting to peatland sites (Data: Hannu Hökkä 2022)
         df["leafarea"] = (
-            df["leaves"].values / 10000.0 * sla[spe]
+            df["Foliage"].values / 10000.0 * sla[spe]
         )  # ATTN This is now leves / tree -> requires *N/1000            # leaf area index m2 m-2
         # df['leafarea'] = df['leaves'].values * df['N'] /10000. * sla[spe]         #ATTN This is now leves / tree -> requires *N/1000            # leaf area index m2 m-2
         # used in ageToLAI
 
         df["stem_mass"] = df[
-            "stem"
+            "Stem_wood"
         ]  # df['yield'] * rho[spe]                        # stem biomass
-        df["stem_and_stump"] = df[["stem_mass", "stump"]].sum(axis=1)
+        df["stem_and_stump"] = df[["stem_mass", "Stump"]].sum(axis=1)
         df["bm"] = df[
             [
                 "stem_mass",
-                "branch_living",
-                "branch_dead",
-                "leaves",
-                "stump",
-                "roots_coarse",
-                "roots_fine",
+                "Living_branches",
+                "Dead_branches",
+                "Foliage",
+                "Stump",
+                "Coarse_roots",
+                "Fine_roots",
             ]
         ].sum(axis=1)
         df["bm_noleaves"] = df[
             [
                 "stem_mass",
-                "branch_living",
-                "branch_dead",
-                "stump",
-                "roots_coarse",
-                "roots_fine",
+                "Living_branches",
+                "Dead_branches",
+                "Stump",
+                "Coarse_roots",
+                "Fine_roots",
             ]
         ].sum(axis=1)
-        df["N_leaves"] = df["leaves"] * nuts[spe]["Foliage"]["N"] / 1000.0
+        df["N_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["N"] / 1000.0
         df["Nbm_noleaves"] = (
             df[
-                ["stem_mass", "branch_living", "branch_dead", "stump", "roots_coarse"]
+                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["N"]
             / 1000.0
-            + df[["roots_fine"]].sum(axis=1) * nuts[spe]["Foliage"]["N"] / 1000.0
+            + df[["Fine_roots"]].sum(axis=1) * nuts[spe]["Foliage"]["N"] / 1000.0
         )
-        df["P_leaves"] = df["leaves"] * nuts[spe]["Foliage"]["P"] / 1000.0
+        df["P_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["P"] / 1000.0
         df["Pbm_noleaves"] = (
             df[
-                ["stem_mass", "branch_living", "branch_dead", "stump", "roots_coarse"]
+                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["P"]
             / 1000.0
-            + df[["roots_fine"]].sum(axis=1) * nuts[spe]["Foliage"]["P"] / 1000.0
+            + df[["Fine_roots"]].sum(axis=1) * nuts[spe]["Foliage"]["P"] / 1000.0
         )
-        df["K_leaves"] = df["leaves"] * nuts[spe]["Foliage"]["K"] / 1000.0
+        df["K_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["K"] / 1000.0
         df["Kbm_noleaves"] = (
             df[
-                ["stem_mass", "branch_living", "branch_dead", "stump", "roots_coarse"]
+                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["K"]
             / 1000.0
-            + df[["roots_fine"]].sum(axis=1) * nuts[spe]["Foliage"]["K"] / 1000.0
+            + df[["Fine_roots"]].sum(axis=1) * nuts[spe]["Foliage"]["K"] / 1000.0
         )
 
         df["woody_logging_residues"] = df[
-            ["branch_living", "branch_dead", "roots_coarse", "stump"]
+            ["Living_branches", "Dead_branches", "Coarse_roots", "Stump"]
         ].sum(axis=1)
         df["N_woody_logging_residues"] = (
             df["woody_logging_residues"] * nuts[spe]["Stem"]["N"] / 1000.0
@@ -415,9 +395,9 @@ class Allometry:
             df["woody_logging_residues"] * nuts[spe]["Stem"]["K"] / 1000.0
         )
 
-        df["N_fine_roots"] = df["roots_fine"] * nuts[spe]["Foliage"]["N"] / 1000.0
-        df["P_fine_roots"] = df["roots_fine"] * nuts[spe]["Foliage"]["P"] / 1000.0
-        df["K_fine_roots"] = df["roots_fine"] * nuts[spe]["Foliage"]["K"] / 1000.0
+        df["N_fine_roots"] = df["Fine_roots"] * nuts[spe]["Foliage"]["N"] / 1000.0
+        df["P_fine_roots"] = df["Fine_roots"] * nuts[spe]["Foliage"]["P"] / 1000.0
+        df["K_fine_roots"] = df["Fine_roots"] * nuts[spe]["Foliage"]["K"] / 1000.0
 
         df["N_leaf_demand"] = (
             df["N_leaves"] / longevityLeaves[spe] * (1.0 - retrans["N"])
@@ -431,85 +411,85 @@ class Allometry:
 
         # ********** Interpolation functions ******************************************
         ageToHdom = interp1d(
-            df["age"].values,
-            df["hdom"].values,
-            fill_value=(df["hdom"].values[0], df["hdom"].values[-1]),
+            df["Age"].values,
+            df["Hdom"].values,
+            fill_value=(df["Hdom"].values[0], df["Hdom"].values[-1]),
             bounds_error=True,
         )
         interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["leafarea"].values,
             fill_value=(df["leafarea"].values[0], df["leafarea"].values[-1]),
             bounds_error=True,
         )
         ageToYield = interp1d(
-            df["age"].values,
-            df["yield"].values,
-            fill_value=(df["yield"].values[0], df["yield"].values[-1]),
+            df["Age"].values,
+            df["Yield"].values,
+            fill_value=(df["Yield"].values[0], df["Yield"].values[-1]),
             bounds_error=True,
         )
         ageToVol = interp1d(
-            df["age"].values,
-            df["vol"].values,
-            fill_value=(df["vol"].values[0], df["vol"].values[-1]),
+            df["Age"].values,
+            df["Volume"].values,
+            fill_value=(df["Volume"].values[0], df["Volume"].values[-1]),
             bounds_error=True,
         )
         ageToBa = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["BA"].values,
             fill_value=(df["BA"].values[0], df["BA"].values[-1]),
             bounds_error=True,
         )
         ageToBm = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["bm"].values,
             fill_value=(df["bm"].values[0], df["bm"].values[-1]),
             bounds_error=True,
         )
         ageToBmNoLeaves = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["bm_noleaves"].values,
             fill_value=(df["bm_noleaves"].values[0], df["bm_noleaves"].values[-1]),
             bounds_error=True,
         )
         ageToStems = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["N"].values,
             fill_value=(df["N"].values[0], df["N"].values[-1]),
             bounds_error=True,
         )
         ageToLeaves = interp1d(
-            df["age"].values,
-            df["leaves"].values,
-            fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
+            df["Age"].values,
+            df["Foliage"].values,
+            fill_value=(df["Foliage"].values[0], df["Foliage"].values[-1]),
             bounds_error=True,
         )
         ageToFineRoots = interp1d(
-            df["age"].values,
-            df["roots_fine"].values,
-            fill_value=(df["roots_fine"].values[0], df["roots_fine"].values[-1]),
+            df["Age"].values,
+            df["Fine_roots"].values,
+            fill_value=(df["Fine_roots"].values[0], df["Fine_roots"].values[-1]),
             bounds_error=True,
         )
         ageToBranchLiving = interp1d(
-            df["age"].values,
-            df["branch_living"].values,
-            fill_value=(df["branch_living"].values[0], df["branch_living"].values[-1]),
+            df["Age"].values,
+            df["Living_branches"].values,
+            fill_value=(df["Living_branches"].values[0], df["Living_branches"].values[-1]),
             bounds_error=True,
         )
         ageToBranchDead = interp1d(
-            df["age"].values,
-            df["branch_dead"].values,
-            fill_value=(df["branch_dead"].values[0], df["branch_dead"].values[-1]),
+            df["Age"].values,
+            df["Dead_branches"].values,
+            fill_value=(df["Dead_branches"].values[0], df["Dead_branches"].values[-1]),
             bounds_error=True,
         )
         ageToCoarseRoots = interp1d(
-            df["age"].values,
-            df["roots_coarse"].values,
-            fill_value=(df["roots_coarse"].values[0], df["roots_coarse"].values[-1]),
+            df["Age"].values,
+            df["Coarse_roots"].values,
+            fill_value=(df["Coarse_roots"].values[0], df["Coarse_roots"].values[-1]),
             bounds_error=True,
         )
         ageToStemStump = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["stem_and_stump"].values,
             fill_value=(
                 df["stem_and_stump"].values[0],
@@ -518,45 +498,45 @@ class Allometry:
             bounds_error=True,
         )
         ageToNNoLeaves = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["Nbm_noleaves"].values,
             fill_value=(df["Nbm_noleaves"].values[0], df["Nbm_noleaves"].values[-1]),
             bounds_error=True,
         )
         ageToPNoLeaves = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["Pbm_noleaves"].values,
             fill_value=(df["Pbm_noleaves"].values[0], df["Pbm_noleaves"].values[-1]),
             bounds_error=True,
         )
         ageToKNoLeaves = interp1d(
-            df["age"].values,
+            df["Age"].values,
             df["Kbm_noleaves"].values,
             fill_value=(df["Kbm_noleaves"].values[0], df["Kbm_noleaves"].values[-1]),
             bounds_error=True,
         )
 
         volToLogs = interp1d(
-            df["vol"].values,
-            df["logs"].values,
-            fill_value=(df["logs"].values[0], df["logs"].values[-1]),
+            df["Volume"].values,
+            df["Logs"].values,
+            fill_value=(df["Logs"].values[0], df["Logs"].values[-1]),
             bounds_error=True,
         )
         volToPulp = interp1d(
-            df["vol"].values,
-            df["pulp"].values,
-            fill_value=(df["pulp"].values[0], df["pulp"].values[-1]),
+            df["Volume"].values,
+            df["Pulp"].values,
+            fill_value=(df["Pulp"].values[0], df["Pulp"].values[-1]),
             bounds_error=True,
         )
 
         yiToVol = interp1d(
-            df["yield"].values,
-            df["vol"].values,
-            fill_value=(df["vol"].values[0], df["vol"].values[-1]),
+            df["Yield"].values,
+            df["Volume"].values,
+            fill_value=(df["Volume"].values[0], df["Volume"].values[-1]),
             bounds_error=True,
         )
         yiToBm = interp1d(
-            df["yield"].values,
+            df["Yield"].values,
             df["bm"].values,
             fill_value=(df["bm"].values[0], df["bm"].values[-1]),
             bounds_error=True,
@@ -564,14 +544,14 @@ class Allometry:
 
         bmToYi = interp1d(
             df["bm_noleaves"].values,
-            df["yield"].values,
-            fill_value=(df["yield"].values[0], df["yield"].values[-1]),
+            df["Yield"].values,
+            fill_value=(df["Yield"].values[0], df["Yield"].values[-1]),
             bounds_error=True,
         )
         bmToVol = interp1d(
             df["bm_noleaves"].values,
-            df["vol"].values,
-            fill_value=(df["vol"].values[0], df["vol"].values[-1]),
+            df["Volume"].values,
+            fill_value=(df["Volume"].values[0], df["Volume"].values[-1]),
             bounds_error=True,
         )
 
@@ -584,30 +564,30 @@ class Allometry:
 
         bmToLeafMass = interp1d(
             df["bm_noleaves"].values,
-            df["leaves"].values,
-            fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
+            df["Foliage"].values,
+            fill_value=(df["Foliage"].values[0], df["Foliage"].values[-1]),
             bounds_error=True,
         )
 
         bmWithLeavesToLeafMass = interp1d(
             df["bm"].values,
-            df["leaves"].values,
-            fill_value=(df["leaves"].values[0], df["leaves"].values[-1]),
+            df["Foliage"].values,
+            fill_value=(df["Foliage"].values[0], df["Foliage"].values[-1]),
             bounds_error=True,
         )
         bmToLAI = interp1d(
             df["bm_noleaves"].values,
-            df["leaves"].values * sla[spe] / 10000.0,
+            df["Foliage"].values * sla[spe] / 10000.0,
             fill_value=(
-                df["leaves"].values[0] * sla[spe] / 10000.0,
-                df["leaves"].values[-1] * sla[spe] / 10000.0,
+                df["Foliage"].values[0] * sla[spe] / 10000.0,
+                df["Foliage"].values[-1] * sla[spe] / 10000.0,
             ),
             bounds_error=True,
         )
         bmToHdom = interp1d(
             df["bm_noleaves"].values,
-            df["hdom"].values,
-            fill_value=(df["hdom"].values[0], df["hdom"].values[-1]),
+            df["Hdom"].values,
+            fill_value=(df["Hdom"].values[0], df["Hdom"].values[-1]),
             bounds_error=True,
         )
         bmToStems = interp1d(
@@ -625,8 +605,8 @@ class Allometry:
 
         bmToFineRoots = interp1d(
             df["bm_noleaves"].values,
-            df["roots_fine"].values,
-            fill_value=(df["roots_fine"].values[0], df["roots_fine"].values[-1]),
+            df["Fine_roots"].values,
+            fill_value=(df["Fine_roots"].values[0], df["Fine_roots"].values[-1]),
             bounds_error=True,
         )
         bmToNFineRoots = interp1d(
@@ -687,14 +667,14 @@ class Allometry:
 
         bmToLogVolume = interp1d(
             df["bm_noleaves"].values,
-            df["logs"].values,
-            fill_value=(df["logs"].values[0], df["logs"].values[-1]),
+            df["Logs"].values,
+            fill_value=(df["Logs"].values[0], df["Logs"].values[-1]),
             bounds_error=True,
         )
         bmToPulpVolume = interp1d(
             df["bm_noleaves"].values,
-            df["pulp"].values,
-            fill_value=(df["pulp"].values[0], df["pulp"].values[-1]),
+            df["Pulp"].values,
+            fill_value=(df["Pulp"].values[0], df["Pulp"].values[-1]),
             bounds_error=True,
         )
 

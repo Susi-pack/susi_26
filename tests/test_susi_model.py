@@ -42,7 +42,7 @@ def valid_susi_params(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,
@@ -130,7 +130,7 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,
@@ -222,7 +222,7 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: [1, 1, 1],
                     CanopyLayerName.subdominant: None,
@@ -320,7 +320,7 @@ def test_initial_dominant_age_below_minimum(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                     CanopyLayerName.subdominant: None,
@@ -409,7 +409,7 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                     CanopyLayerName.subdominant: None,
@@ -498,7 +498,7 @@ def test_subdominant_layer_validation(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: None,
                     CanopyLayerName.subdominant: [1, 1, 1, 1, 1],
@@ -587,7 +587,7 @@ def test_under_layer_validation(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: None,
                     CanopyLayerName.subdominant: None,
@@ -676,9 +676,9 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: "test_allometry.xlsx",
-                2: "test_allometry.xlsx",
-                3: "test_allometry.xlsx",
+                1: "test_allometry.csv",
+                2: "test_allometry.csv",
+                3: "test_allometry.csv",
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
@@ -771,7 +771,7 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: [99, 99, 99, 99, 99],
                     CanopyLayerName.subdominant: None,

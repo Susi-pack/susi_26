@@ -34,11 +34,11 @@ class TestSusiMainFertilizationIntegration:
         # Create a dummy weather.csv file
         weather_file = tmp_path / "weather.csv"
         weather_file.write_text("dummy,data\n")
-        # Copy test_allometry.xlsx to tmp_path
+        # Copy test_allometry.csv to tmp_path
         import shutil
 
-        source_allometry = Path(__file__).parent.parent / "data" / "test_allometry.xlsx"
-        shutil.copy(source_allometry, tmp_path / "test_allometry.xlsx")
+        source_allometry = Path(__file__).parent.parent / "data" / "test_allometry.csv"
+        shutil.copy(source_allometry, tmp_path / "test_allometry.csv")
         return tmp_path
 
     @pytest.fixture
@@ -76,7 +76,7 @@ class TestSusiMainFertilizationIntegration:
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.xlsx"},
+                allometry_file_registry={1: "test_allometry.csv"},
                 pointers={
                     CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                     CanopyLayerName.subdominant: None,

@@ -242,7 +242,7 @@ def get_ncf_outputs(file):
 
 
 def allometry_filename_from_stand_number(stand_number: int) -> str:
-    return f"susi_input_{stand_number}.xlsx"
+    return f"susi_input_{stand_number}.csv"
 
 
 def read_initial_dominant_stand_age_from_allometry_file(
@@ -251,7 +251,7 @@ def read_initial_dominant_stand_age_from_allometry_file(
     allometry_filepath = allometry_files_folder / allometry_filename_from_stand_number(
         stand_number
     )
-    return float(pd.read_excel(allometry_filepath)["Age"][0])
+    return float(pd.read_csv(allometry_filepath)["Age"][0])
 
 
 def should_implement_thinning(
@@ -520,7 +520,7 @@ def list_all_files_in_directory_with_given_extension(
 
 
 allometry_filepaths = list_all_files_in_directory_with_given_extension(
-    ALLOMETRY_FILES_DIRECTORY_PATH, extension=".xlsx"
+    ALLOMETRY_FILES_DIRECTORY_PATH, extension=".csv"
 )
 
 # We will simulate one stand for each allometry file

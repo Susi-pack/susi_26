@@ -61,7 +61,7 @@ def _make_susi_params(*, cutting_management, n: int = 5):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=DATA_DIR,
-            allometry_file_registry={1: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: [1] * n,
                 CanopyLayerName.subdominant: None,
@@ -127,11 +127,11 @@ def _make_susi_params(*, cutting_management, n: int = 5):
 
 def _make_regeneration_allometry(n: int = 5):
     """Post-clearcut allometry: age must start at 1 (see ClearCutParams's
-    new_allometry_includes_age_one validator). test_allometry.xlsx does NOT
-    qualify (it starts at age 60) — post_clearcut_allom.xlsx does."""
+    new_allometry_includes_age_one validator). test_allometry.csv does NOT
+    qualify (it starts at age 60) — post_clearcut_allom.csv does."""
     return CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "post_clearcut_allom.xlsx"},
+        allometry_file_registry={1: "post_clearcut_allom.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * n,
             CanopyLayerName.subdominant: None,
