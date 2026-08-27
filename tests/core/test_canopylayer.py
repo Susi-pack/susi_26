@@ -95,7 +95,7 @@ GROUP_B_FIELDS = (
 def _make_stand() -> Stand:
     allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.xlsx"},
+        allometry_file_registry={1: "test_allometry.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -361,7 +361,7 @@ class TestDoClearcutAllometrySwitchover:
         way Stand.apply_cutting_management does in production."""
         new_growth_allometry = CanopyLayerAllometry(
             allometry_dir_path=DATA_DIR,
-            allometry_file_registry={1: "post_clearcut_allom.xlsx"},
+            allometry_file_registry={1: "post_clearcut_allom.csv"},
             pointers={
                 CanopyLayerName.dominant: [1] * len(cut_cols_global),
                 CanopyLayerName.subdominant: None,
@@ -378,7 +378,7 @@ class TestDoClearcutAllometrySwitchover:
 
     def test_cut_columns_pick_up_the_new_allometrys_curves(self):
         stand = _make_stand()
-        old_zone = stand.dominant.zones[0]  # pre-cut zone, test_allometry.xlsx
+        old_zone = stand.dominant.zones[0]  # pre-cut zone, test_allometry.csv
         new_zones = self._new_zones(np.array(CUT_COLS))
 
         stand.dominant.do_clearcut(
@@ -395,7 +395,7 @@ class TestDoClearcutAllometrySwitchover:
 
         # And it must actually differ from what the *old* allometry would
         # have given at age 1 -- otherwise this wouldn't be exercising a
-        # real switch (test_allometry.xlsx and post_clearcut_allom.xlsx are
+        # real switch (test_allometry.csv and post_clearcut_allom.csv are
         # different growth-and-yield tables).
         old_bm_at_age_1 = old_zone.allometry.functions.age_to_bm(np.array([1.0]))[0]
         assert not np.isclose(expected, old_bm_at_age_1)
@@ -457,8 +457,8 @@ class TestDoClearcutAllometrySwitchover:
         new_growth_allometry = CanopyLayerAllometry(
             allometry_dir_path=DATA_DIR,
             allometry_file_registry={
-                1: "post_clearcut_allom.xlsx",
-                2: "test_allometry.xlsx",
+                1: "post_clearcut_allom.csv",
+                2: "test_allometry.csv",
             },
             pointers={
                 # col 0 -> zone 1, col 2 -> zone 2 (order matches strip order
@@ -532,7 +532,7 @@ class TestMultiZoneCanopylayer:
             # Same underlying file registered under two different zone
             # ids: both zones are the same species/growth-and-yield data,
             # differing only in sfc.
-            allometry_file_registry={1: "test_allometry.xlsx", 2: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv", 2: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: self.POINTERS,
                 CanopyLayerName.subdominant: None,
@@ -564,7 +564,7 @@ class TestMultiZoneCanopylayer:
     def test_each_zone_built_from_its_own_sfc(self):
         stand = self._make_multizone_stand()
 
-        # test_allometry.xlsx is Pine (species id 1). Pine's leaf_scale is
+        # test_allometry.csv is Pine (species id 1). Pine's leaf_scale is
         # 1.0 at sfc=1 and 1.4 at sfc=4 (allometry.py's allometry_development:
         # `df["leaves"] / leaf_scale[sfc]`), and both zones share every other
         # input (species, growth-and-yield table, age). So if each zone

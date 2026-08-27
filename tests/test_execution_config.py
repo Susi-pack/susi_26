@@ -45,7 +45,7 @@ def valid_susi_params(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,
@@ -133,7 +133,7 @@ def another_valid_susi_params(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.xlsx"},
+            allometry_file_registry={1: "test_allometry.csv"},
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,

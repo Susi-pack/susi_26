@@ -35,7 +35,7 @@ SFC = np.ones(N, dtype=int) * 4
 def _make_stand(age: float = 70.0) -> Stand:
     allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.xlsx"},
+        allometry_file_registry={1: "test_allometry.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -66,7 +66,7 @@ def _regeneration_allometry() -> CanopyLayerAllometry:
     """age must start at 1 -- see ClearCut.new_allometry_includes_age_one."""
     return CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "post_clearcut_allom.xlsx"},
+        allometry_file_registry={1: "post_clearcut_allom.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,

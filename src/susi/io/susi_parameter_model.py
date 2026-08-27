@@ -25,6 +25,7 @@ from susi.io.extra_pydantic_types import (
     NonPositiveFloat,
     PositiveInt,
 )
+from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 
 
 def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
@@ -45,52 +46,39 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
 
 
 @lru_cache()
-def read_allometry_info_from_excel(filepath: Path) -> tuple[pd.DataFrame, int]:
+def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
     """
-    Read allometry file, return allometry dataframe and species id.
+    Read allometry file, return the allometry dataframe and its species id.
     It is cached so that the same file is not read twice.
     """
+    column_names = [c.name for c in ALLOMETRY_COLUMNS]
+    df = pd.read_csv(filepath)
+    missing = set(column_names) - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Allometry file {filepath} is missing expected columns: {missing}"
+        )
+    extra = set(df.columns) - set(column_names)
+    if extra:
+        raise ValueError(
+            f"Allometry file {filepath} has unexpected columns: {extra}"
+        )
 
-    cnames = [
-        "yr",
-        "age",
-        "N",
-        "BA",
-        "Hg",
-        "Dg",
-        "hdom",
-        "vol",
-        "logs",
-        "pulp",
-        "loss",
-        "yield",
-        "mortality",
-        "stem",
-        "stemloss",
-        "branch_living",
-        "branch_dead",
-        "leaves",
-        "stump",
-        "roots_coarse",
-        "roots_fine",
-    ]
-    df = pd.read_excel(
-        filepath, sheet_name=0, usecols=range(22), skiprows=1, header=None
-    )
-    df = df.drop([0], axis=1)
-    df.columns = cnames
-    cname = ["idSpe"]
-    df2 = pd.read_excel(filepath, sheet_name=1, usecols=[4], skiprows=1, header=None)
-    df2.columns = cname
+    species_ids = df["Species_ID"].unique()
+    if len(species_ids) != 1:
+        raise ValueError(
+            f"{filepath}: Species_ID column must be constant, found {species_ids}"
+        )
+    species_id = int(species_ids[0])
 
     # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
-    df = df.loc[df["age"] != 0]
+    df = df.loc[df["Age"] != 0]
 
-    steps = np.array(np.diff(df["age"]), dtype=float)
+    steps = np.array(np.diff(df["Age"]), dtype=float)
     idx = np.ravel(np.argwhere(steps < 1.0)) + 1
-    df.loc[idx, "age"] = df.loc[idx, "age"] + 5.0 / 365.0
+    df.loc[idx, "Age"] = df.loc[idx, "Age"] + 5.0 / 365.0
 
-    return df, df2["idSpe"][0]
+    return df, species_id
 
 
 class SimulationConfig(StrictFrozenModel):
@@ -154,12 +142,12 @@ class CanopyLayerAllometry(StrictFrozenModel):
         return self
 
     @model_validator(mode="after")
-    def parse_excels(self) -> Self:
+    def parse_allometry_files(self) -> Self:
         _zones_data = {}
         _zones_species_id = {}
 
         for allometry_registry_number, filename in self.allometry_file_registry.items():
-            df, species_id = read_allometry_info_from_excel(
+            df, species_id = read_allometry_info_from_csv(
                 filepath=self.allometry_dir_path / filename
             )
             _zones_data[allometry_registry_number] = df
@@ -572,9 +560,9 @@ class ClearCut(StrictFrozenModel):
     @model_validator(mode="after")
     def new_allometry_includes_age_one(self) -> Self:
         for zid, df in self.new_growth_allometry.zones_data.items():
-            if df["age"].min() > 1:
+            if df["Age"].min() > 1:
                 raise ValueError(
-                    f"Post-clearcut allometry zone {zid} has a minimum age of {df['age'].min()} years, but must start from age=1 year."
+                    f"Post-clearcut allometry zone {zid} has a minimum age of {df['Age'].min()} years, but must start from age=1 year."
                 )
         return self
 
@@ -945,8 +933,8 @@ class SusiParams(StrictFrozenModel):
         """Helper method to validate age for a single canopy layer."""
 
         for registry_number, df in allometry_data.items():
-            min_age_in_dataframe = df["age"].min()
-            max_age_in_dataframe = df["age"].max()
+            min_age_in_dataframe = df["Age"].min()
+            max_age_in_dataframe = df["Age"].max()
 
             if initial_age < min_age_in_dataframe:
                 raise ValueError(

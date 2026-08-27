@@ -38,7 +38,7 @@ SFC = np.array([1, 1, 4, 4, 4])
 def _make_multizone_stand(age: float = 70.0) -> Stand:
     allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.xlsx", 2: "test_allometry.xlsx"},
+        allometry_file_registry={1: "test_allometry.csv", 2: "test_allometry.csv"},
         pointers={
             CanopyLayerName.dominant: POINTERS,
             CanopyLayerName.subdominant: None,
