@@ -16,7 +16,7 @@ Typical usage:
 import matplotlib.pyplot as plt
 from IPython.display import Markdown, display
 
-from analysis.streamlit.components import plots
+from analysis.shared_reporting_utils import plots
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 

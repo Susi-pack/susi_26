@@ -1,38 +1,14 @@
 import streamlit as st
 from typing import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 
 from susi.io.load_output_data import (
     read_netcdf_files_for_selected_variables,
-    NetcdfVariablePath,
-    NetcdfAggregationFn,
     StandID,
     ScenarioID,
     OutputDataStore,
 )
-
-
-@dataclass(frozen=True)
-class AggregatedNetcdfVar:
-    netcdf_path: NetcdfVariablePath
-    aggregation_method: NetcdfAggregationFn
-    display_label: str | None = (
-        None  # Label to be displayed. If None, the netcdf_path is used.
-    )
-
-
-def aggregate_var(
-    # Helper to reduce verbosity
-    path: str,
-    fn: NetcdfAggregationFn,
-    label: str | None = None,
-) -> AggregatedNetcdfVar:
-    return AggregatedNetcdfVar(
-        netcdf_path=NetcdfVariablePath(path),
-        aggregation_method=fn,
-        display_label=label,
-    )
+from analysis.shared_reporting_utils.project_summary import AggregatedNetcdfVar
 
 
 # Cacheing to not re-read the same variables twice

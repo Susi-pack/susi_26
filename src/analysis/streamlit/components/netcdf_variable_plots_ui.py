@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
-from analysis.streamlit.components import plots
+from analysis.shared_reporting_utils import plots
 
 
 def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:

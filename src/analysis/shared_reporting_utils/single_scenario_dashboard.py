@@ -1,47 +1,26 @@
-import streamlit as st
+"""
+Shared data-loading logic for the "Single Scenario Dashboard" -- the fixed,
+~100-variable set of 7 figures (stand, hydrology, mass, carbon, nutrient
+balance x3) built from one scenario's netCDF output.
+
+Reused by both the Streamlit page
+(`analysis.streamlit.pages.single_scenario_dashboard`) and the notebook
+component (`analysis.notebooks.components.single_scenario_dashboard`).
+
+Extracted per #231 to eliminate the duplicated fixed-variable-path tuple
+that used to be hand-copied independently in each frontend.
+"""
+
 from pathlib import Path
-import matplotlib.pyplot as plt
+from typing import Sequence
 
 import susi.io.load_output_data as load_output
+from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
-from analysis.streamlit.components import plots, folder_selection
-
-st.header("Choose project folder")
-
-col1, col2, col3 = st.columns([2, 3, 1])
-
-with col1:
-    st.markdown("**Data folder**")
-
-with col2:
-    st.write(st.session_state.settings["data_folder"])
-
-with col3:
-    if st.button("Browse…", use_container_width=True):
-        result = folder_selection.pick_folder_popup()
-        if result:
-            st.session_state.settings["data_folder"] = result
-            st.rerun()
-
-
-chosen_scenario_folder = folder_selection.build_folder_selection_widget(
-    dir_path=folder_selection.build_folder_selection_widget(
-        dir_path=folder_selection.build_folder_selection_widget(
-            dir_path=st.session_state.settings["data_folder"], label="project"
-        ),
-        label="stand",
-    ),
-    label="scenario",
-)
-
-
-params = load_output.read_params_from_jsons(
-    experiment_folderpath=chosen_scenario_folder
-)
-
-chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])
-all_variables = load_output.list_all_netcdf_variables(chosen_netcdf_filepath)
-
+# The fixed variable-path list behind the Single Scenario Dashboard's 7
+# figures (stand, hydrology, mass, carbon, nutrient balance x3). Order
+# matters only in that it must stay stable/complete -- consumers look
+# variables up by path, not by position.
 VARIABLE_PATHS = (
     load_output.NetcdfVariablePath("/strip/dwtyr"),
     load_output.NetcdfVariablePath("/strip/dwtyr_growingseason"),
@@ -141,43 +120,11 @@ VARIABLE_PATHS = (
     load_output.NetcdfVariablePath("/balance/K/balance_root_lyr"),
 )
 
-data: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableArray] = (
-    load_output.read_value_several_variables_from_single_file(
-        netcdf_filepath=chosen_netcdf_filepath, variable_paths=VARIABLE_PATHS
+
+def load_report_data(
+    netcdf_filepath: Path, variable_paths: Sequence[NetcdfVariablePath]
+) -> dict[NetcdfVariablePath, NetcdfVariableArray]:
+    """Read the given variables from a single netcdf file."""
+    return load_output.read_value_several_variables_from_single_file(
+        netcdf_filepath=netcdf_filepath, variable_paths=variable_paths
     )
-)
-
-st.markdown("## Stand")
-fig_stand = plots.stand(data=data)
-st.pyplot(fig_stand)
-plt.close(fig_stand)
-
-st.markdown("## Hydrology")
-fig_hydro = plots.hydrology(data=data)
-st.pyplot(fig_hydro)
-plt.close(fig_hydro)
-
-st.markdown("## Mass")
-fig_mass = plots.mass(data=data)
-st.pyplot(fig_mass)
-plt.close(fig_mass)
-
-st.markdown("## Carbon")
-fig_carbon = plots.carbon(data=data)
-st.pyplot(fig_carbon)
-plt.close(fig_carbon)
-
-st.markdown("## Nitrogen Balance")
-fig_n = plots.nutrient_balance(data=data, substance="N")
-st.pyplot(fig_n)
-plt.close(fig_n)
-
-st.markdown("## Phosphorus Balance")
-fig_p = plots.nutrient_balance(data=data, substance="P")
-st.pyplot(fig_p)
-plt.close(fig_p)
-
-st.markdown("## Potassium Balance")
-fig_k = plots.nutrient_balance(data=data, substance="K")
-st.pyplot(fig_k)
-plt.close(fig_k)

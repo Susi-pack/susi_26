@@ -77,7 +77,7 @@ Use this when exploring one scenario in isolation.
 This is used in the following places in the codebase:
 
 * `src/analysis/streamlit/pages/1_single_netcdf.py` — folder picker, variable explorer, plots
-* `src/analysis/streamlit/pages/annamari_figures.py` — ~90 variables read at once, multiple themed plot pages
+* `src/analysis/streamlit/pages/single_scenario_dashboard.py` — ~90 variables read at once, multiple themed plot pages
 * `src/analysis/streamlit/pages/optimization.py` — golden test file for variable structure, then reads from chosen scenario
 
 ```python

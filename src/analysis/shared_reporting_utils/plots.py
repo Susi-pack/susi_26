@@ -158,7 +158,7 @@ def temporal_stats(data: np.ndarray) -> matplotlib.figure.Figure:
     return fig
 
 
-# %% Annamari plots
+# %% Single Scenario Dashboard plots
 
 
 def _get_var(

@@ -13,6 +13,12 @@ from susi.io.load_output_data import (
 
 ParamName = NewType("ParamName", str)
 
+# Scenario name is how scenarios are told apart in the first place, so it
+# trivially "differs" across every scenario by definition. It is never
+# useful to surface as a differing parameter, so `find_differing_params`
+# unconditionally excludes it (see root CONTEXT.md, "Differing Parameters").
+_SCENARIO_NAME_PARAM = "site_parameters/scenario_name"
+
 
 def retrieve_scenarios_for_stand(
     stand_id: StandID, outputs_dir: Path
@@ -129,11 +135,12 @@ def find_differing_params(
     all_param_paths = _collect_all_param_paths(flat_params)
     value_mapping = _build_param_value_mapping(flat_params, all_param_paths)
 
-    # Only include parameters with more than one unique value
+    # Only include parameters with more than one unique value, excluding the
+    # scenario name itself (it trivially always differs).
     return {
         ParamName(param_path): scen_ids
         for param_path, scen_ids in value_mapping.items()
-        if len(scen_ids) > 1
+        if len(scen_ids) > 1 and param_path != _SCENARIO_NAME_PARAM
     }
 
 

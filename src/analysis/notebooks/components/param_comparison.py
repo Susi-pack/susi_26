@@ -26,11 +26,6 @@ from analysis.core.parse_outputs import (
     find_unique_params,
 )
 
-# Scenario name is how scenarios are told apart in the first place, so it
-# always "differs" across them — showing it as a differing parameter would
-# just be noise. Matches the Streamlit version's skip of the same param.
-_SCENARIO_NAME_PARAM = "site_parameters/scenario_name"
-
 
 def display_param_comparison(
     stand_id: StandID, output_dir: Path
@@ -45,21 +40,15 @@ def display_param_comparison(
       same value across every scenario.
 
     Returns the (differing, unique) dicts exactly as produced by
-    `find_differing_params`/`find_unique_params` (unfiltered — the
-    scenario-name skip above is a display-only concern), so callers can
-    reuse them without recomputing.
+    `find_differing_params`/`find_unique_params`, so callers can reuse them
+    without recomputing.
     """
     differing = find_differing_params(stand_id, output_dir)
     unique = find_unique_params(stand_id, output_dir)
 
     display(Markdown("## Differing Parameters"))
-    displayable = {
-        name: value_map
-        for name, value_map in differing.items()
-        if name != _SCENARIO_NAME_PARAM
-    }
-    if displayable:
-        for param_name, value_map in displayable.items():
+    if differing:
+        for param_name, value_map in differing.items():
             display(Markdown(f"**{param_name}**"))
             rows = [
                 {"value": value, "scenarios": ", ".join(scenarios)}
