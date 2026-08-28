@@ -641,6 +641,18 @@ wheels = [
 ]
 
 [[package]]
+name = "ipyfilechooser"
+version = "0.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ipywidgets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/13/63/a0bfdda0cdf002421632734e203e4692d72dc4e71cd006f101c90f9ba6d3/ipyfilechooser-0.6.0.tar.gz", hash = "sha256:41df9e4395a924f8e1b78e2804dbe5066dc3fdc233fb07fecfcdc2a0c9a7d8d3", size = 12737, upload-time = "2021-09-15T22:31:56.261Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/60/249e3444fcd9c833704741769981cd02fe2c7ce94126b1394e7a3b26e543/ipyfilechooser-0.6.0-py3-none-any.whl", hash = "sha256:4555c24b30b819c91dc0ae5e6f7e4cf8f90e5cca531a9209a1fe4deee288d5c5", size = 11039, upload-time = "2021-09-15T22:31:55.152Z" },
+]
+
+[[package]]
 name = "ipython"
 version = "9.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2513,6 +2525,8 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "altair", extra = ["all"] },
+    { name = "ipyfilechooser" },
+    { name = "ipywidgets" },
     { name = "matplotlib" },
     { name = "netcdf4" },
     { name = "numba" },
@@ -2546,6 +2560,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "altair", extras = ["all"], specifier = ">=6.0.0" },
+    { name = "ipyfilechooser", specifier = ">=0.6.0" },
+    { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "netcdf4", specifier = ">=1.7.4" },
     { name = "numba", specifier = ">=0.64.0" },
