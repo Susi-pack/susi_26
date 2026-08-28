@@ -78,36 +78,53 @@ class Growth_and_Yield_Table:
         self.y = y  # y-coordinate
         self.x = x  # x-coordinate
         self.altitude = altitude  # altitude above the sea level
+        
+        # If basal missing in the data, calculated from stem count and mean diameter
+        if self.G_1 == 0:
+            self.G_1 = self.N_1 * np.pi * (self.Dg_1 / 2) ** 2 / 10000
+        if self.G_2 == 0:
+            self.G_2 = self.N_2 * np.pi * (self.Dg_2 / 2) ** 2 / 10000
+        if self.G_3 == 0:
+            self.G_3 = self.N_3 * np.pi * (self.Dg_3 / 2) ** 2 / 10000
 
         self.G = sum([self.G_1, self.G_2, self.G_3])
         self.N = sum([self.N_1, self.N_2, self.N_3])
+
+        weights = (
+            [self.G_1, self.G_2, self.G_3]
+            if self.G > 0
+            else [self.N_1, self.N_2, self.N_3]
+        )
+
+        weight_sum = sum(weights)
+
         self.age = round(
             sum(
-                a * g
-                for a, g in zip(
-                    [self.age_1, self.age_2, self.age_3], [self.G_1, self.G_2, self.G_3]
+                a * w
+                for a, w in zip(
+                    [self.age_1, self.age_2, self.age_3], weights,
                 )
             )
-            / self.G
+            / weight_sum
         )
         self.Dg = round(
             sum(
-                d * g
-                for d, g in zip(
-                    [self.Dg_1, self.Dg_2, self.Dg_3], [self.G_1, self.G_2, self.G_3]
+                d * w
+                for d, w in zip(
+                    [self.Dg_1, self.Dg_2, self.Dg_3], weights
                 )
             )
-            / self.G,
+            / weight_sum,
             1,
         )
         self.Hg = round(
             sum(
-                h * g
-                for h, g in zip(
-                    [self.Hg_1, self.Hg_2, self.Hg_3], [self.G_1, self.G_2, self.G_3]
+                h * w
+                for h, w in zip(
+                    [self.Hg_1, self.Hg_2, self.Hg_3], weights
                 )
             )
-            / self.G,
+            / weight_sum,
             1,
         )
 
@@ -237,7 +254,7 @@ class Growth_and_Yield_Table:
         ReferenceTrees.loc[ReferenceTrees["sp"] > 3, "sp"] = 3
 
         for index, row in ReferenceTrees.iterrows():
-            if row["H"] > 1.5:
+            if row["H"] > 2:
                 temp_assortments = StemCurve().predictAssortmentVolumes(
                     row["D"],
                     row["H"],
@@ -283,24 +300,27 @@ class Growth_and_Yield_Table:
 
         fx = np.zeros(len(D))
         for i in range(len(D)):
-            # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
-            if sp[i] <= 2:
-                spi = sp[i] - 1
+            if D[i] == 0:
+                fx[i] = 3           # If D == 0, survival set to approximately 95%. Just a wild guess by Mikko without scientific argumentation.
             else:
-                spi = 2
-            fx[i] = (
-                S_param["Intercept"][spi]
-                + S_param["sqrt_d"][spi] * np.sqrt(D[i])
-                + S_param["d"][spi] * D[i]
-                + S_param["BAL_Total"][spi] * (BAL_Total[i] / np.sqrt(D[i] + 1))
-                + S_param["BAL_Pine"][spi] * (BAL_Pine[i] / np.sqrt(D[i] + 1))
-                + S_param["BAL_Spruce"][spi] * (BAL_Spruce[i] / np.sqrt(D[i] + 1))
-                + S_param["BAL_Spruce_Broadleaf"][spi]
-                * (BAL_S_B[i] / np.sqrt(D[i] + 1))
-                + S_param["Peat"][spi] * Peat[i]
-                + S_param["Aspen"][spi] * Aspen[i]
-                + S_param["Birch"][spi] * Birch[i]
-            )
+                # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
+                if sp[i] <= 2:
+                    spi = sp[i] - 1
+                else:
+                    spi = 2
+                fx[i] = (
+                    S_param["Intercept"][spi]
+                    + S_param["sqrt_d"][spi] * np.sqrt(D[i])
+                    + S_param["d"][spi] * D[i]
+                    + S_param["BAL_Total"][spi] * (BAL_Total[i] / np.sqrt(D[i] + 1))
+                    + S_param["BAL_Pine"][spi] * (BAL_Pine[i] / np.sqrt(D[i] + 1))
+                    + S_param["BAL_Spruce"][spi] * (BAL_Spruce[i] / np.sqrt(D[i] + 1))
+                    + S_param["BAL_Spruce_Broadleaf"][spi]
+                    * (BAL_S_B[i] / np.sqrt(D[i] + 1))
+                    + S_param["Peat"][spi] * Peat[i]
+                    + S_param["Aspen"][spi] * Aspen[i]
+                    + S_param["Birch"][spi] * Birch[i]
+                )
         survival = 1 / (1 + np.exp(-fx))
         return survival
 
@@ -424,7 +444,7 @@ class Growth_and_Yield_Table:
 
     # Predict diameter increment for next 5 years:
     def predict_diameter_increment_5_years(
-        self, ReferenceTrees, fertilityClass, temperatureSum=1200, peat=1
+        self, ReferenceTrees, fertilityClass, temperatureSum, peat=1
     ):
         """
         Timo Pukkala and others, Self-learning growth simulator for modelling forest stand dynamics in
@@ -507,23 +527,26 @@ class Growth_and_Yield_Table:
         survival_rate = self.predict_survival_5_years(ReferenceTrees, peat=1)
 
         # predict 5-year diameter increment
-        ReferenceTrees["D"] = ReferenceTrees[
-            "D"
-        ] + self.predict_diameter_increment_5_years(
+        ReferenceTrees["D"] = ReferenceTrees["D"] + self.predict_diameter_increment_5_years(
             ReferenceTrees, self.fertility_class, self.DDY, self.peat
         )
 
         # predict height of reference trees after 5 years
         height = []
         for index, row in ReferenceTrees.iterrows():
-            height_estimate = naslund_height(row["D"], row["sp"])
-            # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
-            if row["sp"] <= 2:
-                spi = int(row["sp"] - 1)
+            if row["H"] <= 1.3:
+                height.append(
+                    row["H"] + np.interp(self.fertility_class, [1, 6], [2.0, 1.3])              # This is the first iteration. It came from Mikko's hat.
+                )
             else:
-                spi = 2
-            height_scaled = h_scalar[spi] * height_estimate
-            height.append(height_scaled)
+                height_estimate = naslund_height(row["D"], row["sp"])
+                # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
+                if row["sp"] <= 2:
+                    spi = int(row["sp"] - 1)
+                else:
+                    spi = 2
+                height_scaled = h_scalar[spi] * height_estimate
+                height.append(height_scaled)
         ReferenceTrees["H"] = height
 
         # update stem number per reference tree class
@@ -534,7 +557,7 @@ class Growth_and_Yield_Table:
             ReferenceTrees
         )
         assortments = self.get_assortment_volumes(
-            ReferenceTrees, age, y, x, altitude, DDY, fertility_class, peatland
+            ReferenceTrees, max(5, age), y, x, altitude, DDY, fertility_class, peatland
         )
         biomass = self.get_biomass_components(ReferenceTrees)
 
@@ -580,40 +603,58 @@ class Growth_and_Yield_Table:
 
         # Pine
         if self.N_1 != 0:
-            ref_1 = pd.DataFrame(
-                np.array(
-                    generate_weibull_tree_list(
-                        self.n_trees, self.G_1, self.Dg_1, self.N_1
-                    )
-                ),
-                columns=["Nd", "D"],
-            )
+            if self.Dg_1 == 0:
+                ref_1 = pd.DataFrame({
+                    "Nd": [self.N_1],
+                    "D": [self.Dg_1]
+                })
+            else:
+                ref_1 = pd.DataFrame(
+                    np.array(
+                        generate_weibull_tree_list(
+                            self.n_trees, max(1, self.G_1), max(1, self.Dg_1), self.N_1
+                        )
+                    ),
+                    columns=["Nd", "D"],
+                )
             ref_1.insert(0, "sp", 1)
             ReferenceTrees.append(ref_1)
 
         # Spruce
         if self.N_2 != 0:
-            ref_2 = pd.DataFrame(
-                np.array(
-                    generate_weibull_tree_list(
-                        self.n_trees, self.G_2, self.Dg_2, self.N_2
-                    )
-                ),
-                columns=["Nd", "D"],
-            )
+            if self.Dg_2 == 0:
+                ref_2 = pd.DataFrame({
+                    "Nd": [self.N_2],
+                    "D": [self.Dg_2]
+                })
+            else:            
+                ref_2 = pd.DataFrame(
+                    np.array(
+                        generate_weibull_tree_list(
+                            self.n_trees, max(1, self.G_2), max(1, self.Dg_2), self.N_2
+                        )
+                    ),
+                    columns=["Nd", "D"],
+                )
             ref_2.insert(0, "sp", 2)
             ReferenceTrees.append(ref_2)
 
         # Deciduous trees (assuming Betula pubescens)
         if self.N_3 != 0:
-            ref_3 = pd.DataFrame(
-                np.array(
-                    generate_weibull_tree_list(
-                        self.n_trees, self.G_3, self.Dg_3, self.N_3
-                    )
-                ),
-                columns=["Nd", "D"],
-            )
+            if self.Dg_3 == 0:
+                ref_3 = pd.DataFrame({
+                    "Nd": [self.N_3],
+                    "D": [self.Dg_3]
+                })
+            else:    
+                ref_3 = pd.DataFrame(
+                    np.array(
+                        generate_weibull_tree_list(
+                            self.n_trees, max(1, self.G_3), max(1, self.Dg_3), self.N_3
+                        )
+                    ),
+                    columns=["Nd", "D"],
+                )
             ref_3.insert(0, "sp", 4)
             ReferenceTrees.append(ref_3)
 
@@ -621,35 +662,51 @@ class Growth_and_Yield_Table:
 
         # Height correction
         h_scalar = [
-            0 if self.N_1 == 0 else naslund_correction(1, self.Dg_1, self.Hg_1),
-            0 if self.N_2 == 0 else naslund_correction(2, self.Dg_2, self.Hg_2),
-            0 if self.N_3 == 0 else naslund_correction(3, self.Dg_3, self.Hg_3),
+            0.8 if self.Dg_1 == 0 else naslund_correction(1, self.Dg_1, self.Hg_1),         # The 0.8 also came from Mikko's hat and needs calibrating.
+            0.8 if self.Dg_2 == 0 else naslund_correction(2, self.Dg_2, self.Hg_2),
+            0.8 if self.Dg_3 == 0 else naslund_correction(3, self.Dg_3, self.Hg_3),
         ]
 
         # Height estimates
         height = []
         for index, row in ReferenceTrees.iterrows():
-            height_estimate = naslund_height(row["D"], row["sp"])
-            # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
-            if row["sp"] <= 2:
-                spi = int(row["sp"] - 1)
+            if row["D"] == 0:
+                species = row["sp"]
+                if species == 1:
+                    height.append(self.Hg_1)
+                elif species == 2:
+                    height.append(self.Hg_2)
+                else:
+                    height.append(self.Hg_3)
             else:
-                spi = 2
-            height_scaled = h_scalar[spi] * height_estimate
-            if height_scaled < 1.3:
-                height_scaled = 1.3
-            height.append(height_scaled)
+                height_estimate = naslund_height(row["D"], row["sp"])
+                # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
+                if row["sp"] <= 2:
+                    spi = int(row["sp"] - 1)
+                else:
+                    spi = 2
+                height_scaled = h_scalar[spi] * height_estimate
+                if height_scaled < 1.3:
+                    height_scaled = 1.3
+                height.append(height_scaled)
         ReferenceTrees["H"] = height
 
         # Mean height and diameter based on the reference trees
-        mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
-            ReferenceTrees
-        )
+        if ReferenceTrees["D"].sum() == 0:
+            mean_height = np.average(
+                ReferenceTrees["H"],
+                weights=ReferenceTrees["Nd"],
+            )
+            mean_diameter = 0
+        else:
+            mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
+                ReferenceTrees
+            )
 
         # Assortment volumes
         assortments = self.get_assortment_volumes(
             ReferenceTrees,
-            self.age,
+            max(5, self.age),
             self.y,
             self.x,
             self.altitude,
@@ -762,7 +819,7 @@ gy = Growth_and_Yield_Table(
     DDY, fertility_class, peat, y, x, altitude, n_trees
 )
 
-susi_input = gy.get_table()
+susi_input = gy.get_table(start_year=5, end_year=80, step_years=5)
 susi_input.to_clipboard()
 
 
