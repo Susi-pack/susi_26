@@ -38,13 +38,15 @@ from ipyfilechooser import FileChooser
 import susi.io.load_output_data as load_output
 
 
-def build_dropdown(dir_path: Path, label: str) -> widgets.Dropdown:
+def build_dropdown(dir_path: Path | str, label: str) -> widgets.Dropdown:
     """
     Build, display, and return a Dropdown listing the subdirectories of dir_path.
 
     Dropdown options are (name, Path) pairs, so `.value` on the returned
     widget is already a Path, ready to pass straight into the next
-    build_dropdown() call in the chain.
+    build_dropdown() call in the chain. dir_path also accepts a str, so a
+    build_folder_browser() FileChooser's `.selected` (a str, not a Path) can
+    be chained straight in too.
 
     Raises ValueError, labeled with which selection step failed, if dir_path
     doesn't exist (e.g. a stale value from an earlier `.value` in the chain)
@@ -52,6 +54,7 @@ def build_dropdown(dir_path: Path, label: str) -> widgets.Dropdown:
     which would otherwise crash confusingly deep inside the next chained
     call instead of at the point of the actual problem.
     """
+    dir_path = Path(dir_path)
     if not dir_path.exists() or not dir_path.is_dir():
         raise ValueError(f"{label} folder not found: {dir_path}")
 
