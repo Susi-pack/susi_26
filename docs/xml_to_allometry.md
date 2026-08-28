@@ -123,19 +123,36 @@ An additional file `extra_XML_info.json` is created in the output directory, con
 ## Usage
 
 ```bash
-python xml_to_allometry.py <input.xml> <output_directory>
+python xml_to_allometry.py <input.xml> <output_directory> --altitude=<value> --ddy=<value>
 ```
 
 **Arguments:**
 
 - `input.xml` - Path to the input XML file
 - `output_directory` - Path to the output directory for generated files
+- `--altitude` - **Required.** Altitude above sea level, in metres, applied to every stand in this run. Not present in the XML standard, so it must be supplied explicitly.
+- `--ddy` - **Required.** Temperature sum (degree days per year). Also not present in the XML standard, so it must be supplied explicitly.
+- `--allow-out-of-range-values` - Optional flag. See [Altitude / DDY Validation](#altitude--ddy-validation) below.
+- `--do-thinning` - Optional flag. Apply sapling stand thinning where needed (see [Thinning Rate Calculation](#thinning-rate-calculation)).
 
 **Example:**
 
 ```bash
-python src/tools/xml_to_allometry.py data/forest_stands.xml output/allometry_files/
+python src/tools/xml_to_allometry.py data/forest_stands.xml output/allometry_files/ --altitude=150 --ddy=1200
 ```
+
+### Altitude / DDY Validation
+
+`--altitude` and `--ddy` apply the same value to every stand processed in this run — there is currently no way to vary them per stand or per XML file in a single run.
+
+Values are checked against an enforced range, deliberately set a bit wider than what's typical for Finnish forest land, to allow some margin without silently accepting nonsense input:
+
+| Parameter | Enforced range | Typical Finnish value | Unit |
+|-----------|-----------------|------------------------|------|
+| `--altitude` | 0 – 1000 | sea level – 700 | metres above sea level |
+| `--ddy` | 500 – 2000 | ~600 (Lapland) – ~1500 (southern Finland) | degree days per year |
+
+By default, a value outside the **enforced range** blocks the run with an error naming every violation found (not just the first). Pass `--allow-out-of-range-values` to proceed anyway — the tool will still print a warning for each out-of-range value used, so it stays visible in the run's output. `NaN` is always rejected outright, regardless of `--allow-out-of-range-values`.
 
 ## Technical Details
 
