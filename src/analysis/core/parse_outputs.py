@@ -17,7 +17,9 @@ ParamName = NewType("ParamName", str)
 # trivially "differs" across every scenario by definition. It is never
 # useful to surface as a differing parameter, so `find_differing_params`
 # unconditionally excludes it (see root CONTEXT.md, "Differing Parameters").
-_SCENARIO_NAME_PARAM = "site_parameters/scenario_name"
+# A frozenset, not a single constant, so a future never-useful param can be
+# added here without another near-duplicate condition alongside this one.
+_EXCLUDED_DIFFERING_PARAMS = frozenset({"site_parameters/scenario_name"})
 
 
 def retrieve_scenarios_for_stand(
@@ -140,7 +142,7 @@ def find_differing_params(
     return {
         ParamName(param_path): scen_ids
         for param_path, scen_ids in value_mapping.items()
-        if len(scen_ids) > 1 and param_path != _SCENARIO_NAME_PARAM
+        if len(scen_ids) > 1 and param_path not in _EXCLUDED_DIFFERING_PARAMS
     }
 
 

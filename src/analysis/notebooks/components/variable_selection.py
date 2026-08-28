@@ -64,7 +64,7 @@ def build_selector(
         checkboxes[var_path] = widgets.Checkbox(
             value=var_path in preselected_set,
             description=var_path,
-            tooltip=f"Shape: {var_info.shape}\nUnits: {var_info.units or 'N/A'}",
+            tooltip=f"Shape: {var_info.shape}\nUnits: {var_info.units}",
             layout=widgets.Layout(width="100%"),
             style={"description_width": "initial"},
         )

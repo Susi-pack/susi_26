@@ -45,7 +45,6 @@ params = load_output.read_params_from_jsons(
 )
 
 chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])
-all_variables = load_output.list_all_netcdf_variables(chosen_netcdf_filepath)
 
 data: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableArray] = (
     load_report_data(
