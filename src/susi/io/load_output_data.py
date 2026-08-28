@@ -220,7 +220,7 @@ def list_subdirectories_sorted(path: Path) -> list[Path]:
     for sibling directories is equivalent to sorting by name).
 
     Shared by the Streamlit and notebook folder-selection widgets
-    (analysis.gui.components.folder_selection,
+    (analysis.streamlit.components.folder_selection,
     analysis.notebooks.components.folder_selection), which both need a
     stable, predictable subfolder order for their dropdowns.
     """

@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.components.folder_selection`.
+Notebook equivalent of `analysis.streamlit.components.folder_selection`.
 
 Reactivity model (see #215, #217): one selection step per notebook cell,
 sequential re-run. No `.observe()`-based reactive cascading between dependent

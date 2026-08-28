@@ -4,7 +4,7 @@ from pathlib import Path
 import susi.io.load_output_data as load_output
 from susi.io.load_output_data import NetcdfVariablePath
 
-from analysis.gui.components import folder_selection
+from analysis.streamlit.components import folder_selection
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(

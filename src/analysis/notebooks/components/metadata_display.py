@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.components.metadata_expander`.
+Notebook equivalent of `analysis.streamlit.components.metadata_expander`.
 
 Metadata display is not itself a picker or a renderer over freshly-computed
 data (see #215's picker/renderer split) — the caller already holds

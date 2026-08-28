@@ -49,7 +49,7 @@ include = ["susi*", "analysis*"]
 namespaces = false
 
 [project.scripts]
-susi-analyze = "analysis.gui.__main__:main"
+susi-analyze = "analysis.streamlit.__main__:main"
 
 [tool.ty.src]
 include = ["src", "tests", "src/susi/core/main.py"]

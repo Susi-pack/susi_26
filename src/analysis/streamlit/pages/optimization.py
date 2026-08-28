@@ -1,6 +1,6 @@
 import streamlit as st
 
-from analysis.gui.components import (
+from analysis.streamlit.components import (
     folder_selection,
     netcdf_variable_explorer,
 )

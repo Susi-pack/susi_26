@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.components.netcdf_variable_plots_ui`.
+Notebook equivalent of `analysis.streamlit.components.netcdf_variable_plots_ui`.
 
 Reuses the quick-look plotting logic (`plots.spatial_bars`,
 `plots.temporal_stats`) unchanged -- it's already Streamlit-independent,
@@ -16,7 +16,7 @@ Typical usage:
 import matplotlib.pyplot as plt
 from IPython.display import Markdown, display
 
-from analysis.gui.components import plots
+from analysis.streamlit.components import plots
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 

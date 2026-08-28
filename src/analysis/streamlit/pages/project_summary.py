@@ -2,7 +2,7 @@ import streamlit as st
 
 import pandas as pd
 
-from analysis.gui.components import folder_selection, netcdf_reader
+from analysis.streamlit.components import folder_selection, netcdf_reader
 import susi.io.load_output_data as load_output
 
 st.header("Project summary")

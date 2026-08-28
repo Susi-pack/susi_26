@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 import susi.io.load_output_data as load_output
 
-from analysis.gui.components import plots, folder_selection
+from analysis.streamlit.components import plots, folder_selection
 
 st.header("Choose project folder")
 

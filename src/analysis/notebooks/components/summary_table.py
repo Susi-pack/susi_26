@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.pages.project_summary`.
+Notebook equivalent of `analysis.streamlit.pages.project_summary`.
 
 Per #215's picker/renderer split, this is a renderer element: it computes
 and displays the per-stand/scenario aggregated summary table, and also
@@ -24,7 +24,7 @@ import pandas as pd
 from IPython.display import display
 
 import susi.io.load_output_data as load_output
-from analysis.gui.components import netcdf_reader
+from analysis.streamlit.components import netcdf_reader
 
 _mean = load_output.NetcdfVariableArray.mean_of_all_values
 _end = load_output.NetcdfVariableArray.spatial_mean_at_last_timestep
@@ -32,7 +32,7 @@ _sum = load_output.NetcdfVariableArray.mean_over_space_sum_over_time
 _initial = load_output.NetcdfVariableArray.spatial_mean_at_initial_timestep
 
 # Same fixed variable list as the Streamlit page
-# (analysis.gui.pages.project_summary). Copied rather than imported since
+# (analysis.streamlit.pages.project_summary). Copied rather than imported since
 # it's defined inline there, not exported for reuse.
 CHOSEN_VARIABLES = (
     netcdf_reader.aggregate_var("strip/dwtyr_growingseason", _mean),

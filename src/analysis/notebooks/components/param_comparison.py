@@ -1,6 +1,6 @@
 """
 Notebook equivalent of the parameter-comparison display in
-`analysis.gui.pages.compare_scenarios_for_stand`.
+`analysis.streamlit.pages.compare_scenarios_for_stand`.
 
 Reuses `find_differing_params`/`find_unique_params` from the shared backend
 unchanged (they're already Streamlit-independent). Per #215's picker/renderer

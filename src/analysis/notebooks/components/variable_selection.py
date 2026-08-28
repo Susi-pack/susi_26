@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.components.netcdf_variable_explorer`.
+Notebook equivalent of `analysis.streamlit.components.netcdf_variable_explorer`.
 
 Flattens the Streamlit tree-select (~90 hierarchical netcdf variable paths,
 via `streamlit_tree_select`) to a filterable, checkbox-based multi-select

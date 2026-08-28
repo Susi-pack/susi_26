@@ -1,5 +1,5 @@
 """
-Notebook equivalent of `analysis.gui.pages.annamari_figures`.
+Notebook equivalent of `analysis.streamlit.pages.annamari_figures`.
 
 Reuses `components/plots.py`'s `stand`/`hydrology`/`mass`/`carbon`/
 `nutrient_balance` functions unchanged -- they're already
@@ -44,11 +44,11 @@ import matplotlib.pyplot as plt
 from IPython.display import Markdown, display
 
 import susi.io.load_output_data as load_output
-from analysis.gui.components import plots
+from analysis.streamlit.components import plots
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 # Same fixed variable list as the Streamlit page
-# (analysis.gui.pages.annamari_figures). Copied rather than imported since
+# (analysis.streamlit.pages.annamari_figures). Copied rather than imported since
 # it's defined inline there, not exported for reuse.
 VARIABLE_PATHS = (
     load_output.NetcdfVariablePath("/strip/dwtyr"),
