@@ -72,3 +72,7 @@ susi_2021/
 
 # LLM stuf
 CONTEXT.md
+CONTEXT-MAP.md
+AGENTS.md
+docs/adr/
+docs/agents/
