@@ -70,6 +70,19 @@ def build_dropdown(dir_path: Path | str, label: str) -> widgets.Dropdown:
     return dropdown
 
 
+def resolve_start_folder(chooser: FileChooser, default: Path) -> Path:
+    """
+    Return chooser's committed selection, or default if none has been made yet.
+
+    Navigating a build_folder_browser() FileChooser doesn't set `.selected`
+    until the user clicks its "Select" button (see that function's
+    docstring), so a page notebook that offers browsing as an alternative to
+    a default starting folder needs this "has the user picked something yet"
+    check before it can build its first build_dropdown() chain link.
+    """
+    return Path(chooser.selected) if chooser.selected else default
+
+
 def build_folder_browser(start_path: Path) -> FileChooser:
     """
     Build, display, and return a directory-only file chooser rooted at start_path.
