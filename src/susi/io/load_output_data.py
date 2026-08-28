@@ -56,6 +56,18 @@ class NetcdfVariableArray:
         self._raw = raw
         self._validate()
 
+    @property
+    def raw_shape(self) -> tuple[int, ...]:
+        """
+        Shape of the raw (unprocessed) array, before axis-stripping/reduction.
+
+        Unlike `.processed`, which reduces a 3-D array to 2-D by dropping the
+        scenario axis, this reflects the original dimensionality -- e.g. to
+        check whether a variable is (scenario, time, space)-shaped before
+        deciding how to plot it.
+        """
+        return self._raw.shape
+
     # ------------------------------------------------------------------
     # Construction / validation
     # ------------------------------------------------------------------

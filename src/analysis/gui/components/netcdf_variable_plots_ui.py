@@ -10,9 +10,9 @@ def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> No
     for var_path, var_value in variables_values.items():
         st.markdown(f"**{var_path}**")
 
-        if len(var_value._raw.shape) != 3:
+        if len(var_value.raw_shape) != 3:
             st.info(
-                f"Variable has shape {var_value._raw.shape}. Only 3D variables (scenario, time, space) are currently plotted."
+                f"Variable has shape {var_value.raw_shape}. Only 3D variables (scenario, time, space) are currently plotted."
             )
         else:
             data = var_value.processed
