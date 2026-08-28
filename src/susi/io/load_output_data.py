@@ -202,6 +202,19 @@ def list_subdirectories(path: Path) -> list[Path]:
     return [x for x in path.iterdir() if x.is_dir()]
 
 
+def list_subdirectories_sorted(path: Path) -> list[Path]:
+    """
+    Like list_subdirectories, but sorted (alphabetically by full path, which
+    for sibling directories is equivalent to sorting by name).
+
+    Shared by the Streamlit and notebook folder-selection widgets
+    (analysis.gui.components.folder_selection,
+    analysis.notebooks.components.folder_selection), which both need a
+    stable, predictable subfolder order for their dropdowns.
+    """
+    return sorted(list_subdirectories(path))
+
+
 def read_params_from_jsons(
     experiment_folderpath: Path,
     metadata_filename: str = "metadata.json",

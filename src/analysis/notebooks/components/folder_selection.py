@@ -46,11 +46,16 @@ def build_dropdown(dir_path: Path, label: str) -> widgets.Dropdown:
     widget is already a Path, ready to pass straight into the next
     build_dropdown() call in the chain.
 
-    Raises ValueError if dir_path has no subdirectories: an empty Dropdown's
-    `.value` is silently None, which would otherwise crash confusingly deep
-    inside the next chained call instead of at the point of the actual problem.
+    Raises ValueError, labeled with which selection step failed, if dir_path
+    doesn't exist (e.g. a stale value from an earlier `.value` in the chain)
+    or has no subdirectories: an empty Dropdown's `.value` is silently None,
+    which would otherwise crash confusingly deep inside the next chained
+    call instead of at the point of the actual problem.
     """
-    subdirs = sorted(load_output.list_subdirectories(dir_path))
+    if not dir_path.exists() or not dir_path.is_dir():
+        raise ValueError(f"{label} folder not found: {dir_path}")
+
+    subdirs = load_output.list_subdirectories_sorted(dir_path)
     if not subdirs:
         raise ValueError(f"No {label} subfolders found in {dir_path}")
 
