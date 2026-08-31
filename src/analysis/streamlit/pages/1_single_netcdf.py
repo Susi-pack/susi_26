@@ -4,7 +4,7 @@ from pathlib import Path
 import susi.io.load_output_data as load_output
 from susi.io.app_settings import AppSettings
 
-from analysis.gui.components import (
+from analysis.streamlit.components import (
     metadata_expander,
     netcdf_variable_explorer,
     netcdf_variable_plots_ui,

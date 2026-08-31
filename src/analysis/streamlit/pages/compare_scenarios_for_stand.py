@@ -1,6 +1,6 @@
 import streamlit as st
 
-from analysis.gui.components import folder_selection
+from analysis.streamlit.components import folder_selection
 from pathlib import Path
 from susi.io.load_output_data import StandID
 from analysis.core.parse_outputs import find_differing_params, find_unique_params
@@ -52,9 +52,6 @@ if stand_id and output_dir:
     st.subheader("Differing Parameters")
     if differing:
         for param_name, value_map in differing.items():
-            # Do not display scenario names as a differing parameter
-            if param_name == "site_parameters/scenario_name":
-                continue
             # Parameter name as section title
             st.markdown(f"**{param_name}**")
             # Two-column grid: left = value, right = scenarios

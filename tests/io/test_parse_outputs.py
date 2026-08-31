@@ -149,6 +149,38 @@ class TestFindDifferingParams:
             ]
             assert result[param][(-0.7,)] == [ScenarioID("scenario_b")]
 
+    def test_excludes_scenario_name_even_though_it_differs(self):
+        with TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            stand_dir = output_dir / "stand_01"
+            stand_dir.mkdir()
+            # 2 scenarios that differ on both scenario_name (trivially, by
+            # definition) and a real parameter (ditch_depth_west).
+            scenarios = [
+                ("scenario_a", [-0.2], "scenario_a"),
+                ("scenario_b", [-0.7], "scenario_b"),
+            ]
+            for scen_id, ditch_val, scenario_name in scenarios:
+                scen_dir = stand_dir / scen_id
+                scen_dir.mkdir()
+                susi_params = {
+                    "site_parameters": {
+                        "ditch_depth_west": ditch_val,
+                        "scenario_name": scenario_name,
+                    },
+                }
+                with open(scen_dir / "params.json", "w") as f:
+                    json.dump(susi_params, f)
+                with open(scen_dir / "metadata.json", "w") as f:
+                    json.dump({"stand_id": "stand_01", "scenario_id": scen_id}, f)
+
+            result = find_differing_params(StandID("stand_01"), output_dir)
+            # Real differing parameter is present.
+            assert ParamName("site_parameters/ditch_depth_west") in result
+            # scenario_name differs across scenarios too, but must never be
+            # surfaced as a differing parameter.
+            assert ParamName("site_parameters/scenario_name") not in result
+
 
 class TestFindUniqueParams:
     def test_returns_only_unique_params(self, mock_output_dir):

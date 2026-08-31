@@ -76,9 +76,9 @@ Use this when exploring one scenario in isolation.
 
 This is used in the following places in the codebase:
 
-* `src/analysis/gui/pages/1_single_netcdf.py` — folder picker, variable explorer, plots
-* `src/analysis/gui/pages/annamari_figures.py` — ~90 variables read at once, multiple themed plot pages
-* `src/analysis/gui/pages/optimization.py` — golden test file for variable structure, then reads from chosen scenario
+* `src/analysis/streamlit/pages/1_single_netcdf.py` — folder picker, variable explorer, plots
+* `src/analysis/streamlit/pages/single_scenario_dashboard.py` — ~90 variables read at once, multiple themed plot pages
+* `src/analysis/streamlit/pages/optimization.py` — golden test file for variable structure, then reads from chosen scenario
 
 ```python
 from pathlib import Path
@@ -136,7 +136,7 @@ print(arr.last_timestep())                   # raw slice
     arr = NetcdfVariableArray(raw)
     ```
 
-    The aggregation methods, some of them shown above at the last, optional step, are shortcuts for the most common reductions.  They save writing `arr.processed[-1, :].mean()` every time, and they can be passed around as callbacks — see `src/analysis/gui/pages/optimization.py` where users pick one from a dropdown at runtime.
+    The aggregation methods, some of them shown above at the last, optional step, are shortcuts for the most common reductions.  They save writing `arr.processed[-1, :].mean()` every time, and they can be passed around as callbacks — see `src/analysis/streamlit/pages/optimization.py` where users pick one from a dropdown at runtime.
 
 
 ---
@@ -147,8 +147,8 @@ Use this when you need data from every stand & scenario in a project.
 
 This is used in the following places in the codebase:
 
-* `src/analysis/gui/pages/project_summary.py` — batch-loads all stands/scenarios and builds an aggregated DataFrame; uses the manual approach for caching
-* `src/analysis/gui/pages/compare_scenarios_for_stand.py` — metadata-only: compares JSON parameters across scenarios without loading any NetCDFs
+* `src/analysis/streamlit/pages/project_summary.py` — batch-loads all stands/scenarios and builds an aggregated DataFrame; uses the manual approach for caching
+* `src/analysis/streamlit/pages/compare_scenarios_for_stand.py` — metadata-only: compares JSON parameters across scenarios without loading any NetCDFs
 
 ```python
 import susi.io.load_output_data as load_output
@@ -191,8 +191,8 @@ print(arr.spatial_mean_at_last_timestep())
 
 **Used in:**
 
-* `src/analysis/gui/pages/project_summary.py` — batch-loads all stands/scenarios and builds an aggregated DataFrame; uses the manual approach for caching
-* `src/analysis/gui/pages/compare_scenarios_for_stand.py` — metadata-only: compares JSON parameters across scenarios without loading any NetCDFs
+* `src/analysis/streamlit/pages/project_summary.py` — batch-loads all stands/scenarios and builds an aggregated DataFrame; uses the manual approach for caching
+* `src/analysis/streamlit/pages/compare_scenarios_for_stand.py` — metadata-only: compares JSON parameters across scenarios without loading any NetCDFs
 
 ---
 

@@ -3,6 +3,12 @@
 outputs/*
 !outputs/.gitkeep
 
+# Ignore the contents of the analysis exports folder (derived artifacts
+# frontends save on request, e.g. a Project Summary Table CSV),
+# but track the folder itself
+src/analysis/exports/*
+!src/analysis/exports/.gitkeep
+
 #python stuff
 venv/
 *.pyc
@@ -49,7 +55,6 @@ desktop.ini
 
 requirements_inaki.txt
 
-analysis/.ipynb_checkpoints
 analysis/eyeballing.py
 pyrightconfig.json
 paroninkorpi/
@@ -57,7 +62,12 @@ tests/golden_file_test/golden_file_new_experiment
 
 # docs
 site/
-src/analysis/.ipynb_checkpoints
+
+# Jupyter checkpoint files, wherever notebooks live (path moved under
+# src/analysis/notebooks/ in #222; anchor to no specific path so a future
+# move doesn't go stale again)
+**/.ipynb_checkpoints/
+
 .hypothesis/constants
 devlog/
 
@@ -72,3 +82,8 @@ susi_2021/
 
 # LLM stuf
 CONTEXT.md
+CONTEXT-MAP.md
+AGENTS.md
+docs/adr/
+docs/agents/
+tmp

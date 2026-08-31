@@ -27,7 +27,9 @@ pages = [
     st.Page(
         "pages/compare_scenarios_for_stand.py", title="Compare scenarios single stand"
     ),
-    st.Page("pages/annamari_figures.py", title="Annamari"),
+    st.Page(
+        "pages/single_scenario_dashboard.py", title="Single scenario dashboard"
+    ),
     st.Page("pages/optimization.py", title="Optimization"),
     st.Page("pages/9_settings.py", title="Settings"),
 ]

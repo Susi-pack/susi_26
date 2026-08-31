@@ -3,16 +3,16 @@ import matplotlib.pyplot as plt
 
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
-from analysis.gui.components import plots
+from analysis.shared_reporting_utils import plots
 
 
 def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
     for var_path, var_value in variables_values.items():
         st.markdown(f"**{var_path}**")
 
-        if len(var_value._raw.shape) != 3:
+        if len(var_value.raw_shape) != 3:
             st.info(
-                f"Variable has shape {var_value._raw.shape}. Only 3D variables (scenario, time, space) are currently plotted."
+                f"Variable has shape {var_value.raw_shape}. Only 3D variables (scenario, time, space) are currently plotted."
             )
         else:
             data = var_value.processed
