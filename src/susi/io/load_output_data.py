@@ -1,6 +1,7 @@
 # Read netcdf files and load variables into and OutputDataStore
 from functools import cached_property
 
+import re
 from typing import NewType, Sequence, Callable
 from pathlib import Path
 import pandas as pd
@@ -214,17 +215,30 @@ def list_subdirectories(path: Path) -> list[Path]:
     return [x for x in path.iterdir() if x.is_dir()]
 
 
+def _natural_sort_key(path: Path) -> tuple:
+    """
+    Split path.name into alternating text/number chunks, with number chunks
+    converted to int, so sorting by this key compares embedded numbers
+    numerically instead of digit-by-digit (e.g. "stand_2" before "stand_10").
+    """
+    return tuple(
+        int(chunk) if chunk.isdigit() else chunk
+        for chunk in re.split(r"(\d+)", path.name)
+    )
+
+
 def list_subdirectories_sorted(path: Path) -> list[Path]:
     """
-    Like list_subdirectories, but sorted (alphabetically by full path, which
-    for sibling directories is equivalent to sorting by name).
+    Like list_subdirectories, but naturally sorted by name: embedded numbers
+    are compared numerically rather than lexicographically, so "stand_2"
+    sorts before "stand_10" instead of after it (see #217).
 
     Shared by the Streamlit and notebook folder-selection widgets
     (analysis.streamlit.components.folder_selection,
     analysis.notebooks.components.folder_selection), which both need a
     stable, predictable subfolder order for their dropdowns.
     """
-    return sorted(list_subdirectories(path))
+    return sorted(list_subdirectories(path), key=_natural_sort_key)
 
 
 def read_params_from_jsons(
