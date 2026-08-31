@@ -113,26 +113,23 @@ And commit them with
 git commit -m "<your commit message>"
 ```
 
-## (NOT YET ENFORCED, IGNORE) `pre-commit`: Automatic formating
-We enforce code formating, linting, import cleanup, and notebook hygiene via **pre-commit**.
+## `pre-commit`: Automatic notebook hygiene
+We currently enforce one thing via **pre-commit**: stripping Jupyter notebook outputs, via **nbstripout**, scoped to `src/analysis/notebooks/`.
+(Code formatting/linting via `ruff` is not wired into pre-commit yet — see the section above.)
 
-The tools we use are:
-* **ruff** - Code formatting and linting
-* **nbstripout** – Remove jupyter notebook outputs
+Run this once per clone to install the hook locally:
+```bash
+pre-commit install
+```
 
-This means that before you run `git commit`, those tools below will run (locally) and attempt to format the code.
-If they can do the formatting automatically, they will.
-If there are any errors in the code, they will point them out.
-If they cannot format the code and/or fix the errors, you will need to fix them manually.
-
-Your code **must** pass all checks before being pushed.
+After that, before every `git commit`, notebook outputs under `src/analysis/notebooks/` are stripped automatically.
 
 Note that you can also run pre-commit manually:
 ```bash
 pre-commit run --all-files
 ```
 
-This is configured in the `.pre-commit-config.yaml` file.
+This is configured in the `.pre-commit-config.yaml` file. There is no CI enforcement — this only strips outputs if you've run `pre-commit install` locally, so make sure you do.
 
 
 ---
@@ -172,7 +169,7 @@ Alternative: use the `gh` CLI interface.
 
 ### PR Requirements for approval
 
-* (NOT YET ENFORCED, IGNORE) All pre-commit checks pass
+* (NOT YET ENFORCED, IGNORE — no CI backstop) All pre-commit checks pass (currently: notebook outputs stripped)
 * (NOT YET ENFORCED, IGNORE) All CI checks pass (see section below)
 * One of the admins gives the OK
 
@@ -181,14 +178,14 @@ Alternative: use the `gh` CLI interface.
 # 🚀 8. (NOT YET ENFORCED, IGNORE) CI (GitHub Actions)
 
 Continuous Integration (CI) runs automatically on Pull Requests and on pushes to `main`.
-CI checks:
+CI checks (planned, not yet set up):
 
 * ruff
 * pytest
 
 If CI fails, the PR **cannot** be merged.
 
-This is configured in the `.github/workflows/ci.yaml` file.
+This will be configured in a `.github/workflows/ci.yaml` file.
 
 ---
 # 🕵️‍♀️ 9. PR code review

@@ -1,0 +1,9 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+        # Only strip outputs from the notebooks that live under src/analysis/notebooks/
+        files: ^src/analysis/notebooks/.*\.ipynb$
