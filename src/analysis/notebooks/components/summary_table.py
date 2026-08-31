@@ -53,5 +53,11 @@ def display_summary_table(dir_path: Path) -> pd.DataFrame:
     )
 
     df_summary = build_summary_dataframe(data_store, SUMMARY_VARIABLES)
-    display(df_summary)
+    # Show every row and column -- pandas' defaults for `display.max_rows`
+    # (60) and `display.max_columns` (20) would otherwise collapse the
+    # middle rows/columns into an ellipsis for this table.
+    with pd.option_context(
+        "display.max_columns", None, "display.max_rows", None, "display.width", None
+    ):
+        display(df_summary)
     return df_summary
