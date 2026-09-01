@@ -2591,10 +2591,10 @@ class Outputs:
         self.ncf["strip"]["dwtyr"][scen, year, :] = dfwt.mean(axis=0)
         self.ncf["strip"]["dwtyr_latesummer"][scen, year, :] = dfwt[
             str(yr) + startdate : str(yr) + enddate
-        ].mean()
+        ].mean(axis=0)
         self.ncf["strip"]["dwtyr_growingseason"][scen, year, :] = dfwt[
             str(yr) + "-05-01" : str(yr) + "-10-31"
-        ].mean()
+        ].mean(axis=0)
         self.ncf["strip"]["H"][scen, start : start + days, :] = stpout["hts"][
             scen, start : start + days, :
         ]

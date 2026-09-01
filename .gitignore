@@ -87,3 +87,7 @@ AGENTS.md
 docs/adr/
 docs/agents/
 tmp
+
+# Data
+
+DATA/*.gpkg
