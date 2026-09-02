@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 
-
 def _create_profile_line(
     ax,
     wt,
@@ -129,7 +128,7 @@ def hydrology(ff, scen):
     wtmin = min(wtls) - 0.2
 
     ax = fig.add_subplot(gs[10:, :4])
-    ax = create_profile_line(
+    _ax = create_profile_line(
         ax,
         wt,
         wtmin,
@@ -145,7 +144,7 @@ def hydrology(ff, scen):
     )
 
     ax = fig.add_subplot(gs[10:, 4:8])
-    ax = create_profile_line(
+    _ax = create_profile_line(
         ax,
         wtgs,
         wtmin,
@@ -161,7 +160,7 @@ def hydrology(ff, scen):
     )
 
     ax = fig.add_subplot(gs[10:, 8:])
-    ax = create_profile_line(
+    _ax = create_profile_line(
         ax,
         wtls,
         wtmin,
@@ -180,7 +179,7 @@ def hydrology(ff, scen):
 
     wt = np.mean(ncf["strip"]["dwt"][scen, :, :], axis=1)
     days = np.shape(wt)[0]
-    sd = np.std(
+    _sd = np.std(
         ncf["strip"]["dwt"][scen, :, :], axis=1
     )  # sdls = np.std(ncf['strip']['dwtyr_latesummer'][scen,:, :], axis = 0)
 
@@ -263,7 +262,7 @@ def hydrology(ff, scen):
     dfdeltas = pd.DataFrame(data=deltas, columns=list(range(cols)))
 
     ax = fig.add_subplot(gs[2:4, :4])
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         dfdeltas,
         cols,
@@ -280,7 +279,7 @@ def hydrology(ff, scen):
     dfET = pd.DataFrame(data=ET, columns=list(range(cols)))
 
     ax = fig.add_subplot(gs[2:4, 4:8])
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax, dfET, cols, "green", "ET", "", fs, facecolor, zero=False, hidex=True
     )
 
@@ -370,8 +369,8 @@ def stand(ff, scen):
     wt = np.mean(ncf["strip"]["dwtyr"][scen, :, :], axis=0)
     cols = np.shape(wt)[0]
     sd = np.std(ncf["strip"]["dwtyr"][scen, :, :], axis=0)
-    wtgs = np.mean(ncf["strip"]["dwtyr_growingseason"][scen, :, :], axis=0)
-    sdgs = np.std(ncf["strip"]["dwtyr_growingseason"][scen, :, :], axis=0)
+    _wtgs = np.mean(ncf["strip"]["dwtyr_growingseason"][scen, :, :], axis=0)
+    _sdgs = np.std(ncf["strip"]["dwtyr_growingseason"][scen, :, :], axis=0)
     wtls = np.mean(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
     sdls = np.std(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
     wtmin = min(wtls) - 0.2
@@ -1186,15 +1185,15 @@ def carbon(ff, scen):
         + ncf["stand"]["woodylitter"][scen, :, :] / 10000.0
     ) * mass_to_c
 
-    soil = ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1 * mass_to_c + litter
+    ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1 * mass_to_c + litter
 
-    out = ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1 * mass_to_c
+    ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1 * mass_to_c
 
     wt = np.mean(ncf["strip"]["dwtyr"][scen, :, :], axis=0)
     cols = np.shape(wt)[0]
     sd = np.std(ncf["strip"]["dwtyr"][scen, :, :], axis=0)
     wtls = np.mean(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
-    sdls = np.std(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
+    _sdls = np.std(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
     wtmin = min(wtls) - 0.2
 
     # -------water table as a reference-----------------------------
@@ -1445,12 +1444,12 @@ def nutrient_balance(ff, substance, scen):
     cols = np.shape(wt)[0]
     sd = np.std(ncf["strip"]["dwtyr"][scen, :, :], axis=0)
     wtls = np.mean(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
-    sdls = np.std(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
+    _sdls = np.std(ncf["strip"]["dwtyr_latesummer"][scen, :, :], axis=0)
     wtmin = min(wtls) - 0.2
 
     # -------water table as a reference-----------------------------
     ax = fig.add_subplot(gs[10:, :6])
-    ax = create_profile_line(
+    _ax = create_profile_line(
         ax,
         wt,
         wtmin,
@@ -1472,7 +1471,7 @@ def nutrient_balance(ff, substance, scen):
     h = elevation + wtls
 
     ax = fig.add_subplot(gs[10:, 6:])
-    ax = create_profile_line(
+    _ax = create_profile_line(
         ax,
         h,
         wtmin,
@@ -1492,7 +1491,7 @@ def nutrient_balance(ff, substance, scen):
     towater = ncf["balance"][substance]["to_water"][scen, :, :]
     ax = fig.add_subplot(gs[8:10, :6])
     df = pd.DataFrame(data=towater, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1508,7 +1507,7 @@ def nutrient_balance(ff, substance, scen):
     brl = ncf["balance"][substance]["decomposition_below_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[8:10, 6:])
     df = pd.DataFrame(data=brl, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1524,7 +1523,7 @@ def nutrient_balance(ff, substance, scen):
     de = ncf["balance"][substance]["decomposition_tot"][scen, :, :]
     ax = fig.add_subplot(gs[6:8, :6])
     df = pd.DataFrame(data=de, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1540,7 +1539,7 @@ def nutrient_balance(ff, substance, scen):
     dert = ncf["balance"][substance]["decomposition_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[6:8, 6:])
     df = pd.DataFrame(data=dert, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1561,7 +1560,7 @@ def nutrient_balance(ff, substance, scen):
 
     ax = fig.add_subplot(gs[4:6, :6])
     df = pd.DataFrame(data=supply, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1577,7 +1576,7 @@ def nutrient_balance(ff, substance, scen):
     fert = ncf["balance"][substance]["fertilization_release"][scen, :, :]
     ax = fig.add_subplot(gs[4:6, 6:])
     df = pd.DataFrame(data=fert, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1593,7 +1592,7 @@ def nutrient_balance(ff, substance, scen):
     dem = ncf["balance"][substance]["stand_demand"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, :6])
     df = pd.DataFrame(data=dem, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1609,7 +1608,7 @@ def nutrient_balance(ff, substance, scen):
     dem = ncf["balance"][substance]["gv_demand"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, 6:])
     df = pd.DataFrame(data=dem, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -1625,7 +1624,7 @@ def nutrient_balance(ff, substance, scen):
     dem = ncf["balance"][substance]["balance_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[:2, :6])
     df = pd.DataFrame(data=dem, columns=list(range(cols)))
-    ax = create_profile_boxplot(
+    _ax = create_profile_boxplot(
         ax,
         df,
         cols,
@@ -2182,5 +2181,3 @@ def compare_scens(ff):
 # stand(ff, 0)
 # mass(ff, 0)
 # nutrient_balance(ff, 'N', 0)
-
-
