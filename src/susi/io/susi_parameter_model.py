@@ -14,7 +14,6 @@ from pydantic import (
     field_validator,
     PrivateAttr,
     model_validator,
-    NonNegativeInt,
 )
 
 from susi.io.extra_pydantic_types import (
@@ -59,9 +58,7 @@ def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
         )
     extra = set(df.columns) - set(column_names)
     if extra:
-        raise ValueError(
-            f"Allometry file {filepath} has unexpected columns: {extra}"
-        )
+        raise ValueError(f"Allometry file {filepath} has unexpected columns: {extra}")
 
     species_ids = df["Species_ID"].unique()
     if len(species_ids) != 1:
@@ -661,8 +658,9 @@ class SiteParams(StrictFrozenModel):
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
-    n: NonNegativeInt = Field(
-        description="Number of computation nodes, a.k.a. number of soil columns. It is usually `int(L/2)`."
+    n: int = Field(
+        description="Number of computation nodes, a.k.a. number of soil columns. It used to be`int(L/2)`. It must be at least 3, because a 2-node strip has no interior columns",
+        ge=3,
     )
 
     site_fertility_class: PositiveInt = Field(
