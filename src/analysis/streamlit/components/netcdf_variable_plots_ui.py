@@ -3,31 +3,20 @@ import matplotlib.pyplot as plt
 
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
-from analysis.shared_reporting_utils import plots
+from analysis.shared_reporting_utils.quick_look_plots import quick_look_sections
 
 
 def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
-    for var_path, var_value in variables_values.items():
+    for var_path, message, figures in quick_look_sections(variables_values):
         st.markdown(f"**{var_path}**")
 
-        if len(var_value.raw_shape) != 3:
-            st.info(
-                f"Variable has shape {var_value.raw_shape}. Only 3D variables (scenario, time, space) are currently plotted."
-            )
-        else:
-            data = var_value.processed
-            n_time, n_space = data.shape
+        if message is not None:
+            st.info(message)
+            continue
 
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("*Time-Space Waterfall (Grouped Bars)*")
-                fig = plots.spatial_bars(data=data)
-                st.pyplot(fig)
-                plt.close(fig)
-
-            with col2:
-                st.markdown("*Spatial Statistics (Mean ± Std)*")
-                fig = plots.temporal_stats(data=data)
+        columns = st.columns(len(figures))
+        for column, (title, fig) in zip(columns, figures):
+            with column:
+                st.markdown(f"*{title}*")
                 st.pyplot(fig)
                 plt.close(fig)
