@@ -792,53 +792,6 @@ def get_mese_scen(ifile):
     return df
 
 
-def get_motti(ifile, return_spe=False):
-    # ---read the Motti-simulation to be used as a basis for the Susi-simulation
-
-    cnames = [
-        "yr",
-        "age",
-        "N",
-        "BA",
-        "Hg",
-        "Dg",
-        "hdom",
-        "vol",
-        "logs",
-        "pulp",
-        "loss",
-        "yield",
-        "mortality",
-        "stempulp",
-        "stemloss",
-        "branch_living",
-        "branch_dead",
-        "leaves",
-        "stump",
-        "roots_coarse",
-        "roots_fine",
-    ]
-    df = pd.read_excel(ifile, sheet_name=0, usecols=range(22), skiprows=1, header=None)
-    df = df.drop([0], axis=1)
-    df.columns = cnames
-
-    cname = ["idSpe"]
-    df2 = pd.read_excel(ifile, sheet_name=1, usecols=[4], skiprows=1, header=None)
-    df2.columns = cname
-
-    # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
-    df = df.loc[df["age"] != 0]
-
-    steps = np.array(np.diff(df["age"]), dtype=float)
-    idx = np.ravel(np.argwhere(steps < 1.0)) + 1
-    df["age"][idx] = df["age"][idx] + 5.0 / 365.0
-
-    if return_spe:
-        return df, df2["idSpe"][0]
-    else:
-        return df
-
-
 def nut_to_vol(
     vol_ini,
     Nrel,
