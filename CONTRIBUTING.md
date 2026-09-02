@@ -29,6 +29,8 @@ There are 2 options for you to format the code using the same tool.
 1. (most ergonomic) install `ruff` in your favourite IDE.
 2. Run `ruff` in the CLI to format the code.
 
+`ruff check` (linting) is also enforced automatically via **pre-commit**, see the section below — you don't need `ruff` installed yourself for that to work.
+
 Note: this will improve when the CI pipeline is set up.
 
 ---
@@ -113,23 +115,28 @@ And commit them with
 git commit -m "<your commit message>"
 ```
 
-## `pre-commit`: Automatic notebook hygiene
-We currently enforce one thing via **pre-commit**: stripping Jupyter notebook outputs, via **nbstripout**, scoped to `src/analysis/notebooks/`.
-(Code formatting/linting via `ruff` is not wired into pre-commit yet — see the section above.)
+## `pre-commit`: Automatic notebook hygiene and linting
+We currently enforce two things via **pre-commit**:
+* stripping Jupyter notebook outputs, via **nbstripout**, scoped to `src/analysis/notebooks/`.
+* linting, via **`ruff check`**, over the whole repo (this does not auto-format your code — see the section above for that).
 
 Run this once per clone to install the hook locally:
 ```bash
 pre-commit install
 ```
 
-After that, before every `git commit`, notebook outputs under `src/analysis/notebooks/` are stripped automatically.
+After that, before every `git commit`:
+* notebook outputs under `src/analysis/notebooks/` are stripped automatically.
+* `ruff check` runs on the codebase; if it reports issues, the commit is blocked until you fix them (or run `ruff check --fix`).
 
 Note that you can also run pre-commit manually:
 ```bash
 pre-commit run --all-files
 ```
 
-This is configured in the `.pre-commit-config.yaml` file. There is no CI enforcement — this only strips outputs if you've run `pre-commit install` locally, so make sure you do.
+This is configured in the `.pre-commit-config.yaml` file. There is no CI enforcement yet — hooks only run if you've run `pre-commit install` locally, so make sure you do.
+
+Note: `pre-commit` runs each hook in its own isolated, cached environment that it manages itself — you do **not** need `ruff` or `nbstripout` installed in your own venv for this to work. The only requirement is having `pre-commit` installed (already a dev dependency) and having run `pre-commit install` once. The very first commit after that may take a little longer while it downloads and builds those environments (needs network access); after that they're cached and reused instantly.
 
 
 ---
@@ -169,7 +176,7 @@ Alternative: use the `gh` CLI interface.
 
 ### PR Requirements for approval
 
-* (NOT YET ENFORCED, IGNORE — no CI backstop) All pre-commit checks pass (currently: notebook outputs stripped)
+* (NOT YET ENFORCED, IGNORE — no CI backstop) All pre-commit checks pass (currently: notebook outputs stripped, `ruff check` linting)
 * (NOT YET ENFORCED, IGNORE) All CI checks pass (see section below)
 * One of the admins gives the OK
 
