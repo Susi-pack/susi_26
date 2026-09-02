@@ -4,6 +4,7 @@ from analysis.streamlit.components import folder_selection
 from pathlib import Path
 from susi.io.load_output_data import StandID
 from analysis.core.parse_outputs import find_differing_params, find_unique_params
+from analysis.shared_reporting_utils.param_comparison import shape_differing_params
 
 
 # %% Choose stand folder
@@ -47,20 +48,21 @@ if stand_id and output_dir:
     # Get differing and unique parameters
     differing = find_differing_params(stand_id, output_dir)
     unique = find_unique_params(stand_id, output_dir)
+    shaped_differing = shape_differing_params(differing)
 
     # Display differing parameters (table-like, no expanders)
     st.subheader("Differing Parameters")
-    if differing:
-        for param_name, value_map in differing.items():
+    if shaped_differing:
+        for param_name, rows in shaped_differing.items():
             # Parameter name as section title
             st.markdown(f"**{param_name}**")
             # Two-column grid: left = value, right = scenarios
-            for value, scenarios in value_map.items():
+            for row in rows:
                 col1, col2 = st.columns([1, 3])
                 with col1:
-                    st.code(f"{value}")
+                    st.code(f"{row['value']}")
                 with col2:
-                    st.write(f"{', '.join(scenarios)}")
+                    st.write(row["scenarios"])
             st.divider()  # Separator between parameters
     else:
         st.info("No differing parameters found across scenarios.")

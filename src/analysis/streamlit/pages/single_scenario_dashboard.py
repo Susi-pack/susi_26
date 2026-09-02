@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 import susi.io.load_output_data as load_output
 
-from analysis.shared_reporting_utils import plots
 from analysis.shared_reporting_utils.single_scenario_dashboard import (
+    SECTIONS,
     VARIABLE_PATHS,
     load_report_data,
 )
@@ -52,37 +52,8 @@ data: dict[load_output.NetcdfVariablePath, load_output.NetcdfVariableArray] = (
     )
 )
 
-st.markdown("## Stand")
-fig_stand = plots.stand(data=data)
-st.pyplot(fig_stand)
-plt.close(fig_stand)
-
-st.markdown("## Hydrology")
-fig_hydro = plots.hydrology(data=data)
-st.pyplot(fig_hydro)
-plt.close(fig_hydro)
-
-st.markdown("## Mass")
-fig_mass = plots.mass(data=data)
-st.pyplot(fig_mass)
-plt.close(fig_mass)
-
-st.markdown("## Carbon")
-fig_carbon = plots.carbon(data=data)
-st.pyplot(fig_carbon)
-plt.close(fig_carbon)
-
-st.markdown("## Nitrogen Balance")
-fig_n = plots.nutrient_balance(data=data, substance="N")
-st.pyplot(fig_n)
-plt.close(fig_n)
-
-st.markdown("## Phosphorus Balance")
-fig_p = plots.nutrient_balance(data=data, substance="P")
-st.pyplot(fig_p)
-plt.close(fig_p)
-
-st.markdown("## Potassium Balance")
-fig_k = plots.nutrient_balance(data=data, substance="K")
-st.pyplot(fig_k)
-plt.close(fig_k)
+for title, plot_fn in SECTIONS.values():
+    st.markdown(f"## {title}")
+    fig = plot_fn(data=data)
+    st.pyplot(fig)
+    plt.close(fig)

@@ -1,13 +1,13 @@
 """
 Notebook equivalent of `analysis.streamlit.pages.single_scenario_dashboard`.
 
-Reuses `shared_reporting_utils/plots.py`'s `stand`/`hydrology`/`mass`/
-`carbon`/`nutrient_balance` functions unchanged -- they're already
-Streamlit-independent, pure matplotlib -- and
-`shared_reporting_utils/single_scenario_dashboard.py`'s `VARIABLE_PATHS`/
-`load_report_data` for the fixed variable-path list and data loading.
-Replaces `st.pyplot`/`plt.close` display wrapping with plain inline
-matplotlib display.
+Reuses `shared_reporting_utils/single_scenario_dashboard.py`'s
+`VARIABLE_PATHS`/`load_report_data` for the fixed variable-path list and
+data loading, and its `SECTIONS` for the per-section (title, plot_fn)
+pairing (per #233) -- `plots.py`'s `stand`/`hydrology`/`mass`/`carbon`/
+`nutrient_balance` functions are reached only through `SECTIONS`, not
+imported directly. Replaces `st.pyplot`/`plt.close` display wrapping with
+plain inline matplotlib display.
 
 Per #221, one figure/section per cell: rather than one function that dumps
 all 7 dashboards at once, each section gets its own `display_*` function, so
@@ -44,7 +44,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from IPython.display import Markdown, display
 
-from analysis.shared_reporting_utils import plots
 from analysis.shared_reporting_utils import (
     single_scenario_dashboard as shared_single_scenario_dashboard,
 )
@@ -68,27 +67,28 @@ def _display_figure(title: str, fig) -> None:
 
 
 def display_stand(data: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
-    _display_figure("Stand", plots.stand(data=data))
+    title, plot_fn = shared_single_scenario_dashboard.SECTIONS["stand"]
+    _display_figure(title, plot_fn(data=data))
 
 
 def display_hydrology(data: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
-    _display_figure("Hydrology", plots.hydrology(data=data))
+    title, plot_fn = shared_single_scenario_dashboard.SECTIONS["hydrology"]
+    _display_figure(title, plot_fn(data=data))
 
 
 def display_mass(data: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
-    _display_figure("Mass", plots.mass(data=data))
+    title, plot_fn = shared_single_scenario_dashboard.SECTIONS["mass"]
+    _display_figure(title, plot_fn(data=data))
 
 
 def display_carbon(data: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:
-    _display_figure("Carbon", plots.carbon(data=data))
-
-
-_NUTRIENT_NAMES = {"N": "Nitrogen", "P": "Phosphorus", "K": "Potassium"}
+    title, plot_fn = shared_single_scenario_dashboard.SECTIONS["carbon"]
+    _display_figure(title, plot_fn(data=data))
 
 
 def display_nutrient_balance(
     data: dict[NetcdfVariablePath, NetcdfVariableArray], substance: str
 ) -> None:
     """substance is one of "N", "P", "K"."""
-    title = f"{_NUTRIENT_NAMES.get(substance, substance)} Balance"
-    _display_figure(title, plots.nutrient_balance(data=data, substance=substance))
+    title, plot_fn = shared_single_scenario_dashboard.SECTIONS[substance]
+    _display_figure(title, plot_fn(data=data))
