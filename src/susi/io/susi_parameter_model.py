@@ -676,19 +676,32 @@ class SiteParams(StrictFrozenModel):
     nLyrs: int
     dzLyr: float
     ditch_depth_west: list[NonPositiveFloat] = Field(
-        description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
+        description="ditch depth at the beginning of simulation (m). Must have exactly one element unless `allow_multiple_ditch_scenarios` is True (see its description)."
     )
     ditch_depth_east: list[NonPositiveFloat] = Field(
-        description="ditch depth at the beginning of simulation (m). If given several values SUSI calculates scenarios for each ditch depth."
+        description="ditch depth at the beginning of simulation (m). Must have exactly one element unless `allow_multiple_ditch_scenarios` is True (see its description)."
     )
     ditch_depth_20y_west: list[NonPositiveFloat] = Field(
-        description="Ditch depth after 20 yrs, m, negative down"
+        description="Ditch depth after 20 yrs, m, negative down. Must have exactly one element unless `allow_multiple_ditch_scenarios` is True (see its description)."
     )
     ditch_depth_20y_east: list[NonPositiveFloat] = Field(
-        description="Ditch depth after 20 yrs, m, negative down"
+        description="Ditch depth after 20 yrs, m, negative down. Must have exactly one element unless `allow_multiple_ditch_scenarios` is True (see its description)."
     )
     scenario_name: list[str] = Field(
-        description="Scenario names, equal nmber of names than ditch depth scenarios."
+        description="Scenario names, one per ditch depth scenario (same length as the ditch_depth_* lists). Must have exactly one element unless `allow_multiple_ditch_scenarios` is True (see its description)."
+    )
+    allow_multiple_ditch_scenarios: bool = Field(
+        default=False,
+        description=(
+            "Advanced/legacy escape hatch. By default, ditch_depth_west, ditch_depth_east, "
+            "ditch_depth_20y_west, ditch_depth_20y_east and scenario_name must each contain "
+            "exactly one element, and SUSI runs a single ditch-depth scenario. Set this to "
+            "True to allow those lists to hold more than one element, in which case SUSI "
+            "loops over them and computes one scenario per element within a single run. "
+            "Most users should leave this False and instead call SUSI once per scenario; "
+            "this is kept for backward compatibility with the historical multi-scenario "
+            "workflow (see issue #30)."
+        ),
     )
 
     drain_age: PositiveFloat = Field(description="Time since drainage (yrs).")
@@ -769,6 +782,33 @@ class SiteParams(StrictFrozenModel):
                 "for clear-cutting."
             )
         return data
+
+    @model_validator(mode="after")
+    def single_ditch_scenario_by_default(self) -> Self:
+        lists = {
+            "ditch_depth_west": self.ditch_depth_west,
+            "ditch_depth_east": self.ditch_depth_east,
+            "ditch_depth_20y_west": self.ditch_depth_20y_west,
+            "ditch_depth_20y_east": self.ditch_depth_20y_east,
+            "scenario_name": self.scenario_name,
+        }
+        lengths = {name: len(values) for name, values in lists.items()}
+        if len(set(lengths.values())) != 1:
+            raise ValueError(
+                "ditch_depth_west, ditch_depth_east, ditch_depth_20y_west, "
+                "ditch_depth_20y_east and scenario_name must all have the same "
+                f"number of elements, got {lengths}"
+            )
+        n_scenarios = next(iter(lengths.values()))
+        if n_scenarios != 1 and not self.allow_multiple_ditch_scenarios:
+            raise ValueError(
+                f"Got {n_scenarios} ditch-depth scenarios, but SiteParams only "
+                "accepts one by default. Call SUSI once per scenario instead. "
+                "If you really need multiple ditch-depth scenarios computed "
+                "within a single run, set allow_multiple_ditch_scenarios=True "
+                "(advanced/legacy usage, see issue #30)."
+            )
+        return self
 
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
