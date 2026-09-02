@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 
 from susi.io.load_output_data import NetcdfVariablePath
+from analysis.shared_reporting_utils import plots
 from analysis.shared_reporting_utils.single_scenario_dashboard import (
+    SECTIONS,
     load_report_data,
 )
 
@@ -78,3 +80,44 @@ class TestLoadReportData:
 
         assert NetcdfVariablePath("/stand/volume") not in data
         assert NetcdfVariablePath("/cpy/ET_yr") not in data
+
+
+class TestSections:
+    """
+    Wiring-only tests for SECTIONS: which title/plot_fn each key maps to.
+    Doesn't call the plot_fns themselves -- `plots.py`'s figure builders are
+    deliberately untested (per #227), since exercising them needs a full
+    ~100-variable netcdf fixture for no extra coverage.
+    """
+
+    def test_keys_cover_all_seven_sections(self):
+        assert set(SECTIONS.keys()) == {
+            "stand",
+            "hydrology",
+            "mass",
+            "carbon",
+            "N",
+            "P",
+            "K",
+        }
+
+    def test_titles(self):
+        assert SECTIONS["stand"][0] == "Stand"
+        assert SECTIONS["hydrology"][0] == "Hydrology"
+        assert SECTIONS["mass"][0] == "Mass"
+        assert SECTIONS["carbon"][0] == "Carbon"
+        assert SECTIONS["N"][0] == "Nitrogen Balance"
+        assert SECTIONS["P"][0] == "Phosphorus Balance"
+        assert SECTIONS["K"][0] == "Potassium Balance"
+
+    def test_non_substance_sections_wire_to_matching_plots_function(self):
+        assert SECTIONS["stand"][1] is plots.stand
+        assert SECTIONS["hydrology"][1] is plots.hydrology
+        assert SECTIONS["mass"][1] is plots.mass
+        assert SECTIONS["carbon"][1] is plots.carbon
+
+    def test_nutrient_balance_sections_wire_to_matching_substance(self):
+        for substance in ("N", "P", "K"):
+            _, plot_fn = SECTIONS[substance]
+            assert plot_fn.func is plots.nutrient_balance
+            assert plot_fn.keywords == {"substance": substance}

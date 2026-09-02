@@ -8,14 +8,19 @@ Reused by both the Streamlit page
 component (`analysis.notebooks.components.single_scenario_dashboard`).
 
 Extracted per #231 to eliminate the duplicated fixed-variable-path tuple
-that used to be hand-copied independently in each frontend.
+that used to be hand-copied independently in each frontend, and per #233
+to share the per-section (title, plot_fn) pairing (`SECTIONS`) too.
 """
 
+from functools import partial
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
+
+from matplotlib.figure import Figure
 
 import susi.io.load_output_data as load_output
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
+from analysis.shared_reporting_utils import plots
 
 # The fixed variable-path list behind the Single Scenario Dashboard's 7
 # figures (stand, hydrology, mass, carbon, nutrient balance x3). Order
@@ -128,3 +133,26 @@ def load_report_data(
     return load_output.read_value_several_variables_from_single_file(
         netcdf_filepath=netcdf_filepath, variable_paths=variable_paths
     )
+
+
+PlotFn = Callable[..., Figure]
+
+# The (title, plot_fn) pairing behind the dashboard's 7 sections, in display
+# order. `plot_fn` takes `data` (a dict as returned by `load_report_data`)
+# and returns a Figure. Keyed by a stable identifier -- "N"/"P"/"K" match
+# `plots.nutrient_balance`'s `substance` argument -- so a frontend can look
+# up a single section without hard-coding its title or which `plots`
+# function builds it.
+#
+# Extracted per #233 to eliminate the duplicated "title / build figure via
+# plots.x() / display / close" block that used to be hand-repeated (or, on
+# the notebook side, independently re-derived) in each frontend.
+SECTIONS: dict[str, tuple[str, PlotFn]] = {
+    "stand": ("Stand", plots.stand),
+    "hydrology": ("Hydrology", plots.hydrology),
+    "mass": ("Mass", plots.mass),
+    "carbon": ("Carbon", plots.carbon),
+    "N": ("Nitrogen Balance", partial(plots.nutrient_balance, substance="N")),
+    "P": ("Phosphorus Balance", partial(plots.nutrient_balance, substance="P")),
+    "K": ("Potassium Balance", partial(plots.nutrient_balance, substance="K")),
+}

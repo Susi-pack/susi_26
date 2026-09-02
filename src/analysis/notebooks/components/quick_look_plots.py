@@ -1,9 +1,10 @@
 """
 Notebook equivalent of `analysis.streamlit.components.netcdf_variable_plots_ui`.
 
-Reuses the quick-look plotting logic (`plots.spatial_bars`,
-`plots.temporal_stats`) unchanged -- it's already Streamlit-independent,
-pure matplotlib. Replaces the Streamlit display wrapper (`st.pyplot` +
+Reuses `shared_reporting_utils/quick_look_plots.py`'s `quick_look_sections`
+for the 3D-shape guard and per-variable (title, fig) generation (per #234) --
+`plots.spatial_bars`/`plots.temporal_stats` are reached only through it, not
+imported directly. Replaces the Streamlit display wrapper (`st.pyplot` +
 `plt.close`, laid out in two `st.columns`) with plain inline matplotlib
 display, one plot after another (see #215: functional, not aesthetic,
 equivalence).
@@ -16,7 +17,7 @@ Typical usage:
 import matplotlib.pyplot as plt
 from IPython.display import Markdown, display
 
-from analysis.shared_reporting_utils import plots
+from analysis.shared_reporting_utils.quick_look_plots import quick_look_sections
 from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 
@@ -30,26 +31,14 @@ def display_quick_look_plots(
     matching the Streamlit version's restriction; other-shaped variables get
     a one-line notice instead of a plot.
     """
-    for var_path, var_value in variables_values.items():
+    for var_path, message, figures in quick_look_sections(variables_values):
         display(Markdown(f"**{var_path}**"))
 
-        if len(var_value.raw_shape) != 3:
-            display(
-                Markdown(
-                    f"*Variable has shape {var_value.raw_shape}. Only 3D "
-                    "variables (scenario, time, space) are currently plotted.*"
-                )
-            )
+        if message is not None:
+            display(Markdown(f"*{message}*"))
             continue
 
-        data = var_value.processed
-
-        display(Markdown("*Time-Space Waterfall (Grouped Bars)*"))
-        fig = plots.spatial_bars(data=data)
-        display(fig)
-        plt.close(fig)
-
-        display(Markdown("*Spatial Statistics (Mean ± Std)*"))
-        fig = plots.temporal_stats(data=data)
-        display(fig)
-        plt.close(fig)
+        for title, fig in figures:
+            display(Markdown(f"*{title}*"))
+            display(fig)
+            plt.close(fig)

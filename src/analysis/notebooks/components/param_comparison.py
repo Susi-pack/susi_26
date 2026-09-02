@@ -3,10 +3,12 @@ Notebook equivalent of the parameter-comparison display in
 `analysis.streamlit.pages.compare_scenarios_for_stand`.
 
 Reuses `find_differing_params`/`find_unique_params` from the shared backend
-unchanged (they're already Streamlit-independent). Per #215's picker/renderer
-split, this is a renderer element: it displays its output and also returns
-the underlying (differing, unique) dicts, so a later cell can reuse them
-without recomputing.
+unchanged (they're already Streamlit-independent), and
+`shared_reporting_utils/param_comparison.py`'s `shape_differing_params` for
+the value -> comma-joined-scenarios row-shaping step (per #235). Per #215's
+picker/renderer split, this is a renderer element: it displays its output and
+also returns the underlying (differing, unique) dicts, so a later cell can
+reuse them without recomputing.
 
 Typical usage:
 
@@ -25,6 +27,7 @@ from analysis.core.parse_outputs import (
     find_differing_params,
     find_unique_params,
 )
+from analysis.shared_reporting_utils.param_comparison import shape_differing_params
 
 
 def display_param_comparison(
@@ -45,15 +48,12 @@ def display_param_comparison(
     """
     differing = find_differing_params(stand_id, output_dir)
     unique = find_unique_params(stand_id, output_dir)
+    shaped_differing = shape_differing_params(differing)
 
     display(Markdown("## Differing Parameters"))
-    if differing:
-        for param_name, value_map in differing.items():
+    if shaped_differing:
+        for param_name, rows in shaped_differing.items():
             display(Markdown(f"**{param_name}**"))
-            rows = [
-                {"value": value, "scenarios": ", ".join(scenarios)}
-                for value, scenarios in value_map.items()
-            ]
             display(pd.DataFrame(rows))
     else:
         display(Markdown("*No differing parameters found across scenarios.*"))
