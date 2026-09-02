@@ -1,4 +1,3 @@
-from numba.scripts.generate_lower_listing import description
 from functools import lru_cache
 import datetime
 from enum import Enum

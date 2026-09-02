@@ -5,7 +5,6 @@
 from susi.io.load_output_data import StandID
 from typing import Optional
 import math
-import pandas as pd
 import xmltodict
 from pydantic import BaseModel, computed_field, Field
 import argparse

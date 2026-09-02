@@ -12,7 +12,6 @@ import datetime
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
-    CanopyLayerName,
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
