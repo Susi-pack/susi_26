@@ -29,7 +29,6 @@ DDY_MAX = 2000.0
 class CLIArguments:
     xml_filepath: Path
     output_folder: Path
-    do_thinning: bool
     altitude: float
     ddy: float
 
@@ -112,8 +111,7 @@ def out_of_range_message(
     """
     if value < min_value or value > max_value:
         return (
-            f"{name}={value} is outside the enforced range "
-            f"[{min_value}, {max_value}]"
+            f"{name}={value} is outside the enforced range [{min_value}, {max_value}]"
         )
     return None
 
@@ -143,10 +141,6 @@ def parse_CLI_arguments() -> CLIArguments:
         "output_dir",
         type=valid_directory,
         help="Output folder for generated allometry files.",
-    )
-
-    parser.add_argument(
-        "--do-thinning", action="store_true", help="Do thinning. Default: False"
     )
 
     parser.add_argument(
@@ -215,7 +209,9 @@ def parse_CLI_arguments() -> CLIArguments:
     if out_of_range_messages:
         if args.allow_out_of_range_values:
             for message in out_of_range_messages:
-                print(f"Warning: {message}; proceeding due to --allow-out-of-range-values")
+                print(
+                    f"Warning: {message}; proceeding due to --allow-out-of-range-values"
+                )
         else:
             parser.error(
                 "; ".join(out_of_range_messages)
@@ -225,15 +221,9 @@ def parse_CLI_arguments() -> CLIArguments:
     return CLIArguments(
         xml_filepath=args.xml_file,
         output_folder=args.output_dir,
-        do_thinning=args.do_thinning,
         altitude=args.altitude,
         ddy=args.ddy,
     )
-
-
-def sampling_stand_thinning_rate(species_id, stem_count):
-    target_N = 1800 if species_id == 2 else 2000
-    return target_N / stem_count
 
 
 def read_stands_from_xml_file(xml_file_path: Path) -> dict:
@@ -274,14 +264,14 @@ def get_tree_strata_data(
 ) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
     """
     Map strata into fixed species slots:
-    
+
     index 0 -> TreeSpecies 1
     index 1 -> TreeSpecies 2
     index 2 -> TreeSpecies >= 3
-    
+
     Missing species are represented by empty strata.
     """
-    
+
     if isinstance(tree_strata_xml_data, dict):
         tree_strata_xml_data = [tree_strata_xml_data]
 
@@ -298,14 +288,14 @@ def get_tree_strata_data(
         empty_stratum.model_copy(),
         empty_stratum.model_copy(),
     ]
-    
+
     for stratum in tree_strata_xml_data:
         tree_species = int(stratum["tst:TreeSpecies"])
-        
+
         tree_stratum = TreeStratum(
-            age=float(stratum["tst:Age"]),
+            age=int(stratum["tst:Age"]),
             basal_area=float(stratum["tst:BasalArea"]),
-            stem_count=float(stratum["tst:StemCount"]),
+            stem_count=int(stratum["tst:StemCount"]),
             mean_diameter=float(stratum["tst:MeanDiameter"]),
             mean_height=float(stratum["tst:MeanHeight"]),
         )
@@ -316,30 +306,24 @@ def get_tree_strata_data(
             strata[1] = tree_stratum
         else:
             strata[2] = tree_stratum
-        
+
     return tuple(strata)
 
 
-def get_stand_data_from_xml(stand: dict) -> StandData:
+def get_stand_data_from_xml(stand: dict) -> StandData | None:
     stand_basic_data = stand["st:StandBasicData"]
-    
+
     tree_stand_data = stand.get("ts:TreeStandData")
     if tree_stand_data is None:
-        raise ValueError(
-            f"Stand {stand['@id']} has no ts:TreeStandData"
-        )
-    
+        raise ValueError(f"Stand {stand['@id']} has no ts:TreeStandData")
+
     tree_stand_data_date = tree_stand_data.get("ts:TreeStandDataDate")
     if tree_stand_data_date is None:
-        raise ValueError(
-            f"Stand {stand['@id']} has no ts:TreeStandDataDate"
-        )
+        raise ValueError(f"Stand {stand['@id']} has no ts:TreeStandDataDate")
 
     tree_stand_summary = tree_stand_data_date.get("tss:TreeStandSummary")
     if tree_stand_summary is None:
-        raise ValueError(
-            f"Stand {stand['@id']} has no tss:TreeStandSummary"
-        )
+        raise ValueError(f"Stand {stand['@id']} has no tss:TreeStandSummary")
 
     tree_strata_container = tree_stand_data_date.get("tst:TreeStrata")
 
@@ -351,10 +335,8 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
     tree_strata_xml_data = tree_strata_container.get("tst:TreeStratum")
 
     if tree_strata_xml_data is None:
-        raise ValueError(
-            f"Stand {stand['@id']} has no TreeStratum"
-        )
-    
+        raise ValueError(f"Stand {stand['@id']} has no TreeStratum")
+
     tree_strata = get_tree_strata_data(tree_strata_xml_data)
 
     strata_basal_areas_per_stratum = []
@@ -395,30 +377,6 @@ def get_stand_data_from_xml(stand: dict) -> StandData:
     )
 
 
-def compute_thinning_rate(stand_data: StandData) -> float:
-    # Check the need of sapling stand thinning
-    threshold = 2200 if stand_data.main_species == 2 else 2500
-
-    thinning_needed: bool = (stand_data.mean_diameter < 8) & (
-        stand_data.stem_count > threshold
-    )
-
-    if thinning_needed:
-        thinning_rate = sampling_stand_thinning_rate(
-            stand_data.main_species, stand_data.stem_count
-        )
-
-        print("Sampling stand thinning is necessary!")
-        print(
-            f"--- Stem count decreased from {stand_data.stem_count} to {round(thinning_rate * stand_data.stem_count)}"
-        )
-        print()
-
-    else:  # NO thinning
-        thinning_rate = 1.0
-    return thinning_rate
-
-
 def dump_json_info_to_file(
     output_folder: Path, many_stand_datas: ManyStandDatas
 ) -> None:
@@ -436,17 +394,11 @@ def get_ykj_coordinates(coords: tuple[float, float]) -> tuple[float, float]:
 
 
 def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
-    if cli_args.do_thinning:
-        thinning_rate = compute_thinning_rate(stand_data)
-    else:
-        thinning_rate = 1.0
-
-    # Apply thinning:
     strata_basal_areas_per_stratum = [
-        stratum.basal_area * thinning_rate for stratum in stand_data.tree_strata
+        stratum.basal_area for stratum in stand_data.tree_strata
     ]
     strata_stem_counts_per_stratum = [
-        stratum.stem_count * thinning_rate for stratum in stand_data.tree_strata
+        stratum.stem_count for stratum in stand_data.tree_strata
     ]
 
     # Location in YKJ coordinates, and input variables x & y to sawlog reduction model
@@ -498,7 +450,6 @@ def main():
     cli_args = parse_CLI_arguments()
 
     print("Tool initialized with:")
-    print(f"    - thinning = {cli_args.do_thinning}")
     print(f"    - altitude = {cli_args.altitude}")
     print(f"    - ddy = {cli_args.ddy}")
 
@@ -506,10 +457,7 @@ def main():
 
     stand_datas = [
         stand_data
-        for stand_data in (
-            get_stand_data_from_xml(stand)
-            for stand in stands
-        )
+        for stand_data in (get_stand_data_from_xml(stand) for stand in stands)
         if stand_data is not None
     ]
 
