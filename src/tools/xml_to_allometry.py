@@ -293,9 +293,9 @@ def get_tree_strata_data(
         tree_species = int(stratum["tst:TreeSpecies"])
 
         tree_stratum = TreeStratum(
-            age=int(stratum["tst:Age"]),
+            age=float(stratum["tst:Age"]),
             basal_area=float(stratum["tst:BasalArea"]),
-            stem_count=int(stratum["tst:StemCount"]),
+            stem_count=float(stratum["tst:StemCount"]),
             mean_diameter=float(stratum["tst:MeanDiameter"]),
             mean_height=float(stratum["tst:MeanHeight"]),
         )
@@ -357,7 +357,7 @@ def get_stand_data_from_xml(stand: dict) -> StandData | None:
     # Parse and validate all necessary XML data
     return StandData(
         id=StandID(stand["@id"]),
-        fertility_class=int(stand_basic_data["st:FertilityClass"]),
+        fertility_class=int(float(stand_basic_data["st:FertilityClass"])),
         polygon=stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
             "gml:Polygon"
         ]["gml:exterior"]["gml:LinearRing"]["gml:coordinates"],
