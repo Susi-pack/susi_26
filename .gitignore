@@ -1,13 +1,24 @@
-# Ignore the contents of the outputs folder,
-# but track the folder itself
+# Ignore the contents of the some folders,
+# but track the folders themselves
+
 outputs/*
 !outputs/.gitkeep
 
-# Ignore the contents of the analysis exports folder (derived artifacts
-# frontends save on request, e.g. a Project Summary Table CSV),
-# but track the folder itself
 src/analysis/exports/*
 !src/analysis/exports/.gitkeep
+
+src/inputs/user_parameters/*
+!src/inputs/user_parameters/.gitkeep
+
+inputs/*
+!inputs/.gitkeep
+
+
+# Ignore src/inputs/
+# except for src/inputs/system/, which is data needed for susi tests and examples
+src/inputs/*
+!src/inputs/system/
+
 
 #python stuff
 venv/
