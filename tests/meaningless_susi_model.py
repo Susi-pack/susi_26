@@ -30,14 +30,16 @@ _N_SOIL_COLS = 5
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        FMI_weather_filepath=_app_settings.input_folder.joinpath("weather/CFw.csv"),
+        FMI_weather_filepath=_app_settings.input_folder.joinpath(
+            "system/weather/CFw.csv"
+        ),
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2007, 12, 31),
     ),
     allometry_parameters=CanopyLayerAllometry(
-        allometry_dir_path=_app_settings.input_folder,
+        allometry_dir_path=_app_settings.input_folder.joinpath("system/allometry"),
         allometry_file_registry={1: "CF_41.csv"},
         pointers={
             CanopyLayerName.dominant: [1] * _N_SOIL_COLS,

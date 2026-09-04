@@ -4,7 +4,7 @@ from multiprocessing import Pool
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
-from inputs.parameters import sample_parameters
+from inputs.system.parameters import sample_parameters
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import SusiParams
 
