@@ -34,6 +34,7 @@ Copyright &copy; 2026 Annamari Laurén
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
     { "Get started" = "index.md" },
+    { "How to handle input data" = "how_to_handle_input_data.md" },
     { "Parameters" = "simulation_config.md" },
     { "Read data from experiments" = "reading_output_data.md" },
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
