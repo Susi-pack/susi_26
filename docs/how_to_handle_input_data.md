@@ -4,87 +4,85 @@ icon: lucide/folder-input
 
 # How to handle input data
 
-SUSI needs two very different kinds of input data:
+SUSI needs three pieces of input data to run its simulations:
 
-- **Dev data** — small, reference weather/allometry files and parameter models that tests
-  and example scripts depend on. This has to stay tracked in the repo so a fresh checkout
-  keeps working.
-- **Your own data** — site-specific weather files, allometry tables, XML stand exports,
-  parameter models, and so on. This is personal to your machine and must never end up in a
-  commit.
+- an allometry path to guide the stand development,
+- weather data for the simulated period, and
+- the parameters for the simulation.
 
-The repo keeps these apart with two folders and one settings object.
+This guide covers where you should store that data.
+For more information about each dataset, see [SUSI's three input data types](input_data_types.md).
 
-## `src/inputs/` — tracked dev data
+!!! info "system data vs user data"
 
-`src/inputs/` lives inside the Python package tree, so anything under it is importable.
-Only `src/inputs/system/` is actually tracked in git; everything else under `src/inputs/`
-is gitignored.
+    Apart from the data you choose to input (the *user data*), SUSI also comes with some default datasets that are used for its development and testing (the *system data*).
+    Your data should not be tracked in the repository, but the system data should.
+    To keep those concers separated, these datasets are stored in different folders.
 
-```
-src/inputs/
-├── system/              # tracked — data used by tests and example scripts
-│   ├── allometry/
-│   │   └── CF_41.csv
-│   ├── parameters/
-│   │   ├── sample_parameters.py
-│   │   ├── golden_test.py
-│   │   └── para_2021.py
-│   └── weather/
-│       └── CFw.csv
-└── user_parameters/     # tracked as a folder, contents gitignored
-    └── .gitkeep
-```
+    - System data lives in `src/inputs/system`. That is the only folder with tracked contents within `src/inputs`.
+    - User data lives in 2 places, both untracked.
+        - Parameters live in `src/inputs/user_parameters`
+        - Weather and allometry data should stay in the root-level `inputs/` folder.
 
-`src/inputs/system/parameters/` holds the Pydantic parameter-model scripts that tests and
-example scripts import directly, e.g.:
+##  Your weather and allometry data: `inputs/<project>/`
 
-```python
-from inputs.system.parameters import sample_parameters
-```
+The repo root has an `inputs/` folder, tracked the same way `outputs/` is:
+the folder itself is tracked (via `.gitkeep`) but everything you put inside it is gitignored.
+This is the conventional place to drop your own datasets (weather CSVs, allometry files, XML stand exports).
 
-`src/inputs/user_parameters/` is a reserved, empty spot for your own parameter-model
-scripts. It's tracked as a folder (so it always exists after checkout) but its contents are
-gitignored — put a parameter-model `.py` file there if you want it importable the same way
-`system/parameters/` scripts are, without it ever being committed.
-
-## `inputs/` — untracked personal data
-
-The repo root also has an `inputs/` folder, tracked the same way `outputs/` is: the folder
-itself is tracked (via `.gitkeep`) but everything you put inside it is gitignored. This is
-the conventional place to drop your own datasets — weather CSVs, allometry files, XML stand
-exports — that aren't Python and don't need to be importable.
+We recommend that you name the top-level folder after your **project**, mirroring the way
+in which simulation outputs are organized.
+The way you organize your data inside that folder is up to you.
+If you have few datasets for a given project, a flat structure works well:
 
 ```
 inputs/
-└── .gitkeep   # only this is tracked; drop your own files anywhere under inputs/
+└── my_project/
+    ├── weather.csv
+    └── my_pines_allometry.csv
+```
+If you have several datasets in the same project (e.g., because you want to simulate many stands, weather scenarios and/or allometry paths) giving some more structure might work better.
+For instance, grouping by type of data:
+
+```
+inputs/
+└── my_project/
+    ├── weather/
+    │   └── weather_1.csv
+    │   └── weather_2.csv
+    │   └── ...
+    └── allometry/
+        └── my_pines.csv
 ```
 
-## Pointing `AppSettings` at these folders
+Grouping by scenario instead (mirroring how outputs are organized) is just as valid.
+Nothing under the project folder is enforced.
 
-::: susi.io.app_settings.AppSettings
-    handler: python
-    options:
-      show_source: false
 
-`AppSettings.input_folder` and `AppSettings.user_input_folder` give you both roots as
-resolved, validated paths, so you never have to hardcode an absolute path or guess the repo
-layout:
+## Your model parameters: `src/inputs/user_parameters/`
+
+`src/inputs/user_parameters/` is a reserved, empty spot to define your own model parameters.
+These are `.py` files that build a `SusiParams` instance, the `Pydantic` class that declares the set of parameters required by SUSI.
+The folder is tracked, but its contents are not.
+The reason to put these inside `src/inputs/` instead of inside the root level `inputs/` with the rest of the data is that this makes the parameters importable by Python:
 
 ```python
-from susi.io.app_settings import AppSettings
-
-app_settings = AppSettings()
-
-app_settings.input_folder       # <repo_root>/src/inputs
-app_settings.user_input_folder  # <repo_root>/inputs
+from inputs.user_parameters import my_site_parameters
 ```
 
-## Building `SusiParams` from your own data
+!!! info
+    You are not required to put the input parameters into the `src/inputs/user_parameters/` folder.
+    As long as you pass an instance of `SusiParams` to the simulator, anything works.
+    The current suggestion is recommended because it allows for a clean separation between model parameters and the simulation instructions.
+    This setup works well for simple projects, but there are legitimate reasons for not following this recommendation!
 
-`WeatherParams.FMI_weather_filepath` and `CanopyLayerAllometry.allometry_dir_path` both
-accept any path, tracked or not — build them off `user_input_folder` instead of
-`input_folder` to point at your own data:
+## Building a `SusiParams` instance from your own data
+
+Once you have your data in place, you must point SUSI to it.
+`WeatherParams.FMI_weather_filepath` and `CanopyLayerAllometry.allometry_dir_path`
+both accept any path.
+Build them off `user_input_folder`
+instead of `input_folder` to point at your own data:
 
 ```python
 from susi.io.app_settings import AppSettings
@@ -93,11 +91,11 @@ from susi.io.susi_parameter_model import WeatherParams, CanopyLayerAllometry, Ca
 app_settings = AppSettings()
 
 weather_parameters = WeatherParams(
-    FMI_weather_filepath=app_settings.user_input_folder.joinpath("my_site/weather.csv"),
+    FMI_weather_filepath=app_settings.user_input_folder.joinpath("my_project/weather/weather.csv"),
 )
 
 allometry_parameters = CanopyLayerAllometry(
-    allometry_dir_path=app_settings.user_input_folder.joinpath("my_site/allometry"),
+    allometry_dir_path=app_settings.user_input_folder.joinpath("my_project/allometry"),
     allometry_file_registry={1: "my_pines.csv"},
     pointers={
         CanopyLayerName.dominant: [1],
@@ -111,10 +109,40 @@ See [`src/inputs/system/parameters/sample_parameters.py`](https://github.com/Sus
 for a full, working `SusiParams` built the same way off `input_folder` — swap in
 `user_input_folder` and it becomes a template for your own site.
 
+
+## Change default input folders via `AppSettings`
+
+All this works because `AppSettings` holds the default paths for the two input folders.
+```python
+from susi.io.app_settings import AppSettings
+
+app_settings = AppSettings()
+
+app_settings.input_folder       # <repo_root>/src/inputs
+app_settings.user_input_folder  # <repo_root>/inputs
+```
+
+This way, we have resolved, validated paths, and you never have to hardcode an absolute path or guess the repo layout.
+
+If you want to change the defaults because you have your data elsewhere, simply instantiate `AppSettings` with different values:
+
+```python
+from susi.io.app_settings import AppSettings
+
+app_settings = AppSettings(input_folder=..., user_input_folder=...)
+
+...
+```
+
+Here all the fields available in `AppSettings`:
+::: susi.io.app_settings.AppSettings
+    handler: python
+    options:
+      show_source: false
+
 ## Summary
 
 | Folder | Tracked? | Importable? | Use for |
 |---|---|---|---|
-| `src/inputs/system/` | Yes | Yes | Dev data used by tests/example scripts |
+| `inputs/<project>/` | Folder only | No | Your weather/allometry/stand data |
 | `src/inputs/user_parameters/` | Folder only | Yes | Your own parameter-model scripts |
-| `inputs/` (repo root) | Folder only | No | Your own weather/allometry/stand data |
