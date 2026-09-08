@@ -475,7 +475,10 @@ class Stand:
             self.p_non_woody_litter_mort = (
                 self.p_non_woody_litter_mort + cl.p_non_woody_litter_mort * cl.stems
             )
-            self.k_non_woody_litter_mort = self.k_non_woody_litter_mort
+
+            self.k_non_woody_litter_mort = (
+                self.k_non_woody_litter_mort + cl.k_non_woody_litter_mort * cl.stems
+            )
 
             # self.n_demand = self.n_demand + (cl.n_demand + cl.Nleafdemand) * cl.stems
             # self.p_demand = self.p_demand + (cl.p_demand+ cl.Pleafdemand) * cl.stems
