@@ -382,6 +382,7 @@ class Susi:
                     stp.run_timestep(
                         d, h0ts_west[d], h0ts_east[d], stpout["deltas"][r, d, :], moss
                     )  # strip/peat hydrology
+                    dwt = stp.dwt.copy()
                     stpout = stp.update_outarrays(r, d, stpout)
 
                     z, peat_temperature = pt.run_timestep(
