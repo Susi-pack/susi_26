@@ -536,7 +536,6 @@ class Susi:
                     stand.n_woodylitter
                     + stand.n_woody_lresid
                     + stand.n_woody_litter_mort
-                    + stand.n_woody_litter_mort
                     + groundvegetation.n_litter_w
                 ) / 10000.0
                 esN.run_yr(
