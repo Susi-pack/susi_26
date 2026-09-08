@@ -10,10 +10,11 @@ SUSI needs three pieces of input data to run its simulations:
 - weather data for the simulated period, and
 - the parameters for the simulation.
 
-This guide covers where you should store that data.
+This guide covers where you should store that data, and how to point SUSI to it.
 For more information about each dataset, see [SUSI's three input data types](input_data_types.md).
 
-!!! info "system data vs user data"
+
+??? info "system data vs user data"
 
     Apart from the data you choose to input (the *user data*), SUSI also comes with some default datasets that are used for its development and testing (the *system data*).
     Your data should not be tracked in the repository, but the system data should.
@@ -23,6 +24,22 @@ For more information about each dataset, see [SUSI's three input data types](inp
     - User data lives in 2 places, both untracked.
         - Parameters live in `src/inputs/user_parameters`
         - Weather and allometry data should stay in the root-level `inputs/` folder.
+
+!!! question "Why two folders for your data?"
+
+    If you follow the recommendations below, your data will be in two separate places:
+
+    - Simulation parameters: in `src/inputs/user_parameters`
+    - Weather and allometry data: in the root-level `inputs/` folder.
+
+    Why this difference? Why can't all data live in the same place?
+    It could!
+    And maybe you disagree with our design choice here.
+    But here are our reasons for splitting the data this way.
+
+    - The model parameters are declared as a `Pydantic` class. For it to be importable, it must live inside `src/`. That's why the parameters can't be in the root-level `inputs/` folder.
+    - It is ugly to have all the (possibly heavy) user data files within `src/`. It is more elegant to store it at the same level simulation outputs are stored, i.e., at the root level.
+
 
 ##  Your weather and allometry data: `inputs/<project>/`
 
@@ -106,7 +123,8 @@ allometry_parameters = CanopyLayerAllometry(
 ```
 
 See [`src/inputs/system/parameters/sample_parameters.py`](https://github.com/Susi-pack/susi_26/blob/main/src/inputs/system/parameters/sample_parameters.py)
-for a full, working `SusiParams` built the same way off `input_folder` — swap in
+for a full, working `SusiParams` built the same way off `input_folder`.
+Swap in
 `user_input_folder` and it becomes a template for your own site.
 
 
