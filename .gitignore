@@ -1,13 +1,29 @@
-# Ignore the contents of the outputs folder,
-# but track the folder itself
+# Ignore the contents of the some folders,
+# but track the folders themselves
+
 outputs/*
 !outputs/.gitkeep
 
-# Ignore the contents of the analysis exports folder (derived artifacts
-# frontends save on request, e.g. a Project Summary Table CSV),
-# but track the folder itself
 src/analysis/exports/*
 !src/analysis/exports/.gitkeep
+
+inputs/*
+!inputs/.gitkeep
+
+
+# Ignore src/inputs/, except for src/inputs/system/ (tracked dev data needed
+# for susi tests and examples) and src/inputs/user_parameters/ (tracked as an
+# empty folder; its own contents stay untracked, see below). The negations
+# for user_parameters/ must live in this same block: git won't recurse into
+# an already-excluded directory, so a later, separate `!.../.gitkeep` rule
+# can't re-include anything inside it.
+src/inputs/*
+!src/inputs/system/
+!src/inputs/user_parameters/
+
+src/inputs/user_parameters/*
+!src/inputs/user_parameters/.gitkeep
+
 
 #python stuff
 venv/

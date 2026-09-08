@@ -5,7 +5,7 @@ from susi.core.susi_main import Susi
 from susi.io.metadata_model import SimulationMetaData
 
 from susi.io.app_settings import AppSettings
-from inputs.parameters.para_2021 import (
+from inputs.system.parameters.para_2021 import (
     SiteLabel,
     get_stand_label_from_site_label,
     get_scenario_label_from_site_label,

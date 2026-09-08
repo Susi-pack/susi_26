@@ -34,12 +34,15 @@ Copyright &copy; 2026 Annamari Laurén
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
     { "Get started" = "index.md" },
+    { "How to handle input data" = "how_to_handle_input_data.md" },
+    { "SUSI's three input data types" = "input_data_types.md" },
     { "Parameters" = "simulation_config.md" },
+    { "Weather data" = "weather_data.md" },
+    { "XML --> allometry file" = "xml_to_allometry.md" },
     { "Read data from experiments" = "reading_output_data.md" },
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
-    { "XML --> allometry file" = "xml_to_allometry.md" },
     { "Get started with zensical" = "zensical_index.md" },
 ]
 
