@@ -106,5 +106,9 @@ tmp
 <<<<<<< HEAD
 
 # Data
-
 DATA/
+
+# Jupyter stuff
+.jupyter_ystore.db
+.virtual_documents
+.jupyter
