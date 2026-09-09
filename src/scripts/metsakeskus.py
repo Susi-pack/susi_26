@@ -53,6 +53,29 @@ DEVELOPMENTCLASS_FILTER = [
 ]  # 1 = open/seedling, 2 = young growing, 3 = grown-up
 # DRAINAGESTATE_FILTER: only stands whose peatland has already been ditched/
 # drained are of interest here (SUSI models managed, drained peatlands).
+#
+# Verified on this dataset (MV_Uusimaa.gpkg): drainagestate splits cleanly by
+# soil type — codes {1,2,3} occur ONLY on mineral-soil stands (subgroup==1,
+# "Kangas"), codes {6,7,8,9} occur ONLY on peatland stands (subgroup in
+# {2,3,4}). So within the population SUBGROUP_FILTER already restricts to
+# (Korpi/Räme), codes 1/2/3 are moot regardless of this filter.
+#
+# 6/7/8/9 match the standard Finnish "ojitustilanneluokka" (drainage-state)
+# succession scale for peatlands (label mapping is domain knowledge, not
+# verified against an explicit codebook in this repo -- no such docs were
+# found alongside the data):
+#   6 = ojittamaton suo   — undrained/pristine mire, no ditches
+#   7 = ojikko            — freshly ditched, trees not yet responding
+#   8 = muuttuma          — transitional, vegetation shifting toward forest
+#   9 = turvekangas       — fully drained, forest-floor vegetation mature
+# Counts on Korpi/Räme forest-land stands here: 6=8,276 (37.8%), 7=1,487
+# (6.8%), 8=4,715 (21.6%), 9=7,403 (33.8%) of 21,881 total.
+#
+# So [7,8,9] excludes exactly one thing -- code 6, the 37.8% that are
+# undrained/natural mire -- since SUSI simulates drained-peatland forestry
+# hydrology (ditch water-table management), which doesn't apply to a mire
+# that's never been ditched. It keeps all three "how far the drainage
+# response has progressed" stages (7/8/9) rather than filtering within them.
 DRAINAGESTATE_FILTER = [7, 8, 9]  # drained peatland development stages
 # FERTILITYCLASS_FILTER: Metsäkeskus site-fertility classes for peatlands;
 # restricting to 2-5 excludes the very richest and very poorest extremes.
