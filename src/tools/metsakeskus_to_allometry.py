@@ -1125,6 +1125,14 @@ def parse_CLI_arguments() -> CLIArguments:
 # %% Progress-report printing (side-effecting; kept out of the pure layer above)
 
 
+def print_section(title: str) -> None:
+    """Marks one phase of main()'s reading -> filtering -> writing pipeline
+    in the console output, so the three phases are visually separated."""
+    print()
+    print(title)
+    print("-" * len(title))
+
+
 def print_year_distribution(year_distribution: pd.DataFrame) -> None:
     print("Available measured inventory years (type=1):")
     print(year_distribution.to_string(index=False))
@@ -1146,6 +1154,7 @@ def print_skips(skips: list[StandSkipped], label: str) -> None:
 def main() -> None:
     cli_args = parse_CLI_arguments()
 
+    print_section("Reading")
     print("Tool initialized with:")
     print(f"    - input_gpkg  = {cli_args.input_gpkg}")
     print(f"    - output_dir  = {cli_args.output_dir}")
@@ -1159,12 +1168,17 @@ def main() -> None:
     print(f"stand      : {len(layers.stand):>7,} rows")
     print(f"treestand  : {len(layers.treestand):>7,} rows")
     print(f"treestratum: {len(layers.treestratum):>7,} rows")
-    print()
 
+    print_section("Filtering")
+
+    print(
+        "1. Site filter -- forest land, peatland (Korpi/Räme), already drained, "
+        f"fertility class in {cli_args.config.fertilityclass_filter}:"
+    )
     filtered_stand = filter_stands_by_site_attributes(
         layers.stand, cli_args.config.fertilityclass_filter
     )
-    print(f"Filtered peatland forest stands: {len(filtered_stand):,}")
+    print(f"   -> {len(filtered_stand):,} / {len(layers.stand):,} stands kept")
     print()
 
     stand_ids = set(
@@ -1172,40 +1186,54 @@ def main() -> None:
     )
     print_year_distribution(compute_year_distribution(layers.treestand, stand_ids))
 
+    print(f"2. Measured-snapshot filter -- exact {cli_args.config.target_year} match:")
     snapshot = select_target_year_snapshot(
         layers.treestand, stand_ids, cli_args.config.target_year
     )
     n_excluded = len(stand_ids) - len(snapshot)
-    print(
-        f"Stands with a {cli_args.config.target_year} measured snapshot: {len(snapshot):,}"
-    )
+    print(f"   -> {len(snapshot):,} / {len(stand_ids):,} stands kept")
     if n_excluded > 0:
-        print(f"  ({n_excluded} stand(s) had no exact-year match and are excluded)")
+        print(f"      ({n_excluded} stand(s) had no exact-year match and are excluded)")
     print()
 
     merged = attach_stand_attributes(snapshot, filtered_stand)
+    print(
+        "3. Development-class filter -- classes "
+        f"{cli_args.config.developmentclass_filter}:"
+    )
     merged_filtered = filter_by_developmentclass(
         merged, cli_args.config.developmentclass_filter
     )
-    print(
-        f"After developmentclass filter {cli_args.config.developmentclass_filter}: "
-        f"{len(merged_filtered):,}"
-    )
+    print(f"   -> {len(merged_filtered):,} / {len(merged):,} stands kept")
     print()
 
+    print(
+        "4. Structural + species-data checks -- geometry, treestandid, diameter/height:"
+    )
     candidates, structural_skips = build_stand_candidates(
         merged_filtered, layers.treestratum
     )
-    viable_candidates, ba_skips = partition_viable_candidates(candidates)
-    print(f"Viable stands: {len(viable_candidates):,}")
+    print(f"   -> {len(candidates):,} / {len(merged_filtered):,} stands kept")
     # structural_skips covers both missing structural fields (no usable
     # geometry, no treestandid) and a species with real basal area but no
     # usable diameter/height (DegenerateSpeciesDataError) -- build_stand_candidates.
-    print_skips(structural_skips, "Skipped (invalid or missing data)")
-    print_skips(ba_skips, "Skipped (zero basal area)")
+    print_skips(structural_skips, "   Skipped (invalid or missing data)")
+    print()
+
+    print("5. Viability check -- nonzero total basal area:")
+    viable_candidates, ba_skips = partition_viable_candidates(candidates)
+    print(f"   -> {len(viable_candidates):,} / {len(candidates):,} stands kept")
+    print_skips(ba_skips, "   Skipped (zero basal area)")
 
     filtered_stands, build_skips = build_filtered_stands(viable_candidates)
-    print_skips(build_skips, "Skipped (could not build stand record)")
+    print_skips(build_skips, "   Skipped (could not build stand record)")
+    print()
+
+    print(f"Stands ready for allometry: {len(filtered_stands):,}")
+
+    print_section("Writing")
+    print(f"Destination folder: {cli_args.output_dir}")
+    print()
 
     outcomes = [
         process_stand(stand, cli_args.config, cli_args.output_dir)
