@@ -449,7 +449,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
     height from a plain average of the recorded rows. Only a field with
     truly nothing to average (an all-NaN column) falls back to 0 -- not a
     fabricated placeholder, and deliberately not NaN either, since NaN would
-    silently poison build_filtered_stand's basal-area-weighted stand-level
+    silently poison build_valid_stand's basal-area-weighted stand-level
     age/height/diameter (NaN * 0 is NaN, not 0).
 
     A species present with real, POSITIVE basal area but degenerate
@@ -557,7 +557,7 @@ def build_stand_candidates(
     degenerate diameter/height data (build_species_strata's
     DegenerateSpeciesDataError, see aggregate_species_group) -- caught here
     and turned into a StandSkipped for the whole stand, rather than letting
-    artificial data flow forward into a FilteredStand."""
+    artificial data flow forward into a ValidStand."""
     candidates: list[StandCandidate] = []
     skipped: list[StandSkipped] = []
     treestratum_treestandid = pd.to_numeric(treestratum["treestandid"], errors="coerce")
@@ -665,13 +665,13 @@ def centroid_to_ykj(geometry: BaseGeometry) -> tuple[int, int]:
     return round(easting / 10000), round(northing / 1000)
 
 
-def build_filtered_stand(candidate: StandCandidate) -> ValidStand:
+def build_valid_stand(candidate: StandCandidate) -> ValidStand:
     """Builds the final stand record from an already-viable candidate
     (nonzero total basal area, guaranteed by partition_viable_candidates;
     non-empty geometry, guaranteed by build_stand_candidates). Not fully
     total, though: centroid_to_ykj can still raise for a geometry that's
     present and non-empty but otherwise degenerate (e.g. all-coincident
-    points) -- callers processing a batch should use build_filtered_stands,
+    points) -- callers processing a batch should use build_valid_stands,
     which isolates that per candidate instead of aborting the whole run."""
     strata = candidate.strata
     stand_total_ba = total_basal_area(strata)
@@ -715,18 +715,18 @@ def build_filtered_stand(candidate: StandCandidate) -> ValidStand:
     )
 
 
-def build_filtered_stands(
+def build_valid_stands(
     candidates: list[StandCandidate],
 ) -> tuple[list[ValidStand], list[StandSkipped]]:
-    """Batch build_filtered_stand, isolating one candidate's failure (see
-    build_filtered_stand's docstring) as a StandSkipped instead of letting it
+    """Batch build_valid_stand, isolating one candidate's failure (see
+    build_valid_stand's docstring) as a StandSkipped instead of letting it
     abort every other stand in the run -- the same per-stand isolation
     principle process_stand already applies to the growth-table stage."""
     built: list[ValidStand] = []
     skipped: list[StandSkipped] = []
     for candidate in candidates:
         try:
-            built.append(build_filtered_stand(candidate))
+            built.append(build_valid_stand(candidate))
         except Exception as error:  # noqa: BLE001 -- one bad stand's geometry math must not abort the batch
             skipped.append(StandSkipped(stand_id=candidate.id, reason=str(error)))
     return built, skipped
@@ -822,18 +822,18 @@ def write_allometry_csv(
     table_with_species.to_csv(output_path, index=False)
 
 
-def filtered_stand_to_json_dict(stand: ValidStand) -> dict:
+def valid_stand_to_json_dict(stand: ValidStand) -> dict:
     data = dataclasses.asdict(stand)
     data["id"] = str(stand.id)
     data["geometry"] = stand.geometry.wkt
     return data
 
 
-def dump_filtered_stands_json(stands: list[ValidStand], output_path: Path) -> None:
+def dump_valid_stands_json(stands: list[ValidStand], output_path: Path) -> None:
     """Informational dump of every processed stand's data, including the
     filter/stratum columns -- mirrors xml_to_allometry.py's
     extra_XML_info.json for anyone who wants to regroup or audit later."""
-    payload = {"stands": [filtered_stand_to_json_dict(stand) for stand in stands]}
+    payload = {"stands": [valid_stand_to_json_dict(stand) for stand in stands]}
     output_path.write_text(json.dumps(payload, indent=2))
 
 
@@ -1225,11 +1225,11 @@ def main() -> None:
     print(f"   -> {len(viable_candidates):,} / {len(candidates):,} stands kept")
     print_skips(ba_skips, "   Skipped (zero basal area)")
 
-    filtered_stands, build_skips = build_filtered_stands(viable_candidates)
+    valid_stands, build_skips = build_valid_stands(viable_candidates)
     print_skips(build_skips, "   Skipped (could not build stand record)")
     print()
 
-    print(f"Stands ready for allometry: {len(filtered_stands):,}")
+    print(f"Stands ready for allometry: {len(valid_stands):,}")
 
     print_section("Writing")
     print(f"Destination folder: {cli_args.output_dir}")
@@ -1237,7 +1237,7 @@ def main() -> None:
 
     outcomes = [
         process_stand(stand, cli_args.config, cli_args.output_dir)
-        for stand in filtered_stands
+        for stand in valid_stands
     ]
     written: list[StandWritten] = [o for o in outcomes if isinstance(o, StandWritten)]
     processing_skips: list[StandSkipped] = [
@@ -1249,12 +1249,12 @@ def main() -> None:
     print_skips(processing_skips, "Skipped (processing failure)")
 
     json_path = cli_args.output_dir / "extra_gpkg_info.json"
-    dump_filtered_stands_json(filtered_stands, json_path)
+    dump_valid_stands_json(valid_stands, json_path)
     print(f"Informational JSON written: {json_path}")
 
     if cli_args.emit_xml:
         xml_path = cli_args.output_dir / f"{cli_args.project_name}.xml"
-        write_stands_xml(filtered_stands, xml_path)
+        write_stands_xml(valid_stands, xml_path)
         print(f"XML written: {xml_path}")
 
 
