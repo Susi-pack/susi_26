@@ -1,0 +1,223 @@
+---
+icon: lucide/table-2
+---
+
+# Metsäkeskus data --> allometry files
+
+`src/tools/metsakeskus_to_allometry.py` converts a Metsäkeskus forest inventory
+GeoPackage (`.gpkg`) into the allometry CSVs SUSI reads.
+Every stand that survives the filters below is converted: there is no sampling
+and no grouping of stands.
+
+This page is the reference for the tool's parameters, inputs and outputs.
+For a walkthrough of an actual run, see
+[How to generate allometry files from Metsäkeskus data](how_to_generate_allometry_from_metsakeskus.md).
+
+## Synopsis
+
+```bash
+python src/tools/metsakeskus_to_allometry.py INPUT_GPKG [OUTPUT_DIR] \
+    --config CONFIG.toml --project-name NAME \
+    [--allow-out-of-range-values] [--emit-xml]
+```
+
+## Command-line arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage. Must exist and end in `.gpkg`. |
+| `OUTPUT_DIR` | no | Where to write the allometry files. Defaults to `inputs/<project-name>/allometry/`. Must **not** already exist: the tool creates it, and refuses to run into an existing folder rather than overwrite a previous run. |
+| `--config` | yes | Path to the TOML config file (see below). Must exist and end in `.toml`. |
+| `--project-name` | yes | Names the run. Drives the default output folder, and names the XML file written by `--emit-xml`. |
+| `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
+| `--emit-xml` | no | Also write a combined ForestPropertyData XML next to the CSVs. |
+
+## Config file
+
+A TOML file, passed with `--config`. Copy
+[`src/tools/metsakeskus_to_allometry.default.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry.default.toml)
+and edit it: the optional fields are listed with the values the tool applies
+when they are absent, while the three required ones carry deliberately invalid
+placeholders for you to replace. Unknown fields are rejected, and every missing
+required field is reported at once.
+
+### Required
+
+Neither altitude nor temperature sum is part of the Metsäkeskus data, so you
+supply both. One value applies to every stand in the run.
+
+| Field | Unit | Enforced range | Description |
+|---|---|---|---|
+| `target_year` | year | — | Which inventory snapshot to use. Only stands measured in exactly this year are converted. |
+| `altitude` | m above sea level | 0 – 1000 | Site elevation. |
+| `ddy` | degree days per year | 500 – 2000 | Temperature sum. |
+
+The enforced ranges are deliberately wider than Finnish forest land, to catch a
+mistyped value (metres vs feet, say) without rejecting real ones. A value
+outside the range blocks the run unless you pass `--allow-out-of-range-values`.
+
+### Optional
+
+| Field | Default | Description |
+|---|---|---|
+| `developmentclass_filter` | `[1, 2, 3]` | Metsäkeskus development classes to keep: 1 = open/seedling, 2 = young growing, 3 = grown-up. |
+| `fertilityclass_filter` | `[2, 3, 4, 5]` | Peatland fertility classes to keep. The default excludes the richest and poorest extremes. |
+| `n_trees` | `20` | Reference trees per species in the growth model. |
+| `start_year` | `5` | First projected step, in years after the inventory snapshot. |
+| `end_year` | `80` | Last projected step, in years after the snapshot. |
+| `step_years` | `5` | Interval between projected steps. |
+
+The last four are passed straight to `Growth_and_Yield_Table`, and set how far
+forward each stand's growth is projected and at what resolution. Every table
+also opens with a row for the snapshot itself, at `Year` 0, so the defaults
+produce 17 rows per file. `Year` counts from the snapshot; the `Age` column
+adds the stand's measured age to it.
+
+## Input data
+
+Three layers of the GeoPackage are read:
+
+| Layer | Columns used |
+|---|---|
+| `stand` | `standid`, `maingroup`, `subgroup`, `drainagestate`, `fertilityclass`, `developmentclass`, `soiltype`, `geometry` |
+| `treestand` | `standid`, `treestandid`, `date`, `type` |
+| `treestratum` | `treestandid`, `treespecies`, `basalarea`, `stemcount`, `age`, `meandiameter`, `meanheight` |
+
+??? info "How `stand`, `treestand` and `treestratum` relate"
+
+    One **stand** (*kuvio*) is one mapped forest polygon, and carries the site
+    attributes: soil, drainage, fertility, development class.
+
+    A stand's trees are not stored on the stand itself. Each row of `treestand`
+    is one *snapshot* of that stand's trees on one date, so a stand measured
+    repeatedly, or projected forward, has several. `type` says which kind of
+    snapshot it is: `1` is measured data, while `2` and `3` are Metsäkeskus's
+    own grown-forward projections.
+
+    Each snapshot in turn has several rows in `treestratum`, joined by
+    `treestandid`: one row per species and diameter cohort. This is the
+    Metsäkeskus *stand stratum*, and it is not SUSI's canopy layer. Several
+    strata of the same species collapse into one of SUSI's three species slots,
+    and those slots are then ranked into the dominant and subdominant canopy
+    layers.
+
+    `treestandsummary` is deliberately not read: it is only populated for the
+    projected snapshots, not for measured ones.
+
+## What the tool does
+
+The run is printed in three sections — reading, filtering, and writing.
+Each filter reports how many stands it kept.
+
+**1. Site filter.** Keeps stands that are forest land (`maingroup` = 1), on
+peatland (`subgroup` 2 *korpi* or 3 *räme*), already drained (`drainagestate`
+7 *ojikko*, 8 *muuttuma* or 9 *turvekangas*), and whose `fertilityclass` is in
+`fertilityclass_filter`. Everything but the fertility class is hard-coded.
+
+??? info "Why only drained peatland forest land?"
+
+    Because that is what SUSI simulates. Mineral soils (`subgroup` = 1) are
+    outside the model altogether, and so are pristine, undrained mires
+    (`drainagestate` = 6) — the model's water and peat dynamics assume a
+    drainage network exists. These stands are not merely unwanted here: SUSI
+    has nothing meaningful to say about them, so they are excluded in code
+    rather than left to the config.
+
+**2. Measured-snapshot filter.** Keeps one `treestand` row per stand: the
+measured one (`type` = 1) whose date falls in `target_year`. A stand without
+one is dropped. Before applying the filter, the tool prints every measured
+year present in your data and how many stands it covers.
+
+??? info "Why an exact year, and only measured data?"
+
+    `type` 2 and 3 snapshots are Metsäkeskus's own projections, grown forward
+    to a common date and roughly ten years beyond it. Feeding one of those into
+    SUSI would model the same growth twice — once in Metsäkeskus's model, again
+    in SUSI's — so only measured data is used.
+
+    The year match is exact, with no "nearest available year" fallback. The
+    benefit is that every stand in a run shares one inventory date, so the
+    stands are comparable to each other; the cost is that stands measured in
+    other years are lost. That is usually the largest single drop in the run,
+    which is why the year table is printed just before it.
+
+**3. Development-class filter.** Keeps stands whose `developmentclass` is in
+`developmentclass_filter`.
+
+**4. Structural and species-data checks.** Drops a stand with no usable
+geometry or no `treestandid`, then collapses its `treestratum` rows into SUSI's
+three species slots:
+
+| SUSI slot | `treespecies` codes |
+|---|---|
+| 1, pine | 1 |
+| 2, spruce | 2 |
+| 3, deciduous | 3, 4, 5, 6, 7, 8, 9, 15, 20, 29 |
+
+Within a slot, age, mean diameter and mean height are averaged weighted by
+basal area, and stem counts are summed — or estimated from basal area and mean
+diameter when the inventory did not record them. A species carrying real basal
+area but no usable diameter or height drops the whole stand (see
+[Skipped stands](#skipped-stands)).
+
+**5. Viability check.** Drops stands whose basal area is zero across all three
+species: there is no growth to model.
+
+**Writing.** For each surviving stand, the polygon centroid is transformed from
+EPSG:3067 (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model, the species
+are ranked by basal area into a dominant and a subdominant, and one growth
+trajectory is computed per layer.
+
+## Output files
+
+| File | Written |
+|---|---|
+| `<standid>_dominant.csv` | Always, one per surviving stand. |
+| `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
+| `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
+| `<project-name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document, replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
+
+Each CSV follows the canonical allometry schema — the columns declared in
+`susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by
+`read_allometry_info_from_csv` — with a leading `Species_ID` column that is
+constant within the file (1 pine, 2 spruce, 3 deciduous).
+
+??? info "Why two single-species files per stand?"
+
+    `Growth_and_Yield_Table` pools every species with a nonzero stem count into
+    one shared list of reference trees. A curve for a single canopy layer
+    therefore only exists if the other species are zeroed, so the tool calls the
+    growth model once per layer, each time with only that layer's species alive.
+    The result maps directly onto `CanopyLayerAllometry`'s `dominant` and
+    `subdominant` layers.
+
+    For a monoculture, the subdominant file is simply not written: the
+    second-ranked species is genuinely absent, and duplicating the dominant
+    layer would double-count its basal area for anything that sums across
+    layers.
+
+## Skipped stands
+
+A stand that fails a check is reported with its id and a reason, and the run
+continues. One bad stand never aborts the others.
+
+| Reason | Meaning |
+|---|---|
+| `no usable geometry` | The stand polygon is missing or empty. |
+| `no treestandid` | The snapshot has no id to join `treestratum` on, so there are no trees to read. |
+| `<species>: basal area X m2/ha but no usable mean diameter` (or `mean height`) | A species with real, measured basal area has no diameter or height to go with it. |
+| `zero basal area across all species` | No growth data at all. Expected for recently cleared or seedling stands. |
+| Anything else | The growth model or the coordinate transform raised for this stand; the message quotes the underlying error. |
+
+??? info "Why stands are skipped rather than patched"
+
+    A missing diameter could be replaced with a plausible number, and the stand
+    would go through. But that number would then be compounded: the stem count
+    is derived from basal area and diameter, so a real basal area and an
+    invented diameter produce an invented stem count that is indistinguishable
+    from a measured one, in a file that looks exactly like every other output.
+
+    The tool would rather lose the stand and say so. The same rule applies to
+    `soiltype`: when the export doesn't record it, it stays absent all the way
+    through — `null` in the JSON, and the tag simply omitted from the XML —
+    rather than being filled in with a number.
