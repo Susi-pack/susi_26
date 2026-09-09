@@ -86,6 +86,40 @@ def test_load_extraction_config_reads_toml(tmp_path):
     assert config.n_trees == 15
 
 
+# %% metsakeskus_to_allometry.default.toml
+#
+# Guards against the shipped default/template config drifting from
+# ExtractionConfig's own field defaults -- see that file's header comment.
+
+DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "src"
+    / "tools"
+    / "metsakeskus_to_allometry.default.toml"
+)
+
+
+def test_default_config_toml_optional_fields_match_dataclass_defaults():
+    config = m.load_extraction_config(DEFAULT_CONFIG_PATH)
+    defaults = m.ExtractionConfig(target_year=0, altitude=0.0, ddy=0.0)
+    assert config.developmentclass_filter == defaults.developmentclass_filter
+    assert config.fertilityclass_filter == defaults.fertilityclass_filter
+    assert config.n_trees == defaults.n_trees
+    assert config.start_year == defaults.start_year
+    assert config.end_year == defaults.end_year
+    assert config.step_years == defaults.step_years
+
+
+def test_default_config_toml_required_fields_are_deliberately_out_of_range():
+    """The shipped file's altitude/ddy placeholders must stay outside
+    [ALTITUDE_MIN, ALTITUDE_MAX] / [DDY_MIN, DDY_MAX] -- that's what makes an
+    untouched copy fail loudly instead of running silently (see the file's
+    header comment and parse_CLI_arguments' out-of-range handling)."""
+    config = m.load_extraction_config(DEFAULT_CONFIG_PATH)
+    assert not (m.ALTITUDE_MIN <= config.altitude <= m.ALTITUDE_MAX)
+    assert not (m.DDY_MIN <= config.ddy <= m.DDY_MAX)
+
+
 # %% out_of_range_message reuse (imported from xml_to_allometry)
 
 
@@ -223,13 +257,16 @@ def test_estimate_stemcount_zero_diameter_returns_zero():
 # %% aggregate_species_group
 
 
-def test_aggregate_species_group_empty_returns_nominal_dummy_stratum():
+def test_aggregate_species_group_empty_returns_zero_stratum():
+    # No treestratum rows at all for this species -- nothing recorded to
+    # preserve, so this is literally _ZERO_STRATUM (see its docstring).
     empty = pd.DataFrame(
         {"age": [], "basalarea": [], "stemcount": [], "meandiameter": [], "meanheight": []}
     )
-    result = m.aggregate_species_group(empty, dominant_age=42)
+    result = m.aggregate_species_group(empty, species_name="pine")
+    assert result is m._ZERO_STRATUM
     assert result == m.TreeStratum(
-        age=42, basal_area=0.0, stem_count=0, mean_diameter=5.0, mean_height=3.0
+        age=0, basal_area=0.0, stem_count=0, mean_diameter=0.0, mean_height=0.0
     )
 
 
@@ -243,7 +280,7 @@ def test_aggregate_species_group_weights_by_basal_area():
             "meanheight": [8.0, 16.0],
         }
     )
-    result = m.aggregate_species_group(rows, dominant_age=30)
+    result = m.aggregate_species_group(rows, species_name="pine")
     # Weighted age: (20*10 + 40*30) / 40 = 35
     assert result.age == 35
     assert result.basal_area == pytest.approx(40.0)
@@ -262,23 +299,137 @@ def test_aggregate_species_group_estimates_missing_stemcount():
             "meanheight": [15.0],
         }
     )
-    result = m.aggregate_species_group(rows, dominant_age=30)
+    result = m.aggregate_species_group(rows, species_name="pine")
     assert result.stem_count > 0
 
 
-def test_aggregate_species_group_guards_zero_diameter():
+def test_aggregate_species_group_raises_on_degenerate_diameter_with_real_basal_area():
+    # Real, positive basal area but no usable mean diameter: this species
+    # would reach Growth_and_Yield_Table if it becomes dominant/subdominant,
+    # so there is no safe value to invent -- reject rather than paper over it
+    # (previously substituted a fabricated NOMINAL_DIAMETER_CM here).
     rows = pd.DataFrame(
         {
             "age": [30.0],
             "basalarea": [20.0],
             "stemcount": [100.0],
             "meandiameter": [0.0],
+            "meanheight": [15.0],
+        }
+    )
+    with pytest.raises(m.DegenerateSpeciesDataError, match="deciduous"):
+        m.aggregate_species_group(rows, species_name="deciduous")
+
+
+def test_aggregate_species_group_raises_on_degenerate_height_with_real_basal_area():
+    rows = pd.DataFrame(
+        {
+            "age": [30.0],
+            "basalarea": [20.0],
+            "stemcount": [100.0],
+            "meandiameter": [20.0],
             "meanheight": [0.0],
         }
     )
-    result = m.aggregate_species_group(rows, dominant_age=30)
-    assert result.mean_diameter == m.NOMINAL_DIAMETER_CM
-    assert result.mean_height == m.NOMINAL_HEIGHT_M
+    with pytest.raises(m.DegenerateSpeciesDataError, match="spruce"):
+        m.aggregate_species_group(rows, species_name="spruce")
+
+
+def test_aggregate_species_group_healthy_basal_area_does_not_raise():
+    rows = pd.DataFrame(
+        {
+            "age": [30.0],
+            "basalarea": [20.0],
+            "stemcount": [100.0],
+            "meandiameter": [20.0],
+            "meanheight": [15.0],
+        }
+    )
+    result = m.aggregate_species_group(rows, species_name="pine")
+    assert result.mean_diameter == pytest.approx(20.0)
+    assert result.mean_height == pytest.approx(15.0)
+
+
+def test_aggregate_species_group_zero_basal_area_preserves_recorded_data():
+    # The species IS recorded (rows are not empty) but its rows sum to zero
+    # basal area -- e.g. a young regeneration cohort recorded without a
+    # basal-area figure. Its real stem count, age, diameter and height must
+    # be kept, not rewritten to zero just because basal_area is zero.
+    rows = pd.DataFrame(
+        {
+            "age": [12.0],
+            "basalarea": [0.0],
+            "stemcount": [80.0],
+            "meandiameter": [3.5],
+            "meanheight": [2.1],
+        }
+    )
+    result = m.aggregate_species_group(rows, species_name="spruce")
+    assert result.basal_area == 0.0
+    assert result.stem_count == 80
+    assert result.age == 12
+    assert result.mean_diameter == pytest.approx(3.5)
+    assert result.mean_height == pytest.approx(2.1)
+
+
+def test_aggregate_species_group_zero_basal_area_averages_multiple_rows():
+    rows = pd.DataFrame(
+        {
+            "age": [10.0, 20.0],
+            "basalarea": [0.0, 0.0],
+            "stemcount": [50.0, 30.0],
+            "meandiameter": [2.0, 4.0],
+            "meanheight": [1.0, 3.0],
+        }
+    )
+    result = m.aggregate_species_group(rows, species_name="deciduous")
+    assert result.basal_area == 0.0
+    assert result.stem_count == 80  # real stem count is summed, not zeroed
+    assert result.age == 15  # plain average, not basal-area-weighted (no BA to weight by)
+    assert result.mean_diameter == pytest.approx(3.0)
+    assert result.mean_height == pytest.approx(2.0)
+
+
+def test_aggregate_species_group_zero_basal_area_with_nothing_recorded_falls_back_to_zero_not_nan():
+    # Rows are present but every other field is genuinely missing (NaN).
+    # There is truly nothing to average, so this falls back to 0 -- never
+    # NaN, since NaN * 0 == NaN would silently poison
+    # build_filtered_stand's basal-area-weighted stand-level age/height/
+    # diameter for this species' basal_area=0 weight.
+    rows = pd.DataFrame(
+        {
+            "age": [None],
+            "basalarea": [0.0],
+            "stemcount": [0.0],
+            "meandiameter": [None],
+            "meanheight": [None],
+        }
+    )
+    result = m.aggregate_species_group(rows, species_name="deciduous")
+    assert result.age == 0
+    assert result.stem_count == 0
+    assert result.mean_diameter == 0.0
+    assert result.mean_height == 0.0
+    assert not math.isnan(result.mean_diameter)
+    assert not math.isnan(result.mean_height)
+
+
+# %% build_species_strata
+
+
+def test_build_species_strata_propagates_degenerate_species_data_error():
+    stand_strata = pd.DataFrame(
+        {
+            "treespecies": [1, 2],
+            "age": [45.0, 40.0],
+            "basalarea": [10.0, 5.0],
+            "stemcount": [0.0, 0.0],
+            "meandiameter": [20.0, 0.0],  # spruce: real BA, degenerate diameter
+            "meanheight": [18.0, 0.0],
+        }
+    )
+    with pytest.raises(m.DegenerateSpeciesDataError, match="spruce"):
+        m.build_species_strata(stand_strata)
 
 
 # %% total_basal_area / determine_dominant_and_subdominant_species
@@ -356,7 +507,7 @@ _DEFAULT_GEOMETRY = Point(385000, 6685000).buffer(50)
 _UNSET = object()
 
 
-def _merged_row(standid=1, treestandid=101, geometry=_UNSET):
+def _merged_row(standid=1, treestandid=101, geometry=_UNSET, soiltype=10):
     return pd.Series(
         {
             "standid": standid,
@@ -365,7 +516,7 @@ def _merged_row(standid=1, treestandid=101, geometry=_UNSET):
             "fertilityclass": 3,
             "developmentclass": 2,
             "drainagestate": 7,
-            "soiltype": 10,
+            "soiltype": soiltype,
             "geometry": _DEFAULT_GEOMETRY if geometry is _UNSET else geometry,
         }
     )
@@ -424,14 +575,100 @@ def test_build_stand_candidates_keeps_valid_row():
     assert len(skipped) == 0
 
 
+def test_build_stand_candidates_skips_degenerate_species_data():
+    # treestandid 101 matches _merged_row()'s default -- a species with
+    # real, positive basal area but no usable diameter (DegenerateSpeciesDataError,
+    # see aggregate_species_group) must turn the whole stand into a
+    # StandSkipped, not a candidate carrying fabricated allometry inputs.
+    merged_filtered = pd.DataFrame([_merged_row()])
+    treestratum = pd.DataFrame(
+        [
+            {
+                "treestandid": 101,
+                "treespecies": 1,
+                "age": 45.0,
+                "basalarea": 10.0,
+                "stemcount": 0.0,
+                "meandiameter": 0.0,
+                "meanheight": 0.0,
+            }
+        ]
+    )
+    candidates, skipped = m.build_stand_candidates(merged_filtered, treestratum)
+    assert len(candidates) == 0
+    assert len(skipped) == 1
+    assert "pine" in skipped[0].reason
+    assert "basal area" in skipped[0].reason
+
+
+def test_build_stand_candidates_preserves_zero_basal_area_species_data():
+    # A species recorded with real stem count/diameter/height but zero
+    # basal area (e.g. an unmeasured regeneration cohort) must survive into
+    # the StandCandidate unchanged -- it is only ever excluded from the
+    # allometry-creation step downstream, never from the data itself.
+    merged_filtered = pd.DataFrame([_merged_row()])
+    treestratum = pd.DataFrame(
+        [
+            {
+                "treestandid": 101,
+                "treespecies": 1,
+                "age": 45.0,
+                "basalarea": 15.0,
+                "stemcount": 400.0,
+                "meandiameter": 20.0,
+                "meanheight": 18.0,
+            },
+            {
+                "treestandid": 101,
+                "treespecies": 2,
+                "age": 12.0,
+                "basalarea": 0.0,
+                "stemcount": 80.0,
+                "meandiameter": 3.5,
+                "meanheight": 2.1,
+            },
+        ]
+    )
+    candidates, skipped = m.build_stand_candidates(merged_filtered, treestratum)
+    assert len(skipped) == 0
+    assert len(candidates) == 1
+    spruce = candidates[0].strata.spruce
+    assert spruce.basal_area == 0.0
+    assert spruce.stem_count == 80
+    assert spruce.age == 12
+    assert spruce.mean_diameter == pytest.approx(3.5)
+    assert spruce.mean_height == pytest.approx(2.1)
+
+
+def test_build_stand_candidates_missing_soiltype_stays_none():
+    # No soiltype recorded for this stand: must stay None, not a fabricated
+    # placeholder number indistinguishable from a real measurement (soiltype
+    # never feeds Growth_and_Yield_Table -- see StandSiteAttributes).
+    merged_filtered = pd.DataFrame([_merged_row(soiltype=None)])
+    candidates, skipped = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert not skipped
+    assert candidates[0].site.soiltype is None
+
+
+def test_build_stand_candidates_keeps_recorded_soiltype():
+    merged_filtered = pd.DataFrame([_merged_row(soiltype=10)])
+    candidates, skipped = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert not skipped
+    assert candidates[0].site.soiltype == 10
+
+
 # %% partition_viable_candidates
 
 
-def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0):
+def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10):
     return m.StandCandidate(
         id=StandID(stand_id),
         site=m.StandSiteAttributes(
-            subgroup=2, fertilityclass=3, developmentclass=2, drainagestate=7, soiltype=10
+            subgroup=2,
+            fertilityclass=3,
+            developmentclass=2,
+            drainagestate=7,
+            soiltype=soiltype,
         ),
         strata=_strata(pine_ba, spruce_ba, decid_ba),
         # A real Helsinki-area point (EPSG:3067) rather than (0, 0): keeps
@@ -489,6 +726,78 @@ def test_build_filtered_stands_isolates_one_bad_candidate(monkeypatch):
     assert [s.id for s in built] == [StandID("1")]
     assert [s.stand_id for s in skipped] == [StandID("2")]
     assert "degenerate geometry" in skipped[0].reason
+
+
+# %% Zero-basal-area species data survives into FilteredStand but never
+# reaches allometry creation (end-to-end, through the real aggregation +
+# growth-table pipeline rather than the hand-built _strata/_candidate
+# helpers above, which bypass aggregate_species_group entirely).
+
+
+def _stand_candidate_with_a_zero_basal_area_species(treestratum_rows):
+    merged_filtered = pd.DataFrame([_merged_row()])
+    candidates, skipped = m.build_stand_candidates(merged_filtered, pd.DataFrame(treestratum_rows))
+    assert not skipped
+    return candidates[0]
+
+
+def test_build_filtered_stand_ignores_preserved_zero_basal_area_species_in_stand_level_average():
+    # Spruce carries real, non-nominal age/diameter/height despite zero
+    # basal area -- it must contribute nothing (weight 0) to the stand-level
+    # basal-area-weighted averages, which should equal pine's own values.
+    candidate = _stand_candidate_with_a_zero_basal_area_species(
+        [
+            {
+                "treestandid": 101, "treespecies": 1, "age": 45.0,
+                "basalarea": 15.0, "stemcount": 400.0,
+                "meandiameter": 20.0, "meanheight": 18.0,
+            },
+            {
+                "treestandid": 101, "treespecies": 2, "age": 12.0,
+                "basalarea": 0.0, "stemcount": 80.0,
+                "meandiameter": 3.5, "meanheight": 2.1,
+            },
+        ]
+    )
+    viable, skipped = m.partition_viable_candidates([candidate])
+    assert not skipped
+    stand = m.build_filtered_stand(viable[0])
+
+    assert stand.stand_meanage == pytest.approx(45.0)
+    assert stand.stand_meandiameter == pytest.approx(20.0)
+    assert stand.stand_meanheight == pytest.approx(18.0)
+
+
+def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_path):
+    # Same setup, but check the actual allometry-creation step: spruce's
+    # real recorded data must not turn into a subdominant CSV, because it
+    # never has positive basal area (process_stand's own gate).
+    candidate = _stand_candidate_with_a_zero_basal_area_species(
+        [
+            {
+                "treestandid": 101, "treespecies": 1, "age": 45.0,
+                "basalarea": 15.0, "stemcount": 400.0,
+                "meandiameter": 20.0, "meanheight": 18.0,
+            },
+            {
+                "treestandid": 101, "treespecies": 2, "age": 12.0,
+                "basalarea": 0.0, "stemcount": 80.0,
+                "meandiameter": 3.5, "meanheight": 2.1,
+            },
+        ]
+    )
+    viable, _ = m.partition_viable_candidates([candidate])
+    stand = m.build_filtered_stand(viable[0])
+    # Spruce's real data is still there, for reporting/future use ...
+    assert stand.strata.spruce.stem_count == 80
+    config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0, end_year=10)
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    # ... but it never became an allometry CSV.
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.subdominant_csv is None
+    assert list(tmp_path.glob("*.csv")) == [outcome.dominant_csv]
 
 
 # %% write_allometry_csv round-trips through the real SUSI reader
@@ -630,6 +939,44 @@ def test_dump_filtered_stands_json_writes_valid_json(tmp_path):
 
     payload = json.loads(output_path.read_text())
     assert payload["stands"][0]["id"] == "1"
+
+
+def test_dump_filtered_stands_json_writes_null_for_missing_soiltype(tmp_path):
+    candidate = _candidate("1", pine_ba=10, soiltype=None)
+    stand = m.build_filtered_stand(candidate)
+    output_path = tmp_path / "extra_gpkg_info.json"
+
+    m.dump_filtered_stands_json([stand], output_path)
+
+    import json
+
+    payload = json.loads(output_path.read_text())
+    assert payload["stands"][0]["site"]["soiltype"] is None
+
+
+def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_path):
+    # Two stands: one with no recorded soiltype, one with a real value --
+    # the tag must be omitted (not a fabricated number) for the first, and
+    # xml_to_allometry.py's reader (already Optional in its own model) must
+    # read that back as None rather than crashing on a missing tag, while
+    # the second stand's real value survives untouched.
+    from tools.xml_to_allometry import get_stand_data_from_xml, read_stands_from_xml_file
+
+    candidates = [
+        _candidate("1", pine_ba=10, soiltype=None),
+        _candidate("2", pine_ba=10, soiltype=10),
+    ]
+    stands = [m.build_filtered_stand(c) for c in candidates]
+    xml_path = tmp_path / "run.xml"
+
+    m.write_stands_xml(stands, xml_path)
+    xml_text = xml_path.read_text()
+    assert xml_text.count("<st:SoilType>") == 1  # only stand 2's
+
+    raw_stands = read_stands_from_xml_file(xml_path)
+    parsed_by_id = {str(sd.id): sd for sd in (get_stand_data_from_xml(s) for s in raw_stands)}
+    assert parsed_by_id["1"].soil_type is None
+    assert parsed_by_id["2"].soil_type == 10
 
 
 def test_write_stands_xml_is_replayable_through_xml_to_allometry(tmp_path):
