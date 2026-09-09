@@ -1,36 +1,61 @@
 """
 Takes Metsäkeskus forest data --> Runs SUSI for multiple stands.
 Based on Sandeep's script, which is based on Samuli's https://github.com/LukeEcomod/mNFIprocessing.
+NOTE: MK Uusimaa data downloaded from: https://avoin.metsakeskus.fi/aineistot/Metsavarakuviot/Maakunta/MV_Uusimaa.zip
 """
 
-import sys
+import shutil
+import math
 from pathlib import Path
+import geopandas as gpd
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from pyproj import Transformer
+
+from susi.core.allometric_road_map import Growth_and_Yield_Table
 
 # %% constants
 
+# Metsäkeskus (Finnish Forest Centre) inventories accumulate over many years;
+# TARGET_YEAR picks which inventory "snapshot" of each stand to use (see the
+# date-selection logic further down — it prefers an exact match on this year,
+# falling back to the next available year per stand).
 TARGET_YEAR = 2018
 BASE_DIR = Path(".").resolve()
+# Source data: a GeoPackage (.gpkg) with the Metsäkeskus "MV_Uusimaa" forest
+# stand dataset (see the download URL noted below, near the layer loading code).
 INPUT_GPKG = BASE_DIR / "DATA" / "MV_Uusimaa.gpkg"
+# XML_OUT_DIR: per-stratum XML files mirroring the Finnish ForestPropertyData
+# schema — an auditable, GeoPackage-independent record of the extracted stands.
 XML_OUT_DIR = BASE_DIR / "DATA" / "susi_xml_inputs" / str(TARGET_YEAR)
+# XLSX_OUT_DIR: per-stratum allometry workbooks that SUSI reads directly as
+# simulation input (AllometryParams dominant/subdominant, see cell 8 below).
 XLSX_OUT_DIR = BASE_DIR / "DATA" / "susi_allometry" / str(TARGET_YEAR)
 
 XML_OUT_DIR.mkdir(parents=True, exist_ok=True)
 XLSX_OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Path to the susi_26 source tree (for Growth_and_Yield_Table and helpers)
-SUSI_SRC = Path("/Users/sandeep/susi_26/src")
-if str(SUSI_SRC) not in sys.path:
-    sys.path.insert(0, str(SUSI_SRC))
 
 # %%  Filter stands
-MAINGROUP_FILTER = [1]  # 1 = Forest land
-SUBGROUP_FILTER = [2, 3]  # 2 = Korpi (spruce mire), 3 = Räme (pine mire)
+# These filters select the subset of Metsäkeskus stands that are relevant to
+# SUSI (which simulates drained peatland forestry). Values are Metsäkeskus's
+# own coded categories.
+MAINGROUP_FILTER = [1]  # 1 = Forest land (excludes e.g. agricultural/other land)
+SUBGROUP_FILTER = [
+    2,
+    3,
+]  # 2 = Korpi (spruce mire), 3 = Räme (pine mire) — peatland types
 DEVELOPMENTCLASS_FILTER = [
     1,
     2,
     3,
 ]  # 1 = open/seedling, 2 = young growing, 3 = grown-up
+# DRAINAGESTATE_FILTER: only stands whose peatland has already been ditched/
+# drained are of interest here (SUSI models managed, drained peatlands).
 DRAINAGESTATE_FILTER = [7, 8, 9]  # drained peatland development stages
+# FERTILITYCLASS_FILTER: Metsäkeskus site-fertility classes for peatlands;
+# restricting to 2-5 excludes the very richest and very poorest extremes.
 FERTILITYCLASS_FILTER = [2, 3, 4, 5]  # peatland fertility classes of interest
 
 # %% Representative sampling
@@ -40,6 +65,10 @@ FERTILITYCLASS_FILTER = [2, 3, 4, 5]  # peatland fertility classes of interest
 #
 # OLD single value:  N_PER_STRATUM = 5
 # NEW per-DC dict:   N_PER_DC = {dc: n_stands}
+# N_PER_DC controls how many representative stands are kept per
+# (subgroup x fertilityclass x developmentclass) stratum after filtering —
+# this is a sub-sampling step, not the full filtered population (see cell 6:
+# select_quantile_representatives).
 N_PER_DC: dict[int, int] = {
     1: 5,  # open / seed-tree stage
     2: 15,  # young growing forest
@@ -47,6 +76,14 @@ N_PER_DC: dict[int, int] = {
 }
 
 # %% ── Region metadata
+# REGION_META feeds Growth_and_Yield_Table (see _build_gyt below) with the
+# climatic/geographic context SUSI's allometric growth models need:
+#   DDY      = effective temperature sum / degree-day-years (climate proxy)
+#   x, y     = fallback YKJ (EPSG:2393) map coordinates, used only when a
+#              stand's own geometry can't be converted (see centroid_to_ykj)
+#   altitude = elevation (m), also a growth-model covariate
+# These are per-region defaults; real stands use their own reprojected
+# centroid coordinates instead of x/y where possible.
 REGION_TAG = "Uusimaa"
 
 REGION_META_MAP: dict[str, dict] = {
@@ -74,13 +111,63 @@ print(f"N per DC: {N_PER_DC}")
 # %%
 """
 Load GeoPackage layers and filter to drained peatland forest stands.
-NOTE: MK Uusimaa data downloaded from: https://avoin.metsakeskus.fi/aineistot/Metsavarakuviot/Maakunta/MV_Uusimaa.zip
 """
-import geopandas as gpd
-import pandas as pd
-import numpy as np
 
 # ── Load layers ───────────────────────────────────────────────────────────────
+# Metsäkeskus GeoPackages are split into four related layers. Verified on
+# this dataset (MV_Uusimaa.gpkg), the hierarchy and cardinalities are:
+#
+#   stand (429,164 rows, standid unique)
+#     one row per physical forest compartment ("kuvio"): geometry + static
+#     site attributes (maingroup, subgroup, fertilityclass, drainagestate,
+#     soiltype, area, ...). These don't change across snapshots in time.
+#     │
+#     │ 1-to-many via standid (~3 treestand rows per stand)
+#     ▼
+#   treestand (1,235,876 rows)
+#     one row per *snapshot in time* of a stand's tree stock: a
+#     (treestandid, standid, date, type) tuple. Almost every stand carries
+#     exactly 3 of these — a chain of type=1 (real measurement), type=2
+#     (grown forward to a common "current" date), type=3 (grown forward
+#     another ~10y past type=2) — see the `type` note at step 2 below.
+#     Site attributes (subgroup/fertilityclass/geometry/...) live on
+#     `stand`, not here — treestand only carries date/type/ids.
+#     │
+#     ├── 1-to-many via treestandid (0-1 row; only 852,631 of 1,235,876
+#     │   treestand rows have one) — treestandsummary
+#     │     pre-aggregated stand-level stats for ONE snapshot: meanage,
+#     │     basalarea, stemcount, meandiameter, meanheight, volume,
+#     │     biomass, value, developmentclass, maintreespecies,
+#     │     dominantheight. Effectively a materialized version of what
+#     │     this script computes by hand from treestratum below.
+#     │     NOT joined in this script (see cell "In[3]" note) — but that
+#     │     is because treestandsummary has NO standid column at all
+#     │     (only treestandid), so a naive join on standid fails; joining
+#     │     correctly on treestandid works (100% of its treestandids are
+#     │     found in treestand). The ~69% coverage is NOT random/bare-stand
+#     │     related — it's a deterministic function of `type`: type=2 and
+#     │     type=3 (Metsäkeskus's own grown-forward snapshots) have a
+#     │     summary row ~100% of the time; type=1 (the real measurement)
+#     │     has ZERO summary rows, ever. Since this script only ever keeps
+#     │     type==1 records (see step 2 below), treestandsummary would
+#     │     cover NONE of the stands this script uses, for any stand —
+#     │     it's not just "can't fully replace" treestratum, it's entirely
+#     │     unusable here regardless of the join-key fix.
+#     │
+#     └── 1-to-many via treestandid (806,778 of 1,235,876 treestand rows
+#         have >=1; up to 10 rows) — treestratum
+#           one row per species/diameter-cohort WITHIN that one snapshot
+#           (age, basalarea, stemcount, meandiameter, meanheight, ...).
+#           This is the per-species detail later aggregated into the
+#           pine/spruce/deciduous slots SUSI needs.
+#
+# Why treestratum (and treestandsummary) key off treestandid rather than
+# standid directly: species composition and its aggregates are a property
+# of a particular time-snapshot, not of the stand itself — the same stand's
+# type=1/2/3 snapshots have different tree ages/sizes (that's the point of
+# the growth-model projection). Keying by treestandid lets each snapshot
+# carry its own independent stratum/summary rows without needing a
+# composite (standid, date) key.
 stand = gpd.read_file(INPUT_GPKG, layer="stand")
 treestand = gpd.read_file(INPUT_GPKG, layer="treestand")
 treestandsumm = gpd.read_file(INPUT_GPKG, layer="treestandsummary")
@@ -92,10 +179,14 @@ print(f"treestandsumm  : {len(treestandsumm):>7,} rows")
 print(f"treestratum    : {len(treestratum):>7,} rows")
 
 # ── Coerce filter columns to numeric ─────────────────────────────────────────
+# GeoPackage attribute columns can come back as strings/objects; force them
+# to numeric so the .isin() filters below compare like-for-like.
 for col in ["maingroup", "subgroup", "drainagestate", "fertilityclass"]:
     stand[col] = pd.to_numeric(stand[col], errors="coerce")
 
 # ── Filter stands ─────────────────────────────────────────────────────────────
+# Apply the site-level filters defined above: forest land, on a spruce/pine
+# mire, already drained, within the fertility-class range of interest.
 mask = (
     stand["maingroup"].isin(MAINGROUP_FILTER)
     & stand["subgroup"].isin(SUBGROUP_FILTER)
@@ -111,7 +202,7 @@ print(
 )
 
 
-# In[3]:
+# %% In[3]:
 """
  Select treestand per stand for a TARGET year (2005 or the earliest available year >= 2005),
  then attach stand-level site attributes.
@@ -125,12 +216,18 @@ Date selection logic:
   - A summary table shows how many stands were matched per year so you can
     see which actual inventory dates were used.
 
-This version intentionally does NOT join treestandsummary, because keys do not overlap
-in this dataset (treestand <-> treestandsummary join path unresolved).
+This version intentionally does NOT join treestandsummary. NOTE: verified this is not
+because the ids fail to overlap -- treestandsummary.treestandid IS fully contained in
+treestand.treestandid (852,631 / 852,631 match). treestandsummary simply has no standid
+column at all, so a join attempted on standid (rather than treestandid) fails outright.
+More importantly: treestandsummary rows exist ONLY for type=2/type=3 (Metsäkeskus's own
+grown-forward projections), never for type=1 (the real measurement). Since this cell keeps
+type==1 records only (see step 2 below), treestandsummary has ZERO coverage of any stand
+this script actually uses -- fixing the join key would not help; it is structurally
+inapplicable to a type=1-only pipeline. See the layer-loading comment above cell "In[2]"
+for the full stand/treestand/treestandsummary/treestratum relationship.
 """
 
-import numpy as np
-import pandas as pd
 
 # ── Target year (edit this to change which inventory snapshot is used) ────────
 # use this year's measurement; if absent, use earliest year > TARGET_YEAR
@@ -139,6 +236,22 @@ import pandas as pd
 ts = treestand[treestand["standid"].isin(peat_stands["standid"])].copy()
 
 # 2) Parse date/type and keep measured records (type=1) when available
+# `type` marks each treestand row's place in Metsäkeskus's growth-model
+# chain, not an independent measurement method — verified empirically on
+# this dataset (MV_Uusimaa.gpkg):
+#   type=1: the REAL measured/interpreted inventory date (highly variable,
+#           1900-2026, median ~2021) — ground truth for the stand.
+#   type=2: the SAME stand grown forward by Metsäkeskus's model to a common
+#           "current" reference date (clustered on batch dates like
+#           2026-01-01); date2 - date1 varies widely (14 to ~46,000 days).
+#   type=3: grown forward another ~10 years from type=2 (date3 - date2 is
+#           3652-3653 days for ~all stands, std-dev only ~85 days) — a
+#           future-projection snapshot, not a measurement.
+# Each stand normally carries exactly one treestand row of each type (a
+# chain of 3 snapshots: measured -> now -> +10y). We keep type==1 because
+# SUSI does its own growth simulation from the real starting point — using
+# Metsäkeskus's own forward-projections (2/3) as the seed would double up
+# on growth modeling.
 ts["date_dt"] = pd.to_datetime(ts["date"], errors="coerce")
 ts["type_num"] = pd.to_numeric(ts["type"], errors="coerce")
 ts["year"] = ts["date_dt"].dt.year
@@ -162,6 +275,10 @@ print()
 
 # 4) Select TARGET_YEAR or earliest year after it, per stand
 #    Step A: keep only records with year >= TARGET_YEAR
+# NOTE: as currently written this keeps ONLY exact TARGET_YEAR matches
+# (the ">= TARGET_YEAR" fallback described in the docstring/commented-out
+# `ts_gte` line is disabled) — any stand without a measurement in exactly
+# TARGET_YEAR is silently excluded at step 5 below.
 ts_exact = ts_measured[ts_measured["year"] == TARGET_YEAR].copy()
 # ts_gte = ts_measured[ts_measured["year"] >= TARGET_YEAR].copy()
 
@@ -194,6 +311,8 @@ print(f"  → Total stands selected: {len(latest_ts):,}")
 print()
 
 # 6) Bring stand-layer attributes (robust join key: standid)
+# Re-attach the site-level columns from `peat_stands` (the `stand` layer) onto
+# each selected treestand record — treestand itself carries no site metadata.
 stand_cols_preferred = [
     "standid",
     "subgroup",
@@ -211,6 +330,12 @@ stand_attr = peat_stands[stand_cols].copy()
 merged = latest_ts.merge(stand_attr, on="standid", how="left")
 
 # 7) Keep placeholders for summary columns so downstream code never KeyErrors
+# Since treestandsummary is NOT joined (see docstring above — it has zero
+# coverage for type=1 rows, which is all this script keeps), these
+# stand-level aggregate columns don't actually exist yet; NaN placeholders
+# keep later code (which does `.get(...)`) from raising KeyError. Most of these get
+# overwritten downstream by values computed from treestratum (e.g.
+# stand_meanage, stand_basalarea — see cell "In[4]").
 summary_placeholder_cols = [
     "meanage",
     "basalarea",
@@ -226,6 +351,9 @@ for c in summary_placeholder_cols:
         merged[c] = np.nan
 
 # 8) Development class filter
+# Second application of the developmentclass filter (already implicit via
+# DEVELOPMENTCLASS_FILTER intent) — done here explicitly since `stand`-level
+# filtering above didn't include developmentclass.
 merged["developmentclass"] = pd.to_numeric(merged["developmentclass"], errors="coerce")
 merged_filtered = merged[merged["developmentclass"].isin([1, 2, 3])].copy()
 
@@ -242,19 +370,21 @@ print(
 )
 
 
-# In[4]:
+# %% In[4]:
 """
  Load treestratum for selected stands and aggregate each stand's
  strata to exactly three slots: [pine | spruce | deciduous].
 """
-import math
-import numpy as np
-import pandas as pd
 
+# Metsäkeskus tree-species codes mapped onto SUSI's three growth-model
+# species slots (SUSI's Growth_and_Yield_Table only models pine/spruce/
+# generic deciduous, not each Finnish species individually).
 PINE_SP = {1}
 SPRUCE_SP = {2}
 DECID_SP = {3, 4, 5, 6, 7, 8, 9, 15, 20, 29}
 
+# treestratum rows are keyed by treestandid (the inventory-event id), not
+# standid — so first collect the treestandids of the stands selected above.
 selected_ids = set(
     pd.to_numeric(merged_filtered["treestandid"], errors="coerce")
     .dropna()
@@ -289,6 +419,9 @@ if len(strata_raw) > 0:
 
 
 def _estimate_stemcount(total_ba: float, dg_cm: float) -> int:
+    """Back out stem count from basal area and mean diameter when the
+    inventory didn't record stemcount directly:
+    N = BA / (per-tree basal area of a stem with diameter dg_cm)."""
     if total_ba > 0 and pd.notna(dg_cm) and dg_cm > 0:
         ba_per_tree = math.pi * (dg_cm / 2 / 100) ** 2
         return max(1, int(round(total_ba / ba_per_tree)))
@@ -296,6 +429,11 @@ def _estimate_stemcount(total_ba: float, dg_cm: float) -> int:
 
 
 def _aggregate_species_group(rows: pd.DataFrame) -> dict | None:
+    """Collapse all treestratum rows belonging to one species group (pine,
+    spruce, or deciduous — there can be several strata rows per species,
+    e.g. different diameter cohorts) into one representative stratum,
+    basal-area-weighted where possible. Returns None if the group has no
+    rows at all for this stand (caller substitutes a zero-BA dummy)."""
     if rows.empty:
         return None
 
@@ -303,18 +441,24 @@ def _aggregate_species_group(rows: pd.DataFrame) -> dict | None:
     total_n = float(rows["stemcount"].sum(skipna=True))
 
     if total_ba > 0:
+        # Basal-area-weighted means: strata with more BA (bigger/more trees)
+        # dominate the aggregate age/diameter/height for the species group.
         wt = rows["basalarea"].fillna(0.0)
         age_w = (rows["age"].fillna(0.0) * wt).sum() / total_ba
         dg_w = (rows["meandiameter"].fillna(0.0) * wt).sum() / total_ba
         hg_w = (rows["meanheight"].fillna(0.0) * wt).sum() / total_ba
     else:
+        # No basal area to weight by — fall back to plain averages.
         age_w = rows["age"].mean()
         dg_w = rows["meandiameter"].mean()
         hg_w = rows["meanheight"].mean()
 
+    # Guard against zero/NaN diameter or height, which would break
+    # downstream allometry math — substitute small nominal values instead.
     dg_final = float(dg_w) if (pd.notna(dg_w) and dg_w > 0) else 5.0
     hg_final = float(hg_w) if (pd.notna(hg_w) and hg_w > 0) else 3.0
 
+    # If stemcount wasn't recorded but basal area was, derive it.
     if (pd.isna(total_n) or total_n <= 0) and total_ba > 0:
         total_n = _estimate_stemcount(total_ba, dg_final)
 
@@ -328,6 +472,11 @@ def _aggregate_species_group(rows: pd.DataFrame) -> dict | None:
 
 
 def build_three_strata(stand_strata: pd.DataFrame, dominant_age: int):
+    """Split one stand's treestratum rows into the three SUSI species slots
+    (pine, spruce, deciduous). A species with no strata present in this
+    stand gets a zero-basal-area "dummy" stratum (age = the stand's
+    dominant age, no trees) so downstream code always has three complete
+    records to work with, even for single-species stands."""
     dummy = {
         "age": dominant_age,
         "basalarea": 0.0,
@@ -359,6 +508,9 @@ def build_three_strata(stand_strata: pd.DataFrame, dominant_age: int):
 records = []
 skipped_zero_ba = 0
 
+# Build one output record per stand: three per-species strata (pine, spruce,
+# deciduous) plus stand-level aggregates computed by weighting the three
+# species strata by their basal area.
 for _, row in merged_filtered.iterrows():
     tsid = pd.to_numeric(pd.Series([row.get("treestandid")]), errors="coerce").iloc[0]
     if pd.isna(tsid):
@@ -372,9 +524,14 @@ for _, row in merged_filtered.iterrows():
 
     total_ba = float(pine["basalarea"] + spr["basalarea"] + decid["basalarea"])
     if total_ba <= 0:
+        # A stand with literally zero measured basal area across all three
+        # species groups carries no usable growth data — drop it.
         skipped_zero_ba += 1
         continue
 
+    # Stand-level age/height/diameter: basal-area-weighted across the three
+    # species slots (mirrors _aggregate_species_group's weighting logic, one
+    # level up).
     stand_age = (
         pine["age"] * pine["basalarea"]
         + spr["age"] * spr["basalarea"]
@@ -393,6 +550,8 @@ for _, row in merged_filtered.iterrows():
         + decid["meandiameter"] * decid["basalarea"]
     ) / total_ba
 
+    # Main species = whichever of pine/spruce/deciduous carries the most
+    # basal area in this stand — this becomes the "dominant" SUSI layer.
     ba_slots = {
         "pine": pine["basalarea"],
         "spruce": spr["basalarea"],
@@ -450,7 +609,7 @@ else:
     ]
     print(stands_df[display_cols].head(8).to_string(index=False))
 
-# In[5]:
+# %% In[5]:
 """
 Select representative stands per stratum using evenly-spaced BA
 quantiles, with per-development-class sample sizes (N_PER_DC).
@@ -464,7 +623,14 @@ NEW: N_PER_DC = {1: 5, 2: 15, 3: 15}  — sample size varies by DC
 
 
 def select_quantile_representatives(group: pd.DataFrame, n: int) -> pd.DataFrame:
-    """Return up to n rows from group at evenly-spaced BA quantiles."""
+    """Return up to n rows from group at evenly-spaced BA quantiles.
+
+    Rather than a random sample, this deliberately picks stands spread
+    across the basal-area distribution (sorted, then indices at
+    1/(n+1), 2/(n+1), ... n/(n+1) of the way through) — so the selected
+    representatives span the full range of stand density seen in each
+    stratum instead of clustering around the mean.
+    """
     group = group.sort_values("stand_basalarea").reset_index(drop=True)
     actual_n = min(n, len(group))
     if actual_n == 0:
@@ -480,6 +646,8 @@ def select_quantile_representatives(group: pd.DataFrame, n: int) -> pd.DataFrame
 
 
 selected_list = []
+# Stratification key for both sampling and output-file grouping: peatland
+# subgroup (Korpi/Räme) x fertility class x development class.
 STRATUM_KEYS = ["subgroup", "fertilityclass", "developmentclass"]
 
 for stratum_vals, grp in stands_df.groupby(STRATUM_KEYS):
@@ -528,7 +696,7 @@ print(
 )
 
 
-# In[6]:
+# %% In[6]:
 """
 (compatibility variant) — Select representative stands per stratum
 using evenly-spaced BA quantiles.
@@ -538,6 +706,11 @@ Priority for sample size:
 2) N_PER_STRATUM (fallback): single value for all strata
 3) default = 15
 """
+# NOTE: this cell is functionally a duplicate/superset of the previous one
+# (it re-defines select_quantile_representatives and re-runs the same
+# grouping) — it overwrites `selected` with an equivalent DataFrame that
+# additionally carries an `output_stem` column. Kept as-is (not deduplicated)
+# since this is exploratory Sandeep-script code, not production SUSI code.
 
 
 def select_quantile_representatives(group: pd.DataFrame, n: int) -> pd.DataFrame:
@@ -610,7 +783,7 @@ print(
 )
 
 
-# In[7]:
+# %% In[7]:
 """
 Generate combined allometry xlsx files.
 
@@ -637,7 +810,6 @@ In AllometryParams set:
 The "::" separator tells SUSI to read a named sheet from the combined file
 rather than the default "StandData" sheet (backward-compatible extension).
 """
-import shutil
 
 # ── Guard: ensure cell 7 has been run (stratum_id column must exist) ──────────
 if "stratum_id" not in selected.columns:
@@ -648,15 +820,19 @@ if "stratum_id" not in selected.columns:
 if "standid_str" not in selected.columns:
     selected["standid_str"] = selected["standid"].astype(int).astype(str)
 
-from pyproj import Transformer
-from susi.core.allometric_road_map import Growth_and_Yield_Table
 
+# Metsäkeskus stand geometries are in ETRS-TM35FIN (EPSG:3067); SUSI's
+# Growth_and_Yield_Table expects the older Finnish YKJ grid (EPSG:2393) for
+# its climate/location lookups, so every centroid gets reprojected below.
 _transformer_3067_to_ykj = Transformer.from_crs(
     "EPSG:3067", "EPSG:2393", always_xy=True
 )
 
 
 def centroid_to_ykj(geom) -> tuple[int, int]:
+    """Stand-polygon centroid -> YKJ grid coordinates, scaled to the units
+    Growth_and_Yield_Table expects (10 km easting units, 1 km northing
+    units) — matching the REGION_META x/y convention above."""
     cx, cy = geom.centroid.x, geom.centroid.y
     ykj_e, ykj_n = _transformer_3067_to_ykj.transform(cx, cy)
     return round(ykj_e / 10000), round(ykj_n / 1000)  # x, y
@@ -668,6 +844,16 @@ SPECIES_NAME = {1: "Pine", 2: "Spruce", 3: "Deciduous"}
 def _build_gyt(
     pine: dict, spr: dict, decid: dict, fc: int, x_ykj: int, y_ykj: int
 ) -> Growth_and_Yield_Table:
+    """Construct SUSI's Growth_and_Yield_Table for one stand.
+
+    This is the key hand-off point from the Metsäkeskus data to SUSI: the
+    three per-species strata (age/basal-area/stem-count/diameter/height for
+    pine=slot 1, spruce=slot 2, deciduous=slot 3) become the growth-model
+    inputs, alongside site/climate context (fertility_class, DDY, x/y/
+    altitude) and `peat=1` (this is always peatland forestry in this
+    pipeline). `n_trees=20` sets the diameter-distribution resolution the
+    allometric table is built over, not a stand attribute.
+    """
     return Growth_and_Yield_Table(
         age_1=pine["age"],
         G_1=pine["basalarea"],
@@ -704,7 +890,15 @@ def _allometry_for_species(
     x_ykj: int,
     y_ykj: int,
 ) -> pd.DataFrame:
-    """Return get_table() allometry with only the requested species slot active."""
+    """Return get_table() allometry with only the requested species slot active.
+
+    SUSI's allometric road map is built per canopy layer (dominant/
+    subdominant), each modeled as a single species growing alone — so the
+    other two species slots are zeroed out (`dummy`, BA=0) for this call.
+    get_table(start_year=5, end_year=80, step_years=5) produces the
+    age-indexed growth trajectory (5-year steps out to 80 years) that SUSI
+    reads as the stand's future development curve.
+    """
     if sp_code == 1:
         gy = _build_gyt(pine, dummy, dummy, fc, x_ykj, y_ykj)
     elif sp_code == 2:
@@ -730,7 +924,8 @@ dummy_stratum = dict(
 
 for stratum_id, stratum_grp in selected.groupby("stratum_id"):
     out_path = XLSX_OUT_DIR / f"{stratum_id}.xlsx"
-    tmp_path = out_path.with_suffix(".tmp.xlsx")
+    tmp_path = out_path.with_suffix(".tmp.xlsx")  # write to temp, then move — avoids
+    # leaving a half-written/corrupt xlsx behind if generation fails partway.
     loggings_rows = []
 
     try:
@@ -745,12 +940,17 @@ for stratum_id, stratum_grp in selected.groupby("stratum_id"):
                     geom = row.get("geometry")
                     main_sp = int(row["main_species"])
 
+                    # Use the stand's real reprojected centroid when its
+                    # geometry survived the pipeline; otherwise fall back to
+                    # the region-level default coordinates.
                     if geom is not None and not pd.isna(geom):
                         x_ykj, y_ykj = centroid_to_ykj(geom)
                     else:
                         x_ykj, y_ykj = REGION_META["x"], REGION_META["y"]
 
                     # Identify subdominant species (second-highest BA slot)
+                    # — SUSI models a stand as up to two canopy layers:
+                    # dominant (main_sp) and subdominant (sub_sp below).
                     ba_map = {
                         1: pine["basalarea"],
                         2: spr["basalarea"],
@@ -759,6 +959,8 @@ for stratum_id, stratum_grp in selected.groupby("stratum_id"):
                     sorted_sp = sorted(ba_map, key=ba_map.get, reverse=True)
                     sub_sp = sorted_sp[1] if ba_map[sorted_sp[1]] > 0 else main_sp
 
+                    # Compute each layer's own 80-year allometric growth
+                    # trajectory (see _allometry_for_species docstring).
                     dom_df = _allometry_for_species(
                         pine,
                         spr,
@@ -773,6 +975,9 @@ for stratum_id, stratum_grp in selected.groupby("stratum_id"):
                         pine, spr, decid, sub_sp, dummy_stratum.copy(), fc, x_ykj, y_ykj
                     )
 
+                    # Two sheets per stand: dom_{standid} / sub_{standid} —
+                    # this is what AllometryParams' "file.xlsx::sheet_name"
+                    # syntax reads (see module docstring above).
                     dom_df.to_excel(writer, sheet_name=f"dom_{sid}", index=False)
                     sub_df.to_excel(writer, sheet_name=f"sub_{sid}", index=False)
 
@@ -810,6 +1015,9 @@ for stratum_id, stratum_grp in selected.groupby("stratum_id"):
                     )
 
                 except Exception as stand_exc:
+                    # Per-stand failures don't abort the whole stratum file —
+                    # log and continue so the other stands in this stratum
+                    # still get written.
                     skipped_stands.append(
                         {
                             "stratum_id": stratum_id,
@@ -823,6 +1031,9 @@ for stratum_id, stratum_grp in selected.groupby("stratum_id"):
                 raise RuntimeError("All stands failed — no sheets to write.")
 
             # Write shared Loggings lookup sheet (one row per stand × layer)
+            # — this is what SUSI's read_allometry_info_from_excel uses to
+            # know which species each dom_/sub_ sheet in this workbook
+            # represents.
             pd.DataFrame(loggings_rows).to_excel(
                 writer, sheet_name="Loggings", index=False
             )
@@ -852,7 +1063,7 @@ if len(gs_df):
     )
 
 
-# In[8]:
+# %% In[8]:
 """
 Write XML documentation files (one per stratum, all stands inside).
 
@@ -867,6 +1078,9 @@ files produced in cell 8 instead.
 
 
 def _stratum_xml(s: dict) -> str:
+    # One <tst:TreeStratum> block per species slot (pine/spruce/deciduous),
+    # even when its basal area is 0 (i.e. the dummy stratum for an absent
+    # species) — mirrors build_three_strata's "always three slots" design.
     return (
         f"        <tst:TreeStratum>\n"
         f"          <tst:Age>{s['age']}</tst:Age>\n"
@@ -879,6 +1093,9 @@ def _stratum_xml(s: dict) -> str:
 
 
 def build_stand_xml_block(row: pd.Series) -> str:
+    """Render one stand's data as a <st:Stand> block, using the polygon's
+    own exterior ring coordinates when geometry is available (falling back
+    to a degenerate point near the region default location otherwise)."""
     geom = row.get("geometry")
     if geom is not None and not pd.isna(geom):
         coords_str = " ".join(f"{x},{y}" for x, y in geom.exterior.coords)
@@ -940,6 +1157,11 @@ def build_stand_xml_block(row: pd.Series) -> str:
 xml_files_written = []
 STRATUM_KEYS = ["subgroup", "fertilityclass", "developmentclass"]
 
+# One XML file per stratum (not per stand — same grouping as the xlsx step),
+# named {REGION}_sg{sg}_fc{fc}_dc{dc}.xml (note: unlike the xlsx filenames,
+# these do NOT embed TARGET_YEAR, so XML outputs from different years can
+# collide/overwrite each other under XML_OUT_DIR — XML_OUT_DIR itself is
+# already year-scoped, though, which avoids that in practice).
 for stratum_vals, grp in selected.groupby(STRATUM_KEYS):
     sg, fc, dc = stratum_vals
     stands_xml = "".join(build_stand_xml_block(row) for _, row in grp.iterrows())
@@ -981,13 +1203,14 @@ for p in xml_files_written:
 # > xlsx generation in cell 8 above.
 #
 
-# In[9]:
+# %% In[9]:
 """
 Distribution plots: BA and age across the selected stands,
 grouped by stratum (subgroup × fertilityclass × developmentclass).
 """
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
+# Sanity-check visualization: lets you eyeball whether the quantile-based
+# representative selection (cell 6/7) actually spans a sensible range of
+# basal area, age, and height per stratum, rather than clustering.
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
 fig.suptitle(
@@ -1062,12 +1285,14 @@ ax.legend(fontsize=8, ncol=2)
 plt.show()
 
 
-# In[10]:
+# %% In[10]:
 """
 Distribution plots: BA and age across the selected stands,
 grouped by stratum (subgroup × fertilityclass × developmentclass).
 """
-import matplotlib.ticker as mtick
+# NOTE: duplicate of the previous cell (In[9]) — same four panels, re-run
+# here (as in a notebook you'd re-run a cell to refresh a plot). Left as-is
+# since it's a straight duplicate with no behavioral difference.
 
 fig, axes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
 fig.suptitle(
