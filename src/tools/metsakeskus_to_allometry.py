@@ -812,18 +812,6 @@ def build_growth_and_yield_table(
 # %% Writing output (I/O)
 
 
-def clear_previous_outputs(output_dir: Path) -> None:
-    """Removes this tool's own per-stand CSVs from a previous run in
-    output_dir, before writing new ones. Without this, a stand that used to
-    have a subdominant layer but is now a monoculture under the current
-    config (StandWritten.subdominant_csv=None) would leave last run's stale
-    susi_input_<id>_subdominant.csv on disk, contradicting the current run's
-    result -- mirrors src/scripts/metsakeskus.py's own pre-write cleanup."""
-    for pattern in ("susi_input_*_dominant.csv", "susi_input_*_subdominant.csv"):
-        for stale_file in output_dir.glob(pattern):
-            stale_file.unlink()
-
-
 def write_allometry_csv(
     table: pd.DataFrame, species_id: int, output_path: Path
 ) -> None:
@@ -990,12 +978,12 @@ def process_stand(
 
         # Both tables computed successfully (or there is no subdominant
         # layer to compute) -- only now do we write anything to disk.
-        dominant_path = output_dir / f"susi_input_{stand.id}_dominant.csv"
+        dominant_path = output_dir / f"{stand.id}_dominant.csv"
         write_allometry_csv(dominant_table, stand.dominant_species, dominant_path)
 
         subdominant_path: Path | None = None
         if subdominant_table is not None:
-            subdominant_path = output_dir / f"susi_input_{stand.id}_subdominant.csv"
+            subdominant_path = output_dir / f"{stand.id}_subdominant.csv"
             write_allometry_csv(
                 subdominant_table, stand.subdominant_species, subdominant_path
             )
@@ -1113,7 +1101,16 @@ def parse_CLI_arguments() -> CLIArguments:
             )
 
     output_dir = args.output_dir or (Path("inputs") / args.project_name / "allometry")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Refuse to reuse an existing folder rather than silently overwriting
+    # (or, previously, deleting) whatever a prior run left there -- the user
+    # must pick a different output_dir/--project-name instead.
+    if output_dir.exists():
+        parser.error(
+            f"Output folder already exists: {output_dir}. Refusing to run into "
+            "an existing folder. Pass a different --project-name (or output_dir) "
+            "instead."
+        )
+    output_dir.mkdir(parents=True)
 
     return CLIArguments(
         input_gpkg=args.input_gpkg,
@@ -1210,7 +1207,6 @@ def main() -> None:
     filtered_stands, build_skips = build_filtered_stands(viable_candidates)
     print_skips(build_skips, "Skipped (could not build stand record)")
 
-    clear_previous_outputs(cli_args.output_dir)
     outcomes = [
         process_stand(stand, cli_args.config, cli_args.output_dir)
         for stand in filtered_stands

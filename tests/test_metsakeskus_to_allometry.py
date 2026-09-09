@@ -821,7 +821,7 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
         config.end_year,
         config.step_years,
     )
-    output_path = tmp_path / "susi_input_1_dominant.csv"
+    output_path = tmp_path / "1_dominant.csv"
     m.write_allometry_csv(table, stand.dominant_species, output_path)
 
     df, species_id = read_allometry_info_from_csv(output_path)
@@ -900,29 +900,6 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(tmp_path, mon
 
     assert isinstance(outcome, m.StandSkipped)
     assert list(tmp_path.glob("*.csv")) == []
-
-
-# %% clear_previous_outputs
-
-
-def test_clear_previous_outputs_removes_stale_csvs(tmp_path):
-    stale_dominant = tmp_path / "susi_input_1_dominant.csv"
-    stale_subdominant = tmp_path / "susi_input_1_subdominant.csv"
-    stale_dominant.write_text("stale")
-    stale_subdominant.write_text("stale")
-    other_file = tmp_path / "extra_gpkg_info.json"
-    other_file.write_text("{}")
-
-    m.clear_previous_outputs(tmp_path)
-
-    assert not stale_dominant.exists()
-    assert not stale_subdominant.exists()
-    assert other_file.exists()  # only this tool's own per-stand CSVs are cleared
-
-
-def test_clear_previous_outputs_on_empty_dir_is_a_noop(tmp_path):
-    m.clear_previous_outputs(tmp_path)  # must not raise
-    assert list(tmp_path.iterdir()) == []
 
 
 # %% dump_filtered_stands_json / write_stands_xml
@@ -1197,6 +1174,47 @@ def test_parse_CLI_arguments_respects_explicit_output_dir(monkeypatch, dummy_gpk
         ],
     )
     assert cli_args.output_dir == out_dir
+
+
+def test_parse_CLI_arguments_refuses_existing_output_dir(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+):
+    # A folder already there -- e.g. left over from a previous run -- must
+    # stop the tool instead of being silently written into (see the removed
+    # clear_previous_outputs: it used to delete whatever was already there).
+    out_dir = tmp_path / "custom_out"
+    out_dir.mkdir()
+
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_gpkg_file),
+                str(out_dir),
+                f"--config={dummy_config_file}",
+                "--project-name=myproject",
+            ],
+        )
+    stderr = capsys.readouterr().err
+    assert str(out_dir) in stderr
+    assert "already exists" in stderr
+
+
+def test_parse_CLI_arguments_refuses_existing_default_output_dir(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+):
+    # Same refusal, but for the default inputs/<project-name>/allometry/ path
+    # rather than an explicit output_dir argument.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "inputs" / "myproject" / "allometry").mkdir(parents=True)
+
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+        )
+    stderr = capsys.readouterr().err
+    assert "already exists" in stderr
 
 
 def test_parse_CLI_arguments_blocks_out_of_range_altitude(monkeypatch, dummy_gpkg_file, tmp_path, capsys):
