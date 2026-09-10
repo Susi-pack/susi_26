@@ -4,14 +4,11 @@ icon: lucide/map
 
 # How to generate allometry files from Metsäkeskus data
 
-Metsäkeskus, the Finnish Forest Centre, publishes its forest inventory as open
-data: every mapped stand in Finland, with its site attributes and its trees.
-`metsakeskus_to_allometry.py` turns that into the allometry files SUSI reads,
-for every stand in the export that SUSI can actually simulate.
+Metsäkeskus, publishes some its forest inventory as open data.
+`metsakeskus_to_allometry.py` turns each stand in that dataset into the allometry file SUSI reads.
 
-This guide walks through one run, from downloading the data to checking what
-came out. For every flag, config field and filter rule, see the
-[reference page](metsakeskus_to_allometry.md).
+This guide walks through that process, from downloading the data to checking what came out.
+For every flag, config field and filter rule mentioned below, see the [reference page](metsakeskus_to_allometry.md).
 
 ## 1. Download the inventory data
 
@@ -32,23 +29,23 @@ inputs/
     └── MV_Uusimaa.gpkg
 ```
 
-!!! warning "These files are big"
+!!! warning "These files are large"
 
-    The Uusimaa export is 1.8 GB, covers about 429,000 stands, and needs a few
-    GB of memory to read. Everything inside `inputs/` is gitignored, so it will
-    not end up in a commit.
+    The Uusimaa export is 1.8 GB, covers about 429,000 rows (each row = a site at a given year, not all are forests), and needs a few GB of memory to read. Everything inside `inputs/` is gitignored, so it will not end up in a commit.
 
 ## 2. Write the config file
 
-Copy the template,
-[`src/tools/metsakeskus_to_allometry.default.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry.default.toml),
-next to the data it describes:
+Copy the template, [`src/tools/metsakeskus_to_allometry.default.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry.default.toml), next to the data it describes:
 
 ```
 inputs/uusimaa/metsakeskus.toml
 ```
+This file will be passed via the `--config` flag.
+Note that `--config` accepts any path, so keeping the file next to the data is only a convention.
 
-Three fields are required and have no default:
+
+Three fields are required and have no default.
+We choose the following values in this case:
 
 ```toml
 target_year = 2018   # which inventory snapshot to use
@@ -56,48 +53,30 @@ altitude = 50        # metres above sea level
 ddy = 1250           # temperature sum, degree days per year
 ```
 
-`target_year` picks which measurement of each stand to convert; only stands
-measured in exactly that year are used. Altitude and temperature sum are not
-part of the Metsäkeskus data, so you supply them yourself, and the same pair
-applies to every stand in the run.
+`target_year` picks which measurement of each stand to convert; only stands measured in exactly that year are used.
+Altitude and temperature sum are not part of the Metsäkeskus data, so you supply them yourself, and the same pair applies to every stand in the run.
 
-Everything else — which fertility and development classes to keep, and how far
-forward each stand's growth is projected — is optional, and documented in the
-[reference](metsakeskus_to_allometry.md#config-file).
+There are other parameters that modify, e.g., which fertility and development classes to keep, how far forward each stand's growth is projected etc., is optional, and documented in the [reference](metsakeskus_to_allometry.md#config-file).
 
-!!! tip "Don't know your region's altitude and temperature sum?"
-
-    `src/scripts/metsakeskus.py` carries a rough value per region: Uusimaa 50 m
-    and 1250 degree days, Lappi 120 m and 800, and so on. Good enough to get a
-    first run out; replace them with your own site's figures when you have them.
-
-`--config` accepts any path, so keeping the file next to the data is only a
-convention.
 
 ## 3. Run the tool
 
 ```bash
 python src/tools/metsakeskus_to_allometry.py \
-    inputs/uusimaa/MV_Uusimaa.gpkg \
-    --config inputs/uusimaa/metsakeskus.toml \
-    --project-name uusimaa
+    inputs/uusimaa/MV_Uusimaa.gpkg \ # <-- .gpkg with Metsäkeskus region data
+    --config inputs/uusimaa/metsakeskus.toml \ # <-- config file of the previous step
+    --project-name uusimaa # <-- your folder name inside inputs/
 ```
 
-The files land in `inputs/<project-name>/allometry/` — here
-`inputs/uusimaa/allometry/`. Pass a second positional argument if you want them
-somewhere else. Either way the folder must not already exist: the tool refuses
-to run into a previous run's output rather than overwrite it, so a repeat run
-needs a new `--project-name` (or a new output folder).
+The output files land in `inputs/<project-name>/allometry/`.
+In the example above, that's `inputs/uusimaa/allometry/`.
+That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-name` (or a new output folder).
 
-Expect the writing to dominate the runtime. In the Uusimaa run below, reading
-and filtering the whole 1.8 GB export took under a minute, and writing the
-files took about twenty more — one growth trajectory per canopy layer, computed
-and written one file at a time.
 
 ## 4. Read the progress report
 
-The run prints what it read, how each filter narrowed the stands down, and what
-it wrote. For the run above:
+The run prints what it read, how each filter narrowed the stands down, and what it wrote.
+For the run above:
 
 | Stage | Stands left |
 |---|---|
@@ -119,11 +98,8 @@ inputs/uusimaa/allometry/
 └── extra_gpkg_info.json
 ```
 
-Each stand gets one file per canopy layer: `_dominant.csv` always, and
-`_subdominant.csv` when a second species is genuinely present. The JSON
-alongside them records what was extracted for every converted stand; nothing in
-SUSI reads it, but it is the place to look when you want to know why a stand
-came out the way it did.
+Each stand gets one file per canopy layer: `_dominant.csv` always, and `_subdominant.csv` when a second species is present.
+The JSON alongside them records what was extracted for every converted stand; it is the place to look when you want to know why a stand came out the way it did.
 
 ??? question "Why did I get so few stands?"
 
@@ -136,9 +112,7 @@ came out the way it did.
     The second filter then keeps only stands measured in exactly `target_year`,
     which excluded a further 12,571. This is the one to reach for. Just before
     applying it, the tool prints every measured inventory year in your data and
-    how many stands each one covers. Pick a `target_year` from that table: the
-    Uusimaa data spans 1990 to 2025, and 2018 is nowhere near its richest year —
-    2023 covers 2,995 of these stands, against 917 for 2018.
+    how many stands each one covers.
 
     Only 18 stands were lost to data quality here — it is the filters, not the
     state of the data, that decide your yield. Every dropped stand is listed
@@ -147,9 +121,6 @@ came out the way it did.
 
 ## Next steps
 
-You now have allometry files in the layout `CanopyLayerAllometry` expects: a
-folder of CSVs, one per canopy layer. Pointing SUSI at them means building a
-`CanopyLayerAllometry` whose `allometry_dir_path` is that folder, registering
-the stand's files, and mapping them onto the `dominant` and `subdominant`
-layers — see
-[Building a `SusiParams` instance from your own data](how_to_handle_input_data.md#building-a-susiparams-instance-from-your-own-data).
+You now have allometry files in the layout `SusiParams` expects: a folder of CSVs, one per canopy layer.
+Pointing SUSI at them means building a `CanopyLayerAllometry` whose `allometry_dir_path` is that folder, registering the stand's files, and mapping them onto the `dominant` and `subdominant` layers.
+See [Building a `SusiParams` instance from your own data](how_to_handle_input_data.md#building-a-susiparams-instance-from-your-own-data).
