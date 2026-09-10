@@ -16,9 +16,9 @@ For a walkthrough of an actual run, see
 ## Synopsis
 
 ```bash
-python src/tools/metsakeskus_to_allometry.py INPUT_GPKG [OUTPUT_DIR] \
+python src/tools/metsakeskus_to_allometry.py INPUT_GPKG \
     --config CONFIG.toml --project-name NAME \
-    [--allow-out-of-range-values] [--emit-xml]
+    [--allow-out-of-range-values] [--emit-xml] [--dry-run]
 ```
 
 ## Command-line arguments
@@ -26,11 +26,18 @@ python src/tools/metsakeskus_to_allometry.py INPUT_GPKG [OUTPUT_DIR] \
 | Argument | Required | Description |
 |---|---|---|
 | `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage. Must exist and end in `.gpkg`. |
-| `OUTPUT_DIR` | no | Where to write the allometry files. Defaults to `inputs/<project-name>/allometry/`. Must **not** already exist: the tool creates it, and refuses to run into an existing folder rather than overwrite a previous run. |
 | `--config` | yes | Path to the TOML config file (see below). Must exist and end in `.toml`. |
-| `--project-name` | yes | Names the run. Drives the default output folder, and names the XML file written by `--emit-xml`. |
+| `--project-name` | yes | Names the run. Decides where the output goes — `inputs/<project-name>/allometry/`, relative to the current directory — and names the XML file written by `--emit-xml`. Must be a single folder name: no path separators, and not `.` or `..`. |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
 | `--emit-xml` | no | Also write a combined ForestPropertyData XML next to the CSVs. |
+| `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
+
+The output folder is not selectable: `inputs/<project-name>/allometry/` is the
+only place this tool writes. It must **not** already exist — the tool refuses
+to run into a previous run's output rather than overwrite it, so a repeat run
+needs a different `--project-name`. The folder is created just before the
+files are written, so a run that fails while reading or filtering leaves
+nothing behind.
 
 ## Config file
 
@@ -167,6 +174,29 @@ species: there is no growth to model.
 EPSG:3067 (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model, the species
 are ranked by basal area into a dominant and a subdominant, and one growth
 trajectory is computed per layer.
+
+## Dry runs
+
+`--dry-run` stops the run immediately before that last stage. Everything above
+it still happens: the GeoPackage is read, every filter runs, the year table and
+every skipped stand are reported exactly as in a real run. The tool then prints
+the files it would have written, and exits.
+
+Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, no XML, and not
+even the output folder, so a dry run does not claim a `--project-name` that the
+real run then has to work around. The one thing it does still enforce is the
+refusal to run into an existing output folder: whether the real run could start
+is part of what a dry run is for.
+
+Two things carry over from a real run. `--emit-xml` is reported (the dry run
+describes the run you are about to make), and the file names printed are the
+ones a real run would produce, decided by the same code.
+
+The counts are an **upper bound**. Computing the growth trajectories is the
+slow part of a run and the part `--dry-run` skips, so a stand that would fail
+inside the growth model is still counted here. Every other skip — geometry,
+missing data, zero basal area — is reported in full, because those stages all
+ran.
 
 ## Output files
 

@@ -9,7 +9,7 @@
 
 # --- Required, no code-level default ---
 
-# Which inventory snapshot year to use. Example: 2018.
+# Which inventory snapshot year to use. Example: 2005.
 target_year = 0 # REQUIRED
 
 # Site elevation, metres.

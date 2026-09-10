@@ -204,12 +204,31 @@ class ExtractionConfig:
 
 @dataclass(frozen=True)
 class CLIArguments:
+    """The output folder is deliberately NOT a field here: it is a pure
+    function of project_name (output_dir_for_project) and there is no way to
+    override it, so carrying it around as data would just be a second copy of
+    something already derivable -- and one that could drift from it."""
+
     input_gpkg: Path
-    output_dir: Path  # if nothing given, defaults to inputs/<project_name>/allometry/ , resolved before construction
     config: ExtractionConfig
     project_name: str
     allow_out_of_range_values: bool
     emit_xml: bool
+    dry_run: bool
+
+
+@dataclass(frozen=True)
+class StandPlanned:
+    """The files one stand WOULD produce -- a fact about the stand and the
+    output folder, knowable before any growth table is computed (see
+    plan_stand_outputs). Deliberately not part of StandOutcome: that union
+    says what happened when the tool actually tried, while this says what it
+    intends to try, which is all a dry run can honestly report."""
+
+    stand_id: StandID
+    dominant_csv: Path
+    # None exactly when the second species carries no basal area of its own.
+    subdominant_csv: Path | None
 
 
 @dataclass(frozen=True)
@@ -930,6 +949,32 @@ def write_stands_xml(stands: list[ValidStand], output_path: Path) -> None:
 # %% Per-stand orchestration
 
 
+def plan_stand_outputs(stand: ValidStand, output_dir: Path) -> StandPlanned:
+    """Which files this stand produces, and where. Pure, total, and cheap: it
+    reads only what partition_viable_candidates and build_valid_stand have
+    already settled, so it can run long before the growth model does.
+
+    Both paths go through here -- process_stand for a real run, main() for a
+    dry run -- so the dry run reports the real run's own decision rather than
+    a parallel reimplementation of the same naming rules that could drift
+    from it.
+
+    The subdominant file exists exactly when the second-ranked species carries
+    basal area of its own; see docs/adr/0002 for why a monoculture's
+    subdominant layer is not written at all rather than duplicating the
+    dominant one."""
+    subdominant_stratum = species_stratum(stand.strata, stand.subdominant_species)
+    return StandPlanned(
+        stand_id=stand.id,
+        dominant_csv=output_dir / f"{stand.id}_dominant.csv",
+        subdominant_csv=(
+            output_dir / f"{stand.id}_subdominant.csv"
+            if subdominant_stratum.basal_area > 0
+            else None
+        ),
+    )
+
+
 def process_stand(
     stand: ValidStand, config: ExtractionConfig, output_dir: Path
 ) -> StandOutcome:
@@ -944,6 +989,7 @@ def process_stand(
     already written the dominant CSV -- otherwise a StandSkipped outcome
     would leave a stray, unreferenced CSV behind, contradicting the
     reported result."""
+    plan = plan_stand_outputs(stand, output_dir)
     try:
         dominant_table = build_growth_and_yield_table(
             stand.strata,
@@ -959,9 +1005,8 @@ def process_stand(
             config.step_years,
         )
 
-        subdominant_stratum = species_stratum(stand.strata, stand.subdominant_species)
         subdominant_table: pd.DataFrame | None = None
-        if subdominant_stratum.basal_area > 0:
+        if plan.subdominant_csv is not None:
             subdominant_table = build_growth_and_yield_table(
                 stand.strata,
                 stand.subdominant_species,
@@ -978,26 +1023,56 @@ def process_stand(
 
         # Both tables computed successfully (or there is no subdominant
         # layer to compute) -- only now do we write anything to disk.
-        dominant_path = output_dir / f"{stand.id}_dominant.csv"
-        write_allometry_csv(dominant_table, stand.dominant_species, dominant_path)
+        write_allometry_csv(dominant_table, stand.dominant_species, plan.dominant_csv)
 
-        subdominant_path: Path | None = None
         if subdominant_table is not None:
-            subdominant_path = output_dir / f"{stand.id}_subdominant.csv"
+            # plan.subdominant_csv is not None here: it is the very condition
+            # that produced subdominant_table above.
             write_allometry_csv(
-                subdominant_table, stand.subdominant_species, subdominant_path
+                subdominant_table, stand.subdominant_species, plan.subdominant_csv
             )
 
         return StandWritten(
-            stand_id=stand.id,
-            dominant_csv=dominant_path,
-            subdominant_csv=subdominant_path,
+            stand_id=plan.stand_id,
+            dominant_csv=plan.dominant_csv,
+            subdominant_csv=plan.subdominant_csv,
         )
     except Exception as error:  # noqa: BLE001 -- deliberately broad: any per-stand failure becomes a skip, not a run-aborting exception
         return StandSkipped(stand_id=stand.id, reason=str(error))
 
 
 # %% CLI
+
+
+def output_dir_for_project(project_name: str) -> Path:
+    """Where a project's allometry files go. The only place the inputs/ and
+    allometry/ path segments are spelled out, and the only answer available:
+    there is no flag to point the output somewhere else, so the layout
+    inputs/<project-name>/allometry/ is an invariant of this tool rather than
+    a default. Relative to the current working directory, so a run that wants
+    to land elsewhere is a run started elsewhere."""
+    return Path("inputs") / project_name / "allometry"
+
+
+def valid_project_name(value: str) -> str:
+    """--project-name is now the ONLY thing deciding where files are written
+    (output_dir_for_project), so a name that is empty or that climbs out of
+    inputs/ is rejected here instead of quietly writing outside the project
+    layout. Note that only an exact "." or ".." can escape -- once separators
+    are ruled out, an ordinary name that merely contains dots (say
+    "uusimaa..2018") is a folder name like any other and stays allowed."""
+    if not value.strip():
+        raise argparse.ArgumentTypeError("Project name must not be empty")
+    if "/" in value or "\\" in value:
+        raise argparse.ArgumentTypeError(
+            "Project name must be a single folder name, without path "
+            f"separators: {value!r}"
+        )
+    if value in (".", ".."):
+        raise argparse.ArgumentTypeError(
+            f"Project name must be a folder name, not {value!r}"
+        )
+    return value
 
 
 def valid_gpkg_path(value: str) -> Path:
@@ -1030,13 +1105,6 @@ def parse_CLI_arguments() -> CLIArguments:
         "input_gpkg", type=valid_gpkg_path, help="Path to the Metsäkeskus .gpkg file"
     )
     parser.add_argument(
-        "output_dir",
-        type=Path,
-        nargs="?",
-        default=None,
-        help="Output folder. Defaults to inputs/<project-name>/allometry/",
-    )
-    parser.add_argument(
         "--config",
         type=valid_config_path,
         required=True,
@@ -1045,7 +1113,8 @@ def parse_CLI_arguments() -> CLIArguments:
     parser.add_argument(
         "--project-name",
         required=True,
-        help="Names this run. Drives the default output directory, inputs/<project-name>/allometry/",
+        type=valid_project_name,
+        help="Names this run. Decides the output directory, inputs/<project-name>/allometry/",
     )
     parser.add_argument(
         "--allow-out-of-range-values",
@@ -1061,6 +1130,17 @@ def parse_CLI_arguments() -> CLIArguments:
         help=(
             "Also write a combined ForestPropertyData XML alongside the CSVs, "
             "replayable through xml_to_allometry.py independently of the .gpkg."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Report what the run would produce, then exit having written "
+            "nothing at all: no CSVs, no JSON, no XML, not even the output "
+            "folder. Stops before the growth model, which is what makes a "
+            "real run slow, so the filter report arrives in a fraction of "
+            "the time."
         ),
     )
 
@@ -1100,25 +1180,25 @@ def parse_CLI_arguments() -> CLIArguments:
                 + ". Pass --allow-out-of-range-values to override."
             )
 
-    output_dir = args.output_dir or (Path("inputs") / args.project_name / "allometry")
     # Refuse to reuse an existing folder rather than silently overwriting
     # (or, previously, deleting) whatever a prior run left there -- the user
-    # must pick a different output_dir/--project-name instead.
+    # must pick a different --project-name instead. This check runs in dry-run
+    # mode too: "would this run even start?" is exactly what a dry run is for.
+    # Creating the folder is main()'s job, and only on a real run.
+    output_dir = output_dir_for_project(args.project_name)
     if output_dir.exists():
         parser.error(
             f"Output folder already exists: {output_dir}. Refusing to run into "
-            "an existing folder. Pass a different --project-name (or output_dir) "
-            "instead."
+            "an existing folder. Pass a different --project-name instead."
         )
-    output_dir.mkdir(parents=True)
 
     return CLIArguments(
         input_gpkg=args.input_gpkg,
-        output_dir=output_dir,
         config=config,
         project_name=args.project_name,
         allow_out_of_range_values=args.allow_out_of_range_values,
         emit_xml=args.emit_xml,
+        dry_run=args.dry_run,
     )
 
 
@@ -1139,6 +1219,50 @@ def print_year_distribution(year_distribution: pd.DataFrame) -> None:
     print()
 
 
+def csv_counts(outputs: list[StandPlanned] | list[StandWritten]) -> tuple[int, int]:
+    """(dominant, subdominant) CSV counts. Takes either record because the two
+    carry the same pair of path fields, which is what lets the dry run's
+    report and the real run's report be counted the same way instead of each
+    doing its own arithmetic -- and therefore be compared to each other."""
+    dominant = len(outputs)
+    subdominant = sum(1 for output in outputs if output.subdominant_csv is not None)
+    return dominant, subdominant
+
+
+def print_dry_run_plan(
+    plans: list[StandPlanned],
+    output_dir: Path,
+    project_name: str,
+    emit_xml: bool,
+) -> None:
+    """The dry run's stand-in for the real run's writing report: the same
+    counts and the same file names, with nothing on disk. The folder is named
+    as the one that WOULD be created -- parse_CLI_arguments has already
+    refused the run if it exists, so this path is known to be free."""
+    dominant, subdominant = csv_counts(plans)
+    json_path = output_dir / "extra_gpkg_info.json"
+
+    print(f"Destination folder: {output_dir} (not created)")
+    print()
+    print(
+        f"Would write: {len(plans):,} stand(s) -- {dominant:,} dominant + "
+        f"{subdominant:,} subdominant = {dominant + subdominant:,} CSV(s)"
+    )
+    print(f"Would write informational JSON: {json_path}")
+    if emit_xml:
+        print(f"Would write XML: {output_dir / f'{project_name}.xml'}")
+    print()
+    # The dry run stops before build_growth_and_yield_table, so the failures
+    # process_stand would catch (growth model or coordinate math raising for
+    # one stand) cannot be known here. Every filter-level skip above IS real:
+    # those stages all ran.
+    print(
+        "Note: a dry run stops before the growth model, so per-stand "
+        "growth-model failures are not detected. The counts above are an "
+        "upper bound."
+    )
+
+
 def print_skips(skips: list[StandSkipped], label: str) -> None:
     if not skips:
         return
@@ -1153,15 +1277,18 @@ def print_skips(skips: list[StandSkipped], label: str) -> None:
 
 def main() -> None:
     cli_args = parse_CLI_arguments()
+    output_dir = output_dir_for_project(cli_args.project_name)
 
     print_section("Reading")
     print("Tool initialized with:")
     print(f"    - input_gpkg  = {cli_args.input_gpkg}")
-    print(f"    - output_dir  = {cli_args.output_dir}")
+    print(f"    - output_dir  = {output_dir}")
     print(f"    - project     = {cli_args.project_name}")
     print(f"    - target_year = {cli_args.config.target_year}")
     print(f"    - altitude    = {cli_args.config.altitude}")
     print(f"    - ddy         = {cli_args.config.ddy}")
+    if cli_args.dry_run:
+        print("    - DRY RUN -- nothing will be written")
     print()
 
     layers = load_gpkg_layers(cli_args.input_gpkg)
@@ -1231,29 +1358,48 @@ def main() -> None:
 
     print(f"Stands ready for allometry: {len(valid_stands):,}")
 
+    # Everything above this point is identical in a dry run: the filters and
+    # the skip reports are precisely what a dry run exists to show. What it
+    # skips is everything below -- the growth model (~all of a real run's
+    # time) and every write, the output folder included.
+    if cli_args.dry_run:
+        print_section("Writing (dry run -- nothing is written)")
+        plans = [plan_stand_outputs(stand, output_dir) for stand in valid_stands]
+        print_dry_run_plan(plans, output_dir, cli_args.project_name, cli_args.emit_xml)
+        return
+
     print_section("Writing")
-    print(f"Destination folder: {cli_args.output_dir}")
+    print(f"Destination folder: {output_dir}")
+    # Created here rather than at argument-parsing time, so a run that fails
+    # while reading or filtering leaves no empty folder behind to block the
+    # next attempt.
+    output_dir.mkdir(parents=True)
     print()
 
     outcomes = [
-        process_stand(stand, cli_args.config, cli_args.output_dir)
-        for stand in valid_stands
+        process_stand(stand, cli_args.config, output_dir) for stand in valid_stands
     ]
     written: list[StandWritten] = [o for o in outcomes if isinstance(o, StandWritten)]
     processing_skips: list[StandSkipped] = [
         o for o in outcomes if isinstance(o, StandSkipped)
     ]
 
-    n_csvs = len(written) + sum(1 for w in written if w.subdominant_csv is not None)
-    print(f"Allometry files written: {len(written)} stand(s), {n_csvs} CSV(s)")
+    # Same breakdown, and the same csv_counts, as the dry run reports -- so a
+    # dry run and the real run that follows it can be read against each other.
+    dominant, subdominant = csv_counts(written)
+    print(
+        f"Allometry files written: {len(written):,} stand(s) -- {dominant:,} "
+        f"dominant + {subdominant:,} subdominant = "
+        f"{dominant + subdominant:,} CSV(s)"
+    )
     print_skips(processing_skips, "Skipped (processing failure)")
 
-    json_path = cli_args.output_dir / "extra_gpkg_info.json"
+    json_path = output_dir / "extra_gpkg_info.json"
     dump_valid_stands_json(valid_stands, json_path)
     print(f"Informational JSON written: {json_path}")
 
     if cli_args.emit_xml:
-        xml_path = cli_args.output_dir / f"{cli_args.project_name}.xml"
+        xml_path = output_dir / f"{cli_args.project_name}.xml"
         write_stands_xml(valid_stands, xml_path)
         print(f"XML written: {xml_path}")
 

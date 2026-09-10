@@ -31,7 +31,7 @@ inputs/
 
 !!! warning "These files are large"
 
-    The Uusimaa export is 1.8 GB, covers about 429,000 rows (each row = a site at a given year, not all are forests), and needs a few GB of memory to read. Everything inside `inputs/` is gitignored, so it will not end up in a commit.
+    The Uusimaa export is 1.8 GB, covers about 429,000 rows (each row = a site, not all are forests!), and needs a few GB of memory to read. Everything inside `inputs/` is gitignored, so it will not end up in a commit.
 
 ## 2. Write the config file
 
@@ -70,7 +70,20 @@ python src/tools/metsakeskus_to_allometry.py \
 
 The output files land in `inputs/<project-name>/allometry/`.
 In the example above, that's `inputs/uusimaa/allometry/`.
-That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-name` (or a new output folder).
+There is no way to send them anywhere else: `--project-name` is what decides the folder.
+That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-name`.
+
+!!! tip "Try it with `--dry-run` first"
+
+    Add `--dry-run` to the command above and the tool reads the data, applies every filter, and prints exactly what it would produce.
+    Then, exits without writing anything at all.
+
+    This is worth doing before any real run. Two reasons:
+
+    - A real run creates a folder of allometry files that you may have wanted only as a test.
+    - It is faster. Reading and filtering is the fast part of a run; computing one growth trajectory per canopy layer (what `--dry-run` skips) is what takes the time.
+
+    The flip side is that failures inside the growth model cannot be seen in a dry run, so the file count it reports is an upper bound.
 
 
 ## 4. Read the progress report
@@ -113,6 +126,10 @@ The JSON alongside them records what was extracted for every converted stand; it
     which excluded a further 12,571. This is the one to reach for. Just before
     applying it, the tool prints every measured inventory year in your data and
     how many stands each one covers.
+
+    `--dry-run` (see step 3) is the cheap way to try another year: it prints
+    that same table, and the stand counts each filter leaves behind, without
+    writing any files or claiming a project name.
 
     Only 18 stands were lost to data quality here — it is the filters, not the
     state of the data, that decide your yield. Every dropped stand is listed

@@ -1,3 +1,4 @@
+import argparse
 import math
 from pathlib import Path
 
@@ -1112,6 +1113,114 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert json_path.exists()
 
 
+# %% plan_stand_outputs / csv_counts
+
+
+def test_plan_stand_outputs_names_both_layers(tmp_path):
+    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+
+    plan = m.plan_stand_outputs(stand, tmp_path)
+
+    assert plan.stand_id == stand.id
+    assert plan.dominant_csv == tmp_path / "1_dominant.csv"
+    assert plan.subdominant_csv == tmp_path / "1_subdominant.csv"
+
+
+def test_plan_stand_outputs_monoculture_has_no_subdominant(tmp_path):
+    # The same rule process_stand applies: a second-ranked species with zero
+    # basal area gets no file at all (docs/adr/0002).
+    stand = m.build_valid_stand(_candidate("1", pine_ba=10))
+
+    plan = m.plan_stand_outputs(stand, tmp_path)
+
+    assert plan.dominant_csv == tmp_path / "1_dominant.csv"
+    assert plan.subdominant_csv is None
+
+
+def test_plan_stand_outputs_touches_nothing_on_disk(tmp_path):
+    # The premise of --dry-run: planning is pure, so it can name a folder that
+    # does not exist without bringing it into being.
+    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+
+    m.plan_stand_outputs(stand, tmp_path / "never_created")
+
+    assert not (tmp_path / "never_created").exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
+    # The point of routing both paths through plan_stand_outputs: what a dry
+    # run reports is what a real run then puts on disk, name for name.
+    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+    config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0, end_year=10)
+
+    plan = m.plan_stand_outputs(stand, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.dominant_csv == plan.dominant_csv
+    assert outcome.subdominant_csv == plan.subdominant_csv
+    assert sorted(path.name for path in tmp_path.glob("*.csv")) == sorted(
+        [plan.dominant_csv.name, plan.subdominant_csv.name]
+    )
+
+
+def test_csv_counts_counts_dominant_and_subdominant_separately(tmp_path):
+    plans = [
+        m.plan_stand_outputs(
+            m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5)), tmp_path
+        ),
+        m.plan_stand_outputs(
+            m.build_valid_stand(_candidate("2", pine_ba=10)), tmp_path
+        ),
+    ]
+
+    # Two stands -> two dominant files, but only the mixed stand adds a
+    # subdominant one.
+    assert m.csv_counts(plans) == (2, 1)
+
+
+def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
+    output_dir = tmp_path / "allometry"
+    plans = [
+        m.plan_stand_outputs(
+            m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5)), output_dir
+        ),
+        m.plan_stand_outputs(
+            m.build_valid_stand(_candidate("2", pine_ba=10)), output_dir
+        ),
+    ]
+
+    m.print_dry_run_plan(plans, output_dir, project_name="myproject", emit_xml=False)
+
+    printed = capsys.readouterr().out
+    assert "2 stand(s) -- 2 dominant + 1 subdominant = 3 CSV(s)" in printed
+    assert "extra_gpkg_info.json" in printed
+    # Without --emit-xml there is no XML in a real run either, so the plan
+    # must not promise one.
+    assert ".xml" not in printed
+    # The caveat matters: a dry run cannot know about growth-model failures.
+    assert "upper bound" in printed
+    assert not output_dir.exists()
+
+
+def test_print_dry_run_plan_names_the_xml_when_emit_xml_is_set(tmp_path, capsys):
+    # --dry-run and --emit-xml are not contradictory: the dry run describes
+    # the run you are about to make, and that run would emit an XML.
+    output_dir = tmp_path / "allometry"
+    plans = [
+        m.plan_stand_outputs(
+            m.build_valid_stand(_candidate("1", pine_ba=10)), output_dir
+        ),
+    ]
+
+    m.print_dry_run_plan(plans, output_dir, project_name="myproject", emit_xml=True)
+
+    printed = capsys.readouterr().out
+    assert str(output_dir / "myproject.xml") in printed
+    assert not output_dir.exists()
+
+
 # %% CLI
 
 
@@ -1134,6 +1243,28 @@ def _run_parse_CLI_arguments(monkeypatch, argv):
     return m.parse_CLI_arguments()
 
 
+def test_output_dir_for_project_is_under_inputs():
+    assert m.output_dir_for_project("uusimaa") == Path("inputs") / "uusimaa" / "allometry"
+
+
+def test_valid_project_name_accepts_a_plain_folder_name():
+    assert m.valid_project_name("uusimaa") == "uusimaa"
+
+
+def test_valid_project_name_accepts_dots_inside_a_name():
+    # Only an exact "." or ".." can climb out of inputs/; a name that merely
+    # contains dots is an ordinary folder name.
+    assert m.valid_project_name("uusimaa..2018") == "uusimaa..2018"
+
+
+@pytest.mark.parametrize("bad_name", ["", "   ", "a/b", "..", ".", "../escape"])
+def test_valid_project_name_rejects_names_that_are_not_a_single_folder(bad_name):
+    # --project-name is the only thing deciding where output lands, so a name
+    # that is empty or that escapes inputs/<project>/ must be refused.
+    with pytest.raises(argparse.ArgumentTypeError):
+        m.valid_project_name(bad_name)
+
+
 def test_parse_CLI_arguments_requires_config(monkeypatch, dummy_gpkg_file, capsys):
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(monkeypatch, [str(dummy_gpkg_file), "--project-name=test"])
@@ -1148,63 +1279,76 @@ def test_parse_CLI_arguments_requires_project_name(monkeypatch, dummy_gpkg_file,
     assert "--project-name" in capsys.readouterr().err
 
 
-def test_parse_CLI_arguments_defaults_output_dir_under_inputs(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
-):
-    # output_dir defaults relative to the CWD -- chdir into an isolated
-    # tmp_path first so this never touches the real repo's inputs/ directory.
-    monkeypatch.chdir(tmp_path)
-    cli_args = _run_parse_CLI_arguments(
-        monkeypatch,
-        [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
-    )
-    assert cli_args.output_dir == Path("inputs") / "myproject" / "allometry"
-    assert cli_args.output_dir.is_dir()
-
-
-def test_parse_CLI_arguments_respects_explicit_output_dir(monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path):
-    out_dir = tmp_path / "custom_out"
-    cli_args = _run_parse_CLI_arguments(
-        monkeypatch,
-        [
-            str(dummy_gpkg_file),
-            str(out_dir),
-            f"--config={dummy_config_file}",
-            "--project-name=myproject",
-        ],
-    )
-    assert cli_args.output_dir == out_dir
-
-
-def test_parse_CLI_arguments_refuses_existing_output_dir(
+def test_parse_CLI_arguments_rejects_a_second_positional_argument(
     monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
 ):
-    # A folder already there -- e.g. left over from a previous run -- must
-    # stop the tool instead of being silently written into (see the removed
-    # clear_previous_outputs: it used to delete whatever was already there).
-    out_dir = tmp_path / "custom_out"
-    out_dir.mkdir()
-
+    # The output folder used to be an optional second positional. It is gone:
+    # inputs/<project-name>/allometry/ is now the only place output can land,
+    # so a leftover invocation must fail loudly rather than be ignored.
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
             [
                 str(dummy_gpkg_file),
-                str(out_dir),
+                str(tmp_path / "custom_out"),
                 f"--config={dummy_config_file}",
                 "--project-name=myproject",
             ],
         )
-    stderr = capsys.readouterr().err
-    assert str(out_dir) in stderr
-    assert "already exists" in stderr
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_parse_CLI_arguments_creates_no_output_folder(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+):
+    # Creating the folder is main()'s job now, so a run that dies while
+    # reading or filtering leaves nothing behind to block the next attempt.
+    monkeypatch.chdir(tmp_path)
+    _run_parse_CLI_arguments(
+        monkeypatch,
+        [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+    )
+    assert not (tmp_path / "inputs" / "myproject" / "allometry").exists()
+
+
+def test_parse_CLI_arguments_dry_run_defaults_to_false(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+):
+    monkeypatch.chdir(tmp_path)
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+    )
+    assert cli_args.dry_run is False
+
+
+def test_parse_CLI_arguments_dry_run_creates_no_output_folder(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+):
+    # The flag's core promise: a dry run puts nothing on disk, not even the
+    # empty folder that would then block the real run behind a new
+    # --project-name.
+    monkeypatch.chdir(tmp_path)
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_gpkg_file),
+            f"--config={dummy_config_file}",
+            "--project-name=myproject",
+            "--dry-run",
+        ],
+    )
+    assert cli_args.dry_run is True
+    assert not (tmp_path / "inputs").exists()
 
 
 def test_parse_CLI_arguments_refuses_existing_default_output_dir(
     monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
 ):
-    # Same refusal, but for the default inputs/<project-name>/allometry/ path
-    # rather than an explicit output_dir argument.
+    # A folder already there -- e.g. left over from a previous run -- must
+    # stop the tool instead of being silently written into (see the removed
+    # clear_previous_outputs: it used to delete whatever was already there).
     monkeypatch.chdir(tmp_path)
     (tmp_path / "inputs" / "myproject" / "allometry").mkdir(parents=True)
 
@@ -1215,6 +1359,28 @@ def test_parse_CLI_arguments_refuses_existing_default_output_dir(
         )
     stderr = capsys.readouterr().err
     assert "already exists" in stderr
+    assert "--project-name" in stderr
+
+
+def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+):
+    # A dry run reports what the real run would do -- and what the real run
+    # would do here is refuse to start. Catching that is exactly the point.
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "inputs" / "myproject" / "allometry").mkdir(parents=True)
+
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_gpkg_file),
+                f"--config={dummy_config_file}",
+                "--project-name=myproject",
+                "--dry-run",
+            ],
+        )
+    assert "already exists" in capsys.readouterr().err
 
 
 def test_parse_CLI_arguments_blocks_out_of_range_altitude(monkeypatch, dummy_gpkg_file, tmp_path, capsys):
@@ -1231,13 +1397,15 @@ def test_parse_CLI_arguments_blocks_out_of_range_altitude(monkeypatch, dummy_gpk
 
 
 def test_parse_CLI_arguments_allows_out_of_range_with_override(monkeypatch, dummy_gpkg_file, tmp_path, capsys):
+    # chdir first: with the output folder no longer selectable, the run's
+    # destination is inputs/test/allometry relative to the CWD.
+    monkeypatch.chdir(tmp_path)
     config_path = tmp_path / "config.toml"
     config_path.write_text("target_year = 2018\naltitude = 1500.0\nddy = 1200.0\n")
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
         [
             str(dummy_gpkg_file),
-            str(tmp_path / "out"),
             f"--config={config_path}",
             "--project-name=test",
             "--allow-out-of-range-values",
