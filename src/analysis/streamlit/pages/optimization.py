@@ -9,7 +9,7 @@ from susi.io.app_settings import AppSettings
 import susi.io.load_output_data as load_output
 
 import analysis.optimization.core as opti_core
-from susi.io.utils import read_json_file
+from analysis.optimization.stand_areas import stand_areas_for_project
 
 st.header("Optimization")
 
@@ -20,32 +20,12 @@ dir_path = folder_selection.build_folder_selection_widget(
 )
 
 # %% Specify stand areas
-if "paroninkorpi" in str(dir_path):
-    JSON_FROM_XML_PATH = (
-        AppSettings().project_root_path
-        / "xmltoallometry_with_areas/extra_XML_info.json"
-    )
-    j = read_json_file(path=JSON_FROM_XML_PATH)
-
-    def _get_stand_area_from_json_file(json: dict, stand_number: int) -> float:
-        return json["stand_datas"][str(stand_number)]["area"]
-
-    def _stand_id_to_stand_number(stand_id: load_output.StandID) -> int:
-        return int(str(stand_id).split("_")[-1])
-
-    stand_ids = [load_output.StandID(f"stand_{i}") for i in range(1, 22)]
-
-    stand_areas_ha: dict[load_output.StandID, float] = {
-        stand_id: _get_stand_area_from_json_file(
-            json=j, stand_number=_stand_id_to_stand_number(stand_id)
-        )
-        for stand_id in stand_ids
-    }
-
-else:
-    raise ValueError(
-        "Missing method to get stand areas for any area except Paroninkorpi"
-    )
+# Paroninkorpi-only, and raises for any other project; generalizing that is
+# issue #216. Shared with the notebook port so both frontends read the same
+# areas the same way.
+stand_areas_ha: dict[load_output.StandID, float] = stand_areas_for_project(
+    project_dirpath=dir_path
+)
 
 st.subheader("Stand areas")
 with st.expander("View stand areas", expanded=False):
@@ -71,13 +51,6 @@ with st.form(key="optimization_config"):
 
     st.subheader("Choose aggregation method per variable")
 
-    _AGG_METHODS: dict[str, load_output.NetcdfAggregationFn] = {
-        "Mean of all values": load_output.NetcdfVariableArray.mean_of_all_values,
-        "Spatial mean at last timestep": load_output.NetcdfVariableArray.spatial_mean_at_last_timestep,
-        "Mean over space, sum over time": load_output.NetcdfVariableArray.mean_over_space_sum_over_time,
-        "Spatial mean at initial timestep": load_output.NetcdfVariableArray.spatial_mean_at_initial_timestep,
-    }
-
     chosen_var_properties: dict[
         load_output.NetcdfVariablePath, opti_core.TargetVariableProperties
     ] = {}
@@ -88,7 +61,7 @@ with st.form(key="optimization_config"):
         with col2:
             chosen_aggregation_label = st.selectbox(
                 label="Aggregation method",
-                options=list(_AGG_METHODS.keys()),
+                options=list(opti_core.AGGREGATION_METHODS_BY_LABEL.keys()),
                 key=f"agg_{var_path}",
                 label_visibility="collapsed",
             )
@@ -100,7 +73,9 @@ with st.form(key="optimization_config"):
                 key=f"invert_{var_path}",
             )
         chosen_var_properties[var_path] = opti_core.TargetVariableProperties(
-            aggregation_function=_AGG_METHODS[chosen_aggregation_label],
+            aggregation_function=opti_core.AGGREGATION_METHODS_BY_LABEL[
+                chosen_aggregation_label
+            ],
             invert_optimization=invert_optimization,
         )
 

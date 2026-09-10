@@ -1,5 +1,5 @@
 # %%
-from typing import Sequence
+from typing import Any, Sequence
 from numpy.typing import NDArray
 from dataclasses import dataclass
 import numpy as np
@@ -25,11 +25,40 @@ class TargetVariableProperties:
     invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
 
 
+# The reductions a user can pick from to collapse a target variable's
+# time/space array down to the single float the optimization needs, keyed by
+# the label shown in the UI. Lives here rather than in a frontend so that the
+# Streamlit page and the notebook cannot drift apart on what a label means.
+AGGREGATION_METHODS_BY_LABEL: dict[str, load_output.NetcdfAggregationFn] = {
+    "Mean of all values": load_output.NetcdfVariableArray.mean_of_all_values,
+    "Spatial mean at last timestep": load_output.NetcdfVariableArray.spatial_mean_at_last_timestep,
+    "Mean over space, sum over time": load_output.NetcdfVariableArray.mean_over_space_sum_over_time,
+    "Spatial mean at initial timestep": load_output.NetcdfVariableArray.spatial_mean_at_initial_timestep,
+}
+
+
 # OUTPUT API
 @dataclass(frozen=True)
 class DesignAndTargetVectors:
     design_vectors: NDArray[np.float64]  # shape: (n_pareto_solutions, n_vars)
     target_vectors: NDArray[np.float64]  # shape: (n_pareto_solutions, n_vars)
+
+
+@dataclass(frozen=True)
+class PreparedOptimizationData:
+    """
+    A project's netcdf data, reduced to what the Pareto search consumes.
+
+    Produced by prepare_optimization_data() and passed to
+    solve_optimization(). variable_info is carried along because the solve
+    step needs it to undo the sign flip applied to inverted variables.
+    """
+
+    variable_info: dict[NetcdfVariablePath, TargetVariableProperties]
+
+    # One entry per stand; within a stand, one row per surviving scenario and
+    # one column per target variable, already weighted by the stand's area.
+    data_table: list[list[Any]]
 
 
 @dataclass(frozen=True)
@@ -224,7 +253,7 @@ def _print_cardinality_info(
         f"\nTotal number of scenarios before pre-pruning:{sum(scenarios_cardinality)}"
     )
     print(
-        "Total number of scenarios after  pre-pruning:{sum(pruned_scenarios_cardinality)}"
+        f"Total number of scenarios after  pre-pruning:{sum(prepruned_scenarios_cardinality)}"
     )
     print(
         f"Number of pre-pruned scenarios: {sum(scenarios_cardinality) - sum(prepruned_scenarios_cardinality)}"
@@ -317,14 +346,20 @@ def _flip_inverted_variables_sign(
     )
 
 
-def run_optimization(
+def prepare_optimization_data(
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
     project_dirpath: Path,
     stand_areas: dict[StandID, float],
-    epsilon: float,
-    n_random_points: int = 10000,
-) -> OptimizationResults:
+) -> PreparedOptimizationData:
+    """
+    Read the project's netcdfs and reduce them to the Pareto search's input.
 
+    This is the slow, I/O-bound half of run_optimization: it reads every
+    stand/scenario netcdf, aggregates each target variable to one
+    area-weighted float, and drops the scenarios that are dominated within
+    their own stand. It prints how much that pre-pruning saved, so a caller
+    can see the size of the search before committing to it.
+    """
     print("optimization - Reading data...")
 
     data_store = read_data(variable_info=variable_info, project_dirpath=project_dirpath)
@@ -341,23 +376,66 @@ def run_optimization(
         scenarios=data_store.scenarios, prepruned_scenarios=prepruned.scenarios
     )
 
-    data_table_list = from_numpy_arrays_to_nested_lists(prepruned.data_weighted_by_area)
+    return PreparedOptimizationData(
+        variable_info=variable_info,
+        data_table=from_numpy_arrays_to_nested_lists(prepruned.data_weighted_by_area),
+    )
 
+
+def solve_optimization(
+    prepared: PreparedOptimizationData,
+    epsilon: float,
+    n_random_points: int = 10000,
+) -> OptimizationResults:
+    """
+    Run the Pareto search over already-prepared data.
+
+    This is the compute-bound half of run_optimization, and the expensive
+    one: cost grows with the number of scenario combinations reported by
+    prepare_optimization_data() and with how fine epsilon is.
+    """
     print("optimization - Finding Pareto front...")
-    pareto_front = pareto_dp.find_pareto_front(data=data_table_list, epsilon=epsilon)
+    pareto_front = pareto_dp.find_pareto_front(
+        data=prepared.data_table, epsilon=epsilon
+    )
 
     print("optimization - Generating random solutions...")
     random_points = pareto_dp.create_random_points(
-        data=data_table_list, n_points=n_random_points
+        data=prepared.data_table, n_points=n_random_points
     )
 
     return OptimizationResults(
         pareto_front=_flip_inverted_variables_sign(
-            variable_info=variable_info,
+            variable_info=prepared.variable_info,
             vectors=_convert_list_of_points_to_array(pareto_front),
         ),
         random_points=_flip_inverted_variables_sign(
-            variable_info=variable_info,
+            variable_info=prepared.variable_info,
             vectors=_convert_list_of_points_to_array(random_points),
         ),
+    )
+
+
+def run_optimization(
+    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
+    project_dirpath: Path,
+    stand_areas: dict[StandID, float],
+    epsilon: float,
+    n_random_points: int = 10000,
+) -> OptimizationResults:
+    """
+    Read a project's data and find its Pareto front, in one call.
+
+    Callers that want to inspect the problem's size before paying for the
+    search (as the notebook does, one step per cell) can call
+    prepare_optimization_data() and solve_optimization() separately instead.
+    """
+    return solve_optimization(
+        prepared=prepare_optimization_data(
+            variable_info=variable_info,
+            project_dirpath=project_dirpath,
+            stand_areas=stand_areas,
+        ),
+        epsilon=epsilon,
+        n_random_points=n_random_points,
     )
