@@ -40,6 +40,10 @@ dev = [
     "xmltodict>=1.0.4",
     "zensical>=0.0.33",
 ]
+notebook = ["jupyterlab>=4.6,<5", "ipykernel>=6.30"]
+
+[tool.uv]
+default-groups = ["dev", "notebook"]
 
 
 [build-system]
