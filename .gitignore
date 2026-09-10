@@ -105,5 +105,9 @@ docs/agents/
 tmp
 
 # Data
+DATA/
 
-DATA/*.gpkg
+# Jupyter stuff
+.jupyter_ystore.db
+.virtual_documents
+.jupyter

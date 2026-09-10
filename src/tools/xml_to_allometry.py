@@ -368,7 +368,17 @@ def get_stand_data_from_xml(stand: dict) -> StandData | None:
         # Optionals
         main_group=int(stand_basic_data["st:MainGroup"]),
         sub_group=int(stand_basic_data["st:SubGroup"]),
-        soil_type=int(stand_basic_data["st:SoilType"]),
+        # soil_type is genuinely Optional (unlike the other "Optionals"
+        # here): a writer with no recorded soil type (see
+        # metsakeskus_to_allometry.py's StandSiteAttributes) omits the
+        # <st:SoilType> tag entirely rather than inventing a value, so this
+        # must tolerate that -- xmltodict's .get() returns None for a
+        # missing tag, same as the model's own soil_type: Optional[int].
+        soil_type=(
+            int(soil_type_xml)
+            if (soil_type_xml := stand_basic_data.get("st:SoilType")) is not None
+            else None
+        ),
         mean_age=int(tree_stand_summary["tss:MeanAge"]),
         basal_area=float(tree_stand_summary["tss:BasalArea"]),
         mean_height=float(tree_stand_summary["tss:MeanHeight"]),

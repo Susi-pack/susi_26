@@ -41,11 +41,19 @@ Allometry is a canopy layer's growth-and-yield table — age, basal area, stem
 count, mean diameter, and mean height for each tree stratum — that drives
 stand growth over the course of a run.
 
-How to get it: generate it with [`xml_to_allometry.py`](xml_to_allometry.md),
-which converts a Finnish forest XML stand export (metsätietostandardit) into
-the `.xlsx` allometry format SUSI expects.
+How to get it: generate it with one of two converters, depending on the
+inventory data you start from. Both write the same allometry CSV format.
 
-Reference: [XML → allometry file](xml_to_allometry.md), [`CanopyLayerAllometry`](simulation_config.md#susi.io.susi_parameter_model.CanopyLayerAllometry).
+- From a Finnish forest XML stand export (metsätietostandardit):
+  [`xml_to_allometry.py`](xml_to_allometry.md).
+- From a Metsäkeskus forest inventory GeoPackage:
+  [`metsakeskus_to_allometry.py`](how_to_generate_allometry_from_metsakeskus.md),
+  which converts every drained-peatland stand in the export, one file per
+  canopy layer.
+
+Reference: [XML → allometry file](xml_to_allometry.md),
+[Metsäkeskus data → allometry files](metsakeskus_to_allometry.md),
+[`CanopyLayerAllometry`](simulation_config.md#susi.io.susi_parameter_model.CanopyLayerAllometry).
 
 ## `SusiParams`
 
@@ -65,5 +73,5 @@ Reference: [Simulation Parameters](simulation_config.md).
 | Type | What it is | How you get it | Reference |
 |---|---|---|---|
 | Weather | FMI interpolated daily weather CSV | To do | [Weather data](weather_data.md) |
-| Allometry | Growth-and-yield table per canopy layer | Generate with `xml_to_allometry.py` from an XML stand export | [XML → allometry file](xml_to_allometry.md) |
+| Allometry | Growth-and-yield table per canopy layer | Generate with `xml_to_allometry.py` from an XML stand export, or `metsakeskus_to_allometry.py` from a Metsäkeskus `.gpkg` | [XML → allometry file](xml_to_allometry.md), [Metsäkeskus data → allometry files](metsakeskus_to_allometry.md) |
 | `SusiParams` | Full run configuration | Write it yourself as a parameter-model script | [Simulation Parameters](simulation_config.md) |
