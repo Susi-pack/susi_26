@@ -4,11 +4,14 @@ icon: lucide/map
 
 # How to generate allometry files from Metsäkeskus data
 
-Metsäkeskus, publishes some its forest inventory as open data.
+Metsäkeskus publishes some its forest inventory as open data.
 `metsakeskus_to_allometry.py` turns each stand in that dataset into the allometry file SUSI reads.
 
-This guide walks through that process, from downloading the data to checking what came out.
+This guide walks through that process, from downloading the data to checking the output allometry files.
 For every flag, config field and filter rule mentioned below, see the [reference page](metsakeskus_to_allometry.md).
+
+To generate the same kind of file from a Finnish forestry XML stand export instead, see
+[How to generate allometry files from XML data](how_to_generate_allometry_from_xml.md).
 
 ## 1. Download the inventory data
 
@@ -20,13 +23,13 @@ https://avoin.metsakeskus.fi/aineistot/Metsavarakuviot/Maakunta/MV_Uusimaa.zip
 
 Swap `MV_Uusimaa` for the region you need.
 
-Unzip it into your project folder, the same way as the rest of your input data
-(see [How to handle input data](how_to_handle_input_data.md)):
+We recommend you unzip it into the root-level `inputs/` folder.
+That way, it won't be tracked by git, and it will be located in a logical place.
+( For more information on this, see [How to handle input data](how_to_handle_input_data.md)).
 
 ```
 inputs/
-└── uusimaa/
-    └── MV_Uusimaa.gpkg
+└──  MV_Uusimaa.gpkg
 ```
 
 !!! warning "These files are large"
@@ -35,13 +38,23 @@ inputs/
 
 ## 2. Write the config file
 
-Copy the template, [`src/tools/metsakeskus_to_allometry.default.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry.default.toml), next to the data it describes:
+Create a new folder under `inputs/`.
+That's where the input data for your SUSI simulations will live.
+For lack of a better term, we call this the `project` directory.
+The CLI argument `--project-dir` points there.
+In our case, this could be:
+```
+inputs/uusimaa/
+```
+Next, copy the `.toml` template [`src/tools/metsakeskus_to_allometry/default_config.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry/default_config.toml) into that folder.
+Call it `config.toml`:
 
 ```
-inputs/uusimaa/metsakeskus.toml
+inputs/uusimaa/config.toml
 ```
-This file will be passed via the `--config` flag.
-Note that `--config` accepts any path, so keeping the file next to the data is only a convention.
+
+Named and placed this way, the tool finds it automatically from `--project-dir` alone, with no separate `--config` flag needed (see step 3).
+`--config` still accepts any path, if you'd rather keep the file elsewhere or under a different name.
 
 
 Three fields are required and have no default.
@@ -62,16 +75,19 @@ There are other parameters that modify, e.g., which fertility and development cl
 ## 3. Run the tool
 
 ```bash
-python src/tools/metsakeskus_to_allometry.py \
+python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py \
     inputs/uusimaa/MV_Uusimaa.gpkg \ # <-- .gpkg with Metsäkeskus region data
-    --config inputs/uusimaa/metsakeskus.toml \ # <-- config file of the previous step
-    --project-name uusimaa # <-- your folder name inside inputs/
+    --project-dir inputs/uusimaa # <-- your project's folder, from steps 1-2
 ```
 
-The output files land in `inputs/<project-name>/allometry/`.
+`--config` is left out here: since `config.toml` lives directly inside `--project-dir`, the tool finds it there automatically.
+
+The output files land in `<project-dir>/allometry/`.
 In the example above, that's `inputs/uusimaa/allometry/`.
-There is no way to send them anywhere else: `--project-name` is what decides the folder.
-That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-name`.
+There is no way to send them anywhere else: `--project-dir` is what decides the folder.
+That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-dir` (or a fresh `allometry/` folder underneath the existing one).
+
+The tool prints the fully-resolved (absolute) path of everything it reads and writes, so it's never ambiguous what "the output folder" refers to.
 
 !!! tip "Try it with `--dry-run` first"
 
@@ -129,7 +145,7 @@ The JSON alongside them records what was extracted for every converted stand; it
 
     `--dry-run` (see step 3) is the cheap way to try another year: it prints
     that same table, and the stand counts each filter leaves behind, without
-    writing any files or claiming a project name.
+    writing any files or claiming a `--project-dir`.
 
     Only 18 stands were lost to data quality here — it is the filters, not the
     state of the data, that decide your yield. Every dropped stand is listed

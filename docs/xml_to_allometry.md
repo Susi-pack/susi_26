@@ -2,33 +2,100 @@
 icon: lucide/file-input
 ---
 
-# XML to Allometry Converter
+# XML data --> allometry files
 
-## Overview
+`src/tools/xml_to_allometry/xml_to_allometry.py` converts a Finnish national forest XML stand export (metsätietostandardit) into the allometry CSVs SUSI needs.
+Every stand in the file that carries tree strata data is converted: there is no sampling and no grouping of stands.
 
-The `xml_to_allometry.py` script transforms XML stand data following Metsätietostandardit into the allometry CSV format required by SUSI's growth and yield model.
+This page is the reference for the tool's parameters, inputs and outputs.
+For a walkthrough of an actual run, see
+[How to generate allometry files from XML data](how_to_generate_allometry_from_xml.md).
 
 To generate the same kind of file from a Metsäkeskus GeoPackage instead, see
-[How to generate allometry files from Metsäkeskus data](how_to_generate_allometry_from_metsakeskus.md).
+[Metsäkeskus data --> allometry files](metsakeskus_to_allometry.md).
 
-This tool allows SUSI to work with this standardized forestry data format.
+## Synopsis
 
+```bash
+python src/tools/xml_to_allometry/xml_to_allometry.py INPUT_XML \
+    --project-dir PROJECT_DIR [--config CONFIG.toml] \
+    [--allow-out-of-range-values] [--dry-run]
+```
 
-## Finnish Forestry XML Standard
+## Command-line arguments
 
-The input XML files follow the **Finnish national forest information standards** (metsätietostandardit), managed by the Finnish Forest Centre. These standards define XML schema specifications for exchanging forest resource data between different operators in the forestry sector.
+| Argument | Required | Description |
+|---|---|---|
+| `INPUT_XML` | yes | The XML stand export. Must exist and end in `.xml`. |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — and where the config file is looked up by default. |
+| `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/config.toml`. Must exist and end in `.toml`. |
+| `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
+| `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
+
+The output folder is not selectable: `<project-dir>/allometry/` is the
+only place this tool writes. It must **not** already exist — the tool refuses
+to run into a previous run's output rather than overwrite it, so a repeat run
+needs a different `--project-dir`, or a fresh `allometry/` folder underneath
+the existing one. The folder is created just before the files are written, so
+a run that fails while reading or filtering leaves nothing behind.
+
+The tool also prints the fully-resolved (absolute) path it read the config
+from and the path it writes to, so what ends up on disk is never ambiguous
+relative to the directory you happened to run it from.
+
+## Config file
+
+A TOML file. By default the tool looks for `config.toml` directly inside
+`--project-dir`; pass `--config` to use a different name or location. Copy
+[`src/tools/xml_to_allometry/default_config.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/xml_to_allometry/default_config.toml)
+and edit it: the optional fields are listed with the values the tool applies
+when they are absent, while the two required ones carry deliberately invalid
+placeholders for you to replace. Unknown fields are rejected, and every missing
+required field is reported at once.
+
+### Required
+
+Neither altitude nor temperature sum is part of the XML standard, so you
+supply both. One value applies to every stand in the run.
+
+| Field | Unit | Enforced range | Description |
+|---|---|---|---|
+| `altitude` | m above sea level | 0 – 1000 | Site elevation. |
+| `ddy` | degree days per year | 500 – 2000 | Temperature sum. |
+
+The enforced ranges are deliberately wider than Finnish forest land, to catch a
+mistyped value (metres vs feet, say) without rejecting real ones. A value
+outside the range blocks the run unless you pass `--allow-out-of-range-values`.
+
+### Optional
+
+| Field | Default | Description |
+|---|---|---|
+| `n_trees` | `20` | Reference trees per species in the growth model. |
+| `start_year` | `5` | First projected step, in years after the stand's measured data. |
+| `end_year` | `80` | Last projected step, in years after that. |
+| `step_years` | `5` | Interval between projected steps. |
+
+These four are passed straight to `Growth_and_Yield_Table`, and set how far
+forward each stand's growth is projected and at what resolution.
+
+## Input XML structure
+
+The input XML files follow the **Finnish national forest information
+standards** (metsätietostandardit), managed by the Finnish Forest Centre.
+These standards define XML schema specifications for exchanging forest
+resource data between different operators in the forestry sector.
 
 Key characteristics of the format:
 
-- Uses **GML (Geography Markup Language)** for geospatial data (polygon geometries)
+- Uses **GML (Geography Markup Language)** for geospatial data (polygon
+  geometries)
 - Structured around forest **stands** (kuvio) as the basic unit
 - Contains tree stratum data, stand statistics, and metadata
 
-## Input XML Structure
-
 The XML file must follow this hierarchical structure:
 
-```xml
+```
 <ForestPropertyData>
   <Stands>
     <Stand id="...">
@@ -37,6 +104,7 @@ The XML file must follow this hierarchical structure:
         <MainGroup>...</MainGroup>
         <SubGroup>...</SubGroup>
         <SoilType>...</SoilType>
+        <Area>...</Area>
         <PolygonGeometry>
           <polygonProperty>
             <Polygon>
@@ -60,13 +128,14 @@ The XML file must follow this hierarchical structure:
           </TreeStandSummary>
           <TreeStrata>
             <TreeStratum>
+              <TreeSpecies>...</TreeSpecies>
               <Age>...</Age>
               <BasalArea>...</BasalArea>
               <StemCount>...</StemCount>
               <MeanDiameter>...</MeanDiameter>
               <MeanHeight>...</MeanHeight>
             </TreeStratum>
-            <!-- Two more TreeStratum elements (3 total) -->
+            <!-- Up to two more TreeStratum elements -->
           </TreeStrata>
         </TreeStandDataDate>
       </TreeStandData>
@@ -75,99 +144,95 @@ The XML file must follow this hierarchical structure:
 </ForestPropertyData>
 ```
 
-### Required Elements
+### Required elements
 
 | Element | Description |
 |---------|-------------|
 | `Stand/@id` | Unique stand identifier |
 | `StandBasicData/FertilityClass` | Site fertility class (integer) |
+| `StandBasicData/MainGroup`, `SubGroup`, `Area` | Parsed unconditionally; a stand missing any of these aborts the whole run rather than being skipped. |
 | `StandBasicData/PolygonGeometry` | Stand boundary as GML polygon |
 | `TreeStandSummary/MeanDiameter` | Mean diameter at breast height (cm) |
 | `TreeStandSummary/MeanAge` | Mean stand age (years) |
 | `TreeStandSummary/BasalArea` | Basal area (m²/ha) |
 | `TreeStandSummary/MeanHeight` | Mean height (m) |
 | `TreeStandSummary/Volume` | Total volume (m³/ha) |
-| `TreeStrata/TreeStratum` | Exactly 3 tree strata with age, basal area, stem count, diameter, and height |
+| `TreeStrata/TreeStratum` | One to three tree strata, each with a species code plus age, basal area, stem count, diameter, and height (see [What the tool does](#what-the-tool-does)). A stand with no `TreeStrata` container at all is not malformed — it is skipped, see [Skipped stands](#skipped-stands). |
 
-### Optional Elements
+### Optional elements
 
-These are parsed for informational purposes and included in the JSON output:
+Genuinely optional — a missing `SoilType` tag is read as absent (`null`)
+rather than aborting the run:
 
-- `StandBasicData/MainGroup` - Main species group
-- `StandBasicData/SubGroup` - Sub group
-- `StandBasicData/SoilType` - Soil type
+- `StandBasicData/SoilType` — soil type
 
-## Output Files
+## What the tool does
 
-### Allometry CSV files
+The run is printed in three sections — reading, filtering, and writing.
 
-For each stand in the XML file, the script generates a CSV file named
-`susi_input_{stand_id}.csv`: the allometric road map produced by
-`Growth_and_Yield_Table`, with a leading `Species_ID` column naming the stand's
-main species. It follows the canonical allometry schema — the columns declared
-in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` — and is read directly by
+**Filtering.** The one check applied is presence of tree strata: a stand
+whose `TreeStandDataDate` has no `TreeStrata` container at all is skipped
+(reported by stand id and reason) rather than aborting the run; every other
+piece of missing required data aborts immediately, since it signals a
+malformed file rather than an unremarkable gap.
+
+**Writing.** For each stand that survives filtering:
+
+- Its up to three `TreeStratum` entries are mapped into fixed species slots —
+  species 1 (pine) into slot 0, species 2 (spruce) into slot 1, any other
+  species code into slot 2 (deciduous) — with a slot left at zero when the
+  stand has no stratum for that species.
+- The **main species** is the slot with the largest basal area.
+- The stand's first coordinate pair is transformed from EPSG:3067
+  (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model.
+- One growth trajectory is computed by `Growth_and_Yield_Table`, covering all
+  three species slots together (unlike `metsakeskus_to_allometry.py`, which
+  isolates the dominant and subdominant species into separate files — see
+  [issue #276](https://github.com/Susi-pack/susi_26/issues/276)).
+
+## Dry runs
+
+`--dry-run` stops the run immediately before the writing stage. Reading and
+filtering still happen in full — every stand is parsed and the TreeStrata
+check still runs and reports its skips — since that is precisely what a dry
+run exists to show. The tool then prints the files it would have written, and
+exits.
+
+Nothing at all is created — no CSVs, no `extra_xml_info.json`, and not even
+the output folder, so a dry run does not claim a `--project-dir` that the
+real run then has to work around. The one thing it does still enforce is the
+refusal to run into an existing output folder: whether the real run could
+start is part of what a dry run is for.
+
+The counts are an **upper bound**: computing the growth trajectory is the
+slow part of a run and the part `--dry-run` skips, so a stand that would fail
+inside the growth model or the coordinate transform is still counted here.
+The TreeStrata skip is reported in full, because that stage did run.
+
+## Output files
+
+| File | Written |
+|---|---|
+| `susi_input_{stand_id}.csv` | Always, one per stand that survives filtering. |
+| `extra_xml_info.json` | Always. Every converted stand's parsed data — id, fertility class, polygon coordinates, all three tree strata, main species, and the optional metadata fields. Informational: nothing in SUSI reads it. |
+
+Each CSV is the allometric road map produced by `Growth_and_Yield_Table`, with
+a leading `Species_ID` column naming the stand's main species. It follows the
+canonical allometry schema — the columns declared in
+`susi.core.allometry_columns.ALLOMETRY_COLUMNS` — and is read directly by
 `read_allometry_info_from_csv`.
 
-### Informational JSON File
+## Skipped stands
 
-An additional file `extra_XML_info.json` is created in the output directory, containing the complete parsed stand data in JSON format. This includes:
+A stand that fails a check is reported with its id and a reason, and the run
+continues. One bad stand never aborts the others.
 
-- Stand ID and fertility class
-- Polygon coordinates
-- Tree stratum data (all 3 strata)
-- Main species (determined by largest basal area)
-- Optional metadata: main group, sub group, soil type, mean age, basal area, mean height, total volume
+| Reason | Meaning |
+|---|---|
+| `Stand <id> has no TreeStrata` | The stand's `TreeStandDataDate` has no `TreeStrata` container at all. |
 
-## Usage
-
-```bash
-python xml_to_allometry.py <input.xml> <output_directory> --altitude=<value> --ddy=<value>
-```
-
-**Arguments:**
-
-- `input.xml` - Path to the input XML file
-- `output_directory` - Path to the output directory for generated files
-- `--altitude` - **Required.** Altitude above sea level, in metres, applied to every stand in this run. Not present in the XML standard, so it must be supplied explicitly.
-- `--ddy` - **Required.** Temperature sum (degree days per year). Also not present in the XML standard, so it must be supplied explicitly.
-- `--allow-out-of-range-values` - Optional flag. See [Altitude / DDY Validation](#altitude--ddy-validation) below.
-- `--do-thinning` - Optional flag. Apply sapling stand thinning where needed (see [Thinning Rate Calculation](#thinning-rate-calculation)).
-
-**Example:**
-
-```bash
-python src/tools/xml_to_allometry.py data/forest_stands.xml output/allometry_files/ --altitude=150 --ddy=1200
-```
-
-### Altitude / DDY Validation
-
-`--altitude` and `--ddy` apply the same value to every stand processed in this run — there is currently no way to vary them per stand or per XML file in a single run.
-
-Values are checked against an enforced range, deliberately set a bit wider than what's typical for Finnish forest land, to allow some margin without silently accepting nonsense input:
-
-| Parameter | Enforced range | Typical Finnish value | Unit |
-|-----------|-----------------|------------------------|------|
-| `--altitude` | 0 – 1000 | sea level – 700 | metres above sea level |
-| `--ddy` | 500 – 2000 | ~600 (Lapland) – ~1500 (southern Finland) | degree days per year |
-
-By default, a value outside the **enforced range** blocks the run with an error naming every violation found (not just the first). Pass `--allow-out-of-range-values` to proceed anyway — the tool will still print a warning for each out-of-range value used, so it stays visible in the run's output. `NaN` is always rejected outright, regardless of `--allow-out-of-range-values`.
-
-## Technical Details
-
-### Coordinate Transformation
-
-The script transforms stand coordinates from EPSG:3067 (ETRS-TM35FIN) to EPSG:2393 (YKJ) coordinate reference system.
-
-### Thinning Rate Calculation
-
-For young stands with high stem counts and small diameters, the script makes a decision about whether thinning is needed, and calculates a thinning rate:
-
-- **Threshold:** 2500 stems/ha (species ≠ 2) or 2200 stems/ha (species = 2)
-- **Condition:** mean diameter < 8 cm AND stem count > threshold
-- **Target:** Reduce to 2000 stems/ha (species = 2) or 1800 stems/ha (species ≠ 2)
-
-If thinning is needed, the basal area and stem count are adjusted accordingly before generating the allometry table.
-
-### Main Species Determination
-
-The main species is automatically determined as the tree stratum with the largest basal area.
+Every other piece of missing or malformed required data — a missing
+`TreeStandData`, `TreeStandDataDate`, `TreeStandSummary`, or `TreeStratum`
+list once a `TreeStrata` container is present — aborts the whole run instead
+of being skipped stand-by-stand, since it signals the file itself doesn't
+follow the expected structure rather than one ordinary gap in the data.
