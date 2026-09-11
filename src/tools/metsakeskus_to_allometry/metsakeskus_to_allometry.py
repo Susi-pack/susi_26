@@ -13,20 +13,35 @@ import argparse
 import dataclasses
 import json
 import math
-import tomllib
-from dataclasses import dataclass, fields
-from functools import lru_cache
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Generic, TypeVar
 
 import geopandas as gpd
 import pandas as pd
-from pyproj import Transformer
 from shapely.geometry.base import BaseGeometry
 
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.io.load_output_data import StandID
-from tools.xml_to_allometry.xml_to_allometry import out_of_range_message
+from tools.shared_allometry_tool_utils.input_validation import (
+    check_config_fields,
+    load_toml_config,
+    make_existing_file_validator,
+    valid_existing_directory,
+    validate_altitude_ddy,
+)
+from tools.shared_allometry_tool_utils.print_formatting import (
+    StandSkipped,
+    print_section,
+    print_skips,
+)
+from tools.shared_allometry_tool_utils.project_layout import (
+    check_output_dir_available,
+    output_dir_for_project,
+    resolve_config_path,
+)
+from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
+from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
 
 # %% Constants -- hard-coded, non-negotiable
 
@@ -52,21 +67,12 @@ DECIDUOUS_SPECIES_CODES = frozenset({3, 4, 5, 6, 7, 8, 9, 15, 20, 29})
 # construction (SUBGROUP_PEATLAND above already restricts to Korpi/Räme).
 PEAT = 1
 
-# xml_to_allometry.py's own enforced-range bounds for altitude/ddy, reused
-# here for the same reason (catch a mistyped value, e.g. metres vs feet).
-ALTITUDE_MIN = 0.0
-ALTITUDE_MAX = 1000.0
-DDY_MIN = 500.0
-DDY_MAX = 2000.0
-
 # treestand.type: whether the data is measured or projected date.
 # Types 2 and 3 are Metsäkeskus's own grown-forward projections
 # (2: to a common "current" date, 3: +10y future extrapolation)
 # Type 1 is the only measured data.
 TREESTAND_MEASURED_TYPE = 1
 
-SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS Metsäkeskus geometries ship in
-YKJ_CRS = "EPSG:2393"  # Finnish YKJ grid, what Growth_and_Yield_Table's x/y expect
 
 # Fields required in the config file
 REQUIRED_CONFIG_FIELDS = ("target_year", "altitude", "ddy")
@@ -79,9 +85,9 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class PerSpecies(Generic[T]):
-    """One value per SUSI growth-model species slot. Mirrors PerNutrient in
-    susi/core/allometry.py -- same 'three independently-spelled fields ->
-    one X[T] field' pattern, one slot per species instead of per macronutrient."""
+    """
+    One value per SUSI growth-model species.
+    """
 
     pine: T
     spruce: T
@@ -89,33 +95,11 @@ class PerSpecies(Generic[T]):
 
 
 @dataclass(frozen=True)
-class TreeStratum:
-    """
-    One species' aggregated growth-model inputs for one stand.
-    Same shape as xml_to_allometry.py's TreeStratum
-    """
-
-    age: int
-    basal_area: float
-    stem_count: int
-    mean_diameter: float
-    mean_height: float
-
-
-# A TreeStratum for "nothing recorded here"
-_ZERO_STRATUM = TreeStratum(
-    age=0,
-    basal_area=0.0,
-    stem_count=0,
-    mean_diameter=0.0,
-    mean_height=0.0,
-)
-
-
-@dataclass(frozen=True)
 class StandSiteAttributes:
-    """Site-level facts a stand carries into the output. soiltype is
-    Optional -- unlike drainagestate/fertilityclass/etc., it never feeds
+    """
+    Site-level facts a stand carried into the output.
+    should soiltype be Optional? Still an open question, see #280.
+    Right now, soiltype is Optional because it never feeds
     Growth_and_Yield_Table (search build_growth_and_yield_table: it isn't
     one of the parameters), so there is nothing to fabricate a value for.
     A missing soiltype stays None end-to-end (JSON dump: null; XML dump:
@@ -133,7 +117,7 @@ class StandSiteAttributes:
 @dataclass(frozen=True)
 class StandCandidate:
     """
-    Represents one stand after merge + species aggregation, before the viability
+    Represents one stand after database merge + species aggregation, before the viability
     check (partition_viable_candidates) that decides whether it's actually
     processed.
     """
@@ -179,9 +163,11 @@ class GpkgLayers:
 
 @dataclass(frozen=True)
 class ExtractionConfig:
-    """Defaulted/required parameters, loaded from a TOML file (see
+    """
+    Defaulted/required parameters, loaded from a TOML file (see
     parse_extraction_config). Hard-coded, non-negotiable parameters live as
-    module constants above instead."""
+    module constants above instead.
+    """
 
     # Required, no defaults
     target_year: int
@@ -215,9 +201,11 @@ class CLIArguments:
 
 @dataclass(frozen=True)
 class StandPlanned:
-    """The files one stand WOULD produce -- a fact about the stand and the
-    output folder, knowable before any growth table is computed (see
-    plan_stand_outputs)"""
+    """
+    The files one stand WOULD produce.
+    This is a fact about the stand and the output folder,
+    knowable before any growth table is computed.
+    """
 
     stand_id: StandID
     dominant_csv: Path
@@ -238,17 +226,6 @@ class StandWritten:
     subdominant_csv: Path | None
 
 
-@dataclass(frozen=True)
-class StandSkipped:
-    """
-    A stand that does not survives the filters and the checks,
-    so no allometry file gets written.
-    """
-
-    stand_id: StandID
-    reason: str
-
-
 StandOutcome = StandWritten | StandSkipped
 
 
@@ -256,19 +233,11 @@ StandOutcome = StandWritten | StandSkipped
 
 
 def parse_extraction_config(raw: dict) -> ExtractionConfig:
-    """Build an ExtractionConfig from a parsed TOML dict, collecting every
-    missing-required-field violation before raising -- same one-shot
-    reporting style as xml_to_allometry.py's altitude/ddy range checks."""
-    missing = [name for name in REQUIRED_CONFIG_FIELDS if name not in raw]
-    if missing:
-        raise ValueError(
-            f"Config file is missing required field(s): {', '.join(missing)}"
-        )
-
-    known_fields = {f.name for f in fields(ExtractionConfig)}
-    unexpected = sorted(set(raw) - known_fields)
-    if unexpected:
-        raise ValueError(f"Config file has unknown field(s): {', '.join(unexpected)}")
+    """
+    Build an ExtractionConfig from a parsed TOML dict.
+    Presence/unknown-field checking is the shared check_config_fields
+    """
+    check_config_fields(raw, ExtractionConfig, REQUIRED_CONFIG_FIELDS)
 
     return ExtractionConfig(
         target_year=int(raw["target_year"]),
@@ -284,9 +253,7 @@ def parse_extraction_config(raw: dict) -> ExtractionConfig:
 
 
 def load_extraction_config(config_path: Path) -> ExtractionConfig:
-    with open(config_path, "rb") as config_file:
-        raw = tomllib.load(config_file)
-    return parse_extraction_config(raw)
+    return load_toml_config(config_path, parse_extraction_config)
 
 
 # %% gpkg loading (I/O)
@@ -309,9 +276,11 @@ def filter_stands_by_site_attributes(
     stand: gpd.GeoDataFrame,
     fertilityclass_filter: tuple[int, ...],
 ) -> gpd.GeoDataFrame:
-    """Restrict to forest land, on peatland, already drained (hard-coded --
-    see MAINGROUP_FOREST_LAND / SUBGROUP_PEATLAND / DRAINAGESTATE_DRAINED
-    above), within the configured fertility-class range."""
+    """
+    Restrict to forest land, on peatland, already drained.
+    This is hard-coded per the global variables above.
+    Also filters the configured fertility-class range.
+    """
     numeric = stand.copy()
     for column in ("maingroup", "subgroup", "drainagestate", "fertilityclass"):
         numeric[column] = pd.to_numeric(numeric[column], errors="coerce")
@@ -328,8 +297,10 @@ def filter_stands_by_site_attributes(
 def _with_parsed_measurement_columns(
     treestand: pd.DataFrame, stand_ids: set[int]
 ) -> pd.DataFrame:
-    """Shared prep for select_target_year_snapshot and compute_year_distribution:
-    restrict to the given stands' rows and parse date/type/year."""
+    """
+    Shared for select_target_year_snapshot() and compute_year_distribution().
+    Restrict to the given stands' rows and parse date/type/year.
+    """
     candidates = treestand[treestand["standid"].isin(stand_ids)].copy()
     candidates["date_dt"] = pd.to_datetime(candidates["date"], errors="coerce")
     candidates["type_num"] = pd.to_numeric(candidates["type"], errors="coerce")
@@ -340,9 +311,9 @@ def _with_parsed_measurement_columns(
 def compute_year_distribution(
     treestand: pd.DataFrame, stand_ids: set[int]
 ) -> pd.DataFrame:
-    """Per-year count of distinct stands with a measured (type=1) snapshot --
-    for the progress report, mirrors metsakeskus.py's own year-availability
-    printout."""
+    """
+    Per-year count of distinct stands with a measured (type=1 in Metsakeskus types) snapshot
+    """
     candidates = _with_parsed_measurement_columns(treestand, stand_ids)
     measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
     return (
@@ -359,12 +330,10 @@ def select_target_year_snapshot(
     stand_ids: set[int],
     target_year: int,
 ) -> pd.DataFrame:
-    """One treestand row per stand: the type=1 (measured) record whose date
-    falls exactly in target_year. A stand without one is simply absent from
-    the result -- no '>= target_year, else next available year' fallback
-    (matches the script's actual behavior, not its docstring's stated intent;
-    see the grilling-session notes for why that fallback was deliberately not
-    revived)."""
+    """
+    One treestand row per stand: the measured record whose date
+    falls exactly in target_year.
+    """
     candidates = _with_parsed_measurement_columns(treestand, stand_ids)
     measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
     exact_year = measured[measured["year"] == target_year]
@@ -380,8 +349,10 @@ def attach_stand_attributes(
     treestand_snapshot: pd.DataFrame,
     filtered_stand: gpd.GeoDataFrame,
 ) -> pd.DataFrame:
-    """Re-attaches the stand-layer's site columns onto each selected
-    treestand snapshot -- treestand itself carries no site metadata."""
+    """
+    Re-attaches the stand-layer's site columns onto each selected
+    treestand snapshot, since reestand itself carries no site metadata.
+    """
     site_columns = [
         "standid",
         "subgroup",
@@ -451,11 +422,11 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
     subdominant (process_stand only builds a subdominant table when
     basal_area > 0) -- so whatever this function returns for it is
     informational only, never fed into Growth_and_Yield_Table (also see
-    _ZERO_STRATUM and isolate_species_layer, which enforces the same "not
+    ZERO_STRATUM and isolate_species_layer, which enforces the same "not
     passed forward" rule one level down, per canopy layer).
 
     A species entirely absent from this stand (rows empty) gets the flat
-    _ZERO_STRATUM -- there is nothing recorded to preserve.
+    ZERO_STRATUM -- there is nothing recorded to preserve.
 
     A species present with rows summing to zero basal area keeps whatever
     was actually recorded: the real summed stem count, and age/diameter/
@@ -471,7 +442,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
     actually reach Growth_and_Yield_Table, so there is no safe value to
     invent. species_name is only used to name it in that error message."""
     if rows.empty:
-        return _ZERO_STRATUM
+        return ZERO_STRATUM
 
     total_basal_area = float(rows["basalarea"].sum(skipna=True))
     total_stem_count = float(rows["stemcount"].sum(skipna=True))
@@ -662,20 +633,12 @@ def determine_dominant_and_subdominant_species(
     return ranked[0], ranked[1]
 
 
-@lru_cache(maxsize=1)
-def _ykj_transformer() -> Transformer:
-    """Built once and reused -- constructing a Transformer is comparatively
-    expensive, and centroid_to_ykj runs once per viable stand (thousands per
-    real run)."""
-    return Transformer.from_crs(SOURCE_CRS, YKJ_CRS, always_xy=True)
-
-
 def centroid_to_ykj(geometry: BaseGeometry) -> tuple[int, int]:
-    """Stand-polygon centroid -> YKJ grid coordinates, scaled to the units
-    Growth_and_Yield_Table expects (10 km easting units, 1 km northing units)."""
-    transformer = _ykj_transformer()
-    easting, northing = transformer.transform(geometry.centroid.x, geometry.centroid.y)
-    return round(easting / 10000), round(northing / 1000)
+    """Stand-polygon centroid -> YKJ grid coordinates, via the shared
+    point_to_ykj (the transform arithmetic itself, and its cached
+    Transformer, live there now -- see shared_allometry_tool_utils.
+    shared_utils)."""
+    return point_to_ykj(geometry.centroid.x, geometry.centroid.y)
 
 
 def build_valid_stand(candidate: StandCandidate) -> ValidStand:
@@ -747,7 +710,7 @@ def build_valid_stands(
 
 # %% Growth-and-yield table construction
 
-# _ZERO_STRATUM (used below by isolate_species_layer) is defined once, next
+# ZERO_STRATUM (used below by isolate_species_layer) is defined once, next
 # to TreeStratum, and shared with aggregate_species_group -- see its
 # docstring there.
 
@@ -764,15 +727,13 @@ def isolate_species_layer(
     single canopy layer (dominant or subdominant) is modeled as that one
     species growing alone (see docs/adr/0002)."""
     if active_species == 1:
-        return PerSpecies(
-            pine=strata.pine, spruce=_ZERO_STRATUM, deciduous=_ZERO_STRATUM
-        )
+        return PerSpecies(pine=strata.pine, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM)
     if active_species == 2:
         return PerSpecies(
-            pine=_ZERO_STRATUM, spruce=strata.spruce, deciduous=_ZERO_STRATUM
+            pine=ZERO_STRATUM, spruce=strata.spruce, deciduous=ZERO_STRATUM
         )
     return PerSpecies(
-        pine=_ZERO_STRATUM, spruce=_ZERO_STRATUM, deciduous=strata.deciduous
+        pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=strata.deciduous
     )
 
 
@@ -836,8 +797,12 @@ def write_allometry_csv(
 
 
 def valid_stand_to_json_dict(stand: ValidStand) -> dict:
+    """dataclasses.asdict() alone already walks the whole ValidStand
+    structure correctly -- TreeStratum is a (pydantic) dataclass too, and
+    `id` (a StandID, i.e. plain str) needs no conversion -- except for
+    `geometry`, a shapely object asdict() can copy but json.dumps cannot
+    serialize, so that one field is overridden with its WKT text."""
     data = dataclasses.asdict(stand)
-    data["id"] = str(stand.id)
     data["geometry"] = stand.geometry.wkt
     return data
 
@@ -845,7 +810,7 @@ def valid_stand_to_json_dict(stand: ValidStand) -> dict:
 def dump_valid_stands_json(stands: list[ValidStand], output_path: Path) -> None:
     """Informational dump of every processed stand's data, including the
     filter/stratum columns -- mirrors xml_to_allometry.py's
-    extra_XML_info.json for anyone who wants to regroup or audit later."""
+    extra_xml_info.json for anyone who wants to regroup or audit later."""
     payload = {"stands": [valid_stand_to_json_dict(stand) for stand in stands]}
     output_path.write_text(json.dumps(payload, indent=2))
 
@@ -1037,51 +1002,11 @@ def process_stand(
 
 # %% CLI
 
-
-def output_dir_for_project(project_dir: Path) -> Path:
-    """Where a project's allometry files go. There is no flag to point the
-    output somewhere else: appending allometry/ onto --project-dir is an
-    invariant of this tool rather than a default."""
-    return project_dir / "allometry"
-
-
-def valid_project_dir_path(value: str) -> Path:
-    """--project-dir is the ONLY thing deciding where files are written
-    (output_dir_for_project) and -- unless --config overrides it -- where the
-    config file is looked up (see parse_CLI_arguments's config_path.toml
-    default). It must already exist as a real directory: the one the docs
-    have the user set up beforehand, with the .gpkg and config.toml colocated
-    inside it, not a bare name fed into a hard-coded inputs/ prefix."""
-    if not value.strip():
-        raise argparse.ArgumentTypeError("Project directory must not be empty")
-    path = Path(value)
-    if not path.exists():
-        raise argparse.ArgumentTypeError(f"Project directory does not exist: {value}")
-    if not path.is_dir():
-        raise argparse.ArgumentTypeError(f"Not a directory: {value}")
-    return path
-
-
-def valid_gpkg_path(value: str) -> Path:
-    path = Path(value)
-    if not path.exists():
-        raise argparse.ArgumentTypeError(f"File does not exist: {value}")
-    if not path.is_file():
-        raise argparse.ArgumentTypeError(f"Not a file: {value}")
-    if path.suffix.lower() != ".gpkg":
-        raise argparse.ArgumentTypeError("File must have .gpkg extension")
-    return path
-
-
-def valid_config_path(value: str) -> Path:
-    path = Path(value)
-    if not path.exists():
-        raise argparse.ArgumentTypeError(f"Config file does not exist: {value}")
-    if not path.is_file():
-        raise argparse.ArgumentTypeError(f"Not a file: {value}")
-    if path.suffix.lower() != ".toml":
-        raise argparse.ArgumentTypeError("Config file must have .toml extension")
-    return path
+# output_dir_for_project/valid_existing_directory (for --project-dir) and
+# make_existing_file_validator(".gpkg"/".toml") are now the shared
+# tools.shared_allometry_tool_utils functions imported above -- these used
+# to be local, hand-written copies (valid_project_dir_path, valid_gpkg_path,
+# valid_config_path).
 
 
 def parse_CLI_arguments() -> CLIArguments:
@@ -1089,11 +1014,13 @@ def parse_CLI_arguments() -> CLIArguments:
         description="Convert Metsäkeskus .gpkg stand data to SUSI allometry CSV inputs"
     )
     parser.add_argument(
-        "input_gpkg", type=valid_gpkg_path, help="Path to the Metsäkeskus .gpkg file"
+        "input_gpkg",
+        type=make_existing_file_validator(".gpkg"),
+        help="Path to the Metsäkeskus .gpkg file",
     )
     parser.add_argument(
         "--config",
-        type=valid_config_path,
+        type=make_existing_file_validator(".toml"),
         default=None,
         help=(
             "Path to the TOML config file. Defaults to config.toml directly "
@@ -1103,7 +1030,7 @@ def parse_CLI_arguments() -> CLIArguments:
     parser.add_argument(
         "--project-dir",
         required=True,
-        type=valid_project_dir_path,
+        type=valid_existing_directory,
         help=(
             "Path to the project's folder. Decides the output directory, "
             "<project-dir>/allometry/, and -- unless --config is given -- "
@@ -1141,55 +1068,13 @@ def parse_CLI_arguments() -> CLIArguments:
     args = parser.parse_args()
 
     # --config defaults to config.toml directly inside --project-dir -- the
-    # layout the docs have the user set up beforehand. Applied here, after
-    # parsing, rather than as an argparse default: the default path depends
-    # on another argument's value, which add_argument can't express.
-    if args.config is not None:
-        config_path = args.config
-    else:
-        config_path = args.project_dir / "config.toml"
-        if not config_path.exists() or not config_path.is_file():
-            parser.error(
-                f"No config file found at the default location: {config_path}. "
-                "Pass --config to use a different name or location."
-            )
-        if config_path.suffix.lower() != ".toml":
-            parser.error(f"Default config path is not a .toml file: {config_path}")
-
+    # layout the docs have the user set up beforehand.
+    config_path = resolve_config_path(args.config, args.project_dir, parser)
     config = load_extraction_config(config_path)
 
-    # NaN is not a physically meaningful altitude/DDY value under any
-    # circumstances (unlike an out-of-range-but-real number), so it is
-    # rejected outright -- --allow-out-of-range-values does not apply.
-    nan_names = [
-        name
-        for name, value in (("altitude", config.altitude), ("ddy", config.ddy))
-        if math.isnan(value)
-    ]
-    if nan_names:
-        parser.error(f"{', '.join(nan_names)} must be a real number, not NaN.")
-
-    out_of_range_messages = [
-        message
-        for message in (
-            out_of_range_message(
-                "altitude", config.altitude, ALTITUDE_MIN, ALTITUDE_MAX
-            ),
-            out_of_range_message("ddy", config.ddy, DDY_MIN, DDY_MAX),
-        )
-        if message is not None
-    ]
-    if out_of_range_messages:
-        if args.allow_out_of_range_values:
-            for message in out_of_range_messages:
-                print(
-                    f"Warning: {message}; proceeding due to --allow-out-of-range-values"
-                )
-        else:
-            parser.error(
-                "; ".join(out_of_range_messages)
-                + ". Pass --allow-out-of-range-values to override."
-            )
+    validate_altitude_ddy(
+        parser, config.altitude, config.ddy, args.allow_out_of_range_values
+    )
 
     # Refuse to reuse an existing folder rather than silently overwriting
     # (or, previously, deleting) whatever a prior run left there -- the user
@@ -1197,11 +1082,7 @@ def parse_CLI_arguments() -> CLIArguments:
     # mode too: "would this run even start?" is exactly what a dry run is for.
     # Creating the folder is main()'s job, and only on a real run.
     output_dir = output_dir_for_project(args.project_dir)
-    if output_dir.exists():
-        parser.error(
-            f"Output folder already exists: {output_dir}. Refusing to run into "
-            "an existing folder. Pass a different --project-dir instead."
-        )
+    check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
         input_gpkg=args.input_gpkg,
@@ -1216,13 +1097,9 @@ def parse_CLI_arguments() -> CLIArguments:
 
 # %% Progress-report printing (side-effecting; kept out of the pure layer above)
 
-
-def print_section(title: str) -> None:
-    """Marks one phase of main()'s reading -> filtering -> writing pipeline
-    in the console output, so the three phases are visually separated."""
-    print()
-    print(title)
-    print("-" * len(title))
+# print_section/print_skips are now the shared
+# tools.shared_allometry_tool_utils.print_formatting functions, imported
+# above -- these used to be local copies.
 
 
 def print_year_distribution(year_distribution: pd.DataFrame) -> None:
@@ -1273,15 +1150,6 @@ def print_dry_run_plan(
         "growth-model failures are not detected. The counts above are an "
         "upper bound."
     )
-
-
-def print_skips(skips: list[StandSkipped], label: str) -> None:
-    if not skips:
-        return
-    print(f"{label}: {len(skips)}")
-    for skip in skips:
-        print(f"  {skip.stand_id}: {skip.reason}")
-    print()
 
 
 # %% main

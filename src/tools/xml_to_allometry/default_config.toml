@@ -1,0 +1,31 @@
+# Default/template config for src/tools/xml_to_allometry/xml_to_allometry.py.
+#
+# Copy this file, fill in the two REQUIRED fields for your project, and
+# pass it via --config.
+#
+# Every other field is optional.
+# xml_to_allometry.py already applies the value shown here if the key is
+# omitted entirely.
+
+# --- Required, no code-level default ---
+
+# Site elevation, metres. Not present in the XML standard, so it must be
+# supplied here.
+# Enforced range: [0, 1000]
+altitude = -1 # REQUIRED
+
+# Degree-day-years, cumulative temperature sum. Also not present in the XML
+# standard.
+# Enforced range: [500, 2000]
+ddy = 0 # REQUIRED
+
+# --- Optional -- shown here with the same values parse_xml_config() would
+# --- apply anyway if the key were simply absent from this file.
+
+# n_trees, start_year, end_year, step_years all feed
+# Growth_and_Yield_Table.get_table(): how many trees the allometric model
+# tracks, and the age range/step of the growth trajectory it returns.
+n_trees = 20
+start_year = 5
+end_year = 80
+step_years = 5

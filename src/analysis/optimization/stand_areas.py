@@ -32,9 +32,8 @@ _PARONINKORPI_PROJECT_NAME = "paroninkorpi"
 #
 # Note this folder is untracked user data: it is gitignored, so the path only
 # resolves on a machine where that data has actually been generated.
-_PARONINKORPI_AREAS_JSON_RELPATH = Path(
-    "xmltoallometry_with_areas/extra_XML_info.json"
-)
+#
+_PARONINKORPI_AREAS_JSON_RELPATH = Path("xmltoallometry_with_areas/extra_xml_info.json")
 
 
 def stand_areas_for_project(project_dirpath: Path) -> dict[StandID, float]:
@@ -63,9 +62,7 @@ def stand_areas_for_project(project_dirpath: Path) -> dict[StandID, float]:
 
 def _read_paroninkorpi_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
     """Read Paroninkorpi's areas file and map it onto project_dirpath's stands."""
-    areas_json_path = (
-        AppSettings().project_root_path / _PARONINKORPI_AREAS_JSON_RELPATH
-    )
+    areas_json_path = AppSettings().project_root_path / _PARONINKORPI_AREAS_JSON_RELPATH
     if not areas_json_path.exists():
         raise FileNotFoundError(
             f"Paroninkorpi stand-area file not found: {areas_json_path}. It is "
@@ -90,7 +87,7 @@ def areas_from_stand_datas(
     Pick the area of each of stand_ids out of a `stand_datas` mapping.
 
     stand_datas is the `"stand_datas"` entry of Paroninkorpi's
-    extra_XML_info.json: stand number (as a string) -> stand properties,
+    extra_xml_info.json: stand number (as a string) -> stand properties,
     one of which is `"area"`, in hectares.
 
     Split out from the file reading above so it can be unit-tested: the JSON

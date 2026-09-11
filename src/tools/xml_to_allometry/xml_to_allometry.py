@@ -4,41 +4,94 @@
 # %% Imports
 from susi.io.load_output_data import StandID
 from typing import Optional
-import math
 import xmltodict
 from pydantic import BaseModel, computed_field, Field
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from pyproj import Transformer
 from susi.core.allometric_road_map import Growth_and_Yield_Table
+from tools.shared_allometry_tool_utils.input_validation import (
+    check_config_fields,
+    load_toml_config,
+    make_existing_file_validator,
+    valid_existing_directory,
+    validate_altitude_ddy,
+)
+from tools.shared_allometry_tool_utils.print_formatting import (
+    StandSkipped,
+    print_section,
+    print_skips,
+)
+from tools.shared_allometry_tool_utils.project_layout import (
+    check_output_dir_available,
+    output_dir_for_project,
+    resolve_config_path,
+)
+from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
+from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
 
 
-# %% Constants
+# %% Config
 
-# Typical value ranges for Finnish forest land, used to warn/block on likely
-# mistyped --altitude / --ddy input. See issue #194 / PR #174 discussion.
-ALTITUDE_MIN = 0.0  # metres above sea level
-ALTITUDE_MAX = 1000.0
-DDY_MIN = 500.0  # temperature sum, degree days per year
-DDY_MAX = 2000.0
+# Fields required in the config file.
+REQUIRED_CONFIG_FIELDS = ("altitude", "ddy")
+
+INFO_JSON_FILENAME = "extra_xml_info.json"
 
 
-# %% dataclasses
-@dataclass
-class CLIArguments:
-    xml_filepath: Path
-    output_folder: Path
+@dataclass(frozen=True)
+class XmlConfig:
+    """Defaulted/required parameters, loaded from a TOML file (see
+    parse_xml_config)."""
+
+    # Required, no defaults
     altitude: float
     ddy: float
 
+    # Defaulted -- the same values metsakeskus_to_allometry.py's
+    # ExtractionConfig already uses.
+    n_trees: int = 20
+    start_year: int = 5
+    end_year: int = 80
+    step_years: int = 5
 
-class TreeStratum(BaseModel):
-    age: int
-    basal_area: float
-    stem_count: int
-    mean_diameter: float
-    mean_height: float
+
+def parse_xml_config(raw: dict) -> XmlConfig:
+    """Build an XmlConfig from a parsed TOML dict. Presence/unknown-field
+    checking is the shared check_config_fields; per-field type coercion and
+    defaulting below stays here."""
+    check_config_fields(raw, XmlConfig, REQUIRED_CONFIG_FIELDS)
+
+    return XmlConfig(
+        altitude=float(raw["altitude"]),
+        ddy=float(raw["ddy"]),
+        n_trees=int(raw.get("n_trees", 20)),
+        start_year=int(raw.get("start_year", 5)),
+        end_year=int(raw.get("end_year", 80)),
+        step_years=int(raw.get("step_years", 5)),
+    )
+
+
+def load_xml_config(config_path: Path) -> XmlConfig:
+    return load_toml_config(config_path, parse_xml_config)
+
+
+# %% dataclasses
+@dataclass(frozen=True)
+class CLIArguments:
+    xml_filepath: Path
+    config: XmlConfig
+    config_path: Path
+    project_dir: Path
+    allow_out_of_range_values: bool
+    dry_run: bool
+
+
+class NoTreeStrataError(ValueError):
+    """
+    Raised by get_stand_data_from_xml when a stand has no ts:TreeStrata
+    container at all.
+    """
 
 
 class StandData(BaseModel):
@@ -87,143 +140,6 @@ def _create_many_stand_datas(stand_datas: list[StandData]) -> ManyStandDatas:
 
 
 # %% Functions
-def valid_xml_path(value: str) -> Path:
-    path = Path(value)
-
-    if not path.exists():
-        raise argparse.ArgumentTypeError(f"File does not exist: {value}")
-
-    if not path.is_file():
-        raise argparse.ArgumentTypeError(f"Not a file: {value}")
-
-    if path.suffix.lower() != ".xml":
-        raise argparse.ArgumentTypeError("File must have .xml extension")
-
-    return path
-
-
-def out_of_range_message(
-    name: str, value: float, min_value: float, max_value: float
-) -> Optional[str]:
-    """
-    Return a human-readable message if value falls outside [min_value, max_value],
-    or None if it is within range (bounds are inclusive).
-    """
-    if value < min_value or value > max_value:
-        return (
-            f"{name}={value} is outside the enforced range [{min_value}, {max_value}]"
-        )
-    return None
-
-
-def valid_directory(value: str) -> Path:
-    path = Path(value)
-
-    if not path.exists():
-        raise argparse.ArgumentTypeError("Specified output path does not exist.")
-
-    if not path.is_dir():
-        raise argparse.ArgumentTypeError(f"Path exists but is not a directory: {value}")
-
-    return path
-
-
-def parse_CLI_arguments() -> CLIArguments:
-    parser = argparse.ArgumentParser(
-        description="Convert XML stand data to allometry file format"
-    )
-    parser.add_argument(
-        "xml_file",
-        type=valid_xml_path,
-        help="Path to the XML file",
-    )
-    parser.add_argument(
-        "output_dir",
-        type=valid_directory,
-        help="Output folder for generated allometry files.",
-    )
-
-    parser.add_argument(
-        "--altitude",
-        type=float,
-        required=True,
-        help=(
-            "Altitude above sea level, in metres, applied to every stand in this run "
-            "(example: --altitude=150 -- Finnish forest land altitude is typically "
-            "sea level to 700 m). "
-            f"Blocked if outside the enforced range [{ALTITUDE_MIN}, {ALTITUDE_MAX}] "
-            "unless --allow-out-of-range-values is given."
-        ),
-    )
-
-    parser.add_argument(
-        "--ddy",
-        type=float,
-        required=True,
-        help=(
-            "Temperature sum (degree days per year, DDY), applied to every stand in "
-            "this run (example: --ddy=1200 -- Finnish DDY is typically ~600 in "
-            "Lapland to ~1500 in southern Finland). "
-            f"Blocked if outside the enforced range [{DDY_MIN}, {DDY_MAX}] unless "
-            "--allow-out-of-range-values is given."
-        ),
-    )
-
-    parser.add_argument(
-        "--allow-out-of-range-values",
-        action="store_true",
-        help=(
-            "Allow --altitude/--ddy values outside their enforced range instead of "
-            "blocking. Out-of-range values are still printed as a warning."
-        ),
-    )
-
-    args = parser.parse_args()
-
-    # NaN is not a physically meaningful altitude/DDY value under any
-    # circumstances (unlike an out-of-range-but-real number), so it is
-    # rejected outright -- --allow-out-of-range-values does not apply.
-    nan_names = [
-        name
-        for name, value in (("altitude", args.altitude), ("ddy", args.ddy))
-        if math.isnan(value)
-    ]
-    if nan_names:
-        parser.error(f"{', '.join(nan_names)} must be a real number, not NaN.")
-
-    # Collect every out-of-range violation before reporting, so the user
-    # learns about all of them in one run instead of fixing them one at a
-    # time across repeated invocations.
-    out_of_range_messages = [
-        message
-        for message in (
-            out_of_range_message(name, value, min_value, max_value)
-            for name, value, min_value, max_value in (
-                ("altitude", args.altitude, ALTITUDE_MIN, ALTITUDE_MAX),
-                ("ddy", args.ddy, DDY_MIN, DDY_MAX),
-            )
-        )
-        if message is not None
-    ]
-
-    if out_of_range_messages:
-        if args.allow_out_of_range_values:
-            for message in out_of_range_messages:
-                print(
-                    f"Warning: {message}; proceeding due to --allow-out-of-range-values"
-                )
-        else:
-            parser.error(
-                "; ".join(out_of_range_messages)
-                + ". Pass --allow-out-of-range-values to override."
-            )
-
-    return CLIArguments(
-        xml_filepath=args.xml_file,
-        output_folder=args.output_dir,
-        altitude=args.altitude,
-        ddy=args.ddy,
-    )
 
 
 def read_stands_from_xml_file(xml_file_path: Path) -> dict:
@@ -269,25 +185,16 @@ def get_tree_strata_data(
     index 1 -> TreeSpecies 2
     index 2 -> TreeSpecies >= 3
 
-    Missing species are represented by empty strata.
+    Missing species are represented by the shared ZERO_STRATUM -- TreeStratum
+    is immutable, so there is nothing a shared instance in all three slots
+    risks (no defensive per-slot copies needed, unlike when this used to be
+    built from a local, mutable-in-principle BaseModel).
     """
 
     if isinstance(tree_strata_xml_data, dict):
         tree_strata_xml_data = [tree_strata_xml_data]
 
-    empty_stratum = TreeStratum(
-        age=0,
-        basal_area=0,
-        stem_count=0,
-        mean_diameter=0,
-        mean_height=0,
-    )
-
-    strata = [
-        empty_stratum.model_copy(),
-        empty_stratum.model_copy(),
-        empty_stratum.model_copy(),
-    ]
+    strata = [ZERO_STRATUM, ZERO_STRATUM, ZERO_STRATUM]
 
     for stratum in tree_strata_xml_data:
         tree_species = int(stratum["tst:TreeSpecies"])
@@ -310,7 +217,7 @@ def get_tree_strata_data(
     return tuple(strata)
 
 
-def get_stand_data_from_xml(stand: dict) -> StandData | None:
+def get_stand_data_from_xml(stand: dict) -> StandData:
     stand_basic_data = stand["st:StandBasicData"]
 
     tree_stand_data = stand.get("ts:TreeStandData")
@@ -327,10 +234,11 @@ def get_stand_data_from_xml(stand: dict) -> StandData | None:
 
     tree_strata_container = tree_stand_data_date.get("tst:TreeStrata")
 
-    # Skip stands if tree strata information is missing.
+    # Stands with no tree strata information at all are not malformed -- see
+    # NoTreeStrataError -- so this is reported as a skip, not a batch-aborting
+    # raise like the other missing pieces above/below.
     if tree_strata_container is None:
-        f"Skipping stand {stand['@id']}: no TreeStrata"
-        return None
+        raise NoTreeStrataError(f"Stand {stand['@id']} has no TreeStrata")
 
     tree_strata_xml_data = tree_strata_container.get("tst:TreeStratum")
 
@@ -387,23 +295,39 @@ def get_stand_data_from_xml(stand: dict) -> StandData | None:
     )
 
 
-def dump_json_info_to_file(
-    output_folder: Path, many_stand_datas: ManyStandDatas
-) -> None:
-    json_output = output_folder / "extra_XML_info.json"
+def build_stand_datas(stands) -> tuple[list[StandData], list[StandSkipped]]:
+    """Batch get_stand_data_from_xml, isolating the one skippable failure
+    (NoTreeStrataError -- see get_stand_data_from_xml) as a StandSkipped
+    instead of a discarded None sentinel, so the Filtering section can
+    report which stands were dropped and why."""
+    stand_datas: list[StandData] = []
+    skipped: list[StandSkipped] = []
+    for stand in stands:
+        try:
+            stand_datas.append(get_stand_data_from_xml(stand))
+        except NoTreeStrataError as error:
+            skipped.append(
+                StandSkipped(stand_id=StandID(stand["@id"]), reason=str(error))
+            )
+    return stand_datas, skipped
+
+
+def dump_json_info_to_file(output_dir: Path, many_stand_datas: ManyStandDatas) -> None:
+    json_output = output_dir / INFO_JSON_FILENAME
     json_output.write_text(many_stand_datas.model_dump_json())
     return None
 
 
-def get_ykj_coordinates(coords: tuple[float, float]) -> tuple[float, float]:
-    transformer = Transformer.from_crs("EPSG:3067", "EPSG:2393", always_xy=True)
-    ykj_e, ykj_n = transformer.transform(coords[0], coords[1])
-    y = round(ykj_n / 1000)
-    x = round(ykj_e / 10000)
-    return x, y
+def plan_stand_output(stand_data: StandData, output_dir: Path) -> Path:
+    """Where one stand's allometry CSV would land -- knowable before any
+    growth table is computed, so both a dry run and the real run name it the
+    same way."""
+    return output_dir / f"susi_input_{stand_data.id}.csv"
 
 
-def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
+def process_stand(
+    config: XmlConfig, stand_data: StandData, PEAT: int, output_dir: Path
+) -> None:
     strata_basal_areas_per_stratum = [
         stratum.basal_area for stratum in stand_data.tree_strata
     ]
@@ -413,9 +337,8 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
 
     # Location in YKJ coordinates, and input variables x & y to sawlog reduction model
     # Coordinate transformer ETRS-TM35FIN (EPSG:3067) -> YKJ (EPSG:2393)
-
     coords = (stand_data.coords[0][0], stand_data.coords[0][1])
-    x, y = get_ykj_coordinates(coords)
+    x, y = point_to_ykj(*coords)
 
     # Generate stand allometry
     gy = Growth_and_Yield_Table(
@@ -434,23 +357,114 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
         N_3=strata_stem_counts_per_stratum[2],
         Dg_3=stand_data.tree_strata[2].mean_diameter,
         Hg_3=stand_data.tree_strata[2].mean_height,
-        DDY=cli_args.ddy,  # Temperature sum, degree days
+        DDY=config.ddy,  # Temperature sum, degree days
         fertility_class=stand_data.fertility_class,
         peat=PEAT,
         y=y,
         x=x,
-        altitude=cli_args.altitude,  # Altitude above the sea level
-        n_trees=20,  # Number of reference trees per stratum
+        altitude=config.altitude,  # Altitude above the sea level
+        n_trees=config.n_trees,
     )
-    page_1 = gy.get_table(start_year=5, end_year=80, step_years=5)
+    page_1 = gy.get_table(
+        start_year=config.start_year,
+        end_year=config.end_year,
+        step_years=config.step_years,
+    )
     page_1.insert(0, "Species_ID", stand_data.main_species)
 
-    page_1.to_csv(
-        cli_args.output_folder / f"susi_input_{stand_data.id}.csv",
-        index=False,
-    )
+    page_1.to_csv(plan_stand_output(stand_data, output_dir), index=False)
 
     print(f"Allometric road map successfully generated for stand {stand_data.id}")
+
+
+# %% CLI
+
+
+def parse_CLI_arguments() -> CLIArguments:
+    parser = argparse.ArgumentParser(
+        description="Convert XML stand data to allometry file format"
+    )
+    parser.add_argument(
+        "xml_file",
+        type=make_existing_file_validator(".xml"),
+        help="Path to the XML file",
+    )
+    parser.add_argument(
+        "--config",
+        type=make_existing_file_validator(".toml"),
+        default=None,
+        help=(
+            "Path to the TOML config file. Defaults to config.toml directly "
+            "inside --project-dir."
+        ),
+    )
+    parser.add_argument(
+        "--project-dir",
+        required=True,
+        type=valid_existing_directory,
+        help=(
+            "Path to the project's folder. Decides the output directory, "
+            "<project-dir>/allometry/, and -- unless --config is given -- "
+            "where the config file is looked up: <project-dir>/config.toml."
+        ),
+    )
+    parser.add_argument(
+        "--allow-out-of-range-values",
+        action="store_true",
+        help=(
+            "Allow the config file's altitude/ddy values outside their enforced range "
+            "instead of blocking. Out-of-range values are still printed as a warning."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Report what the run would produce, then exit having written "
+            "nothing at all: no CSVs, no JSON, not even the output folder."
+        ),
+    )
+
+    args = parser.parse_args()
+
+    # --config defaults to config.toml directly inside --project-dir -- the
+    # layout the docs have the user set up beforehand.
+    config_path = resolve_config_path(args.config, args.project_dir, parser)
+    config = load_xml_config(config_path)
+
+    validate_altitude_ddy(
+        parser, config.altitude, config.ddy, args.allow_out_of_range_values
+    )
+
+    # Refuse to reuse an existing folder rather than silently overwriting
+    # whatever a prior run left there. This check runs in dry-run mode too:
+    # "would this run even start?" is exactly what a dry run is for.
+    # Creating the folder is main()'s job, and only on a real run.
+    output_dir = output_dir_for_project(args.project_dir)
+    check_output_dir_available(output_dir, parser)
+
+    return CLIArguments(
+        xml_filepath=args.xml_file,
+        config=config,
+        config_path=config_path,
+        project_dir=args.project_dir,
+        allow_out_of_range_values=args.allow_out_of_range_values,
+        dry_run=args.dry_run,
+    )
+
+
+# %% Progress-report printing (side-effecting; kept out of the pure layer above)
+
+
+def print_dry_run_plan(stand_datas: list[StandData], output_dir: Path) -> None:
+    """The dry run's stand-in for the real run's writing report: the same
+    counts and file names, with nothing on disk."""
+    json_path = output_dir / INFO_JSON_FILENAME
+
+    print(f"Destination folder: {output_dir.resolve()} (not created)")
+    print()
+    print(f"Would write: {len(stand_datas):,} stand(s) -- {len(stand_datas):,} CSV(s)")
+    print(f"Would write informational JSON: {json_path}")
 
 
 # %% main
@@ -458,28 +472,64 @@ def process_stand(cli_args: CLIArguments, stand_data: StandData, PEAT: int):
 
 def main():
     cli_args = parse_CLI_arguments()
+    output_dir = output_dir_for_project(cli_args.project_dir)
 
+    print_section("Reading")
     print("Tool initialized with:")
-    print(f"    - altitude = {cli_args.altitude}")
-    print(f"    - ddy = {cli_args.ddy}")
+    print(f"    - xml_file    = {cli_args.xml_filepath.resolve()}")
+    print(f"    - project_dir = {cli_args.project_dir.resolve()}")
+    print(f"    - config      = {cli_args.config_path.resolve()}")
+    print(f"    - output_dir  = {output_dir.resolve()}")
+    print(f"    - altitude    = {cli_args.config.altitude}")
+    print(f"    - ddy         = {cli_args.config.ddy}")
+    if cli_args.dry_run:
+        print("    - DRY RUN -- nothing will be written")
+    print()
 
     stands = read_stands_from_xml_file(cli_args.xml_filepath)
 
-    stand_datas = [
-        stand_data
-        for stand_data in (get_stand_data_from_xml(stand) for stand in stands)
-        if stand_data is not None
-    ]
+    print_section("Filtering")
+    print("1. TreeStrata check -- stands with no recorded tree strata are skipped:")
+    stand_datas, skipped = build_stand_datas(stands)
+    total_stands = len(stand_datas) + len(skipped)
+    print(f"   -> {len(stand_datas):,} / {total_stands:,} stands kept")
+    print_skips(skipped, "   Skipped (no TreeStrata)")
+    print()
+    print(f"Stands ready for allometry: {len(stand_datas):,}")
+
+    # Everything above this point is identical in a dry run: reading and
+    # filtering are precisely what a dry run exists to show. What it skips is
+    # everything below -- the growth model and every write, the output
+    # folder included.
+    if cli_args.dry_run:
+        print_section("Writing (dry run -- nothing is written)")
+        print_dry_run_plan(stand_datas, output_dir)
+        return
+
+    print_section("Writing")
+    print(f"Destination folder: {output_dir.resolve()}")
+    # Created here rather than at argument-parsing time, so a run that fails
+    # while reading or filtering leaves no empty folder behind to block the
+    # next attempt.
+    output_dir.mkdir(parents=True)
+    print()
 
     # PEAT=1 assumes all sites are peatland sites.
     print("Assuming all sites are peatland sites!")
     for stand_data in stand_datas:
-        process_stand(cli_args, stand_data, PEAT=1)
+        process_stand(cli_args.config, stand_data, PEAT=1, output_dir=output_dir)
 
+    print(
+        f"Allometry files written: {len(stand_datas):,} stand(s) -- "
+        f"{len(stand_datas):,} CSV(s)"
+    )
+
+    json_path = output_dir / INFO_JSON_FILENAME
     dump_json_info_to_file(
-        output_folder=cli_args.output_folder,
+        output_dir=output_dir,
         many_stand_datas=_create_many_stand_datas(stand_datas=stand_datas),
     )
+    print(f"Informational JSON written: {json_path}")
 
 
 if __name__ == "__main__":

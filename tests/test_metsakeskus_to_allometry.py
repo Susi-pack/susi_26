@@ -1,4 +1,3 @@
-import argparse
 import math
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from shapely.geometry import Point, Polygon
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import read_allometry_info_from_csv
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
+from tools.shared_allometry_tool_utils import input_validation, shared_utils
 
 # %% ExtractionConfig / parse_extraction_config
 
@@ -118,16 +118,18 @@ def test_default_config_toml_required_fields_are_deliberately_out_of_range():
     untouched copy fail loudly instead of running silently (see the file's
     header comment and parse_CLI_arguments' out-of-range handling)."""
     config = m.load_extraction_config(DEFAULT_CONFIG_PATH)
-    assert not (m.ALTITUDE_MIN <= config.altitude <= m.ALTITUDE_MAX)
-    assert not (m.DDY_MIN <= config.ddy <= m.DDY_MAX)
+    assert not (
+        input_validation.ALTITUDE_MIN <= config.altitude <= input_validation.ALTITUDE_MAX
+    )
+    assert not (input_validation.DDY_MIN <= config.ddy <= input_validation.DDY_MAX)
 
 
-# %% out_of_range_message reuse (imported from xml_to_allometry)
+# %% out_of_range_message reuse (from the shared package)
 
 
-def test_out_of_range_message_reused_from_xml_to_allometry():
-    assert m.out_of_range_message("altitude", 500, 0, 1000) is None
-    message = m.out_of_range_message("altitude", -1, 0, 1000)
+def test_out_of_range_message_reused_from_shared_package():
+    assert input_validation.out_of_range_message("altitude", 500, 0, 1000) is None
+    message = input_validation.out_of_range_message("altitude", -1, 0, 1000)
     assert message is not None
     assert "altitude" in message
 
@@ -261,12 +263,12 @@ def test_estimate_stemcount_zero_diameter_returns_zero():
 
 def test_aggregate_species_group_empty_returns_zero_stratum():
     # No treestratum rows at all for this species -- nothing recorded to
-    # preserve, so this is literally _ZERO_STRATUM (see its docstring).
+    # preserve, so this is literally ZERO_STRATUM (see its docstring).
     empty = pd.DataFrame(
         {"age": [], "basalarea": [], "stemcount": [], "meandiameter": [], "meanheight": []}
     )
     result = m.aggregate_species_group(empty, species_name="pine")
-    assert result is m._ZERO_STRATUM
+    assert result is m.ZERO_STRATUM
     assert result == m.TreeStratum(
         age=0, basal_area=0.0, stem_count=0, mean_diameter=0.0, mean_height=0.0
     )
@@ -494,12 +496,16 @@ def test_centroid_to_ykj_returns_plausible_helsinki_area_coordinates():
 
 def test_centroid_to_ykj_reuses_one_transformer_across_calls():
     # Building a pyproj.Transformer is comparatively expensive; centroid_to_ykj
-    # runs once per viable stand, so it must not rebuild one every call.
-    m._ykj_transformer.cache_clear()
+    # runs once per viable stand, so it must not rebuild one every call. The
+    # cached Transformer itself now lives in the shared shared_utils module
+    # (centroid_to_ykj delegates to its point_to_ykj) -- see
+    # test_shared_allometry_tool_utils.py for the transform arithmetic's own
+    # coverage.
+    shared_utils._ykj_transformer.cache_clear()
     polygon = Point(385000, 6685000).buffer(50)
     m.centroid_to_ykj(polygon)
     m.centroid_to_ykj(polygon)
-    assert m._ykj_transformer.cache_info().hits >= 1
+    assert shared_utils._ykj_transformer.cache_info().hits >= 1
 
 
 # %% build_stand_candidates
@@ -1244,9 +1250,9 @@ def dummy_config_file(tmp_path):
 
 @pytest.fixture
 def project_dir(tmp_path):
-    # --project-dir must already exist (valid_project_dir_path) -- this is
-    # the folder the docs have the user set up beforehand, with the .gpkg and
-    # config.toml colocated inside it.
+    # --project-dir must already exist (shared valid_existing_directory) --
+    # this is the folder the docs have the user set up beforehand, with the
+    # .gpkg and config.toml colocated inside it.
     path = tmp_path / "myproject"
     path.mkdir()
     return path
@@ -1262,28 +1268,13 @@ def test_output_dir_for_project_appends_allometry(tmp_path):
     assert m.output_dir_for_project(project_dir) == project_dir / "allometry"
 
 
-def test_valid_project_dir_path_accepts_an_existing_directory(project_dir):
-    assert m.valid_project_dir_path(str(project_dir)) == project_dir
-
-
-@pytest.mark.parametrize("bad_value", ["", "   "])
-def test_valid_project_dir_path_rejects_an_empty_value(bad_value):
-    with pytest.raises(argparse.ArgumentTypeError):
-        m.valid_project_dir_path(bad_value)
-
-
-def test_valid_project_dir_path_rejects_a_directory_that_does_not_exist(tmp_path):
-    # --project-dir is the folder the docs have the user set up beforehand
-    # (gpkg + config.toml colocated inside it), so it must already be there.
-    with pytest.raises(argparse.ArgumentTypeError):
-        m.valid_project_dir_path(str(tmp_path / "does_not_exist"))
-
-
-def test_valid_project_dir_path_rejects_a_file(tmp_path):
-    file_path = tmp_path / "not_a_directory.txt"
-    file_path.write_text("x")
-    with pytest.raises(argparse.ArgumentTypeError):
-        m.valid_project_dir_path(str(file_path))
+# m.valid_existing_directory (--project-dir's validator) is now the shared
+# tools.shared_allometry_tool_utils.input_validation function -- its own
+# behavior (empty/missing/not-a-directory) is covered directly in
+# test_shared_allometry_tool_utils.py. This just checks metsakeskus_to_
+# allometry.py actually wires it up as --project-dir's type.
+def test_valid_existing_directory_accepts_an_existing_directory(project_dir):
+    assert m.valid_existing_directory(str(project_dir)) == project_dir
 
 
 def test_parse_CLI_arguments_requires_project_dir(monkeypatch, dummy_gpkg_file, dummy_config_file, capsys):

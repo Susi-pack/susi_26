@@ -8,7 +8,7 @@ from analysis.optimization.stand_areas import (
 )
 from susi.io.load_output_data import StandID
 
-# Shaped like the "stand_datas" entry of Paroninkorpi's extra_XML_info.json:
+# Shaped like the "stand_datas" entry of Paroninkorpi's extra_xml_info.json:
 # stand number as a string key, and many more properties per stand than the
 # area this module cares about.
 _STAND_DATAS = {

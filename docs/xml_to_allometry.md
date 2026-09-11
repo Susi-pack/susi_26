@@ -28,7 +28,7 @@ Key characteristics of the format:
 
 The XML file must follow this hierarchical structure:
 
-```xml
+```
 <ForestPropertyData>
   <Stands>
     <Stand id="...">
