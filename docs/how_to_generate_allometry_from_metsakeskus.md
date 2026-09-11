@@ -10,6 +10,9 @@ Metsäkeskus publishes some its forest inventory as open data.
 This guide walks through that process, from downloading the data to checking the output allometry files.
 For every flag, config field and filter rule mentioned below, see the [reference page](metsakeskus_to_allometry.md).
 
+To generate the same kind of file from a Finnish forestry XML stand export instead, see
+[How to generate allometry files from XML data](how_to_generate_allometry_from_xml.md).
+
 ## 1. Download the inventory data
 
 Metsäkeskus publishes one GeoPackage per region (*maakunta*), zipped:

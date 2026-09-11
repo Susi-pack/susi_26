@@ -13,6 +13,9 @@ This page is the reference for the tool's parameters, inputs and outputs.
 For a walkthrough of an actual run, see
 [How to generate allometry files from Metsäkeskus data](how_to_generate_allometry_from_metsakeskus.md).
 
+To generate the same kind of file from a Finnish forestry XML stand export
+instead, see [XML data --> allometry files](xml_to_allometry.md).
+
 ## Synopsis
 
 ```bash
