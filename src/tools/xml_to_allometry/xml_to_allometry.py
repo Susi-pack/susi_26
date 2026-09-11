@@ -142,7 +142,7 @@ def _create_many_stand_datas(stand_datas: list[StandData]) -> ManyStandDatas:
 # %% Functions
 
 
-def read_stands_from_xml_file(xml_file_path: Path) -> dict:
+def read_stands_from_xml_file(xml_file_path: Path) -> list:
     with open(xml_file_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
 
@@ -152,6 +152,15 @@ def read_stands_from_xml_file(xml_file_path: Path) -> dict:
         raise KeyError(
             f"The XML file needs to have the keys ['ForestPropertyData']['st:Stands']['st:Stand']: {error}"
         )
+
+    # xmltodict collapses a single repeated element to a bare dict instead of
+    # a one-item list -- the same quirk get_tree_strata_data already guards
+    # against for a stand's own TreeStratum children. Without this, an XML
+    # file with exactly one <st:Stand> would make build_stand_datas iterate
+    # the dict's string keys (e.g. "st:StandBasicData") instead of stand
+    # records (#281).
+    if isinstance(stands, dict):
+        stands = [stands]
 
     return stands
 

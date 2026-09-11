@@ -195,6 +195,56 @@ def _parsed_stand(stand_id: str, *, include_tree_strata: bool) -> dict:
     return parsed["ForestPropertyData"]["st:Stands"]["st:Stand"]
 
 
+# %% read_stands_from_xml_file
+
+
+def test_read_stands_from_xml_file_wraps_a_single_stand_in_a_list(tmp_path):
+    # xmltodict collapses a single repeated <st:Stand> element to a bare
+    # dict instead of a one-item list. Exercised through the real parser on
+    # actual XML text (not a hand-built list) so this catches the xmltodict
+    # quirk itself, not just a mocked-out shape (#281).
+    xml_path = tmp_path / "single_stand.xml"
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
+
+    stands = xml_to_allometry.read_stands_from_xml_file(xml_path)
+
+    assert isinstance(stands, list)
+    assert len(stands) == 1
+
+
+def test_read_stands_from_xml_file_keeps_multiple_stands_as_a_list(tmp_path):
+    xml_path = tmp_path / "two_stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(
+            _stand_xml_block("1", include_tree_strata=True)
+            + _stand_xml_block("2", include_tree_strata=True)
+        )
+    )
+
+    stands = xml_to_allometry.read_stands_from_xml_file(xml_path)
+
+    assert isinstance(stands, list)
+    assert len(stands) == 2
+
+
+def test_build_stand_datas_handles_a_single_stand_file_end_to_end(tmp_path):
+    # Regression test for #281: a real single-stand XML file used to crash
+    # build_stand_datas with "TypeError: string indices must be integers,
+    # not 'str'" because xmltodict handed it a dict, not a list.
+    xml_path = tmp_path / "single_stand.xml"
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
+
+    stands = xml_to_allometry.read_stands_from_xml_file(xml_path)
+    stand_datas, skipped = xml_to_allometry.build_stand_datas(stands)
+
+    assert [sd.id for sd in stand_datas] == [StandID("1")]
+    assert skipped == []
+
+
 # %% get_stand_data_from_xml / NoTreeStrataError / build_stand_datas
 
 
