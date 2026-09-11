@@ -322,7 +322,7 @@ def plan_stand_output(stand_data: StandData, output_dir: Path) -> Path:
     """Where one stand's allometry CSV would land -- knowable before any
     growth table is computed, so both a dry run and the real run name it the
     same way."""
-    return output_dir / f"susi_input_{stand_data.id}.csv"
+    return output_dir / f"{stand_data.id}.csv"
 
 
 def process_stand(

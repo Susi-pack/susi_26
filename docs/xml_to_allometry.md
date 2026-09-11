@@ -4,10 +4,8 @@ icon: lucide/file-input
 
 # XML data --> allometry files
 
-`src/tools/xml_to_allometry/xml_to_allometry.py` converts a Finnish national
-forest XML stand export (metsätietostandardit) into the allometry CSVs SUSI
-reads. Every stand in the file that carries tree strata data is converted:
-there is no sampling and no grouping of stands.
+`src/tools/xml_to_allometry/xml_to_allometry.py` converts a Finnish national forest XML stand export (metsätietostandardit) into the allometry CSVs SUSI needs.
+Every stand in the file that carries tree strata data is converted: there is no sampling and no grouping of stands.
 
 This page is the reference for the tool's parameters, inputs and outputs.
 For a walkthrough of an actual run, see
