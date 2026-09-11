@@ -109,7 +109,9 @@ def test_default_config_toml_required_fields_are_deliberately_out_of_range():
     untouched copy fail loudly instead of running silently."""
     config = xml_to_allometry.load_xml_config(DEFAULT_CONFIG_PATH)
     assert not (
-        input_validation.ALTITUDE_MIN <= config.altitude <= input_validation.ALTITUDE_MAX
+        input_validation.ALTITUDE_MIN
+        <= config.altitude
+        <= input_validation.ALTITUDE_MAX
     )
     assert not (input_validation.DDY_MIN <= config.ddy <= input_validation.DDY_MAX)
 
@@ -322,7 +324,7 @@ def _stand_data(stand_id="1") -> xml_to_allometry.StandData:
 def test_plan_stand_output_names_the_csv_by_stand_id(tmp_path):
     stand_data = _stand_data("42")
     assert xml_to_allometry.plan_stand_output(stand_data, tmp_path) == (
-        tmp_path / "susi_input_42.csv"
+        tmp_path / "42.csv"
     )
 
 
@@ -369,7 +371,9 @@ def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
 @pytest.fixture
 def dummy_xml_file(tmp_path):
     xml_path = tmp_path / "stand.xml"
-    xml_path.write_text(_forest_property_xml(_stand_xml_block("1", include_tree_strata=True)))
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
     return xml_path
 
 
@@ -395,7 +399,9 @@ def _run_parse_CLI_arguments(monkeypatch, argv):
     return xml_to_allometry.parse_CLI_arguments()
 
 
-def test_parse_CLI_arguments_requires_project_dir(monkeypatch, dummy_xml_file, dummy_config_file, capsys):
+def test_parse_CLI_arguments_requires_project_dir(
+    monkeypatch, dummy_xml_file, dummy_config_file, capsys
+):
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch, [str(dummy_xml_file), f"--config={dummy_config_file}"]
@@ -439,7 +445,9 @@ def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
         ],
     )
     assert cli_args.config_path == dummy_config_file
-    assert cli_args.config.altitude == 150.0  # from dummy_config_file, not project_dir's own
+    assert (
+        cli_args.config.altitude == 150.0
+    )  # from dummy_config_file, not project_dir's own
 
 
 def test_parse_CLI_arguments_blocks_out_of_range_altitude_by_default(
@@ -450,7 +458,11 @@ def test_parse_CLI_arguments_blocks_out_of_range_altitude_by_default(
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
-            [str(dummy_xml_file), f"--config={config_path}", f"--project-dir={project_dir}"],
+            [
+                str(dummy_xml_file),
+                f"--config={config_path}",
+                f"--project-dir={project_dir}",
+            ],
         )
     stderr = capsys.readouterr().err
     assert "altitude" in stderr
@@ -500,7 +512,11 @@ def test_parse_CLI_arguments_refuses_existing_default_output_dir(
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
-            [str(dummy_xml_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
+            [
+                str(dummy_xml_file),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+            ],
         )
     stderr = capsys.readouterr().err
     assert "already exists" in stderr
@@ -512,7 +528,11 @@ def test_parse_CLI_arguments_creates_no_output_folder(
 ):
     _run_parse_CLI_arguments(
         monkeypatch,
-        [str(dummy_xml_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
+        [
+            str(dummy_xml_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+        ],
     )
     assert not (project_dir / "allometry").exists()
 
@@ -522,7 +542,11 @@ def test_parse_CLI_arguments_dry_run_defaults_to_false(
 ):
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
-        [str(dummy_xml_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
+        [
+            str(dummy_xml_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+        ],
     )
     assert cli_args.dry_run is False
 
