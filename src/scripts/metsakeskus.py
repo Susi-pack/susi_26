@@ -1212,7 +1212,7 @@ for p in xml_files_written:
 # ```bash
 # cd /Users/sandeep/susi_26
 #
-# python src/tools/xml_to_allometry.py \
+# python src/tools/xml_to_allometry/xml_to_allometry.py \
 #     /path/to/DATA/susi_xml_inputs/Uusimaa_sg3_fc3_dc2.xml \
 #     /path/to/DATA/susi_allometry/
 # ```

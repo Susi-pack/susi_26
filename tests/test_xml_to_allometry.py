@@ -2,7 +2,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 import pytest
 
-from tools import xml_to_allometry
+from tools.xml_to_allometry import xml_to_allometry
 
 
 # %% out_of_range_message

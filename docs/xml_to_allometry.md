@@ -136,7 +136,7 @@ python xml_to_allometry.py <input.xml> <output_directory> --altitude=<value> --d
 **Example:**
 
 ```bash
-python src/tools/xml_to_allometry.py data/forest_stands.xml output/allometry_files/ --altitude=150 --ddy=1200
+python src/tools/xml_to_allometry/xml_to_allometry.py data/forest_stands.xml output/allometry_files/ --altitude=150 --ddy=1200
 ```
 
 ### Altitude / DDY Validation

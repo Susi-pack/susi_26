@@ -11,7 +11,7 @@ from shapely.geometry import Point, Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import read_allometry_info_from_csv
-from tools import metsakeskus_to_allometry as m
+from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
 
 # %% ExtractionConfig / parse_extraction_config
 
@@ -87,7 +87,7 @@ def test_load_extraction_config_reads_toml(tmp_path):
     assert config.n_trees == 15
 
 
-# %% metsakeskus_to_allometry.default.toml
+# %% default_config.toml
 #
 # Guards against the shipped default/template config drifting from
 # ExtractionConfig's own field defaults -- see that file's header comment.
@@ -96,7 +96,8 @@ DEFAULT_CONFIG_PATH = (
     Path(__file__).resolve().parent.parent
     / "src"
     / "tools"
-    / "metsakeskus_to_allometry.default.toml"
+    / "metsakeskus_to_allometry"
+    / "default_config.toml"
 )
 
 
@@ -938,7 +939,10 @@ def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_pa
     # xml_to_allometry.py's reader (already Optional in its own model) must
     # read that back as None rather than crashing on a missing tag, while
     # the second stand's real value survives untouched.
-    from tools.xml_to_allometry import get_stand_data_from_xml, read_stands_from_xml_file
+    from tools.xml_to_allometry.xml_to_allometry import (
+        get_stand_data_from_xml,
+        read_stands_from_xml_file,
+    )
 
     candidates = [
         _candidate("1", pine_ba=10, soiltype=None),
@@ -958,7 +962,7 @@ def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_pa
 
 
 def test_write_stands_xml_is_replayable_through_xml_to_allometry(tmp_path):
-    from tools.xml_to_allometry import read_stands_from_xml_file
+    from tools.xml_to_allometry.xml_to_allometry import read_stands_from_xml_file
 
     candidates = [_candidate("1", pine_ba=10), _candidate("2", pine_ba=5)]
     stands = [m.build_valid_stand(c) for c in candidates]
@@ -1191,7 +1195,7 @@ def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
         ),
     ]
 
-    m.print_dry_run_plan(plans, output_dir, project_name="myproject", emit_xml=False)
+    m.print_dry_run_plan(plans, output_dir, project_dir=Path("myproject"), emit_xml=False)
 
     printed = capsys.readouterr().out
     assert "2 stand(s) -- 2 dominant + 1 subdominant = 3 CSV(s)" in printed
@@ -1214,7 +1218,7 @@ def test_print_dry_run_plan_names_the_xml_when_emit_xml_is_set(tmp_path, capsys)
         ),
     ]
 
-    m.print_dry_run_plan(plans, output_dir, project_name="myproject", emit_xml=True)
+    m.print_dry_run_plan(plans, output_dir, project_dir=Path("myproject"), emit_xml=True)
 
     printed = capsys.readouterr().out
     assert str(output_dir / "myproject.xml") in printed
@@ -1238,54 +1242,108 @@ def dummy_config_file(tmp_path):
     return config_path
 
 
+@pytest.fixture
+def project_dir(tmp_path):
+    # --project-dir must already exist (valid_project_dir_path) -- this is
+    # the folder the docs have the user set up beforehand, with the .gpkg and
+    # config.toml colocated inside it.
+    path = tmp_path / "myproject"
+    path.mkdir()
+    return path
+
+
 def _run_parse_CLI_arguments(monkeypatch, argv):
     monkeypatch.setattr("sys.argv", ["metsakeskus_to_allometry.py", *argv])
     return m.parse_CLI_arguments()
 
 
-def test_output_dir_for_project_is_under_inputs():
-    assert m.output_dir_for_project("uusimaa") == Path("inputs") / "uusimaa" / "allometry"
+def test_output_dir_for_project_appends_allometry(tmp_path):
+    project_dir = tmp_path / "uusimaa"
+    assert m.output_dir_for_project(project_dir) == project_dir / "allometry"
 
 
-def test_valid_project_name_accepts_a_plain_folder_name():
-    assert m.valid_project_name("uusimaa") == "uusimaa"
+def test_valid_project_dir_path_accepts_an_existing_directory(project_dir):
+    assert m.valid_project_dir_path(str(project_dir)) == project_dir
 
 
-def test_valid_project_name_accepts_dots_inside_a_name():
-    # Only an exact "." or ".." can climb out of inputs/; a name that merely
-    # contains dots is an ordinary folder name.
-    assert m.valid_project_name("uusimaa..2018") == "uusimaa..2018"
-
-
-@pytest.mark.parametrize("bad_name", ["", "   ", "a/b", "..", ".", "../escape"])
-def test_valid_project_name_rejects_names_that_are_not_a_single_folder(bad_name):
-    # --project-name is the only thing deciding where output lands, so a name
-    # that is empty or that escapes inputs/<project>/ must be refused.
+@pytest.mark.parametrize("bad_value", ["", "   "])
+def test_valid_project_dir_path_rejects_an_empty_value(bad_value):
     with pytest.raises(argparse.ArgumentTypeError):
-        m.valid_project_name(bad_name)
+        m.valid_project_dir_path(bad_value)
 
 
-def test_parse_CLI_arguments_requires_config(monkeypatch, dummy_gpkg_file, capsys):
-    with pytest.raises(SystemExit):
-        _run_parse_CLI_arguments(monkeypatch, [str(dummy_gpkg_file), "--project-name=test"])
-    assert "--config" in capsys.readouterr().err
+def test_valid_project_dir_path_rejects_a_directory_that_does_not_exist(tmp_path):
+    # --project-dir is the folder the docs have the user set up beforehand
+    # (gpkg + config.toml colocated inside it), so it must already be there.
+    with pytest.raises(argparse.ArgumentTypeError):
+        m.valid_project_dir_path(str(tmp_path / "does_not_exist"))
 
 
-def test_parse_CLI_arguments_requires_project_name(monkeypatch, dummy_gpkg_file, dummy_config_file, capsys):
+def test_valid_project_dir_path_rejects_a_file(tmp_path):
+    file_path = tmp_path / "not_a_directory.txt"
+    file_path.write_text("x")
+    with pytest.raises(argparse.ArgumentTypeError):
+        m.valid_project_dir_path(str(file_path))
+
+
+def test_parse_CLI_arguments_requires_project_dir(monkeypatch, dummy_gpkg_file, dummy_config_file, capsys):
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch, [str(dummy_gpkg_file), f"--config={dummy_config_file}"]
         )
-    assert "--project-name" in capsys.readouterr().err
+    assert "--project-dir" in capsys.readouterr().err
+
+
+def test_parse_CLI_arguments_reports_a_missing_default_config(
+    monkeypatch, dummy_gpkg_file, project_dir, capsys
+):
+    # --config is optional now: omitting it means "look for config.toml
+    # inside --project-dir", and there is none here -- report that, pointing
+    # back at --config as the way out, rather than a bare file-not-found.
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch, [str(dummy_gpkg_file), f"--project-dir={project_dir}"]
+        )
+    stderr = capsys.readouterr().err
+    assert str(project_dir / "config.toml") in stderr
+    assert "--config" in stderr
+
+
+def test_parse_CLI_arguments_finds_config_toml_inside_project_dir_by_default(
+    monkeypatch, dummy_gpkg_file, project_dir
+):
+    (project_dir / "config.toml").write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+    )
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch, [str(dummy_gpkg_file), f"--project-dir={project_dir}"]
+    )
+    assert cli_args.config_path == project_dir / "config.toml"
+    assert cli_args.config.target_year == 2018
+
+
+def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
+):
+    # A config.toml also happens to sit inside project_dir; an explicit
+    # --config must still win over the default lookup.
+    (project_dir / "config.toml").write_text(
+        "target_year = 1999\naltitude = 10.0\nddy = 600.0\n"
+    )
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [str(dummy_gpkg_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
+    )
+    assert cli_args.config_path == dummy_config_file
+    assert cli_args.config.target_year == 2018  # from dummy_config_file, not project_dir's own
 
 
 def test_parse_CLI_arguments_rejects_a_second_positional_argument(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, tmp_path, capsys
 ):
     # The output folder used to be an optional second positional. It is gone:
-    # inputs/<project-name>/allometry/ is now the only place output can land,
-    # so a leftover invocation must fail loudly rather than be ignored.
-    monkeypatch.chdir(tmp_path)
+    # <project-dir>/allometry/ is now the only place output can land, so a
+    # leftover invocation must fail loudly rather than be ignored.
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -1293,82 +1351,77 @@ def test_parse_CLI_arguments_rejects_a_second_positional_argument(
                 str(dummy_gpkg_file),
                 str(tmp_path / "custom_out"),
                 f"--config={dummy_config_file}",
-                "--project-name=myproject",
+                f"--project-dir={project_dir}",
             ],
         )
     assert "unrecognized arguments" in capsys.readouterr().err
 
 
 def test_parse_CLI_arguments_creates_no_output_folder(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
 ):
     # Creating the folder is main()'s job now, so a run that dies while
     # reading or filtering leaves nothing behind to block the next attempt.
-    monkeypatch.chdir(tmp_path)
     _run_parse_CLI_arguments(
         monkeypatch,
-        [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+        [str(dummy_gpkg_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
     )
-    assert not (tmp_path / "inputs" / "myproject" / "allometry").exists()
+    assert not (project_dir / "allometry").exists()
 
 
 def test_parse_CLI_arguments_dry_run_defaults_to_false(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
 ):
-    monkeypatch.chdir(tmp_path)
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
-        [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+        [str(dummy_gpkg_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
     )
     assert cli_args.dry_run is False
 
 
 def test_parse_CLI_arguments_dry_run_creates_no_output_folder(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
 ):
     # The flag's core promise: a dry run puts nothing on disk, not even the
     # empty folder that would then block the real run behind a new
-    # --project-name.
-    monkeypatch.chdir(tmp_path)
+    # --project-dir.
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
         [
             str(dummy_gpkg_file),
             f"--config={dummy_config_file}",
-            "--project-name=myproject",
+            f"--project-dir={project_dir}",
             "--dry-run",
         ],
     )
     assert cli_args.dry_run is True
-    assert not (tmp_path / "inputs").exists()
+    assert not (project_dir / "allometry").exists()
 
 
 def test_parse_CLI_arguments_refuses_existing_default_output_dir(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, capsys
 ):
     # A folder already there -- e.g. left over from a previous run -- must
     # stop the tool instead of being silently written into (see the removed
     # clear_previous_outputs: it used to delete whatever was already there).
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "inputs" / "myproject" / "allometry").mkdir(parents=True)
+    (project_dir / "allometry").mkdir()
 
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
-            [str(dummy_gpkg_file), f"--config={dummy_config_file}", "--project-name=myproject"],
+            [str(dummy_gpkg_file), f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
         )
     stderr = capsys.readouterr().err
     assert "already exists" in stderr
-    assert "--project-name" in stderr
+    assert "--project-dir" in stderr
 
 
 def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
-    monkeypatch, dummy_gpkg_file, dummy_config_file, tmp_path, capsys
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, capsys
 ):
     # A dry run reports what the real run would do -- and what the real run
     # would do here is refuse to start. Catching that is exactly the point.
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "inputs" / "myproject" / "allometry").mkdir(parents=True)
+    (project_dir / "allometry").mkdir()
 
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
@@ -1376,30 +1429,31 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
             [
                 str(dummy_gpkg_file),
                 f"--config={dummy_config_file}",
-                "--project-name=myproject",
+                f"--project-dir={project_dir}",
                 "--dry-run",
             ],
         )
     assert "already exists" in capsys.readouterr().err
 
 
-def test_parse_CLI_arguments_blocks_out_of_range_altitude(monkeypatch, dummy_gpkg_file, tmp_path, capsys):
+def test_parse_CLI_arguments_blocks_out_of_range_altitude(
+    monkeypatch, dummy_gpkg_file, project_dir, tmp_path, capsys
+):
     config_path = tmp_path / "config.toml"
     config_path.write_text("target_year = 2018\naltitude = 1500.0\nddy = 1200.0\n")
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
-            [str(dummy_gpkg_file), f"--config={config_path}", "--project-name=test"],
+            [str(dummy_gpkg_file), f"--config={config_path}", f"--project-dir={project_dir}"],
         )
     stderr = capsys.readouterr().err
     assert "altitude" in stderr
     assert "--allow-out-of-range-values" in stderr
 
 
-def test_parse_CLI_arguments_allows_out_of_range_with_override(monkeypatch, dummy_gpkg_file, tmp_path, capsys):
-    # chdir first: with the output folder no longer selectable, the run's
-    # destination is inputs/test/allometry relative to the CWD.
-    monkeypatch.chdir(tmp_path)
+def test_parse_CLI_arguments_allows_out_of_range_with_override(
+    monkeypatch, dummy_gpkg_file, project_dir, tmp_path, capsys
+):
     config_path = tmp_path / "config.toml"
     config_path.write_text("target_year = 2018\naltitude = 1500.0\nddy = 1200.0\n")
     cli_args = _run_parse_CLI_arguments(
@@ -1407,7 +1461,7 @@ def test_parse_CLI_arguments_allows_out_of_range_with_override(monkeypatch, dumm
         [
             str(dummy_gpkg_file),
             f"--config={config_path}",
-            "--project-name=test",
+            f"--project-dir={project_dir}",
             "--allow-out-of-range-values",
         ],
     )

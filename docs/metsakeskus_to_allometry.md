@@ -4,7 +4,7 @@ icon: lucide/table-2
 
 # Metsäkeskus data --> allometry files
 
-`src/tools/metsakeskus_to_allometry.py` converts a Metsäkeskus forest inventory
+`src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py` converts a Metsäkeskus forest inventory
 GeoPackage (`.gpkg`) into the allometry CSVs SUSI reads.
 Every stand that survives the filters below is converted: there is no sampling
 and no grouping of stands.
@@ -16,8 +16,8 @@ For a walkthrough of an actual run, see
 ## Synopsis
 
 ```bash
-python src/tools/metsakeskus_to_allometry.py INPUT_GPKG \
-    --config CONFIG.toml --project-name NAME \
+python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG \
+    --project-dir PROJECT_DIR [--config CONFIG.toml] \
     [--allow-out-of-range-values] [--emit-xml] [--dry-run]
 ```
 
@@ -26,23 +26,28 @@ python src/tools/metsakeskus_to_allometry.py INPUT_GPKG \
 | Argument | Required | Description |
 |---|---|---|
 | `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage. Must exist and end in `.gpkg`. |
-| `--config` | yes | Path to the TOML config file (see below). Must exist and end in `.toml`. |
-| `--project-name` | yes | Names the run. Decides where the output goes — `inputs/<project-name>/allometry/`, relative to the current directory — and names the XML file written by `--emit-xml`. Must be a single folder name: no path separators, and not `.` or `..`. |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — where the config file is looked up by default, and names the XML file written by `--emit-xml` (from the folder's own name). |
+| `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/config.toml`. Must exist and end in `.toml`. |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
 | `--emit-xml` | no | Also write a combined ForestPropertyData XML next to the CSVs. |
 | `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
 
-The output folder is not selectable: `inputs/<project-name>/allometry/` is the
+The output folder is not selectable: `<project-dir>/allometry/` is the
 only place this tool writes. It must **not** already exist — the tool refuses
 to run into a previous run's output rather than overwrite it, so a repeat run
-needs a different `--project-name`. The folder is created just before the
-files are written, so a run that fails while reading or filtering leaves
-nothing behind.
+needs a different `--project-dir`, or a fresh `allometry/` folder underneath
+the existing one. The folder is created just before the files are written, so
+a run that fails while reading or filtering leaves nothing behind.
+
+The tool also prints the fully-resolved (absolute) path it read the config
+from and the path it writes to, so what ends up on disk is never ambiguous
+relative to the directory you happened to run it from.
 
 ## Config file
 
-A TOML file, passed with `--config`. Copy
-[`src/tools/metsakeskus_to_allometry.default.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry.default.toml)
+A TOML file. By default the tool looks for `config.toml` directly inside
+`--project-dir`; pass `--config` to use a different name or location. Copy
+[`src/tools/metsakeskus_to_allometry/default_config.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/metsakeskus_to_allometry/default_config.toml)
 and edit it: the optional fields are listed with the values the tool applies
 when they are absent, while the three required ones carry deliberately invalid
 placeholders for you to replace. Unknown fields are rejected, and every missing
@@ -183,7 +188,7 @@ every skipped stand are reported exactly as in a real run. The tool then prints
 the files it would have written, and exits.
 
 Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, no XML, and not
-even the output folder, so a dry run does not claim a `--project-name` that the
+even the output folder, so a dry run does not claim a `--project-dir` that the
 real run then has to work around. The one thing it does still enforce is the
 refusal to run into an existing output folder: whether the real run could start
 is part of what a dry run is for.
@@ -205,7 +210,7 @@ ran.
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
 | `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
-| `<project-name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document, replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
+| `<project folder name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document (named after the `--project-dir` folder), replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
 
 Each CSV follows the canonical allometry schema — the columns declared in
 `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by

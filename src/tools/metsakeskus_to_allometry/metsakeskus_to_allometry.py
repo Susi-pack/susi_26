@@ -26,7 +26,7 @@ from shapely.geometry.base import BaseGeometry
 
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.io.load_output_data import StandID
-from tools.xml_to_allometry import out_of_range_message
+from tools.xml_to_allometry.xml_to_allometry import out_of_range_message
 
 # %% Constants -- hard-coded, non-negotiable
 
@@ -204,14 +204,10 @@ class ExtractionConfig:
 
 @dataclass(frozen=True)
 class CLIArguments:
-    """The output folder is deliberately NOT a field here: it is a pure
-    function of project_name (output_dir_for_project) and there is no way to
-    override it, so carrying it around as data would just be a second copy of
-    something already derivable -- and one that could drift from it."""
-
     input_gpkg: Path
     config: ExtractionConfig
-    project_name: str
+    config_path: Path
+    project_dir: Path
     allow_out_of_range_values: bool
     emit_xml: bool
     dry_run: bool
@@ -221,9 +217,7 @@ class CLIArguments:
 class StandPlanned:
     """The files one stand WOULD produce -- a fact about the stand and the
     output folder, knowable before any growth table is computed (see
-    plan_stand_outputs). Deliberately not part of StandOutcome: that union
-    says what happened when the tool actually tried, while this says what it
-    intends to try, which is all a dry run can honestly report."""
+    plan_stand_outputs)"""
 
     stand_id: StandID
     dominant_csv: Path
@@ -1044,35 +1038,28 @@ def process_stand(
 # %% CLI
 
 
-def output_dir_for_project(project_name: str) -> Path:
-    """Where a project's allometry files go. The only place the inputs/ and
-    allometry/ path segments are spelled out, and the only answer available:
-    there is no flag to point the output somewhere else, so the layout
-    inputs/<project-name>/allometry/ is an invariant of this tool rather than
-    a default. Relative to the current working directory, so a run that wants
-    to land elsewhere is a run started elsewhere."""
-    return Path("inputs") / project_name / "allometry"
+def output_dir_for_project(project_dir: Path) -> Path:
+    """Where a project's allometry files go. There is no flag to point the
+    output somewhere else: appending allometry/ onto --project-dir is an
+    invariant of this tool rather than a default."""
+    return project_dir / "allometry"
 
 
-def valid_project_name(value: str) -> str:
-    """--project-name is now the ONLY thing deciding where files are written
-    (output_dir_for_project), so a name that is empty or that climbs out of
-    inputs/ is rejected here instead of quietly writing outside the project
-    layout. Note that only an exact "." or ".." can escape -- once separators
-    are ruled out, an ordinary name that merely contains dots (say
-    "uusimaa..2018") is a folder name like any other and stays allowed."""
+def valid_project_dir_path(value: str) -> Path:
+    """--project-dir is the ONLY thing deciding where files are written
+    (output_dir_for_project) and -- unless --config overrides it -- where the
+    config file is looked up (see parse_CLI_arguments's config_path.toml
+    default). It must already exist as a real directory: the one the docs
+    have the user set up beforehand, with the .gpkg and config.toml colocated
+    inside it, not a bare name fed into a hard-coded inputs/ prefix."""
     if not value.strip():
-        raise argparse.ArgumentTypeError("Project name must not be empty")
-    if "/" in value or "\\" in value:
-        raise argparse.ArgumentTypeError(
-            "Project name must be a single folder name, without path "
-            f"separators: {value!r}"
-        )
-    if value in (".", ".."):
-        raise argparse.ArgumentTypeError(
-            f"Project name must be a folder name, not {value!r}"
-        )
-    return value
+        raise argparse.ArgumentTypeError("Project directory must not be empty")
+    path = Path(value)
+    if not path.exists():
+        raise argparse.ArgumentTypeError(f"Project directory does not exist: {value}")
+    if not path.is_dir():
+        raise argparse.ArgumentTypeError(f"Not a directory: {value}")
+    return path
 
 
 def valid_gpkg_path(value: str) -> Path:
@@ -1107,14 +1094,21 @@ def parse_CLI_arguments() -> CLIArguments:
     parser.add_argument(
         "--config",
         type=valid_config_path,
-        required=True,
-        help="Path to the TOML config file",
+        default=None,
+        help=(
+            "Path to the TOML config file. Defaults to config.toml directly "
+            "inside --project-dir."
+        ),
     )
     parser.add_argument(
-        "--project-name",
+        "--project-dir",
         required=True,
-        type=valid_project_name,
-        help="Names this run. Decides the output directory, inputs/<project-name>/allometry/",
+        type=valid_project_dir_path,
+        help=(
+            "Path to the project's folder. Decides the output directory, "
+            "<project-dir>/allometry/, and -- unless --config is given -- "
+            "where the config file is looked up: <project-dir>/config.toml."
+        ),
     )
     parser.add_argument(
         "--allow-out-of-range-values",
@@ -1145,7 +1139,24 @@ def parse_CLI_arguments() -> CLIArguments:
     )
 
     args = parser.parse_args()
-    config = load_extraction_config(args.config)
+
+    # --config defaults to config.toml directly inside --project-dir -- the
+    # layout the docs have the user set up beforehand. Applied here, after
+    # parsing, rather than as an argparse default: the default path depends
+    # on another argument's value, which add_argument can't express.
+    if args.config is not None:
+        config_path = args.config
+    else:
+        config_path = args.project_dir / "config.toml"
+        if not config_path.exists() or not config_path.is_file():
+            parser.error(
+                f"No config file found at the default location: {config_path}. "
+                "Pass --config to use a different name or location."
+            )
+        if config_path.suffix.lower() != ".toml":
+            parser.error(f"Default config path is not a .toml file: {config_path}")
+
+    config = load_extraction_config(config_path)
 
     # NaN is not a physically meaningful altitude/DDY value under any
     # circumstances (unlike an out-of-range-but-real number), so it is
@@ -1182,20 +1193,21 @@ def parse_CLI_arguments() -> CLIArguments:
 
     # Refuse to reuse an existing folder rather than silently overwriting
     # (or, previously, deleting) whatever a prior run left there -- the user
-    # must pick a different --project-name instead. This check runs in dry-run
+    # must pick a different --project-dir instead. This check runs in dry-run
     # mode too: "would this run even start?" is exactly what a dry run is for.
     # Creating the folder is main()'s job, and only on a real run.
-    output_dir = output_dir_for_project(args.project_name)
+    output_dir = output_dir_for_project(args.project_dir)
     if output_dir.exists():
         parser.error(
             f"Output folder already exists: {output_dir}. Refusing to run into "
-            "an existing folder. Pass a different --project-name instead."
+            "an existing folder. Pass a different --project-dir instead."
         )
 
     return CLIArguments(
         input_gpkg=args.input_gpkg,
         config=config,
-        project_name=args.project_name,
+        config_path=config_path,
+        project_dir=args.project_dir,
         allow_out_of_range_values=args.allow_out_of_range_values,
         emit_xml=args.emit_xml,
         dry_run=args.dry_run,
@@ -1232,7 +1244,7 @@ def csv_counts(outputs: list[StandPlanned] | list[StandWritten]) -> tuple[int, i
 def print_dry_run_plan(
     plans: list[StandPlanned],
     output_dir: Path,
-    project_name: str,
+    project_dir: Path,
     emit_xml: bool,
 ) -> None:
     """The dry run's stand-in for the real run's writing report: the same
@@ -1242,7 +1254,7 @@ def print_dry_run_plan(
     dominant, subdominant = csv_counts(plans)
     json_path = output_dir / "extra_gpkg_info.json"
 
-    print(f"Destination folder: {output_dir} (not created)")
+    print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
     print(
         f"Would write: {len(plans):,} stand(s) -- {dominant:,} dominant + "
@@ -1250,7 +1262,7 @@ def print_dry_run_plan(
     )
     print(f"Would write informational JSON: {json_path}")
     if emit_xml:
-        print(f"Would write XML: {output_dir / f'{project_name}.xml'}")
+        print(f"Would write XML: {output_dir / f'{project_dir.name}.xml'}")
     print()
     # The dry run stops before build_growth_and_yield_table, so the failures
     # process_stand would catch (growth model or coordinate math raising for
@@ -1277,13 +1289,14 @@ def print_skips(skips: list[StandSkipped], label: str) -> None:
 
 def main() -> None:
     cli_args = parse_CLI_arguments()
-    output_dir = output_dir_for_project(cli_args.project_name)
+    output_dir = output_dir_for_project(cli_args.project_dir)
 
     print_section("Reading")
     print("Tool initialized with:")
-    print(f"    - input_gpkg  = {cli_args.input_gpkg}")
-    print(f"    - output_dir  = {output_dir}")
-    print(f"    - project     = {cli_args.project_name}")
+    print(f"    - input_gpkg  = {cli_args.input_gpkg.resolve()}")
+    print(f"    - project_dir = {cli_args.project_dir.resolve()}")
+    print(f"    - config      = {cli_args.config_path.resolve()}")
+    print(f"    - output_dir  = {output_dir.resolve()}")
     print(f"    - target_year = {cli_args.config.target_year}")
     print(f"    - altitude    = {cli_args.config.altitude}")
     print(f"    - ddy         = {cli_args.config.ddy}")
@@ -1365,11 +1378,11 @@ def main() -> None:
     if cli_args.dry_run:
         print_section("Writing (dry run -- nothing is written)")
         plans = [plan_stand_outputs(stand, output_dir) for stand in valid_stands]
-        print_dry_run_plan(plans, output_dir, cli_args.project_name, cli_args.emit_xml)
+        print_dry_run_plan(plans, output_dir, cli_args.project_dir, cli_args.emit_xml)
         return
 
     print_section("Writing")
-    print(f"Destination folder: {output_dir}")
+    print(f"Destination folder: {output_dir.resolve()}")
     # Created here rather than at argument-parsing time, so a run that fails
     # while reading or filtering leaves no empty folder behind to block the
     # next attempt.
@@ -1399,7 +1412,7 @@ def main() -> None:
     print(f"Informational JSON written: {json_path}")
 
     if cli_args.emit_xml:
-        xml_path = output_dir / f"{cli_args.project_name}.xml"
+        xml_path = output_dir / f"{cli_args.project_dir.name}.xml"
         write_stands_xml(valid_stands, xml_path)
         print(f"XML written: {xml_path}")
 

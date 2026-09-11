@@ -1,4 +1,4 @@
-# Default/template config for src/tools/metsakeskus_to_allometry.py.
+# Default/template config for src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py.
 #
 # Copy this file, fill in the three REQUIRED fields for your project, and
 # pass it via --config.
