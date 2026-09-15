@@ -22,44 +22,51 @@ def test_out_of_range_message_reused_from_shared_package():
     assert "altitude" in message
 
 
-# %% parse_xml_config / XmlConfig
+# %% XmlConfig
+#
+# XmlConfig is a StrictFrozenModel (susi.io.extra_pydantic_types): presence/
+# unknown-field checking, required-vs-defaulted fields, and extra="forbid"
+# all come from Pydantic itself, the same as metsakeskus_to_allometry.py's
+# ExtractionConfig and new_growth_allometry.py's NewGrowthConfig.
 
 
-def test_parse_xml_config_requires_altitude():
+def test_xml_config_requires_altitude():
     with pytest.raises(ValueError, match="altitude"):
-        xml_to_allometry.parse_xml_config({"ddy": 1200.0})
+        xml_to_allometry.XmlConfig.model_validate({"ddy": 1200.0})
 
 
-def test_parse_xml_config_requires_ddy():
+def test_xml_config_requires_ddy():
     with pytest.raises(ValueError, match="ddy"):
-        xml_to_allometry.parse_xml_config({"altitude": 150.0})
+        xml_to_allometry.XmlConfig.model_validate({"altitude": 150.0})
 
 
-def test_parse_xml_config_reports_all_missing_fields_together():
+def test_xml_config_reports_all_missing_fields_together():
     with pytest.raises(ValueError) as exc_info:
-        xml_to_allometry.parse_xml_config({})
+        xml_to_allometry.XmlConfig.model_validate({})
     message = str(exc_info.value)
     assert "altitude" in message
     assert "ddy" in message
 
 
-def test_parse_xml_config_rejects_unknown_field():
+def test_xml_config_rejects_unknown_field():
     with pytest.raises(ValueError, match="typo_field"):
-        xml_to_allometry.parse_xml_config(
+        xml_to_allometry.XmlConfig.model_validate(
             {"altitude": 150.0, "ddy": 1200.0, "typo_field": 1}
         )
 
 
-def test_parse_xml_config_applies_defaults():
-    config = xml_to_allometry.parse_xml_config({"altitude": 150.0, "ddy": 1200.0})
+def test_xml_config_applies_defaults():
+    config = xml_to_allometry.XmlConfig.model_validate(
+        {"altitude": 150.0, "ddy": 1200.0}
+    )
     assert config.n_trees == 20
     assert config.start_year == 5
     assert config.end_year == 80
     assert config.step_years == 5
 
 
-def test_parse_xml_config_overrides_defaults():
-    config = xml_to_allometry.parse_xml_config(
+def test_xml_config_overrides_defaults():
+    config = xml_to_allometry.XmlConfig.model_validate(
         {"altitude": 150.0, "ddy": 1200.0, "n_trees": 5, "step_years": 10}
     )
     assert config.n_trees == 5
@@ -68,7 +75,7 @@ def test_parse_xml_config_overrides_defaults():
 
 def test_xml_config_is_frozen():
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0)
-    with pytest.raises(Exception):  # noqa: B017 -- dataclasses.FrozenInstanceError
+    with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
         setattr(config, "altitude", 200.0)  # noqa: B010
 
 
@@ -86,7 +93,7 @@ def test_load_xml_config_reads_toml(tmp_path):
 # XmlConfig's own field defaults -- see that file's header comment.
 
 DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parent.parent.parent
     / "src"
     / "tools"
     / "xml_to_allometry"
@@ -94,7 +101,7 @@ DEFAULT_CONFIG_PATH = (
 )
 
 
-def test_default_config_toml_optional_fields_match_dataclass_defaults():
+def test_default_config_toml_optional_fields_match_model_defaults():
     config = xml_to_allometry.load_xml_config(DEFAULT_CONFIG_PATH)
     defaults = xml_to_allometry.XmlConfig(altitude=0.0, ddy=0.0)
     assert config.n_trees == defaults.n_trees

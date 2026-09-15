@@ -22,9 +22,9 @@ import pandas as pd
 from shapely.geometry.base import BaseGeometry
 
 from susi.core.allometric_road_map import Growth_and_Yield_Table
+from susi.io.extra_pydantic_types import StrictFrozenModel
 from susi.io.load_output_data import StandID
 from tools.shared_allometry_tool_utils.input_validation import (
-    check_config_fields,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -72,10 +72,6 @@ PEAT = 1
 # (2: to a common "current" date, 3: +10y future extrapolation)
 # Type 1 is the only measured data.
 TREESTAND_MEASURED_TYPE = 1
-
-
-# Fields required in the config file
-REQUIRED_CONFIG_FIELDS = ("target_year", "altitude", "ddy")
 
 
 # %% dataclasses
@@ -161,12 +157,16 @@ class GpkgLayers:
     treestratum: pd.DataFrame
 
 
-@dataclass(frozen=True)
-class ExtractionConfig:
+class ExtractionConfig(StrictFrozenModel):
     """
-    Defaulted/required parameters, loaded from a TOML file (see
-    parse_extraction_config). Hard-coded, non-negotiable parameters live as
-    module constants above instead.
+    Defaulted/required parameters, loaded from a TOML file. Hard-coded,
+    non-negotiable parameters live as module constants above instead.
+
+    StrictFrozenModel (susi.io.extra_pydantic_types) gives us presence
+    checking for the required fields below (no default -> required),
+    rejection of unknown fields (extra="forbid"), and immutability
+    (frozen=True) for free -- replacing check_config_fields,
+    REQUIRED_CONFIG_FIELDS, and the dataclass's own frozen=True.
     """
 
     # Required, no defaults
@@ -232,28 +232,8 @@ StandOutcome = StandWritten | StandSkipped
 # %% Config parsing
 
 
-def parse_extraction_config(raw: dict) -> ExtractionConfig:
-    """
-    Build an ExtractionConfig from a parsed TOML dict.
-    Presence/unknown-field checking is the shared check_config_fields
-    """
-    check_config_fields(raw, ExtractionConfig, REQUIRED_CONFIG_FIELDS)
-
-    return ExtractionConfig(
-        target_year=int(raw["target_year"]),
-        altitude=float(raw["altitude"]),
-        ddy=float(raw["ddy"]),
-        developmentclass_filter=tuple(raw.get("developmentclass_filter", (1, 2, 3))),
-        fertilityclass_filter=tuple(raw.get("fertilityclass_filter", (2, 3, 4, 5))),
-        n_trees=int(raw.get("n_trees", 20)),
-        start_year=int(raw.get("start_year", 5)),
-        end_year=int(raw.get("end_year", 80)),
-        step_years=int(raw.get("step_years", 5)),
-    )
-
-
 def load_extraction_config(config_path: Path) -> ExtractionConfig:
-    return load_toml_config(config_path, parse_extraction_config)
+    return load_toml_config(config_path, ExtractionConfig.model_validate)
 
 
 # %% gpkg loading (I/O)
