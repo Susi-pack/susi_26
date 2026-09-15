@@ -156,34 +156,22 @@ def test_validate_altitude_ddy_rejects_nan_even_with_override(capsys):
     assert "altitude" in capsys.readouterr().err
 
 
-# %% input_validation.check_config_fields
+# %% input_validation.load_toml_config
+#
+# check_config_fields (the manual presence/unknown-field checker
+# load_toml_config's callers used to run before Pydantic did that job
+# instead) is gone -- see xml_to_allometry.py's XmlConfig,
+# metsakeskus_to_allometry.py's ExtractionConfig, and
+# new_growth_allometry.py's NewGrowthConfig, all StrictFrozenModel now.
+# _DummyConfig below stays a plain dataclass: it only needs to be some
+# `parse`-constructible type, unrelated to what check_config_fields used to
+# validate against.
 
 
 @dataclass(frozen=True)
 class _DummyConfig:
     required_field: int
     optional_field: int = 0
-
-
-def test_check_config_fields_accepts_a_valid_dict():
-    input_validation.check_config_fields(
-        {"required_field": 1}, _DummyConfig, ("required_field",)
-    )
-
-
-def test_check_config_fields_raises_on_missing_required_field():
-    with pytest.raises(ValueError, match="required_field"):
-        input_validation.check_config_fields({}, _DummyConfig, ("required_field",))
-
-
-def test_check_config_fields_raises_on_unknown_field():
-    with pytest.raises(ValueError, match="typo_field"):
-        input_validation.check_config_fields(
-            {"required_field": 1, "typo_field": 1}, _DummyConfig, ("required_field",)
-        )
-
-
-# %% input_validation.load_toml_config
 
 
 def test_load_toml_config_reads_the_file_and_hands_the_raw_dict_to_parse(tmp_path):
@@ -202,7 +190,9 @@ def test_load_toml_config_reads_the_file_and_hands_the_raw_dict_to_parse(tmp_pat
 
 def test_output_dir_for_project_appends_allometry(tmp_path):
     project_dir = tmp_path / "myproject"
-    assert project_layout.output_dir_for_project(project_dir) == project_dir / "allometry"
+    assert (
+        project_layout.output_dir_for_project(project_dir) == project_dir / "allometry"
+    )
 
 
 # %% project_layout.check_output_dir_available
@@ -230,7 +220,9 @@ def test_resolve_config_path_prefers_explicit_config(tmp_path):
     project_dir.mkdir()
     (project_dir / "config.toml").write_text("")
 
-    assert project_layout.resolve_config_path(explicit, project_dir, _parser()) == explicit
+    assert (
+        project_layout.resolve_config_path(explicit, project_dir, _parser()) == explicit
+    )
 
 
 def test_resolve_config_path_defaults_to_config_toml_in_project_dir(tmp_path):
@@ -239,7 +231,10 @@ def test_resolve_config_path_defaults_to_config_toml_in_project_dir(tmp_path):
     default_config = project_dir / "config.toml"
     default_config.write_text("")
 
-    assert project_layout.resolve_config_path(None, project_dir, _parser()) == default_config
+    assert (
+        project_layout.resolve_config_path(None, project_dir, _parser())
+        == default_config
+    )
 
 
 def test_resolve_config_path_errors_when_default_is_missing(tmp_path, capsys):

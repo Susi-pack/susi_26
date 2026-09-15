@@ -10,8 +10,8 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from susi.core.allometric_road_map import Growth_and_Yield_Table
+from susi.io.extra_pydantic_types import StrictFrozenModel
 from tools.shared_allometry_tool_utils.input_validation import (
-    check_config_fields,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -33,16 +33,17 @@ from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STR
 
 # %% Config
 
-# Fields required in the config file.
-REQUIRED_CONFIG_FIELDS = ("altitude", "ddy")
-
 INFO_JSON_FILENAME = "extra_xml_info.json"
 
 
-@dataclass(frozen=True)
-class XmlConfig:
-    """Defaulted/required parameters, loaded from a TOML file (see
-    parse_xml_config)."""
+class XmlConfig(StrictFrozenModel):
+    """Defaulted/required parameters, loaded from a TOML file.
+
+    StrictFrozenModel (susi.io.extra_pydantic_types) gives us presence
+    checking for the required fields below (no default -> required),
+    rejection of unknown fields (extra="forbid"), and immutability
+    (frozen=True) for free -- replacing check_config_fields,
+    REQUIRED_CONFIG_FIELDS, and the dataclass's own frozen=True."""
 
     # Required, no defaults
     altitude: float
@@ -56,24 +57,8 @@ class XmlConfig:
     step_years: int = 5
 
 
-def parse_xml_config(raw: dict) -> XmlConfig:
-    """Build an XmlConfig from a parsed TOML dict. Presence/unknown-field
-    checking is the shared check_config_fields; per-field type coercion and
-    defaulting below stays here."""
-    check_config_fields(raw, XmlConfig, REQUIRED_CONFIG_FIELDS)
-
-    return XmlConfig(
-        altitude=float(raw["altitude"]),
-        ddy=float(raw["ddy"]),
-        n_trees=int(raw.get("n_trees", 20)),
-        start_year=int(raw.get("start_year", 5)),
-        end_year=int(raw.get("end_year", 80)),
-        step_years=int(raw.get("step_years", 5)),
-    )
-
-
 def load_xml_config(config_path: Path) -> XmlConfig:
-    return load_toml_config(config_path, parse_xml_config)
+    return load_toml_config(config_path, XmlConfig.model_validate)
 
 
 # %% dataclasses
