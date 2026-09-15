@@ -1,0 +1,51 @@
+# Default/template config for src/tools/new_growth_allometry/new_growth_allometry.py.
+#
+# Copy this file, fill in the required fields for your project, and pass it
+# via --config.
+#
+# Every other field is optional.
+# new_growth_allometry.py already applies the value shown here if the key is
+# omitted entirely.
+#
+
+# --- Required, no code-level default ---
+
+# Site elevation, metres.
+# Enforced range: [0, 1000]
+altitude = -1 # REQUIRED
+
+# Degree-day-years, cumulative temperature sum.
+# Enforced range: [500, 2000]
+ddy = 0 # REQUIRED
+
+# Fertility class of the site.
+fertility_class = -1 # REQUIRED
+
+# Coordinates of the stand, in ETRS-TM35FIN (EPSG:3067) metres.
+# Converted internally to YKJ for the growth model.
+x = -1 # REQUIRED
+y = -1 # REQUIRED
+
+# The one species growing in this new-growth stand.
+# Must be exactly one of "pine", "spruce", "birch".
+# this tool models a single-species regenerated stand.
+species = "" # REQUIRED
+
+# Stem count of that species, in stems/ha.
+# Must be a positive integer.
+stems_count = -1 # REQUIRED
+
+# --- Optional -- shown here with the same values parse_new_growth_config()
+# --- would apply anyway if the key were simply absent from this file.
+
+# n_trees, start_year, end_year, step_years all feed
+# Growth_and_Yield_Table.get_table(): how many trees the allometric model
+# tracks, and the age range/step of the growth trajectory it returns.
+n_trees = 20
+start_year = 5
+end_year = 80
+step_years = 5
+
+# Note: the new-growth stand's starting height (per species) is a fixed
+# model parameter, not configurable here.
+# See STARTING_HEIGHT in new_growth_allometry.py if you genuinely need to change it.

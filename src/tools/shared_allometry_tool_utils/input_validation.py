@@ -1,16 +1,16 @@
 """
-CLI-argument and config validation shared by xml_to_allometry.py and
-metsakeskus_to_allometry.py: file/directory validator factories for
-argparse, the altitude/ddy enforced-range checks, and TOML-config
-presence/unknown-field checking.
+CLI-argument and config validation shared by xml_to_allometry.py,
+metsakeskus_to_allometry.py, and new_growth_allometry.py: file/directory
+validator factories for argparse, and the altitude/ddy enforced-range
+checks.
 
-Per-field type coercion and defaulting for a config file (e.g. `int(raw.get(
-"n_trees", 20))`) stays with each tool -- only the shape checking that is
-genuinely identical between them lives here.
+Each tool's config is its own StrictFrozenModel (susi.io.extra_pydantic_types)
+now, loaded via load_toml_config below -- presence/unknown-field checking,
+per-field type coercion, and defaulting are all Pydantic's job, not
+something this shared module does on the tools' behalf any more.
 """
 
 import argparse
-import dataclasses
 import math
 import tomllib
 from pathlib import Path
@@ -123,31 +123,12 @@ def validate_altitude_ddy(
             )
 
 
-def check_config_fields(
-    raw: dict, config_dataclass: type, required_fields: tuple[str, ...]
-) -> None:
-    """Presence/unknown-field checking for a TOML-derived dict, parameterized
-    by a config dataclass type (whose field names are the allowed set) and a
-    tuple of required-field names. Raises ValueError, collecting every
-    violation of one kind before reporting, so the user learns about all
-    missing fields (or all unknown ones) in a single run."""
-    missing = [name for name in required_fields if name not in raw]
-    if missing:
-        raise ValueError(
-            f"Config file is missing required field(s): {', '.join(missing)}"
-        )
-
-    known_fields = {f.name for f in dataclasses.fields(config_dataclass)}
-    unexpected = sorted(set(raw) - known_fields)
-    if unexpected:
-        raise ValueError(f"Config file has unknown field(s): {', '.join(unexpected)}")
-
-
 def load_toml_config(config_path: Path, parse: Callable[[dict], T]) -> T:
     """Reads a TOML config file and hands the raw dict to `parse` (e.g.
-    xml_to_allometry.py's parse_xml_config or metsakeskus_to_allometry.py's
-    parse_extraction_config) -- the file-reading boilerplate both tools'
-    config loaders were otherwise duplicating byte-for-byte."""
+    xml_to_allometry.py's XmlConfig.model_validate or
+    metsakeskus_to_allometry.py's ExtractionConfig.model_validate) -- the
+    file-reading boilerplate every tool's config loader was otherwise
+    duplicating byte-for-byte."""
     with open(config_path, "rb") as config_file:
         raw = tomllib.load(config_file)
     return parse(raw)
