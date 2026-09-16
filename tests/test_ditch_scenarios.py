@@ -73,7 +73,7 @@ def _make_site_params(**overrides):
         peat_temperature=PeatTemperatureParams(),
     )
     kwargs.update(overrides)
-    return SiteParams(**kwargs)
+    return SiteParams(**kwargs)  # ty: ignore[invalid-argument-type]
 
 
 def test_single_element_lists_are_valid_by_default():

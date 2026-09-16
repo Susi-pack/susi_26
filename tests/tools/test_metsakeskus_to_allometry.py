@@ -1278,6 +1278,7 @@ def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     assert isinstance(outcome, m.StandWritten)
     assert outcome.dominant_csv == plan.dominant_csv
     assert outcome.subdominant_csv == plan.subdominant_csv
+    assert plan.subdominant_csv is not None
     assert sorted(path.name for path in tmp_path.glob("*.csv")) == sorted(
         [plan.dominant_csv.name, plan.subdominant_csv.name]
     )

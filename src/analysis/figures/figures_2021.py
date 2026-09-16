@@ -124,7 +124,7 @@ def load_stand_growth(
 def load_co2_data(
     site_label: SiteLabel,
 ) -> tuple[
-    float, int, pd.DataFrame, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray
+    np.ndarray, int, pd.DataFrame, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray
 ]:
     site_params = assign_susi_params_to_site(site_label)
     sday = site_params.simulation_config.start_date
@@ -142,7 +142,7 @@ def load_co2_data(
         peat_t = ncf["temperature"]["T"][0, :, 3]
         days = np.shape(peat_t)[0]
         dft = pd.DataFrame(
-            peat_t, columns=["T"], index=pd.date_range(sday, periods=days)
+            peat_t, columns=pd.Index(["T"]), index=pd.date_range(sday, periods=days)
         )
 
         esom_co2 = ncf["esom"]["Mass"]["co2"][0, :, 1:-1] / 10.0
@@ -231,10 +231,10 @@ def plot_regression_line(x_range: np.ndarray, a: float) -> None:
 
 
 def plot_scatter_site(
-    x: float,
-    y: float,
-    yerr: float,
-    xerr: float | None = None,
+    x: np.ndarray,
+    y: np.ndarray,
+    yerr: np.ndarray,
+    xerr: np.ndarray | None = None,
     label: str = "",
     color: str | None = None,
     capsize: int = ERRORBAR_CAPSIZE,
@@ -463,7 +463,7 @@ for i, (crd, site_label, tx) in enumerate(zip(coordinates, SITES, abc)):
     ax.fill_between(dfsim.index, wt_max, wt_min, color="grey", alpha=0.3)
     ax.set_ylim((-1.0, 0.0))
     ax.plot(dfmeas, "bo", markersize=2)
-    ax.set_xlim((sday, end_date))
+    ax.set_xlim((mdates.date2num(sday), mdates.date2num(end_date)))
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
@@ -599,7 +599,7 @@ fig = plt.figure(num="growth", figsize=figsi)
 gs = gridspec.GridSpec(ncols=2, nrows=2, figure=fig, wspace=0.25, hspace=0.25)
 
 
-colors = plt.cm.jet(np.linspace(0, 1, nsites))
+colors = plt.colormaps["jet"](np.linspace(0, 1, nsites))
 
 # -----------WT figure ------------------------------------------------
 
@@ -801,7 +801,8 @@ site_names = [WT_MEASUREMENT_INFO[site_label].name for site_label in SITES]
 sfcs = list(SITE_FERTILITY_CLASSES)
 print("***********************")
 dfresid = pd.DataFrame(
-    list(zip(site_names, sfcs, obsvols, prevols)), columns=["name", "sfc", "obs", "pre"]
+    list(zip(site_names, sfcs, obsvols, prevols)),
+    columns=pd.Index(["name", "sfc", "obs", "pre"]),
 )
 dfresid["residual"] = dfresid["pre"] - dfresid["obs"]
 print(dfresid)

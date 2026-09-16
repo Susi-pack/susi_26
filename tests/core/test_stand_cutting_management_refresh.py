@@ -152,7 +152,7 @@ class TestThinningRefreshesStandAggregates:
         stand.apply_cutting_management(
             CuttingManagementParams(
                 application_yr=2005,
-                management_type=Thinning(target_basal_area={"dominant": 12}),
+                management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
             ),
             yr=2005,
             sfc=SFC,

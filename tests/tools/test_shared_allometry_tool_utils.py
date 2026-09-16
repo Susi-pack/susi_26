@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pydantic
 import pytest
 
+from susi.io.load_output_data import StandID
 from tools.shared_allometry_tool_utils import (
     input_validation,
     print_formatting,
@@ -263,7 +264,9 @@ def test_print_skips_does_nothing_for_an_empty_list(capsys):
 
 
 def test_print_skips_reports_stand_id_and_reason(capsys):
-    skips = [print_formatting.StandSkipped(stand_id="1", reason="no TreeStrata")]
+    skips = [
+        print_formatting.StandSkipped(stand_id=StandID("1"), reason="no TreeStrata")
+    ]
     print_formatting.print_skips(skips, "Skipped")
     printed = capsys.readouterr().out
     assert "Skipped: 1" in printed
@@ -306,7 +309,7 @@ def test_tree_stratum_constructs_from_valid_values():
 def test_tree_stratum_rejects_a_malformed_value():
     with pytest.raises(pydantic.ValidationError):
         tree_stratum.TreeStratum(
-            age="not-a-number",
+            age="not-a-number",  # ty: ignore[invalid-argument-type]
             basal_area=15.0,
             stem_count=400,
             mean_diameter=20.0,
@@ -319,7 +322,7 @@ def test_tree_stratum_is_frozen():
         age=30, basal_area=15.0, stem_count=400, mean_diameter=20.0, mean_height=18.0
     )
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-dataclass error
-        stratum.age = 31  # noqa: B010
+        stratum.age = 31  # noqa: B010  # ty: ignore[invalid-assignment]
 
 
 def test_tree_stratum_is_hashable():
