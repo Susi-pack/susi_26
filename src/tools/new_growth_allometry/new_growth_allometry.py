@@ -187,7 +187,6 @@ def build_growth_and_yield_table(
         end_year=config.end_year,
         step_years=config.step_years,
     )
-    table.insert(0, "Species_ID", SPECIES_CODE[config.species])
     return table
 
 

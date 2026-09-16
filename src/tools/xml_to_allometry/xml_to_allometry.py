@@ -364,7 +364,6 @@ def process_stand(
         end_year=config.end_year,
         step_years=config.step_years,
     )
-    page_1.insert(0, "Species_ID", stand_data.main_species)
 
     page_1.to_csv(plan_stand_output(stand_data, output_dir), index=False)
 

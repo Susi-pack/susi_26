@@ -766,13 +766,10 @@ def build_growth_and_yield_table(
 # %% Writing output (I/O)
 
 
-def write_allometry_csv(
-    table: pd.DataFrame, species_id: int, output_path: Path
-) -> None:
+def write_allometry_csv(table: pd.DataFrame, output_path: Path) -> None:
     """Writes one CanopyLayerAllometry-contract CSV -- readable directly by
     susi.io.susi_parameter_model.read_allometry_info_from_csv."""
     table_with_species = table.copy()
-    table_with_species.insert(0, "Species_ID", species_id)
     table_with_species.to_csv(output_path, index=False)
 
 
@@ -962,14 +959,11 @@ def process_stand(
 
         # Both tables computed successfully (or there is no subdominant
         # layer to compute) -- only now do we write anything to disk.
-        write_allometry_csv(dominant_table, stand.dominant_species, plan.dominant_csv)
+        write_allometry_csv(dominant_table, plan.dominant_csv)
 
         if subdominant_table is not None:
-            # plan.subdominant_csv is not None here: it is the very condition
-            # that produced subdominant_table above.
-            write_allometry_csv(
-                subdominant_table, stand.subdominant_species, plan.subdominant_csv
-            )
+            assert plan.subdominant_csv is not None
+            write_allometry_csv(subdominant_table, plan.subdominant_csv)
 
         return StandWritten(
             stand_id=plan.stand_id,

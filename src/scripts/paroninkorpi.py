@@ -47,6 +47,7 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
+    AllometryFileAndSpecies,
 )
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
@@ -241,15 +242,21 @@ def get_ncf_outputs(file):
     }
 
 
-def allometry_filename_from_stand_number(stand_number: int) -> str:
-    return f"susi_input_{stand_number}.csv"
+def allometry_filename_from_stand_number(
+    stand_number: int, species_id: int
+) -> AllometryFileAndSpecies:
+    return AllometryFileAndSpecies(
+        filename=f"susi_input_{stand_number}.csv",
+        species_id=species_id,
+    )
 
 
 def read_initial_dominant_stand_age_from_allometry_file(
-    stand_number: int, allometry_files_folder: Path
+    stand_number: int, allometry_files_folder: Path, species_id: int
 ) -> float:
-    allometry_filepath = allometry_files_folder / allometry_filename_from_stand_number(
-        stand_number
+    allometry_filepath = (
+        allometry_files_folder
+        / allometry_filename_from_stand_number(stand_number, species_id).filename
     )
     return float(pd.read_csv(allometry_filepath)["Age"][0])
 
@@ -292,6 +299,7 @@ def should_implement_thinning(
 def prepare_susi_params(
     stand_number: int,
     allometry_files_directory_path: Path,
+    species_id: int,
     ditch_depth,
     fertility_class: int,
     scenario: str,
@@ -349,7 +357,9 @@ def prepare_susi_params(
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=allometry_files_directory_path,
                 allometry_file_registry={
-                    1: allometry_filename_from_stand_number(stand_number),
+                    1: allometry_filename_from_stand_number(
+                        stand_number, species_id=species_id
+                    ),
                 },
                 pointers={
                     CanopyLayerName.dominant: [1] * 20,
@@ -370,6 +380,7 @@ def prepare_susi_params(
                     CanopyLayerName.dominant: read_initial_dominant_stand_age_from_allometry_file(
                         stand_number=stand_number,
                         allometry_files_folder=allometry_files_directory_path,
+                        species_id=species_id,
                     ),
                     CanopyLayerName.subdominant: 0.0,
                     CanopyLayerName.under: 0.0,
@@ -535,6 +546,7 @@ class DataFromXml:
     fertility_class: int
     G_1: float
     G_2: float
+    species_id: int
 
 
 def get_XML_data_for_each_stand() -> list[DataFromXml]:
@@ -619,6 +631,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
                 G_1=G_1,
                 G_2=G_2,
                 fertility_class=FertilityClass,
+                species_id=main_sp,
             )
         )
     return xml_data
@@ -651,6 +664,7 @@ ditch_depth_for_each_stand = get_ditch_depth_from_raster_by_stand(xml_data)
 fertility_class_for_each_stand = [i.fertility_class for i in xml_data]
 G_1_for_each_stand = [i.G_1 for i in xml_data]
 G_2_for_each_stand = [i.G_2 for i in xml_data]
+species_id_for_each_stand = [i.species_id for i in xml_data]
 
 
 # %% Create params for all base scenario Susi runs
@@ -667,6 +681,7 @@ stand_numbers = range(1, N_STANDS + 1)
 for stand_number in stand_numbers:
     ditch_depth = ditch_depth_for_each_stand[stand_number - 1]
     fertility_class = fertility_class_for_each_stand[stand_number - 1]
+    species_id = species_id_for_each_stand[stand_number - 1]
 
     ### SET BASE SCENARIOS
     if ditch_depth > -0.40:
@@ -683,6 +698,7 @@ for stand_number in stand_numbers:
         susi_params = prepare_susi_params(
             stand_number=stand_number,
             allometry_files_directory_path=ALLOMETRY_FILES_DIRECTORY_PATH,
+            species_id=species_id,
             ditch_depth=ditch_depth,
             fertility_class=fertility_class,
             scenario=scen,
