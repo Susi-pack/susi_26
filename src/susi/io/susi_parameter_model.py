@@ -44,9 +44,9 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
 
 
 @lru_cache()
-def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
+def read_allometry_info_from_csv(filepath: Path) -> pd.DataFrame:
     """
-    Read allometry file, return the allometry dataframe and its species id.
+    Read allometry file and return the allometry dataframe.
     It is cached so that the same file is not read twice.
     """
     column_names = [c.name for c in ALLOMETRY_COLUMNS]
@@ -60,13 +60,6 @@ def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
     if extra:
         raise ValueError(f"Allometry file {filepath} has unexpected columns: {extra}")
 
-    species_ids = df["Species_ID"].unique()
-    if len(species_ids) != 1:
-        raise ValueError(
-            f"{filepath}: Species_ID column must be constant, found {species_ids}"
-        )
-    species_id = int(species_ids[0])
-
     # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
     df = df.loc[df["Age"] != 0]
 
@@ -74,7 +67,7 @@ def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
     idx = np.ravel(np.argwhere(steps < 1.0)) + 1
     df.loc[idx, "Age"] = df.loc[idx, "Age"] + 5.0 / 365.0
 
-    return df, species_id
+    return df
 
 
 class SimulationConfig(StrictFrozenModel):
@@ -98,6 +91,11 @@ class CanopyLayerName(str, Enum):
     under = "under"
 
 
+class AllometryFileAndSpecies(StrictFrozenModel):
+    filename: str
+    species_id: PositiveInt
+
+
 AllometryRegistryNumber: TypeAlias = PositiveInt
 
 
@@ -109,8 +107,10 @@ class CanopyLayerAllometry(StrictFrozenModel):
     allometry_dir_path: DirectoryPath = Field(
         description="Folder where to look for the allometry files."
     )
-    allometry_file_registry: dict[AllometryRegistryNumber, str] = Field(
-        description="Map: allometry registry number -> allometry file. Example: {1:'pines.csv', 2:'spruces.csv'}"
+    allometry_file_registry: dict[AllometryRegistryNumber, AllometryFileAndSpecies] = (
+        Field(
+            description="Map: allometry registry number -> allometry file. Example: {1:AllometryFileAndSpecies(filename='pines.csv', species_id=1), 2:AllometryFileAndSpecies(filename='spruces.csv', species_id=2)}"
+        )
     )
     pointers: dict[CanopyLayerName, list[AllometryRegistryNumber] | None] = Field(
         description="Map: canopy layer name-> list of pointers, length ncols. Example: {'dominant': [1,1,1,1,2,2,2], 'subdominant': None, 'under': None}"
@@ -142,12 +142,17 @@ class CanopyLayerAllometry(StrictFrozenModel):
         _zones_data = {}
         _zones_species_id = {}
 
-        for allometry_registry_number, filename in self.allometry_file_registry.items():
-            df, species_id = read_allometry_info_from_csv(
-                filepath=self.allometry_dir_path / filename
+        for (
+            allometry_registry_number,
+            filename_and_species,
+        ) in self.allometry_file_registry.items():
+            df = read_allometry_info_from_csv(
+                filepath=self.allometry_dir_path / filename_and_species.filename
             )
             _zones_data[allometry_registry_number] = df
-            _zones_species_id[allometry_registry_number] = species_id
+            _zones_species_id[allometry_registry_number] = (
+                filename_and_species.species_id
+            )
 
         self._zones_data = _zones_data
         self._zones_species_id = _zones_species_id

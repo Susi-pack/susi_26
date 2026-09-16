@@ -343,8 +343,7 @@ def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_p
 
     output_path = xml_to_allometry.plan_stand_output(stand_data, tmp_path)
     assert output_path.exists()
-    df, species_id = read_allometry_info_from_csv(output_path)
-    assert species_id == stand_data.main_species
+    df = read_allometry_info_from_csv(output_path)
     assert len(df) > 0
 
 

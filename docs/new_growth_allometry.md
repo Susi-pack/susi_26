@@ -124,8 +124,7 @@ silently represent a mixed stand under one species' label.
 `new_growth_allometry.py` deliberately does not repeat that: since the
 config already states the species directly (there is no inventory row to
 extract several from), the tool enforces that exactly one species is ever
-modeled, and the output file's `Species_ID` always matches what you asked
-for.
+modeled.
 
 ## Dry runs
 

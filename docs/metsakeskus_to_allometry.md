@@ -215,10 +215,8 @@ ran.
 | `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
 | `<project folder name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document (named after the `--project-dir` folder), replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
 
-Each CSV follows the canonical allometry schema — the columns declared in
-`susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by
-`read_allometry_info_from_csv` — with a leading `Species_ID` column that is
-constant within the file (1 pine, 2 spruce, 3 deciduous).
+Each CSV follows the canonical allometry schema.
+The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.
 
 ??? info "Why two single-species files per stand?"
 

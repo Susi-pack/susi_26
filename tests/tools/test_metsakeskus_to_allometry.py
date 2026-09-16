@@ -910,10 +910,9 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
         config.step_years,
     )
     output_path = tmp_path / "1_dominant.csv"
-    m.write_allometry_csv(table, stand.dominant_species, output_path)
+    m.write_allometry_csv(table, output_path)
 
-    df, species_id = read_allometry_info_from_csv(output_path)
-    assert species_id == stand.dominant_species
+    df = read_allometry_info_from_csv(output_path)
     assert len(df) > 0
 
 

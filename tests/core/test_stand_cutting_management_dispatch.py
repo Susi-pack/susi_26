@@ -19,6 +19,7 @@ import pytest
 
 from susi.core.stand import Stand
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     ClearCut,
@@ -39,7 +40,9 @@ SFC = np.ones(N, dtype=int) * 4  # reused for both Stand construction and
 def _make_stand() -> Stand:
     allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+        },
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -70,7 +73,9 @@ def _regeneration_allometry() -> CanopyLayerAllometry:
     """age must start at 1 — see ClearCut.new_allometry_includes_age_one."""
     return CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "post_clearcut_allom.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(filename="post_clearcut_allom.csv", species_id=1)
+        },
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,

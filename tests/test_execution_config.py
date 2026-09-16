@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     SusiParams,
     WeatherParams,
     SimulationConfig,
@@ -45,7 +46,9 @@ def valid_susi_params(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.csv"},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+            },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,
@@ -133,7 +136,9 @@ def another_valid_susi_params(test_data_path):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.csv"},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+            },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                 CanopyLayerName.subdominant: None,

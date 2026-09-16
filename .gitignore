@@ -97,6 +97,7 @@ xmltoallometry_with_areas
 susi_2021/
 
 # LLM stuf
+.scratch/
 CONTEXT.md
 CONTEXT-MAP.md
 AGENTS.md

@@ -3,6 +3,7 @@ import numpy as np
 import datetime
 from pathlib import Path
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     SusiParams,
     WeatherParams,
     SimulationConfig,
@@ -76,7 +77,11 @@ class TestSusiMainFertilizationIntegration:
             ),
             allometry_parameters=CanopyLayerAllometry(
                 allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        filename="test_allometry.csv", species_id=1
+                    )
+                },
                 pointers={
                     CanopyLayerName.dominant: [1, 1, 1, 1, 1],
                     CanopyLayerName.subdominant: None,

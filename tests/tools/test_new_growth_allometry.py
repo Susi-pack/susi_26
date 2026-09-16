@@ -270,8 +270,7 @@ def test_build_growth_and_yield_table_writes_a_csv_round_tripping_through_the_re
     output_path = tmp_path / "new_growth_pine.csv"
     table.to_csv(output_path, index=False)
 
-    df, species_id = read_allometry_info_from_csv(output_path)
-    assert species_id == nga.SPECIES_CODE[nga.Species.PINE]
+    df = read_allometry_info_from_csv(output_path)
     # New growth must start at age 1 -- this is exactly what
     # ClearCut.new_allometry_includes_age_one enforces downstream.
     assert df["Age"].min() == 1
@@ -476,6 +475,5 @@ def test_main_real_run_writes_the_expected_csv(monkeypatch, project_dir):
 
     output_path = project_dir / "allometry" / "new_growth_birch.csv"
     assert output_path.exists()
-    df, species_id = read_allometry_info_from_csv(output_path)
-    assert species_id == nga.SPECIES_CODE[nga.Species.BIRCH]
+    df = read_allometry_info_from_csv(output_path)
     assert df["Age"].min() == 1

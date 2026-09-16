@@ -22,6 +22,7 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     CanopyLayerName,
+    AllometryFileAndSpecies,
 )
 
 _app_settings = AppSettings()
@@ -40,7 +41,9 @@ PARAMETERS = SusiParams(
     ),
     allometry_parameters=CanopyLayerAllometry(
         allometry_dir_path=_app_settings.input_folder.joinpath("system/allometry"),
-        allometry_file_registry={1: "CF_41.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(filename="CF_41.csv", species_id=1)
+        },
         pointers={
             CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
             CanopyLayerName.subdominant: None,

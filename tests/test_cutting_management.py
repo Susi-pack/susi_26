@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
@@ -61,7 +62,9 @@ def _make_susi_params(*, cutting_management, n: int = 5):
         ),
         allometry_parameters=CanopyLayerAllometry(
             allometry_dir_path=DATA_DIR,
-            allometry_file_registry={1: "test_allometry.csv"},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+            },
             pointers={
                 CanopyLayerName.dominant: [1] * n,
                 CanopyLayerName.subdominant: None,
@@ -131,7 +134,9 @@ def _make_regeneration_allometry(n: int = 5):
     qualify (it starts at age 60) — post_clearcut_allom.csv does."""
     return CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "post_clearcut_allom.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(filename="post_clearcut_allom.csv", species_id=1)
+        },
         pointers={
             CanopyLayerName.dominant: [1] * n,
             CanopyLayerName.subdominant: None,

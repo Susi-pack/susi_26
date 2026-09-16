@@ -21,6 +21,7 @@ import numpy as np
 
 from susi.core.stand import Stand
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     LocationsForPhotoParams,
@@ -38,7 +39,10 @@ SFC = np.array([1, 1, 4, 4, 4])
 def _make_multizone_stand(age: float = 70.0) -> Stand:
     allometry_params = CanopyLayerAllometry(
         allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.csv", 2: "test_allometry.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
+            2: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
+        },
         pointers={
             CanopyLayerName.dominant: POINTERS,
             CanopyLayerName.subdominant: None,

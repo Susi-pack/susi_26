@@ -216,11 +216,12 @@ The TreeStrata skip is reported in full, because that stage did run.
 | `susi_input_{stand_id}.csv` | Always, one per stand that survives filtering. |
 | `extra_xml_info.json` | Always. Every converted stand's parsed data — id, fertility class, polygon coordinates, all three tree strata, main species, and the optional metadata fields. Informational: nothing in SUSI reads it. |
 
-Each CSV is the allometric road map produced by `Growth_and_Yield_Table`, with
-a leading `Species_ID` column naming the stand's main species. It follows the
-canonical allometry schema — the columns declared in
+Each CSV is the allometric road map produced by `Growth_and_Yield_Table`. It
+follows the canonical allometry schema — the columns declared in
 `susi.core.allometry_columns.ALLOMETRY_COLUMNS` — and is read directly by
-`read_allometry_info_from_csv`.
+`read_allometry_info_from_csv`. The stand's main species is not a column in
+the file; it travels alongside the filename via `AllometryFileAndSpecies`
+when the file is registered in a `CanopyLayerAllometry.allometry_file_registry`.
 
 ## Skipped stands
 
