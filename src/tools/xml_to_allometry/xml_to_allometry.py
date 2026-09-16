@@ -208,7 +208,7 @@ def get_tree_strata_data(
         else:
             strata[2] = tree_stratum
 
-    return tuple(strata)
+    return (strata[0], strata[1], strata[2])
 
 
 def get_stand_data_from_xml(stand: dict) -> StandData:

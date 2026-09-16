@@ -21,9 +21,9 @@ from pydantic.dataclasses import dataclass
 
 @dataclass(frozen=True)
 class TreeStratum:
-    age: int
+    age: float
     basal_area: float
-    stem_count: int
+    stem_count: float
     mean_diameter: float
     mean_height: float
 
