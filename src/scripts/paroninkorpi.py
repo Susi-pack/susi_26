@@ -29,10 +29,10 @@ from susi.io.app_settings import AppSettings
 
 from susi.io.susi_parameter_model import (
     PeatTypes,
-    TreeSpecies,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     SiteParams,
+    StandParams,
     WeatherParams,
     SimulationConfig,
     SusiParams,
@@ -264,15 +264,15 @@ def should_implement_thinning(
     base_scenario_results, susi_params: SusiParams, G_1, G_2, yr
 ) -> float | None:
     species = "pine" if G_1 >= G_2 else "spruce"
-    if susi_params.site_parameters.site_fertility_class <= 2:
+    if susi_params.stand_params.site_fertility_class <= 2:
         species = "spruce"
-    if susi_params.site_parameters.site_fertility_class >= 4:
+    if susi_params.stand_params.site_fertility_class >= 4:
         species = "pine"
 
     thinning_guidelines = calculate_thinning_recommendation(
         region="Southern_Finland",
         soil="Organic_soil",
-        fertility_class=susi_params.site_parameters.site_fertility_class,
+        fertility_class=susi_params.stand_params.site_fertility_class,
         main_sp=species,
         H_dom=base_scenario_results["hdom"][yr],
     )
@@ -353,19 +353,22 @@ def prepare_susi_params(
                 start_date=start_date,
                 end_date=datetime.datetime(2024, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_file_registry={
-                    1: allometry_filename_from_stand_number(
-                        stand_number,
-                        allometry_files_directory_path,
-                        species_id=species_id,
-                    ),
-                },
-                pointers={
-                    CanopyLayerName.dominant: [1] * 20,
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: None,
-                },
+            stand_params=StandParams(
+                site_fertility_class=fertility_class,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: allometry_filename_from_stand_number(
+                            stand_number,
+                            allometry_files_directory_path,
+                            species_id=species_id,
+                        ),
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1] * 20,
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -385,9 +388,7 @@ def prepare_susi_params(
                     CanopyLayerName.subdominant: 0.0,
                     CanopyLayerName.under: 0.0,
                 },
-                site_fertility_class=fertility_class,
                 sitename="susirun",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,

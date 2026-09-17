@@ -101,9 +101,9 @@ class Susi:
             n_scenarios=len(self.parameters.site_parameters.ditch_depth_east),
             n_yrs=n_simulation_years,
             n_cols=self.parameters.site_parameters.n,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             agearr=self.parameters.site_parameters.age,
-            allometry_params=self.parameters.allometry_parameters,
+            allometry_params=self.parameters.stand_params.canopy_layer_allometry,
             photopara=self.parameters.photo_parameters,
         )  # create stand class
         stand.update()
@@ -113,16 +113,18 @@ class Susi:
         out.initialize_canopy_layer("subdominant")
         out.initialize_canopy_layer("under")
 
-        out.write_sfc(sfc=self.parameters.site_parameters.sfc)
+        out.write_sfc(sfc=self.parameters.sfc)
 
         # describe site parameters for user
-        susi_io.print_site_description(self.parameters.site_parameters)
+        susi_io.print_site_description(
+            self.parameters.site_parameters, self.parameters.sfc
+        )
 
         groundvegetation = Gvegetation(
             n=self.parameters.site_parameters.n,
             lat=lat,
             lon=lon,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             species=stand.dominant.species,
         )  # creates ground vegetation class
         groundvegetation.run(
@@ -137,25 +139,25 @@ class Susi:
 
         esmass = Esom(
             spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             days=366 * n_simulation_years,
             substance="Mass",
         )  # initializing organic matter decomposition instace for mass
         esN = Esom(
             spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             days=366 * n_simulation_years,
             substance="N",
         )  # initializing organic matter decomposition instace for N
         esP = Esom(
             spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             days=366 * n_simulation_years,
             substance="P",
         )  # initializing organic matter decomposition instace for P
         esK = Esom(
             spara=self.parameters.site_parameters,
-            sfc=self.parameters.site_parameters.sfc,
+            sfc=self.parameters.sfc,
             days=366 * n_simulation_years,
             substance="K",
         )  # initializing organic matter decomposition instace for K
@@ -448,9 +450,10 @@ class Susi:
                         dfwt,
                         v,
                         self.parameters.site_parameters,
+                        self.parameters.sfc,
                     )  # Rhet is total annual heterotrophic respiration in kg/ha/yr CO2, per computation node
                     soil_co2_balance = ojanen_2019(
-                        self.parameters.site_parameters, yr, dfwt
+                        self.parameters.site_parameters, yr, dfwt, self.parameters.sfc
                     )
                     out.write_ojanen(r, year + 1, Rhet, soil_co2_balance)
 
@@ -482,7 +485,7 @@ class Susi:
                     stand.apply_cutting_management(
                         yr=yr,
                         cutting_management=cutting_management,
-                        sfc=self.parameters.site_parameters.sfc,
+                        sfc=self.parameters.sfc,
                     )
                     stand.update_logging()
 

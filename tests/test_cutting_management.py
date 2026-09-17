@@ -34,9 +34,9 @@ from susi.io.susi_parameter_model import (
     PeatTypes,
     SimulationConfig,
     SiteParams,
+    StandParams,
     SusiParams,
     Thinning,
-    TreeSpecies,
     WeatherParams,
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
@@ -60,17 +60,20 @@ def _make_susi_params(*, cutting_management, n: int = 5):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=CanopyLayerAllometry(
-            allometry_file_registry={
-                1: AllometryFileAndSpecies(
-                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
-                )
-            },
-            pointers={
-                CanopyLayerName.dominant: [1] * n,
-                CanopyLayerName.subdominant: None,
-                CanopyLayerName.under: None,
-            },
+        stand_params=StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=CanopyLayerAllometry(
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                    )
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1] * n,
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
+            ),
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -86,9 +89,7 @@ def _make_susi_params(*, cutting_management, n: int = 5):
                 CanopyLayerName.subdominant: 70.0,
                 CanopyLayerName.under: 70.0,
             },
-            site_fertility_class=4,
             sitename="test",
-            species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
             vol=None,
@@ -154,7 +155,10 @@ class TestCuttingYearBounds:
     def test_cut_within_bounds(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2005, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                application_yr=2005,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2005
@@ -163,7 +167,10 @@ class TestCuttingYearBounds:
         with pytest.raises(ValueError, match="out of bounds"):
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
-                    application_yr=2003, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                    application_yr=2003,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 )
             )
 
@@ -171,14 +178,20 @@ class TestCuttingYearBounds:
         with pytest.raises(ValueError, match="out of bounds"):
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
-                    application_yr=2008, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                    application_yr=2008,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 )
             )
 
     def test_cut_on_start_year(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                application_yr=2004,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2004
@@ -186,7 +199,10 @@ class TestCuttingYearBounds:
     def test_cut_on_end_year(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2007, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                application_yr=2007,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2007
@@ -238,7 +254,10 @@ class TestClearCutStripsLength:
     def test_thinning_skips_strips_check(self):
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
-                application_yr=2005, management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12})
+                application_yr=2005,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2005
@@ -250,7 +269,7 @@ class TestClearCutStripsLength:
 
 class TestThinningTargetsExistingLayers:
     """Thinning.target_basal_area must only name layers that have allometry
-    (non-None pointers in allometry_parameters) -- see
+    (non-None pointers in stand_params.canopy_layer_allometry) -- see
     SusiParams.thinning_only_targets_layers_with_allometry. In
     _make_susi_params, only the 'dominant' layer has allometry; subdominant
     and under are both None."""
@@ -259,7 +278,9 @@ class TestThinningTargetsExistingLayers:
         sp = _make_susi_params(
             cutting_management=CuttingManagementParams(
                 application_yr=2005,
-                management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             )
         )
         assert sp.site_parameters.cutting_management.application_yr == 2005
@@ -271,7 +292,9 @@ class TestThinningTargetsExistingLayers:
             _make_susi_params(
                 cutting_management=CuttingManagementParams(
                     application_yr=2005,
-                    management_type=Thinning(target_basal_area={CanopyLayerName.subdominant: 12}),
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.subdominant: 12}
+                    ),
                 )
             )
 
@@ -283,7 +306,10 @@ class TestThinningTargetsExistingLayers:
                 cutting_management=CuttingManagementParams(
                     application_yr=2005,
                     management_type=Thinning(
-                        target_basal_area={CanopyLayerName.dominant: 12, CanopyLayerName.under: 8}
+                        target_basal_area={
+                            CanopyLayerName.dominant: 12,
+                            CanopyLayerName.under: 8,
+                        }
                     ),
                 )
             )
@@ -305,9 +331,7 @@ def _site_params_kwargs(n: int = 5, **overrides):
             CanopyLayerName.subdominant: 70.0,
             CanopyLayerName.under: 70.0,
         },
-        site_fertility_class=4,
         sitename="test",
-        species=TreeSpecies("Pine"),
         sfc_specification=1,
         hdom=None,
         vol=None,

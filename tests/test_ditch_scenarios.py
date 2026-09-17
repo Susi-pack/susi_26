@@ -16,7 +16,6 @@ from susi.io.susi_parameter_model import (
     PeatTemperatureParams,
     PeatTypes,
     SiteParams,
-    TreeSpecies,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 
@@ -32,9 +31,7 @@ def _make_site_params(**overrides):
             CanopyLayerName.subdominant: 70.0,
             CanopyLayerName.under: 70.0,
         },
-        site_fertility_class=4,
         sitename="test",
-        species=TreeSpecies("Pine"),
         sfc_specification=1,
         hdom=None,
         vol=None,

@@ -684,8 +684,6 @@ class SiteParams(StrictFrozenModel):
     Soil and stand parameters
     """
 
-    stand_params: StandParams
-
     # Forest
     # Age of different forest layers at the beginning of the simulation
     initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
@@ -700,7 +698,6 @@ class SiteParams(StrictFrozenModel):
     )
 
     sitename: str
-    species: TreeSpecies
     sfc_specification: float
     hdom: float | None
     vol: list[float] | None
@@ -779,11 +776,6 @@ class SiteParams(StrictFrozenModel):
             for layer_name in CanopyLayerName
         }
 
-    @property
-    def sfc(self) -> SkipValidation[np.ndarray]:
-        """site fertility class for all nodes in the strip"""
-        return np.ones(self.n, dtype=int) * self.site_fertility_class
-
     @field_validator("h_mor", mode="before")
     @classmethod
     def compute_if_callable(cls, hmor, info):
@@ -861,13 +853,21 @@ class SusiParams(StrictFrozenModel):
 
     params_schema_version: int = 1
     weather_parameters: WeatherParams
-    allometry_parameters: CanopyLayerAllometry
+    stand_params: StandParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+
+    @property
+    def sfc(self) -> SkipValidation[np.ndarray]:
+        """site fertility class for all nodes in the strip"""
+        return (
+            np.ones(self.site_parameters.n, dtype=int)
+            * self.stand_params.site_fertility_class
+        )
 
     @model_validator(mode="after")
     def check_cutting_within_years(self) -> Self:
@@ -911,11 +911,13 @@ class SusiParams(StrictFrozenModel):
 
         # Each layer might have a different initial stand age
         for canopy_layer in CanopyLayerName:
-            layer_pointers = self.allometry_parameters.pointers.get(canopy_layer)
+            layer_pointers = self.stand_params.canopy_layer_allometry.pointers.get(
+                canopy_layer
+            )
             if layer_pointers is None:
                 continue
             layer_zones = {
-                zone_id: self.allometry_parameters.zones_data[zone_id]
+                zone_id: self.stand_params.canopy_layer_allometry.zones_data[zone_id]
                 for zone_id in set(layer_pointers)
             }
             self._validate_layer_age(
@@ -935,7 +937,7 @@ class SusiParams(StrictFrozenModel):
         for (
             layer_name,
             pointer_column_list,
-        ) in self.allometry_parameters.pointers.items():
+        ) in self.stand_params.canopy_layer_allometry.pointers.items():
             if pointer_column_list is None:
                 continue
 
@@ -957,7 +959,10 @@ class SusiParams(StrictFrozenModel):
         if not isinstance(management_type, ClearCut):
             return self
 
-        for layer, pre_cut_pointers in self.allometry_parameters.pointers.items():
+        for (
+            layer,
+            pre_cut_pointers,
+        ) in self.stand_params.canopy_layer_allometry.pointers.items():
             if pre_cut_pointers is None:
                 continue
 
@@ -972,9 +977,9 @@ class SusiParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def thinning_only_targets_layers_with_allometry(self) -> Self:
-        """A canopy layer with pointers=None in allometry_parameters has no
-        real stand growing in it -- Thinning.target_basal_area must not name
-        a layer that doesn't exist."""
+        """A canopy layer with pointers=None in stand_params.canopy_layer_allometry
+        has no real stand growing in it -- Thinning.target_basal_area must not
+        name a layer that doesn't exist."""
         cutting_management = self.site_parameters.cutting_management
         if cutting_management is None:
             return self
@@ -984,10 +989,10 @@ class SusiParams(StrictFrozenModel):
             return self
 
         for layer in management_type.target_basal_area:
-            if self.allometry_parameters.pointers.get(layer) is None:
+            if self.stand_params.canopy_layer_allometry.pointers.get(layer) is None:
                 raise ValueError(
                     f"Thinning.target_basal_area targets the '{layer.value}' layer, "
-                    f"but that layer does not exist (allometry_parameters.pointers"
+                    f"but that layer does not exist (stand_params.canopy_layer_allometry.pointers"
                     f"['{layer.value}'] is None) -- there is no stand there to thin."
                 )
         return self

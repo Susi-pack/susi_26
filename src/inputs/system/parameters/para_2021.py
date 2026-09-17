@@ -12,8 +12,8 @@ import datetime
 from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
-    TreeSpecies,
     SiteParams,
+    StandParams,
     WeatherParams,
     SimulationConfig,
     SusiParams,
@@ -486,18 +486,21 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             start_date=site_params.start_date,
             end_date=site_params.end_date,
         ),
-        allometry_parameters=CanopyLayerAllometry(
-            allometry_file_registry={
-                1: AllometryFileAndSpecies(
-                    file_path=data_folder / "motti_files" / site_params.mottifile,
-                    species_id=1,
-                )
-            },
-            pointers={
-                CanopyLayerName.dominant: [1] * n,
-                CanopyLayerName.subdominant: None,
-                CanopyLayerName.under: None,
-            },
+        stand_params=StandParams(
+            site_fertility_class=site_params.sfc,
+            canopy_layer_allometry=CanopyLayerAllometry(
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        file_path=data_folder / "motti_files" / site_params.mottifile,
+                        species_id=1,
+                    )
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1] * n,
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
+            ),
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -513,9 +516,7 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
                 CanopyLayerName.subdominant: 0.0,
                 CanopyLayerName.under: 0.0,
             },
-            site_fertility_class=site_params.sfc,
             sitename="susirun",
-            species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
             vol=site_params.vol,

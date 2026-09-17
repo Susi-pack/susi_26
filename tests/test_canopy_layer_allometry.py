@@ -68,9 +68,7 @@ def test_negative_n_silently_produces_empty_pointers():
         )
     }
 
-    result = CanopyLayerAllometry.with_single_allometry_per_layer(
-        layers=layers, n=-1
-    )
+    result = CanopyLayerAllometry.with_single_allometry_per_layer(layers=layers, n=-1)
 
     assert result.pointers[CanopyLayerName.dominant] == []
 

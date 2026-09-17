@@ -129,7 +129,7 @@ def load_co2_data(
     site_params = assign_susi_params_to_site(site_label)
     sday = site_params.simulation_config.start_date
     end_date = site_params.simulation_config.end_date
-    sfc = site_params.site_parameters.site_fertility_class
+    sfc = site_params.stand_params.site_fertility_class
     with open_susi_netcdf(site_label) as ncf:
         vol = np.array(ncf["stand"]["volume"][0, :, 1:-1])
         _, COLS = np.shape(vol)

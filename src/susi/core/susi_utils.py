@@ -1168,12 +1168,12 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
     return npp_arr * 10.0, npp_arr_pot * 10.0  # kg/ha organic matter
 
 
-def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
+def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara, sfc):
     """
     Output:
         mean time series kg CO2 ha-1 day-1 and annual sum for each computation  node
     """
-    sfc = np.median(spara.sfc)
+    sfc = np.median(sfc)
     # peat bulk density: change from g/cm3 to kg m-3 -> multiply by 1000
     bd_d = {
         2: 0.14,
@@ -1215,11 +1215,11 @@ def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
     )  # , np.sum(Rhet_root, axis=0)*10.
 
 
-def ojanen_2019(spara, yr, dfwt):
+def ojanen_2019(spara, yr, dfwt, sfc):
     wts = (
         dfwt[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0
     )  # .values[:-1])
-    sfc = np.median(spara.sfc)
+    sfc = np.median(sfc)
     if sfc < 3:
         soil_co2_balance = (
             (-115 + 12 * wts) * 10 * -1

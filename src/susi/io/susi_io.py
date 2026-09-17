@@ -349,7 +349,9 @@ def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr
     outSummary.write(rows, 12, spara.vonP_bottom)
     outSummary.write(rows, 13, spara.vol)
     outSummary.write(rows, 14, spara.hdom)
-    outSummary.write(rows, 15, spara.species)
+    outSummary.write(
+        rows, 15, str(spara.stand_params.canopy_layer_allometry.zones_species_id)
+    )
     outSummary.write(rows, 16, spara.sfc)
     outSummary.write(rows, 17, str(wpara["start_yr"]) + " " + str(wpara["end_yr"]))
     outSummary.write(rows, 18, float(gN))
@@ -396,11 +398,11 @@ def outfig(
     plt.show()
 
 
-def print_site_description(spara):
+def print_site_description(spara, sfc):
     print("  + Site:")
     print("   + Number of columns:", spara.n)
     print("    - Site fertility class:")
-    print("    ", spara.sfc)
+    print("    ", sfc)
     print("  + Stand:")
     # print ('    - vol:', np.round(spara['vol'],0),'m3/ha' )
     print("    - age:")
@@ -849,13 +851,13 @@ def weather_fig(df):
     ax3.fill_between(
         df.index, df["T"], 0, where=df["T"] >= 0.0, facecolor="r", alpha=0.3
     )
-    ax3.set_ylabel("Air temperature, $^\circ$ C", fontsize=fs)
+    ax3.set_ylabel("Air temperature,  C", fontsize=fs)
 
     annual_temp = df["T"].resample("A").mean()
     t2 = (
         "Mean annual temperature "
         + str(np.round(np.mean(annual_temp.values), 2))
-        + "  $^\circ$ C"
+        + " C"
     )
 
     ax4 = fig.add_axes([0.73, 0.08, 0.25, 0.35])
@@ -863,7 +865,7 @@ def weather_fig(df):
     y_pos = np.arange((len(annual_temp)))
     plt.bar(y_pos, annual_temp.values, align="center", alpha=0.5)
     plt.xticks(y_pos, annual_temp.index.year, rotation=45)
-    ax4.set_ylabel(" $^\circ$ C", fontsize=fs)
+    ax4.set_ylabel(" C", fontsize=fs)
     plt.show()
 
 

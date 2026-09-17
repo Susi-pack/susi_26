@@ -8,10 +8,10 @@ import datetime
 from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
-    TreeSpecies,
     StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
     SiteParams,
+    StandParams,
     WeatherParams,
     SimulationConfig,
     SusiParams,
@@ -41,20 +41,23 @@ PARAMETERS = SusiParams(
         start_date=datetime.datetime(2004, 1, 1),
         end_date=datetime.datetime(2017, 12, 31),
     ),
-    allometry_parameters=CanopyLayerAllometry(
-        allometry_file_registry={
-            1: AllometryFileAndSpecies(
-                file_path=_app_settings.input_folder.joinpath(
-                    "system/allometry/CF_41.csv"
-                ),
-                species_id=1,
-            )
-        },
-        pointers={
-            CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
-            CanopyLayerName.subdominant: None,
-            CanopyLayerName.under: None,
-        },
+    stand_params=StandParams(
+        site_fertility_class=4,
+        canopy_layer_allometry=CanopyLayerAllometry(
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(
+                    file_path=_app_settings.input_folder.joinpath(
+                        "system/allometry/CF_41.csv"
+                    ),
+                    species_id=1,
+                )
+            },
+            pointers={
+                CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
+                CanopyLayerName.subdominant: None,
+                CanopyLayerName.under: None,
+            },
+        ),
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -70,9 +73,7 @@ PARAMETERS = SusiParams(
             CanopyLayerName.subdominant: 0.0,
             CanopyLayerName.under: 0.0,
         },
-        site_fertility_class=4,
         sitename="susirun",
-        species=TreeSpecies("Pine"),
         sfc_specification=1,
         hdom=None,
         vol=None,
