@@ -42,9 +42,13 @@ PARAMETERS = SusiParams(
         end_date=datetime.datetime(2017, 12, 31),
     ),
     allometry_parameters=CanopyLayerAllometry(
-        allometry_dir_path=_app_settings.input_folder.joinpath("system/allometry"),
         allometry_file_registry={
-            1: AllometryFileAndSpecies(filename="CF_41.csv", species_id=1)
+            1: AllometryFileAndSpecies(
+                file_path=_app_settings.input_folder.joinpath(
+                    "system/allometry/CF_41.csv"
+                ),
+                species_id=1,
+            )
         },
         pointers={
             CanopyLayerName.dominant: [1] * _N_SOIL_COLS,

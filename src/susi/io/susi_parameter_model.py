@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache, cached_property
 import datetime
 from enum import Enum
 from pathlib import Path
@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 
 from pydantic import (
-    DirectoryPath,
     Field,
     FilePath,
     SkipValidation,
@@ -92,7 +91,7 @@ class CanopyLayerName(str, Enum):
 
 
 class AllometryFileAndSpecies(StrictFrozenModel):
-    filename: str
+    file_path: Path
     species_id: PositiveInt
 
 
@@ -104,19 +103,21 @@ class CanopyLayerAllometry(StrictFrozenModel):
     Allometry parameters
     """
 
-    allometry_dir_path: DirectoryPath = Field(
-        description="Folder where to look for the allometry files."
-    )
     allometry_file_registry: dict[AllometryRegistryNumber, AllometryFileAndSpecies] = (
         Field(
-            description="Map: allometry registry number -> allometry file. Example: {1:AllometryFileAndSpecies(filename='pines.csv', species_id=1), 2:AllometryFileAndSpecies(filename='spruces.csv', species_id=2)}"
+            description=(
+                "Map: allometry registry number -> allometry file. Example: "
+                "{1:AllometryFileAndSpecies(file_path=Path('pines.csv'), "
+                "species_id=1), 2:AllometryFileAndSpecies("
+                "file_path=Path('spruces.csv'), species_id=2)}"
+            )
         )
     )
     pointers: dict[CanopyLayerName, list[AllometryRegistryNumber] | None] = Field(
         description="Map: canopy layer name-> list of pointers, length ncols. Example: {'dominant': [1,1,1,1,2,2,2], 'subdominant': None, 'under': None}"
     )
 
-    # Information read from the excel file, not serialized
+    # Information read from the CSV file, not serialized
     # Map: Allometry registry number -> allometry path dataframe read from file
     _zones_data: dict[AllometryRegistryNumber, pd.DataFrame] = PrivateAttr()
     # Map: Allometry registry number -> species ID
@@ -144,14 +145,12 @@ class CanopyLayerAllometry(StrictFrozenModel):
 
         for (
             allometry_registry_number,
-            filename_and_species,
+            filepath_and_species,
         ) in self.allometry_file_registry.items():
-            df = read_allometry_info_from_csv(
-                filepath=self.allometry_dir_path / filename_and_species.filename
-            )
+            df = read_allometry_info_from_csv(filepath=filepath_and_species.file_path)
             _zones_data[allometry_registry_number] = df
             _zones_species_id[allometry_registry_number] = (
-                filename_and_species.species_id
+                filepath_and_species.species_id
             )
 
         self._zones_data = _zones_data
@@ -159,15 +158,24 @@ class CanopyLayerAllometry(StrictFrozenModel):
 
         return self
 
-    @property
+    @cached_property
     def zones_data(
         self,
     ) -> dict[AllometryRegistryNumber, pd.DataFrame]:
-        return self._zones_data
+        return {
+            reg_number: read_allometry_info_from_csv(
+                filepath=fpath_and_species.file_path
+            )
+            for reg_number, fpath_and_species in self.allometry_file_registry.items()
+        }
 
-    @property
+    @cached_property
     def zones_species_id(self) -> dict[AllometryRegistryNumber, int]:
-        return self._zones_species_id
+
+        return {
+            reg_number: fpath_and_species.species_id
+            for reg_number, fpath_and_species in self.allometry_file_registry.items()
+        }
 
 
 class CanopyStateParams(StrictFrozenModel):
@@ -650,10 +658,24 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
+class StandParams(StrictFrozenModel):
+    site_fertility_class: PositiveInt = Field(
+        description="Site fertility class. This is set to all nodes in the strip."
+    )
+
+    canopy_layer_allometry: CanopyLayerAllometry
+    # TODO:
+    # age: dict[int, float] and soil_type: int are explicitly NOT in this ticket's scope --
+    # soil_type's mapping to peat_type/peat_type_bottom is open work tracked by #280, and
+    # age has no consumer until that lands either. Both stay future work, not invented here.
+
+
 class SiteParams(StrictFrozenModel):
     """
     Soil and stand parameters
     """
+
+    stand_params: StandParams
 
     # Forest
     # Age of different forest layers at the beginning of the simulation
@@ -666,10 +688,6 @@ class SiteParams(StrictFrozenModel):
     n: int = Field(
         description="Number of computation nodes, a.k.a. number of soil columns. It used to be`int(L/2)`. It must be at least 3, because a 2-node strip has no interior columns",
         ge=3,
-    )
-
-    site_fertility_class: PositiveInt = Field(
-        description="Site fertility class. This is set to all nodes in the strip."
     )
 
     sitename: str

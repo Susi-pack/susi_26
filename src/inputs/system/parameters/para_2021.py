@@ -17,6 +17,7 @@ from susi.io.susi_parameter_model import (
     WeatherParams,
     SimulationConfig,
     SusiParams,
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
@@ -486,8 +487,12 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             end_date=site_params.end_date,
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=data_folder / "motti_files",
-            allometry_file_registry={1: site_params.mottifile},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(
+                    file_path=data_folder / "motti_files" / site_params.mottifile,
+                    species_id=1,
+                )
+            },
             pointers={
                 CanopyLayerName.dominant: [1] * n,
                 CanopyLayerName.subdominant: None,

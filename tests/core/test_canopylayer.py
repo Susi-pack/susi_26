@@ -95,9 +95,10 @@ GROUP_B_FIELDS = (
 
 def _make_stand() -> Stand:
     allometry_params = CanopyLayerAllometry(
-        allometry_dir_path=DATA_DIR,
         allometry_file_registry={
-            1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+            1: AllometryFileAndSpecies(
+                file_path=DATA_DIR / "test_allometry.csv", species_id=1
+            )
         },
         pointers={
             CanopyLayerName.dominant: [1] * N,
@@ -363,10 +364,9 @@ class TestDoClearcutAllometrySwitchover:
         """Build new_zones straight from a CanopyLayerAllometry, exactly the
         way Stand.apply_cutting_management does in production."""
         new_growth_allometry = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    filename="post_clearcut_allom.csv", species_id=1
+                    file_path=DATA_DIR / "post_clearcut_allom.csv", species_id=1
                 )
             },
             pointers={
@@ -462,12 +462,13 @@ class TestDoClearcutAllometrySwitchover:
         cut_cols_global = np.array(CUT_COLS)  # [0, 2]
 
         new_growth_allometry = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    filename="post_clearcut_allom.csv", species_id=1
+                    file_path=DATA_DIR / "post_clearcut_allom.csv", species_id=1
                 ),
-                2: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
+                2: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
             },
             pointers={
                 # col 0 -> zone 1, col 2 -> zone 2 (order matches strip order
@@ -537,13 +538,16 @@ class TestMultiZoneCanopylayer:
 
     def _make_multizone_stand(self) -> Stand:
         allometry_params = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
             # Same underlying file registered under two different zone
             # ids: both zones are the same species/growth-and-yield data,
             # differing only in sfc.
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
-                2: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
+                1: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
+                2: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
             },
             pointers={
                 CanopyLayerName.dominant: self.POINTERS,

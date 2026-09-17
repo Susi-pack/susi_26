@@ -45,9 +45,10 @@ def valid_susi_params(test_data_path):
             end_date=datetime.datetime(2007, 12, 31),
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+                1: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                )
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
@@ -135,9 +136,10 @@ def another_valid_susi_params(test_data_path):
             end_date=datetime.datetime(2007, 12, 31),
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+                1: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                )
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],

@@ -243,10 +243,10 @@ def get_ncf_outputs(file):
 
 
 def allometry_filename_from_stand_number(
-    stand_number: int, species_id: int
+    stand_number: int, allometry_files_folder: Path, species_id: int
 ) -> AllometryFileAndSpecies:
     return AllometryFileAndSpecies(
-        filename=f"susi_input_{stand_number}.csv",
+        file_path=allometry_files_folder / f"susi_input_{stand_number}.csv",
         species_id=species_id,
     )
 
@@ -254,10 +254,9 @@ def allometry_filename_from_stand_number(
 def read_initial_dominant_stand_age_from_allometry_file(
     stand_number: int, allometry_files_folder: Path, species_id: int
 ) -> float:
-    allometry_filepath = (
-        allometry_files_folder
-        / allometry_filename_from_stand_number(stand_number, species_id).filename
-    )
+    allometry_filepath = allometry_filename_from_stand_number(
+        stand_number, allometry_files_folder, species_id
+    ).file_path
     return float(pd.read_csv(allometry_filepath)["Age"][0])
 
 
@@ -355,10 +354,11 @@ def prepare_susi_params(
                 end_date=datetime.datetime(2024, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=allometry_files_directory_path,
                 allometry_file_registry={
                     1: allometry_filename_from_stand_number(
-                        stand_number, species_id=species_id
+                        stand_number,
+                        allometry_files_directory_path,
+                        species_id=species_id,
                     ),
                 },
                 pointers={

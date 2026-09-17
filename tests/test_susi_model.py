@@ -42,9 +42,10 @@ def valid_susi_params(test_data_path):
             end_date=datetime.datetime(2007, 12, 31),
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+                1: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                )
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
@@ -132,9 +133,10 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             end_date=datetime.datetime(2007, 12, 31),
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1)
+                1: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                )
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
@@ -226,10 +228,9 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
@@ -328,10 +329,9 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
@@ -421,10 +421,9 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 end_date=datetime.datetime(2100, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
@@ -514,10 +513,9 @@ def test_subdominant_layer_validation(test_data_path):
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
@@ -607,10 +605,9 @@ def test_under_layer_validation(test_data_path):
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
@@ -699,11 +696,16 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             end_date=datetime.datetime(2007, 12, 31),
         ),
         allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
             allometry_file_registry={
-                1: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
-                2: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
-                3: AllometryFileAndSpecies(filename="test_allometry.csv", species_id=1),
+                1: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                ),
+                2: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                ),
+                3: AllometryFileAndSpecies(
+                    file_path=test_data_path / "test_allometry.csv", species_id=1
+                ),
             },
             pointers={
                 CanopyLayerName.dominant: [1, 1, 1, 1, 1],
@@ -795,10 +797,9 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={

@@ -76,10 +76,9 @@ class TestSusiMainFertilizationIntegration:
                 end_date=datetime.datetime(2007, 12, 31),
             ),
             allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        filename="test_allometry.csv", species_id=1
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
                     )
                 },
                 pointers={
