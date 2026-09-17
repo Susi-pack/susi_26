@@ -43,13 +43,9 @@ from tools.shared_allometry_tool_utils.stand_data import (
 
 
 class XmlConfig(StrictFrozenModel):
-    """Defaulted/required parameters, loaded from a TOML file.
-
-    StrictFrozenModel (susi.io.extra_pydantic_types) gives us presence
-    checking for the required fields below (no default -> required),
-    rejection of unknown fields (extra="forbid"), and immutability
-    (frozen=True) for free -- replacing check_config_fields,
-    REQUIRED_CONFIG_FIELDS, and the dataclass's own frozen=True."""
+    """
+    Defaulted and required parameters, loaded from a TOML file.
+    """
 
     # Required, no defaults
     altitude: float
@@ -87,16 +83,11 @@ class NoTreeStrataError(ValueError):
 
 @dataclass(frozen=True)
 class ParsedStand:
-    """One stand as parsed from the XML, before its allometry CSV is
-    written.
+    """
+    One stand as parsed from the XML, before its allometry CSV is written.
 
-    Carries tree_strata -- the raw per-species growth-model inputs (age,
-    basal_area, stem_count, mean_diameter, mean_height) -- which has no
-    field on the shared StandData: once a stand's CSV exists, only its path
-    and species id matter downstream, not the raw numbers that produced it.
-    process_stand consumes tree_strata to build the single, all-species
-    Growth_and_Yield_Table call and returns the final StandData, so nothing
-    outside this module needs a ParsedStand.
+    Difference with StandData: StandData is what finally gets written to the JSON file.
+    ParsedStand is temporary, and never exists outside this file.
     """
 
     id: StandID
@@ -296,10 +287,12 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
 
 
 def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
-    """Batch get_stand_data_from_xml, isolating the one skippable failure
+    """
+    Batch get_stand_data_from_xml, isolating the one skippable failure
     (NoTreeStrataError -- see get_stand_data_from_xml) as a StandSkipped
     instead of a discarded None sentinel, so the Filtering section can
-    report which stands were dropped and why."""
+    report which stands were dropped and why.
+    """
     parsed_stands: list[ParsedStand] = []
     skipped: list[StandSkipped] = []
     for stand in stands:
@@ -319,20 +312,20 @@ def dump_stand_data_document(output_dir: Path, document: StandDataDocument) -> N
 
 
 def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> Path:
-    """Where one stand's allometry CSV would land -- knowable before any
+    """
+    Where one stand's allometry CSV would land -- knowable before any
     growth table is computed, so both a dry run and the real run name it the
-    same way."""
+    same way.
+    """
     return output_dir / f"{parsed_stand.id}.csv"
 
 
 def process_stand(
     config: XmlConfig, parsed_stand: ParsedStand, PEAT: int, output_dir: Path
 ) -> StandData:
-    """Builds the single allometry CSV for this stand -- all three species
-    strata pooled into one Growth_and_Yield_Table call (not split into
-    separate dominant/subdominant layers), labeled by main_species (the
-    species with the largest basal area) and stored under the dominant
-    canopy layer. There is never a subdominant layer for this tool."""
+    """
+    Builds the single allometry CSV for this stand
+    """
     strata_basal_areas_per_stratum = [
         stratum.basal_area for stratum in parsed_stand.tree_strata
     ]
@@ -459,8 +452,6 @@ def parse_CLI_arguments() -> CLIArguments:
 
     # Refuse to reuse an existing folder rather than silently overwriting
     # whatever a prior run left there. This check runs in dry-run mode too:
-    # "would this run even start?" is exactly what a dry run is for.
-    # Creating the folder is main()'s job, and only on a real run.
     output_dir = output_dir_for_project(args.project_dir)
     check_output_dir_available(output_dir, parser)
 
