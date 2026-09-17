@@ -1,16 +1,28 @@
 import argparse
+import ast
 import dataclasses
+import inspect
 from dataclasses import dataclass
+from pathlib import Path
 
 import pydantic
 import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
 
 from susi.io.load_output_data import StandID
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+)
+from susi.io import susi_parameter_model
 from tools.shared_allometry_tool_utils import (
     input_validation,
     print_formatting,
     project_layout,
     shared_utils,
+    stand_data,
     tree_stratum,
 )
 
@@ -359,3 +371,199 @@ def test_tree_stratum_recurses_correctly_under_dataclasses_asdict():
             "mean_height": 0.0,
         }
     }
+
+
+# %% stand_data.StandData / StandDataDocument round-trip
+
+# Fabricated AllometryFileAndSpecies values, mirroring
+# tests/test_canopy_layer_allometry.py's strategy -- no real CSV is ever read here.
+allometry_file_and_species_strategy = st.builds(
+    AllometryFileAndSpecies,
+    file_path=st.text(min_size=1, max_size=20).map(lambda name: Path(f"{name}.csv")),
+    species_id=st.integers(min_value=1, max_value=100),
+)
+
+canopy_layer_files_strategy = st.dictionaries(
+    keys=st.sampled_from(list(CanopyLayerName)),
+    values=allometry_file_and_species_strategy,
+    max_size=len(CanopyLayerName),
+)
+
+# Printable-ASCII only: st.text()'s default alphabet can produce lone
+# surrogates that json.dumps chokes on, and polygon is the only free-text field.
+safe_text_strategy = st.text(
+    alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=50
+)
+
+_optional_positive_int = st.one_of(st.none(), st.integers(min_value=1, max_value=20))
+_optional_nonneg_float = st.one_of(
+    st.none(), st.floats(min_value=0, max_value=2000, allow_nan=False, allow_infinity=False)
+)
+
+stand_data_strategy = st.builds(
+    stand_data.StandData,
+    site_fertility_class=st.integers(min_value=1, max_value=10),
+    canopy_layer_files=canopy_layer_files_strategy,
+    x_ykj=st.integers(min_value=250, max_value=400),
+    y_ykj=st.integers(min_value=6500, max_value=7800),
+    polygon=st.one_of(st.none(), safe_text_strategy),
+    main_group=_optional_positive_int,
+    sub_group=_optional_positive_int,
+    stand_area=st.one_of(
+        st.none(),
+        st.floats(min_value=0.01, max_value=10_000, allow_nan=False, allow_infinity=False),
+    ),
+    basal_area=_optional_nonneg_float,
+    mean_height=_optional_nonneg_float,
+    mean_diameter=_optional_nonneg_float,
+    total_volume=_optional_nonneg_float,
+    stem_count=_optional_nonneg_float,
+    developmentclass=_optional_positive_int,
+    drainagestate=_optional_positive_int,
+)
+
+stand_data_document_strategy = st.builds(
+    stand_data.StandDataDocument,
+    altitude=st.floats(min_value=-500, max_value=3000, allow_nan=False, allow_infinity=False),
+    ddy=st.floats(min_value=0, max_value=3000, allow_nan=False, allow_infinity=False),
+    stands=st.dictionaries(
+        keys=st.text(min_size=1, max_size=10).map(StandID),
+        values=stand_data_strategy,
+        max_size=5,
+    ),
+)
+
+
+@given(document=stand_data_document_strategy)
+def test_stand_data_document_roundtrips_through_json_in_memory(document):
+    # Pure property, no file involved -- load_stand_data_document_from_json's
+    # own file-reading behaviour is covered separately below.
+    dumped = document.model_dump_json()
+    assert stand_data.StandDataDocument.model_validate_json(dumped) == document
+
+
+# %% stand_data.load_stand_data_document_from_json
+
+
+def test_load_stand_data_document_from_json_reads_a_real_file(tmp_path):
+    document = stand_data.StandDataDocument(
+        altitude=100.0,
+        ddy=1200.0,
+        stands={
+            StandID("stand-1"): stand_data.StandData(
+                site_fertility_class=3,
+                canopy_layer_files={
+                    CanopyLayerName.dominant: AllometryFileAndSpecies(
+                        file_path=Path("pines.csv"), species_id=1
+                    )
+                },
+                x_ykj=339,
+                y_ykj=6675,
+            )
+        },
+    )
+    path = tmp_path / stand_data.STAND_DATA_FILENAME
+    path.write_text(document.model_dump_json())
+
+    loaded = stand_data.load_stand_data_document_from_json(path)
+
+    assert loaded == document
+
+
+# %% stand_data._build_stand_params_from_stand_data_document
+
+
+def _single_stand_document(canopy_layer_files, site_fertility_class=3):
+    return stand_data.StandDataDocument(
+        altitude=100.0,
+        ddy=1200.0,
+        stands={
+            StandID("known"): stand_data.StandData(
+                site_fertility_class=site_fertility_class,
+                canopy_layer_files=canopy_layer_files,
+                x_ykj=339,
+                y_ykj=6675,
+            )
+        },
+    )
+
+
+def test_build_stand_params_raises_a_clear_error_for_an_unknown_stand_id():
+    document = _single_stand_document(canopy_layer_files={})
+
+    with pytest.raises(KeyError, match="unknown"):
+        stand_data._build_stand_params_from_stand_data_document(
+            document, StandID("unknown"), n=3
+        )
+
+
+def test_build_stand_params_matches_with_single_allometry_per_layer():
+    canopy_layer_files = {
+        CanopyLayerName.dominant: AllometryFileAndSpecies(
+            file_path=Path("pines.csv"), species_id=1
+        ),
+        CanopyLayerName.under: AllometryFileAndSpecies(
+            file_path=Path("spruces.csv"), species_id=2
+        ),
+    }
+    document = _single_stand_document(
+        canopy_layer_files=canopy_layer_files, site_fertility_class=4
+    )
+
+    params = stand_data._build_stand_params_from_stand_data_document(
+        document, StandID("known"), n=5
+    )
+
+    assert params.site_fertility_class == 4
+    assert params.canopy_layer_allometry == (
+        CanopyLayerAllometry.with_single_allometry_per_layer(
+            layers=canopy_layer_files, n=5
+        )
+    )
+
+
+@given(
+    canopy_layer_files=canopy_layer_files_strategy.filter(lambda layers: len(layers) > 0),
+    n1=st.integers(min_value=0, max_value=30),
+    n2=st.integers(min_value=0, max_value=30),
+)
+def test_build_stand_params_pointer_lengths_track_n(canopy_layer_files, n1, n2):
+    # Regression test for the bug this design was fixing: a CanopyLayerAllometry
+    # built for one n must not be reused/cached for another -- each call must
+    # produce pointer lists whose length matches the n passed to that call.
+    assume(n1 != n2)
+    document = _single_stand_document(canopy_layer_files=canopy_layer_files)
+
+    params1 = stand_data._build_stand_params_from_stand_data_document(
+        document, StandID("known"), n=n1
+    )
+    params2 = stand_data._build_stand_params_from_stand_data_document(
+        document, StandID("known"), n=n2
+    )
+
+    for layer_name in canopy_layer_files:
+        pointers1 = params1.canopy_layer_allometry.pointers[layer_name]
+        pointers2 = params2.canopy_layer_allometry.pointers[layer_name]
+        assert pointers1 is not None
+        assert pointers2 is not None
+        assert len(pointers1) == n1
+        assert len(pointers2) == n2
+
+
+# %% Dependency direction: susi_parameter_model.py must not import stand_data
+
+
+def test_susi_parameter_model_does_not_import_from_tools():
+    # tools/ depends on susi/, never the reverse -- stand_data.py lives in
+    # tools/ specifically so susi_parameter_model.py can stay ignorant of it.
+    source = inspect.getsource(susi_parameter_model)
+    tree = ast.parse(source)
+
+    imported_modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.add(node.module)
+
+    assert not any(module.startswith("tools") for module in imported_modules)
