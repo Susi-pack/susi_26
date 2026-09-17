@@ -1028,11 +1028,10 @@ def test_dump_valid_stands_json_writes_null_for_missing_soiltype(tmp_path):
 
 def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_path):
     # Two stands: one with no recorded soiltype, one with a real value --
-    # the tag must be omitted (not a fabricated number) for the first. On
-    # the reading side, xml_to_allometry.py no longer captures soil_type at
-    # all (it has no downstream consumer -- see ticket 06/CONTEXT.md's
-    # StandData entry), so all that's left to verify there is that a
-    # missing <st:SoilType> tag doesn't crash its reader.
+    # the tag must be omitted (not a fabricated number) for the first, and
+    # xml_to_allometry.py's reader (already Optional in its own model) must
+    # read that back as None rather than crashing on a missing tag, while
+    # the second stand's real value survives untouched.
     from tools.xml_to_allometry.xml_to_allometry import (
         get_stand_data_from_xml,
         read_stands_from_xml_file,
@@ -1053,7 +1052,8 @@ def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_pa
     parsed_by_id = {
         str(ps.id): ps for ps in (get_stand_data_from_xml(s) for s in raw_stands)
     }
-    assert set(parsed_by_id) == {"1", "2"}
+    assert parsed_by_id["1"].soil_type is None
+    assert parsed_by_id["2"].soil_type == 10
 
 
 def test_write_stands_xml_is_replayable_through_xml_to_allometry(tmp_path):

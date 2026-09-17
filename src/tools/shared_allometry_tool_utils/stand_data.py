@@ -103,6 +103,25 @@ class StandData(StrictFrozenModel):
             "not after."
         ),
     )
+    soil_type: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Finnish land-use soil-type code (e.g. XML st:SoilType / "
+            "Metsakeskus soiltype). No SUSI-simulation consumer yet, but "
+            "expected to eventually map onto SiteParams.peat_type/"
+            "peat_type_bottom (susi_parameter_model.py) -- that mapping is "
+            "still open work (#280)."
+        ),
+    )
+    mean_age: NonNegativeFloat | None = Field(
+        default=None,
+        description=(
+            "Mean stand age, years. No SUSI-simulation consumer yet, but "
+            "expected to eventually feed an initial-stand-age field on "
+            "SiteParams (susi_parameter_model.py), analogous to how "
+            "initial_canopylayer_age_years is set today."
+        ),
+    )
 
 
 class StandDataDocument(StrictFrozenModel):

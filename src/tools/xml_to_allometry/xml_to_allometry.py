@@ -8,7 +8,6 @@ from susi.io.susi_parameter_model import (
     CanopyLayerName,
 )
 from typing import Optional
-import pandas as pd
 import xmltodict
 import argparse
 from dataclasses import dataclass
@@ -88,25 +87,23 @@ class NoTreeStrataError(ValueError):
 
 @dataclass(frozen=True)
 class ParsedStand:
-    """One stand as parsed from the XML, before its allometry CSVs are
+    """One stand as parsed from the XML, before its allometry CSV is
     written.
 
     Carries tree_strata -- the raw per-species growth-model inputs (age,
     basal_area, stem_count, mean_diameter, mean_height) -- which has no
-    field on the shared StandData (see CONTEXT.md's StandData entry: once a
-    stand's CSVs exist, only their paths and species ids matter downstream,
-    not the raw numbers that produced them). process_stand consumes
-    tree_strata to build the dominant/subdominant Growth_and_Yield_Table
-    calls and returns the final StandData, so nothing outside this module
-    needs a ParsedStand.
+    field on the shared StandData: once a stand's CSV exists, only its path
+    and species id matter downstream, not the raw numbers that produced it.
+    process_stand consumes tree_strata to build the single, all-species
+    Growth_and_Yield_Table call and returns the final StandData, so nothing
+    outside this module needs a ParsedStand.
     """
 
     id: StandID
     fertility_class: int
     polygon: str
     tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum]
-    dominant_species: int
-    subdominant_species: int
+    main_species: int
     x_ykj: int
     y_ykj: int
     stem_count: int  # units: trees/ha
@@ -115,28 +112,12 @@ class ParsedStand:
     # Optional parameters, only used for information in the stand_data.json dump
     main_group: Optional[int] = None
     sub_group: Optional[int] = None
+    soil_type: Optional[int] = None
+    mean_age: Optional[int] = None  # years
     basal_area: Optional[float] = None  # m2/ha
     mean_height: Optional[float] = None  # m
     total_volume: Optional[float] = None  # m3/ha
     area: Optional[float] = None  # ha
-
-
-@dataclass(frozen=True)
-class StandPlanned:
-    """Which allometry CSV(s) one stand would produce, and where -- knowable
-    before any growth table is computed. Mirrors
-    metsakeskus_to_allometry.py's type of the same name.
-
-    The subdominant file exists exactly when the second-ranked species
-    carries basal area of its own; see docs/adr/0002 for why a
-    monoculture's subdominant layer is not written at all rather than
-    duplicating the dominant one."""
-
-    stand_id: StandID
-    dominant_csv: Path
-    dominant_species: int
-    subdominant_csv: Optional[Path]
-    subdominant_species: int
 
 
 # %% Functions
@@ -188,7 +169,7 @@ def get_tree_strata_data(
     tree_strata_xml_data: list,
 ) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
     """
-    Map strata into fixed species-code slots:
+    Map strata into fixed species slots:
 
     index 0 -> TreeSpecies 1
     index 1 -> TreeSpecies 2
@@ -226,46 +207,6 @@ def get_tree_strata_data(
     return (strata[0], strata[1], strata[2])
 
 
-def determine_dominant_and_subdominant_species(
-    tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum],
-) -> tuple[int, int]:
-    """Species codes (1, 2, 3 -- see get_tree_strata_data for what each slot
-    means) ranked by basal area, richest first. Mirrors
-    metsakeskus_to_allometry.py's function of the same name: the subdominant
-    is always the second-ranked species' own stratum, even when its basal
-    area is zero -- see docs/adr/0002 for why this deliberately does not
-    duplicate the dominant species for a monoculture stand."""
-    basal_areas = {
-        1: tree_strata[0].basal_area,
-        2: tree_strata[1].basal_area,
-        3: tree_strata[2].basal_area,
-    }
-    ranked = sorted(
-        basal_areas, key=lambda species_code: basal_areas[species_code], reverse=True
-    )
-    return ranked[0], ranked[1]
-
-
-def species_stratum(
-    tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum], species_code: int
-) -> TreeStratum:
-    """The one TreeStratum a species code (1, 2, 3) refers to."""
-    return {1: tree_strata[0], 2: tree_strata[1], 3: tree_strata[2]}[species_code]
-
-
-def isolate_species_layer(
-    tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum], active_species: int
-) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
-    """Zeroes every species slot except active_species -- this is how a
-    single canopy layer (dominant or subdominant) is modeled as that one
-    species growing alone (docs/adr/0002)."""
-    if active_species == 1:
-        return (tree_strata[0], ZERO_STRATUM, ZERO_STRATUM)
-    if active_species == 2:
-        return (ZERO_STRATUM, tree_strata[1], ZERO_STRATUM)
-    return (ZERO_STRATUM, ZERO_STRATUM, tree_strata[2])
-
-
 def get_stand_data_from_xml(stand: dict) -> ParsedStand:
     stand_basic_data = stand["st:StandBasicData"]
 
@@ -296,11 +237,20 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
 
     tree_strata = get_tree_strata_data(tree_strata_xml_data)
 
-    dominant_species, subdominant_species = determine_dominant_and_subdominant_species(
-        tree_strata
-    )
+    strata_basal_areas_per_stratum = []
+    strata_stem_counts_per_stratum = []
+    for tree_stratum in tree_strata:
+        strata_basal_areas_per_stratum.append(tree_stratum.basal_area)
+        strata_stem_counts_per_stratum.append(tree_stratum.stem_count)
 
-    strata_stem_counts_per_stratum = [stratum.stem_count for stratum in tree_strata]
+    # The main species is the one with the largest basal area
+    #           index 0 -> TreeSpecies 1 (Pine)
+    #           index 1 -> TreeSpecies 2 (Spruce)
+    #           index 2 -> TreeSpecies >= 3 (Deciduous trees)
+    # The +1 is there to convert index number to tree species code
+    main_species = (
+        strata_basal_areas_per_stratum.index(max(strata_basal_areas_per_stratum)) + 1
+    )
 
     polygon = stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
         "gml:Polygon"
@@ -318,8 +268,7 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
         fertility_class=int(float(stand_basic_data["st:FertilityClass"])),
         polygon=polygon,
         tree_strata=tree_strata,
-        dominant_species=dominant_species,
-        subdominant_species=subdominant_species,
+        main_species=main_species,
         x_ykj=x_ykj,
         y_ykj=y_ykj,
         stem_count=round(sum(strata_stem_counts_per_stratum)),
@@ -327,6 +276,18 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
         # Optionals
         main_group=int(stand_basic_data["st:MainGroup"]),
         sub_group=int(stand_basic_data["st:SubGroup"]),
+        # soil_type is genuinely Optional (unlike the other "Optionals"
+        # here): a writer with no recorded soil type (see
+        # metsakeskus_to_allometry.py's StandSiteAttributes) omits the
+        # <st:SoilType> tag entirely rather than inventing a value, so this
+        # must tolerate that -- xmltodict's .get() returns None for a
+        # missing tag, same as the model's own soil_type: Optional[int].
+        soil_type=(
+            int(soil_type_xml)
+            if (soil_type_xml := stand_basic_data.get("st:SoilType")) is not None
+            else None
+        ),
+        mean_age=int(tree_stand_summary["tss:MeanAge"]),
         basal_area=float(tree_stand_summary["tss:BasalArea"]),
         mean_height=float(tree_stand_summary["tss:MeanHeight"]),
         total_volume=float(tree_stand_summary["tss:Volume"]),
@@ -357,145 +318,78 @@ def dump_stand_data_document(output_dir: Path, document: StandDataDocument) -> N
     return None
 
 
-def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> StandPlanned:
-    """Which allometry CSV(s) one stand would produce, and where -- knowable
-    before any growth table is computed, so both a dry run and the real run
-    name them the same way."""
-    subdominant_stratum = species_stratum(
-        parsed_stand.tree_strata, parsed_stand.subdominant_species
-    )
-    return StandPlanned(
-        stand_id=parsed_stand.id,
-        dominant_csv=output_dir / f"{parsed_stand.id}_dominant.csv",
-        dominant_species=parsed_stand.dominant_species,
-        subdominant_csv=(
-            output_dir / f"{parsed_stand.id}_subdominant.csv"
-            if subdominant_stratum.basal_area > 0
-            else None
-        ),
-        subdominant_species=parsed_stand.subdominant_species,
-    )
-
-
-def build_growth_and_yield_table(
-    tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum],
-    active_species: int,
-    fertility_class: int,
-    x_ykj: int,
-    y_ykj: int,
-    altitude: float,
-    ddy: float,
-    n_trees: int,
-    start_year: int,
-    end_year: int,
-    step_years: int,
-    PEAT: int,
-) -> pd.DataFrame:
-    """One canopy layer's allometric growth trajectory (get_table's
-    age-indexed rows from start_year to end_year), modeled as active_species
-    growing alone. Mirrors metsakeskus_to_allometry.py's function of the
-    same name."""
-    layer = isolate_species_layer(tree_strata, active_species)
-
-    gy = Growth_and_Yield_Table(
-        age_1=layer[0].age,
-        G_1=layer[0].basal_area,
-        N_1=layer[0].stem_count,
-        Dg_1=layer[0].mean_diameter,
-        Hg_1=layer[0].mean_height,
-        age_2=layer[1].age,
-        G_2=layer[1].basal_area,
-        N_2=layer[1].stem_count,
-        Dg_2=layer[1].mean_diameter,
-        Hg_2=layer[1].mean_height,
-        age_3=layer[2].age,
-        G_3=layer[2].basal_area,
-        N_3=layer[2].stem_count,
-        Dg_3=layer[2].mean_diameter,
-        Hg_3=layer[2].mean_height,
-        DDY=ddy,  # Temperature sum, degree days
-        fertility_class=fertility_class,
-        peat=PEAT,
-        y=y_ykj,
-        x=x_ykj,
-        altitude=altitude,  # Altitude above the sea level
-        n_trees=n_trees,
-    )
-    return gy.get_table(start_year=start_year, end_year=end_year, step_years=step_years)
+def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> Path:
+    """Where one stand's allometry CSV would land -- knowable before any
+    growth table is computed, so both a dry run and the real run name it the
+    same way."""
+    return output_dir / f"{parsed_stand.id}.csv"
 
 
 def process_stand(
     config: XmlConfig, parsed_stand: ParsedStand, PEAT: int, output_dir: Path
 ) -> StandData:
-    """Builds the dominant canopy layer's allometry CSV (always) and the
-    subdominant's (only when a genuine second species is present -- see
-    plan_stand_output), then returns the finished StandData record for this
-    stand, canopy_layer_files populated with what was actually written.
+    """Builds the single allometry CSV for this stand -- all three species
+    strata pooled into one Growth_and_Yield_Table call (not split into
+    separate dominant/subdominant layers), labeled by main_species (the
+    species with the largest basal area) and stored under the dominant
+    canopy layer. There is never a subdominant layer for this tool."""
+    strata_basal_areas_per_stratum = [
+        stratum.basal_area for stratum in parsed_stand.tree_strata
+    ]
+    strata_stem_counts_per_stratum = [
+        stratum.stem_count for stratum in parsed_stand.tree_strata
+    ]
 
-    Both growth tables are computed in full BEFORE either is written to
-    disk, mirroring metsakeskus_to_allometry.py's process_stand: a failure
-    partway through must not leave a stray, unreferenced CSV behind."""
-    plan = plan_stand_output(parsed_stand, output_dir)
-
-    dominant_table = build_growth_and_yield_table(
-        parsed_stand.tree_strata,
-        plan.dominant_species,
-        parsed_stand.fertility_class,
-        parsed_stand.x_ykj,
-        parsed_stand.y_ykj,
-        config.altitude,
-        config.ddy,
-        config.n_trees,
-        config.start_year,
-        config.end_year,
-        config.step_years,
-        PEAT,
+    gy = Growth_and_Yield_Table(
+        age_1=parsed_stand.tree_strata[0].age,
+        G_1=strata_basal_areas_per_stratum[0],
+        N_1=strata_stem_counts_per_stratum[0],
+        Dg_1=parsed_stand.tree_strata[0].mean_diameter,
+        Hg_1=parsed_stand.tree_strata[0].mean_height,
+        age_2=parsed_stand.tree_strata[1].age,
+        G_2=strata_basal_areas_per_stratum[1],
+        N_2=strata_stem_counts_per_stratum[1],
+        Dg_2=parsed_stand.tree_strata[1].mean_diameter,
+        Hg_2=parsed_stand.tree_strata[1].mean_height,
+        age_3=parsed_stand.tree_strata[2].age,
+        G_3=strata_basal_areas_per_stratum[2],
+        N_3=strata_stem_counts_per_stratum[2],
+        Dg_3=parsed_stand.tree_strata[2].mean_diameter,
+        Hg_3=parsed_stand.tree_strata[2].mean_height,
+        DDY=config.ddy,  # Temperature sum, degree days
+        fertility_class=parsed_stand.fertility_class,
+        peat=PEAT,
+        y=parsed_stand.y_ykj,
+        x=parsed_stand.x_ykj,
+        altitude=config.altitude,  # Altitude above the sea level
+        n_trees=config.n_trees,
+    )
+    page_1 = gy.get_table(
+        start_year=config.start_year,
+        end_year=config.end_year,
+        step_years=config.step_years,
     )
 
-    subdominant_table: Optional[pd.DataFrame] = None
-    if plan.subdominant_csv is not None:
-        subdominant_table = build_growth_and_yield_table(
-            parsed_stand.tree_strata,
-            plan.subdominant_species,
-            parsed_stand.fertility_class,
-            parsed_stand.x_ykj,
-            parsed_stand.y_ykj,
-            config.altitude,
-            config.ddy,
-            config.n_trees,
-            config.start_year,
-            config.end_year,
-            config.step_years,
-            PEAT,
-        )
-
-    # Both tables computed successfully (or there is no subdominant layer to
-    # compute) -- only now do we write anything to disk.
-    dominant_table.to_csv(plan.dominant_csv, index=False)
-    canopy_layer_files = {
-        CanopyLayerName.dominant: AllometryFileAndSpecies(
-            file_path=plan.dominant_csv, species_id=plan.dominant_species
-        ),
-    }
-
-    if subdominant_table is not None:
-        assert plan.subdominant_csv is not None
-        subdominant_table.to_csv(plan.subdominant_csv, index=False)
-        canopy_layer_files[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
-            file_path=plan.subdominant_csv, species_id=plan.subdominant_species
-        )
+    output_path = plan_stand_output(parsed_stand, output_dir)
+    page_1.to_csv(output_path, index=False)
 
     print(f"Allometric road map successfully generated for stand {parsed_stand.id}")
 
     return StandData(
         site_fertility_class=parsed_stand.fertility_class,
-        canopy_layer_files=canopy_layer_files,
+        canopy_layer_files={
+            CanopyLayerName.dominant: AllometryFileAndSpecies(
+                file_path=output_path, species_id=parsed_stand.main_species
+            ),
+        },
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
         polygon=parsed_stand.polygon,
         stand_area=parsed_stand.area,
         main_group=parsed_stand.main_group,
         sub_group=parsed_stand.sub_group,
+        soil_type=parsed_stand.soil_type,
+        mean_age=parsed_stand.mean_age,
         basal_area=parsed_stand.basal_area,
         mean_height=parsed_stand.mean_height,
         mean_diameter=parsed_stand.mean_diameter,
@@ -583,28 +477,15 @@ def parse_CLI_arguments() -> CLIArguments:
 # %% Progress-report printing (side-effecting; kept out of the pure layer above)
 
 
-def csv_counts(plans: list[StandPlanned]) -> tuple[int, int]:
-    """(dominant, subdominant) CSV counts -- every planned stand has a
-    dominant file, only some have a subdominant one."""
-    dominant = len(plans)
-    subdominant = sum(1 for plan in plans if plan.subdominant_csv is not None)
-    return dominant, subdominant
-
-
 def print_dry_run_plan(parsed_stands: list[ParsedStand], output_dir: Path) -> None:
     """The dry run's stand-in for the real run's writing report: the same
-    counts and file names, with nothing on disk. plan_stand_output is pure
-    and cheap (no growth-model math), so the dry run can report the real
-    dominant/subdominant split, not just a stand count."""
-    plans = [plan_stand_output(stand, output_dir) for stand in parsed_stands]
-    dominant, subdominant = csv_counts(plans)
+    counts and file names, with nothing on disk."""
     json_path = output_dir / STAND_DATA_FILENAME
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
     print(
-        f"Would write: {len(plans):,} stand(s) -- {dominant:,} dominant + "
-        f"{subdominant:,} subdominant = {dominant + subdominant:,} CSV(s)"
+        f"Would write: {len(parsed_stands):,} stand(s) -- {len(parsed_stands):,} CSV(s)"
     )
     print(f"Would write informational JSON: {json_path}")
 
@@ -665,18 +546,9 @@ def main():
         for parsed_stand in parsed_stands
     }
 
-    # Derived from what process_stand actually wrote, not recomputed via a
-    # second plan_stand_output pass over every stand.
-    dominant = len(final_stands)
-    subdominant = sum(
-        1
-        for stand_data in final_stands.values()
-        if CanopyLayerName.subdominant in stand_data.canopy_layer_files
-    )
     print(
-        f"Allometry files written: {len(final_stands):,} stand(s) -- {dominant:,} "
-        f"dominant + {subdominant:,} subdominant = "
-        f"{dominant + subdominant:,} CSV(s)"
+        f"Allometry files written: {len(final_stands):,} stand(s) -- "
+        f"{len(final_stands):,} CSV(s)"
     )
 
     json_path = output_dir / STAND_DATA_FILENAME

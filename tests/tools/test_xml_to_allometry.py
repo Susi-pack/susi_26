@@ -290,23 +290,31 @@ def test_get_stand_data_from_xml_parses_a_full_stand():
     )
     assert parsed_stand.id == StandID("1")
     assert parsed_stand.fertility_class == 3
+    assert parsed_stand.main_species == 1
     assert parsed_stand.tree_strata[0].basal_area == pytest.approx(20.0)
-    # Only species 1 carries basal area -- dominant/subdominant computation
-    # (docs/adr/0002) still names a subdominant species (2), it just has no
-    # basal area of its own (see the plan_stand_output tests below for the
-    # consequence: no subdominant CSV gets planned for it).
-    assert parsed_stand.dominant_species == 1
-    assert parsed_stand.subdominant_species == 2
+    assert parsed_stand.soil_type is None
+    assert parsed_stand.mean_age == 40
 
 
-def test_get_stand_data_from_xml_ranks_dominant_and_subdominant_by_basal_area():
+def test_get_stand_data_from_xml_parses_soil_type_when_present():
+    xml_text = _forest_property_xml(
+        _stand_xml_block("1", include_tree_strata=True)
+    ).replace(
+        "<st:Area>1.5</st:Area>", "<st:Area>1.5</st:Area>\n<st:SoilType>2</st:SoilType>"
+    )
+    parsed = xmltodict.parse(xml_text)["ForestPropertyData"]["st:Stands"]["st:Stand"]
+
+    parsed_stand = xml_to_allometry.get_stand_data_from_xml(parsed)
+
+    assert parsed_stand.soil_type == 2
+
+
+def test_get_stand_data_from_xml_picks_main_species_by_largest_basal_area():
     parsed_stand = xml_to_allometry.get_stand_data_from_xml(
         _parsed_stand("1", include_tree_strata=True, include_second_species=True)
     )
     # species 1: basal_area=20.0, species 2: basal_area=8.0
-    assert parsed_stand.dominant_species == 1
-    assert parsed_stand.subdominant_species == 2
-    assert parsed_stand.tree_strata[1].basal_area == pytest.approx(8.0)
+    assert parsed_stand.main_species == 1
 
 
 def test_get_stand_data_from_xml_stores_x_ykj_and_y_ykj():
@@ -384,29 +392,14 @@ def _parsed_stand_data(
     )
 
 
-def test_plan_stand_output_names_the_dominant_csv_by_stand_id(tmp_path):
+def test_plan_stand_output_names_the_csv_by_stand_id(tmp_path):
     parsed_stand = _parsed_stand_data("42")
-    plan = xml_to_allometry.plan_stand_output(parsed_stand, tmp_path)
-    assert plan.dominant_csv == tmp_path / "42_dominant.csv"
+    assert xml_to_allometry.plan_stand_output(parsed_stand, tmp_path) == (
+        tmp_path / "42.csv"
+    )
 
 
-def test_plan_stand_output_has_no_subdominant_csv_for_a_monoculture(tmp_path):
-    # Only species 1 carries basal area -- see docs/adr/0002: the
-    # subdominant layer is not written at all for a monoculture stand.
-    parsed_stand = _parsed_stand_data("1")
-    plan = xml_to_allometry.plan_stand_output(parsed_stand, tmp_path)
-    assert plan.subdominant_csv is None
-
-
-def test_plan_stand_output_has_a_subdominant_csv_for_a_two_species_stand(tmp_path):
-    parsed_stand = _parsed_stand_data("1", include_second_species=True)
-    plan = xml_to_allometry.plan_stand_output(parsed_stand, tmp_path)
-    assert plan.subdominant_csv == tmp_path / "1_subdominant.csv"
-
-
-def test_process_stand_writes_a_dominant_csv_round_tripping_through_the_real_reader(
-    tmp_path,
-):
+def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_path):
     parsed_stand = _parsed_stand_data("1")
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
@@ -414,28 +407,16 @@ def test_process_stand_writes_a_dominant_csv_round_tripping_through_the_real_rea
         config, parsed_stand, PEAT=1, output_dir=tmp_path
     )
 
-    dominant_file = stand_data.canopy_layer_files[CanopyLayerName.dominant]
-    assert dominant_file.file_path.exists()
-    assert dominant_file.species_id == 1
-    df = read_allometry_info_from_csv(dominant_file.file_path)
+    output_path = xml_to_allometry.plan_stand_output(parsed_stand, tmp_path)
+    assert output_path.exists()
+    df = read_allometry_info_from_csv(output_path)
     assert len(df) > 0
-    assert CanopyLayerName.subdominant not in stand_data.canopy_layer_files
 
-
-def test_process_stand_writes_both_csvs_for_a_two_species_stand(tmp_path):
-    parsed_stand = _parsed_stand_data("1", include_second_species=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
-
-    stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
-    )
-
+    # Only a dominant layer is ever produced by this tool.
     dominant_file = stand_data.canopy_layer_files[CanopyLayerName.dominant]
-    subdominant_file = stand_data.canopy_layer_files[CanopyLayerName.subdominant]
-    assert dominant_file.file_path.exists()
-    assert subdominant_file.file_path.exists()
-    assert dominant_file.species_id == 1
-    assert subdominant_file.species_id == 2
+    assert dominant_file.file_path == output_path
+    assert dominant_file.species_id == parsed_stand.main_species
+    assert CanopyLayerName.subdominant not in stand_data.canopy_layer_files
 
 
 def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
@@ -451,6 +432,8 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.y_ykj == parsed_stand.y_ykj
     assert stand_data.polygon == parsed_stand.polygon
     assert stand_data.stand_area == parsed_stand.area
+    assert stand_data.soil_type == parsed_stand.soil_type
+    assert stand_data.mean_age == parsed_stand.mean_age
 
 
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
@@ -475,19 +458,20 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
         parsed_stand.fertility_class
     )
     assert CanopyLayerName.dominant in reloaded.stands[StandID("1")].canopy_layer_files
+    assert (
+        CanopyLayerName.subdominant
+        not in reloaded.stands[StandID("1")].canopy_layer_files
+    )
 
 
 def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
     output_dir = tmp_path / "allometry"
-    parsed_stands = [
-        _parsed_stand_data("1"),
-        _parsed_stand_data("2", include_second_species=True),
-    ]
+    parsed_stands = [_parsed_stand_data("1"), _parsed_stand_data("2")]
 
     xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir)
 
     printed = capsys.readouterr().out
-    assert "2 stand(s) -- 2 dominant + 1 subdominant = 3 CSV(s)" in printed
+    assert "2 stand(s) -- 2 CSV(s)" in printed
     assert "stand_data.json" in printed
     assert not output_dir.exists()
 
