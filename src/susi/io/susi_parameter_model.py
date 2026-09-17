@@ -11,7 +11,6 @@ from pydantic import (
     FilePath,
     SkipValidation,
     field_validator,
-    PrivateAttr,
     model_validator,
 )
 
@@ -117,12 +116,6 @@ class CanopyLayerAllometry(StrictFrozenModel):
         description="Map: canopy layer name-> list of pointers, length ncols. Example: {'dominant': [1,1,1,1,2,2,2], 'subdominant': None, 'under': None}"
     )
 
-    # Information read from the CSV file, not serialized
-    # Map: Allometry registry number -> allometry path dataframe read from file
-    _zones_data: dict[AllometryRegistryNumber, pd.DataFrame] = PrivateAttr()
-    # Map: Allometry registry number -> species ID
-    _zones_species_id: dict[AllometryRegistryNumber, int] = PrivateAttr()
-
     @model_validator(mode="after")
     def pointers_must_reference_declared_zones(self) -> Self:
         for layer_name, layer_pointers in self.pointers.items():
@@ -136,26 +129,6 @@ class CanopyLayerAllometry(StrictFrozenModel):
                     f"Allometry pointer(s) {missing} in '{layer_name}' layer do not exist "
                     f"in allometry_file_registry keys {set(declared)}"
                 )
-        return self
-
-    @model_validator(mode="after")
-    def parse_allometry_files(self) -> Self:
-        _zones_data = {}
-        _zones_species_id = {}
-
-        for (
-            allometry_registry_number,
-            filepath_and_species,
-        ) in self.allometry_file_registry.items():
-            df = read_allometry_info_from_csv(filepath=filepath_and_species.file_path)
-            _zones_data[allometry_registry_number] = df
-            _zones_species_id[allometry_registry_number] = (
-                filepath_and_species.species_id
-            )
-
-        self._zones_data = _zones_data
-        self._zones_species_id = _zones_species_id
-
         return self
 
     @cached_property
@@ -176,6 +149,42 @@ class CanopyLayerAllometry(StrictFrozenModel):
             reg_number: fpath_and_species.species_id
             for reg_number, fpath_and_species in self.allometry_file_registry.items()
         }
+
+    @classmethod
+    def with_single_allometry_per_layer(
+        cls, layers: dict[CanopyLayerName, AllometryFileAndSpecies], n: PositiveInt
+    ) -> Self:
+        """
+        Builds a homogeneous CanopyLayerAllometry: one allometry file per canopy layer.
+        Takes a plain per-layer mapping and expands it into the required registry + pointers.
+        A stand needing several files/species within one layer can't be expressed this way;
+        for those, construct CanopyLayerAllometry directly instead.
+
+        n here is the number of soil columns.
+        """
+        allometry_file_registry: dict[
+            AllometryRegistryNumber, AllometryFileAndSpecies
+        ] = {}
+        registry_number_for_layer: dict[CanopyLayerName, AllometryRegistryNumber] = {}
+        for registry_number, (layer_name, allometry_file_and_species) in enumerate(
+            layers.items(), start=1
+        ):
+            allometry_file_registry[registry_number] = allometry_file_and_species
+            registry_number_for_layer[layer_name] = registry_number
+
+        pointers = {
+            layer_name: (
+                [registry_number_for_layer[layer_name]] * n
+                if layer_name in registry_number_for_layer
+                else None
+            )
+            for layer_name in CanopyLayerName
+        }
+
+        return cls(
+            allometry_file_registry=allometry_file_registry,
+            pointers=pointers,
+        )
 
 
 class CanopyStateParams(StrictFrozenModel):
