@@ -21,7 +21,7 @@ instead, see [XML data --> allometry files](xml_to_allometry.md).
 ```bash
 python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
-    [--allow-out-of-range-values] [--emit-xml] [--dry-run]
+    [--allow-out-of-range-values] [--dry-run]
 ```
 
 ## Command-line arguments
@@ -29,10 +29,9 @@ python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG
 | Argument | Required | Description |
 |---|---|---|
 | `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage. Must exist and end in `.gpkg`. |
-| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — where the config file is looked up by default, and names the XML file written by `--emit-xml` (from the folder's own name). |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — where the config file is looked up by default. |
 | `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/config.toml`. Must exist and end in `.toml`. |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
-| `--emit-xml` | no | Also write a combined ForestPropertyData XML next to the CSVs. |
 | `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
 
 The output folder is not selectable: `<project-dir>/allometry/` is the
@@ -190,15 +189,12 @@ it still happens: the GeoPackage is read, every filter runs, the year table and
 every skipped stand are reported exactly as in a real run. The tool then prints
 the files it would have written, and exits.
 
-Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, no XML, and not
+Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, and not
 even the output folder, so a dry run does not claim a `--project-dir` that the
 real run then has to work around. The one thing it does still enforce is the
 refusal to run into an existing output folder: whether the real run could start
 is part of what a dry run is for.
-
-Two things carry over from a real run. `--emit-xml` is reported (the dry run
-describes the run you are about to make), and the file names printed are the
-ones a real run would produce, decided by the same code.
+The file names printed are the ones a real run would produce, decided by the same code.
 
 The counts are an **upper bound**. Computing the growth trajectories is the
 slow part of a run and the part `--dry-run` skips, so a stand that would fail
@@ -213,7 +209,6 @@ ran.
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
 | `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
-| `<project folder name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document (named after the `--project-dir` folder), replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
 
 Each CSV follows the canonical allometry schema.
 The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.
@@ -255,5 +250,5 @@ continues. One bad stand never aborts the others.
 
     The tool would rather lose the stand and say so. The same rule applies to
     `soiltype`: when the export doesn't record it, it stays absent all the way
-    through — `null` in the JSON, and the tag simply omitted from the XML —
+    through — `null` in the JSON—
     rather than being filled in with a number.

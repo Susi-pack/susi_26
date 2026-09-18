@@ -1,3 +1,4 @@
+import json
 import math
 from pathlib import Path
 
@@ -9,17 +10,20 @@ from hypothesis import strategies as st
 from shapely.geometry import Point, Polygon
 
 from susi.io.load_output_data import StandID
-from susi.io.susi_parameter_model import read_allometry_info_from_csv
+from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
 from tools.shared_allometry_tool_utils import input_validation, shared_utils
+from tools.shared_allometry_tool_utils.stand_data import (
+    StandDataDocument,
+    load_stand_data_document_from_json,
+)
 
 # %% ExtractionConfig
 #
 # ExtractionConfig is a StrictFrozenModel (susi.io.extra_pydantic_types):
 # presence/unknown-field checking, required-vs-defaulted fields, and
 # extra="forbid" all come from Pydantic itself, the same as
-# xml_to_allometry.py's XmlConfig and new_growth_allometry.py's
-# NewGrowthConfig.
+# new_growth_allometry.py's NewGrowthConfig.
 
 
 def test_extraction_config_requires_target_year():
@@ -424,7 +428,7 @@ def test_aggregate_species_group_zero_basal_area_with_nothing_recorded_falls_bac
     # Rows are present but every other field is genuinely missing (NaN).
     # There is truly nothing to average, so this falls back to 0 -- never
     # NaN, since NaN * 0 == NaN would silently poison
-    # build_valid_stand's basal-area-weighted stand-level age/height/
+    # build_stand's basal-area-weighted stand-level age/height/
     # diameter for this species' basal_area=0 weight.
     rows = pd.DataFrame(
         {
@@ -705,13 +709,13 @@ def test_build_stand_candidates_preserves_zero_basal_area_species_data():
 def test_build_stand_candidates_missing_soiltype_stays_none():
     # No soiltype recorded for this stand: must stay None, not a fabricated
     # placeholder number indistinguishable from a real measurement (soiltype
-    # never feeds Growth_and_Yield_Table -- see StandSiteAttributes).
+    # never feeds Growth_and_Yield_Table -- see StandCandidate).
     merged_filtered = pd.DataFrame([_merged_row(soiltype=None)])
     candidates, skipped = m.build_stand_candidates(
         merged_filtered, _empty_treestratum()
     )
     assert not skipped
-    assert candidates[0].site.soiltype is None
+    assert candidates[0].soiltype is None
 
 
 def test_build_stand_candidates_keeps_recorded_soiltype():
@@ -720,7 +724,7 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
         merged_filtered, _empty_treestratum()
     )
     assert not skipped
-    assert candidates[0].site.soiltype == 10
+    assert candidates[0].soiltype == 10
 
 
 # %% partition_viable_candidates
@@ -729,13 +733,11 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
 def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10):
     return m.StandCandidate(
         id=StandID(stand_id),
-        site=m.StandSiteAttributes(
-            subgroup=2,
-            fertilityclass=3,
-            developmentclass=2,
-            drainagestate=7,
-            soiltype=soiltype,
-        ),
+        subgroup=2,
+        fertilityclass=3,
+        developmentclass=2,
+        drainagestate=7,
+        soiltype=soiltype,
         strata=_strata(pine_ba, spruce_ba, decid_ba),
         # A real Helsinki-area point (EPSG:3067) rather than (0, 0): keeps
         # centroid_to_ykj's output inside Growth_and_Yield_Table's expected
@@ -759,20 +761,20 @@ def test_partition_viable_candidates_skips_zero_basal_area():
     assert "basal area" in skipped[0].reason
 
 
-# %% build_valid_stand
+# %% build_stand
 
 
-def test_build_valid_stand_is_total_for_a_viable_candidate():
+def test_build_stand_is_total_for_a_viable_candidate():
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     assert stand.id == StandID("1")
     assert stand.stand_basalarea == pytest.approx(15)
     assert stand.dominant_species == 1
     assert stand.subdominant_species == 2
 
 
-def test_build_valid_stands_isolates_one_bad_candidate(monkeypatch):
-    # build_valid_stand can still raise for a structurally pathological
+def test_build_stands_isolates_one_bad_candidate(monkeypatch):
+    # build_stand can still raise for a structurally pathological
     # geometry (e.g. all-coincident points) even after partition_viable_candidates
     # -- one such candidate must not abort every other stand in the batch.
     good = _candidate("1", pine_ba=10)
@@ -787,14 +789,14 @@ def test_build_valid_stands_isolates_one_bad_candidate(monkeypatch):
 
     monkeypatch.setattr(m, "centroid_to_ykj", _flaky_centroid_to_ykj)
 
-    built, skipped = m.build_valid_stands([good, bad])
+    built, skipped = m.build_stands([good, bad])
 
     assert [s.id for s in built] == [StandID("1")]
     assert [s.stand_id for s in skipped] == [StandID("2")]
     assert "degenerate geometry" in skipped[0].reason
 
 
-# %% Zero-basal-area species data survives into ValidStand but never
+# %% Zero-basal-area species data survives into ParsedStand but never
 # reaches allometry creation (end-to-end, through the real aggregation +
 # growth-table pipeline rather than the hand-built _strata/_candidate
 # helpers above, which bypass aggregate_species_group entirely).
@@ -809,7 +811,7 @@ def _stand_candidate_with_a_zero_basal_area_species(treestratum_rows):
     return candidates[0]
 
 
-def test_build_valid_stand_ignores_preserved_zero_basal_area_species_in_stand_level_average():
+def test_build_stand_ignores_preserved_zero_basal_area_species_in_stand_level_average():
     # Spruce carries real, non-nominal age/diameter/height despite zero
     # basal area -- it must contribute nothing (weight 0) to the stand-level
     # basal-area-weighted averages, which should equal pine's own values.
@@ -837,7 +839,7 @@ def test_build_valid_stand_ignores_preserved_zero_basal_area_species_in_stand_le
     )
     viable, skipped = m.partition_viable_candidates([candidate])
     assert not skipped
-    stand = m.build_valid_stand(viable[0])
+    stand = m.build_stand(viable[0])
 
     assert stand.stand_meanage == pytest.approx(45.0)
     assert stand.stand_meandiameter == pytest.approx(20.0)
@@ -871,7 +873,7 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
         ]
     )
     viable, _ = m.partition_viable_candidates([candidate])
-    stand = m.build_valid_stand(viable[0])
+    stand = m.build_stand(viable[0])
     # Spruce's real data is still there, for reporting/future use ...
     assert stand.strata.spruce.stem_count == 80
     config = m.ExtractionConfig(
@@ -891,7 +893,7 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
 
 def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tmp_path):
     candidate = _candidate("1", pine_ba=10)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
@@ -899,7 +901,7 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
     table = m.build_growth_and_yield_table(
         stand.strata,
         stand.dominant_species,
-        stand.site.fertilityclass,
+        stand.fertilityclass,
         stand.x_ykj,
         stand.y_ykj,
         config.altitude,
@@ -921,7 +923,7 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
 
 def test_process_stand_writes_two_csvs(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
@@ -938,7 +940,7 @@ def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
     # A pure pine stand: spruce and deciduous both carry zero basal area, so
     # whichever ranks second as "subdominant" has no live trees to model.
     candidate = _candidate("1", pine_ba=10)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
@@ -954,7 +956,7 @@ def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
 
 def test_process_stand_skips_on_failure(tmp_path, monkeypatch):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0)
 
     def _boom(*args, **kwargs):
@@ -976,7 +978,7 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     # already-computable dominant one -- may be left on disk, since that
     # would contradict the reported failure.
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_valid_stand(candidate)
+    stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
@@ -997,77 +999,145 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     assert list(tmp_path.glob("*.csv")) == []
 
 
-# %% dump_valid_stands_json / write_stands_xml
+def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
+    tmp_path,
+):
+    # StandData is a pydantic model -- a degenerate stand.area (or any other
+    # field failing its constraint) must raise before either CSV is written,
+    # the same invariant test_process_stand_leaves_no_stray_file_when_
+    # subdominant_fails already guards for the two growth tables.
+    import dataclasses
 
-
-def test_dump_valid_stands_json_writes_valid_json(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_valid_stand(candidate)
-    output_path = tmp_path / "extra_gpkg_info.json"
-
-    m.dump_valid_stands_json([stand], output_path)
-
-    import json
-
-    payload = json.loads(output_path.read_text())
-    assert payload["stands"][0]["id"] == "1"
-
-
-def test_dump_valid_stands_json_writes_null_for_missing_soiltype(tmp_path):
-    candidate = _candidate("1", pine_ba=10, soiltype=None)
-    stand = m.build_valid_stand(candidate)
-    output_path = tmp_path / "extra_gpkg_info.json"
-
-    m.dump_valid_stands_json([stand], output_path)
-
-    import json
-
-    payload = json.loads(output_path.read_text())
-    assert payload["stands"][0]["site"]["soiltype"] is None
-
-
-def test_write_stands_xml_omits_soiltype_tag_when_missing_and_round_trips(tmp_path):
-    # Two stands: one with no recorded soiltype, one with a real value --
-    # the tag must be omitted (not a fabricated number) for the first, and
-    # xml_to_allometry.py's reader (already Optional in its own model) must
-    # read that back as None rather than crashing on a missing tag, while
-    # the second stand's real value survives untouched.
-    from tools.xml_to_allometry.xml_to_allometry import (
-        get_stand_data_from_xml,
-        read_stands_from_xml_file,
+    stand = dataclasses.replace(m.build_stand(candidate), area=0.0)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    candidates = [
-        _candidate("1", pine_ba=10, soiltype=None),
-        _candidate("2", pine_ba=10, soiltype=10),
-    ]
-    stands = [m.build_valid_stand(c) for c in candidates]
-    xml_path = tmp_path / "run.xml"
+    outcome = m.process_stand(stand, config, tmp_path)
 
-    m.write_stands_xml(stands, xml_path)
-    xml_text = xml_path.read_text()
-    assert xml_text.count("<st:SoilType>") == 1  # only stand 2's
-
-    raw_stands = read_stands_from_xml_file(xml_path)
-    parsed_by_id = {
-        str(ps.id): ps for ps in (get_stand_data_from_xml(s) for s in raw_stands)
-    }
-    assert parsed_by_id["1"].soil_type is None
-    assert parsed_by_id["2"].soil_type == 10
+    assert isinstance(outcome, m.StandSkipped)
+    assert list(tmp_path.glob("*.csv")) == []
 
 
-def test_write_stands_xml_is_replayable_through_xml_to_allometry(tmp_path):
-    from tools.xml_to_allometry.xml_to_allometry import read_stands_from_xml_file
+# %% build_stand's area
 
-    candidates = [_candidate("1", pine_ba=10), _candidate("2", pine_ba=5)]
-    stands = [m.build_valid_stand(c) for c in candidates]
-    xml_path = tmp_path / "run.xml"
 
-    m.write_stands_xml(stands, xml_path)
-    parsed_stands = read_stands_from_xml_file(xml_path)
+def test_build_stand_computes_area_from_geometry(tmp_path):
+    # candidate.geometry is a Point buffered to radius 50m (EPSG:3067, i.e.
+    # meters) -- area = pi * 50^2 m^2, converted to the ha StandData.stand_area
+    # expects.
+    candidate = _candidate("1", pine_ba=10)
+    stand = m.build_stand(candidate)
+    # buffer() approximates the circle with a polygon, so its area is only
+    # close to (not exactly) pi*r^2 -- a loose relative tolerance accounts
+    # for that polygon approximation, not for float imprecision.
+    assert stand.area == pytest.approx((math.pi * 50**2) / 10_000.0, rel=0.01)
 
-    assert isinstance(parsed_stands, list)
-    assert len(parsed_stands) == 2
+
+# %% process_stand's StandData / dump_stand_data_document
+
+
+def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
+    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    stand_data = outcome.stand_data
+    assert stand_data.site_fertility_class == stand.fertilityclass
+    assert stand_data.x_ykj == stand.x_ykj
+    assert stand_data.y_ykj == stand.y_ykj
+    assert stand_data.stand_area == pytest.approx(stand.area)
+    assert stand_data.main_group == m.MAINGROUP_FOREST_LAND
+    assert stand_data.sub_group == stand.subgroup
+    assert stand_data.developmentclass == stand.developmentclass
+    assert stand_data.drainagestate == stand.drainagestate
+    assert stand_data.soil_type == stand.soiltype
+    assert stand_data.mean_age == pytest.approx(stand.stand_meanage)
+    assert stand_data.basal_area == pytest.approx(stand.stand_basalarea)
+    assert stand_data.mean_height == pytest.approx(stand.stand_meanheight)
+    assert stand_data.mean_diameter == pytest.approx(stand.stand_meandiameter)
+
+
+def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
+    candidate = _candidate("1", pine_ba=10, soiltype=None)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.stand_data.soil_type is None
+
+
+def test_process_stand_populates_canopy_layer_files_for_both_layers(tmp_path):
+    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    canopy_layer_files = outcome.stand_data.canopy_layer_files
+    dominant = canopy_layer_files[CanopyLayerName.dominant]
+    assert dominant.file_path == outcome.dominant_csv
+    assert dominant.species_id == stand.dominant_species
+    subdominant = canopy_layer_files[CanopyLayerName.subdominant]
+    assert subdominant.file_path == outcome.subdominant_csv
+    assert subdominant.species_id == stand.subdominant_species
+
+
+def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path):
+    candidate = _candidate("1", pine_ba=10)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    canopy_layer_files = outcome.stand_data.canopy_layer_files
+    assert CanopyLayerName.dominant in canopy_layer_files
+    assert CanopyLayerName.subdominant not in canopy_layer_files
+
+
+def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
+    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+    outcome = m.process_stand(stand, config, tmp_path)
+    assert isinstance(outcome, m.StandWritten)
+    document = StandDataDocument(
+        altitude=config.altitude,
+        ddy=config.ddy,
+        stands={stand.id: outcome.stand_data},
+    )
+
+    m.dump_stand_data_document(output_dir=tmp_path, document=document)
+
+    json_path = tmp_path / "stand_data.json"
+    assert json_path.exists()
+    payload = json.loads(json_path.read_text())
+    assert "1" in payload["stands"]
+
+    reloaded = load_stand_data_document_from_json(json_path)
+    assert reloaded.stands[StandID("1")].site_fertility_class == stand.fertilityclass
+    assert CanopyLayerName.dominant in reloaded.stands[StandID("1")].canopy_layer_files
+    assert (
+        CanopyLayerName.subdominant in reloaded.stands[StandID("1")].canopy_layer_files
+    )
 
 
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
@@ -1190,8 +1260,8 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert len(ba_skips) == 0
     assert len(viable) == 2
 
-    valid_stands = [m.build_valid_stand(c) for c in viable]
-    stands_by_id = {str(s.id): s for s in valid_stands}
+    parsed_stands = [m.build_stand(c) for c in viable]
+    stands_by_id = {str(s.id): s for s in parsed_stands}
 
     # Stand 1: pine-only monoculture. Per docs/adr/0002, the subdominant is
     # the genuine zero-BA runner-up (spruce or deciduous), never a duplicate
@@ -1209,7 +1279,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
 
     outcomes = {
         str(o.stand_id): o
-        for o in (m.process_stand(s, config, tmp_path) for s in valid_stands)
+        for o in (m.process_stand(s, config, tmp_path) for s in parsed_stands)
     }
     outcome_1, outcome_2 = outcomes["1"], outcomes["2"]
     assert isinstance(outcome_1, m.StandWritten)
@@ -1224,16 +1294,27 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert outcome_2.subdominant_csv is not None
     assert outcome_2.subdominant_csv.exists()
 
-    json_path = tmp_path / "extra_gpkg_info.json"
-    m.dump_valid_stands_json(valid_stands, json_path)
+    json_path = tmp_path / "stand_data.json"
+    m.dump_stand_data_document(
+        output_dir=tmp_path,
+        document=StandDataDocument(
+            altitude=config.altitude,
+            ddy=config.ddy,
+            stands={
+                outcome.stand_id: outcome.stand_data for outcome in outcomes.values()
+            },
+        ),
+    )
     assert json_path.exists()
+    reloaded = load_stand_data_document_from_json(json_path)
+    assert set(str(sid) for sid in reloaded.stands) == {"1", "2"}
 
 
 # %% plan_stand_outputs / csv_counts
 
 
 def test_plan_stand_outputs_names_both_layers(tmp_path):
-    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+    stand = m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5))
 
     plan = m.plan_stand_outputs(stand, tmp_path)
 
@@ -1245,7 +1326,7 @@ def test_plan_stand_outputs_names_both_layers(tmp_path):
 def test_plan_stand_outputs_monoculture_has_no_subdominant(tmp_path):
     # The same rule process_stand applies: a second-ranked species with zero
     # basal area gets no file at all (docs/adr/0002).
-    stand = m.build_valid_stand(_candidate("1", pine_ba=10))
+    stand = m.build_stand(_candidate("1", pine_ba=10))
 
     plan = m.plan_stand_outputs(stand, tmp_path)
 
@@ -1256,7 +1337,7 @@ def test_plan_stand_outputs_monoculture_has_no_subdominant(tmp_path):
 def test_plan_stand_outputs_touches_nothing_on_disk(tmp_path):
     # The premise of --dry-run: planning is pure, so it can name a folder that
     # does not exist without bringing it into being.
-    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+    stand = m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5))
 
     m.plan_stand_outputs(stand, tmp_path / "never_created")
 
@@ -1267,7 +1348,7 @@ def test_plan_stand_outputs_touches_nothing_on_disk(tmp_path):
 def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     # The point of routing both paths through plan_stand_outputs: what a dry
     # run reports is what a real run then puts on disk, name for name.
-    stand = m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5))
+    stand = m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5))
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
@@ -1287,61 +1368,14 @@ def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
 def test_csv_counts_counts_dominant_and_subdominant_separately(tmp_path):
     plans = [
         m.plan_stand_outputs(
-            m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5)), tmp_path
+            m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5)), tmp_path
         ),
-        m.plan_stand_outputs(
-            m.build_valid_stand(_candidate("2", pine_ba=10)), tmp_path
-        ),
+        m.plan_stand_outputs(m.build_stand(_candidate("2", pine_ba=10)), tmp_path),
     ]
 
     # Two stands -> two dominant files, but only the mixed stand adds a
     # subdominant one.
     assert m.csv_counts(plans) == (2, 1)
-
-
-def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
-    output_dir = tmp_path / "allometry"
-    plans = [
-        m.plan_stand_outputs(
-            m.build_valid_stand(_candidate("1", pine_ba=10, spruce_ba=5)), output_dir
-        ),
-        m.plan_stand_outputs(
-            m.build_valid_stand(_candidate("2", pine_ba=10)), output_dir
-        ),
-    ]
-
-    m.print_dry_run_plan(
-        plans, output_dir, project_dir=Path("myproject"), emit_xml=False
-    )
-
-    printed = capsys.readouterr().out
-    assert "2 stand(s) -- 2 dominant + 1 subdominant = 3 CSV(s)" in printed
-    assert "extra_gpkg_info.json" in printed
-    # Without --emit-xml there is no XML in a real run either, so the plan
-    # must not promise one.
-    assert ".xml" not in printed
-    # The caveat matters: a dry run cannot know about growth-model failures.
-    assert "upper bound" in printed
-    assert not output_dir.exists()
-
-
-def test_print_dry_run_plan_names_the_xml_when_emit_xml_is_set(tmp_path, capsys):
-    # --dry-run and --emit-xml are not contradictory: the dry run describes
-    # the run you are about to make, and that run would emit an XML.
-    output_dir = tmp_path / "allometry"
-    plans = [
-        m.plan_stand_outputs(
-            m.build_valid_stand(_candidate("1", pine_ba=10)), output_dir
-        ),
-    ]
-
-    m.print_dry_run_plan(
-        plans, output_dir, project_dir=Path("myproject"), emit_xml=True
-    )
-
-    printed = capsys.readouterr().out
-    assert str(output_dir / "myproject.xml") in printed
-    assert not output_dir.exists()
 
 
 # %% CLI

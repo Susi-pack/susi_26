@@ -10,8 +10,6 @@ every stand that survives filtering is turned into an allometry CSV file.
 
 # %% Imports
 import argparse
-import dataclasses
-import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +22,10 @@ from shapely.geometry.base import BaseGeometry
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.io.extra_pydantic_types import StrictFrozenModel
 from susi.io.load_output_data import StandID
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerName,
+)
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
@@ -42,6 +44,11 @@ from tools.shared_allometry_tool_utils.project_layout import (
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
 from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
+from tools.shared_allometry_tool_utils.stand_data import (
+    STAND_DATA_FILENAME,
+    StandData,
+    StandDataDocument,
+)
 
 # %% Constants -- hard-coded, non-negotiable
 
@@ -91,26 +98,6 @@ class PerSpecies(Generic[T]):
 
 
 @dataclass(frozen=True)
-class StandSiteAttributes:
-    """
-    Site-level facts a stand carried into the output.
-    should soiltype be Optional? Still an open question, see #280.
-    Right now, soiltype is Optional because it never feeds
-    Growth_and_Yield_Table (search build_growth_and_yield_table: it isn't
-    one of the parameters), so there is nothing to fabricate a value for.
-    A missing soiltype stays None end-to-end (JSON dump: null; XML dump:
-    the <st:SoilType> tag is simply omitted, and xml_to_allometry.py's
-    reader already tolerates that) rather than being reported as a specific,
-    invented number indistinguishable from a real measurement."""
-
-    subgroup: int
-    fertilityclass: int
-    developmentclass: int
-    drainagestate: int
-    soiltype: int | None
-
-
-@dataclass(frozen=True)
 class StandCandidate:
     """
     Represents one stand after database merge + species aggregation, before the viability
@@ -119,19 +106,29 @@ class StandCandidate:
     """
 
     id: StandID
-    site: StandSiteAttributes
+    subgroup: int
+    fertilityclass: int
+    developmentclass: int
+    drainagestate: int
+    soiltype: int | None
     strata: PerSpecies[TreeStratum]
     geometry: BaseGeometry
 
 
 @dataclass(frozen=True)
-class ValidStand:
+class ParsedStand:
     """
     One stand ready for Growth_and_Yield_Table.
+    Difference with StandData: StandData is what finally gets written to the
+    JSON file. ParsedStand is temporary, and never exists outside this file.
     """
 
     id: StandID
-    site: StandSiteAttributes
+    subgroup: int
+    fertilityclass: int
+    developmentclass: int
+    drainagestate: int
+    soiltype: int | None
     strata: PerSpecies[TreeStratum]
     stand_meanage: float
     stand_basalarea: float
@@ -139,6 +136,7 @@ class ValidStand:
     stand_meandiameter: float
     x_ykj: int
     y_ykj: int
+    area: float  # ha -- see build_stand (geometry.area is m^2, EPSG:3067)
     geometry: BaseGeometry
     dominant_species: int
     subdominant_species: int
@@ -195,14 +193,13 @@ class CLIArguments:
     config_path: Path
     project_dir: Path
     allow_out_of_range_values: bool
-    emit_xml: bool
     dry_run: bool
 
 
 @dataclass(frozen=True)
 class StandPlanned:
     """
-    The files one stand WOULD produce.
+    The files one stand would produce.
     This is a fact about the stand and the output folder,
     knowable before any growth table is computed.
     """
@@ -221,6 +218,7 @@ class StandWritten:
     """
 
     stand_id: StandID
+    stand_data: StandData
     dominant_csv: Path
     # When the second species carries zero basal area, no subdominant allometry file is written.
     subdominant_csv: Path | None
@@ -413,7 +411,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
     height from a plain average of the recorded rows. Only a field with
     truly nothing to average (an all-NaN column) falls back to 0 -- not a
     fabricated placeholder, and deliberately not NaN either, since NaN would
-    silently poison build_valid_stand's basal-area-weighted stand-level
+    silently poison build_stand's basal-area-weighted stand-level
     age/height/diameter (NaN * 0 is NaN, not 0).
 
     A species present with real, POSITIVE basal area but degenerate
@@ -521,7 +519,7 @@ def build_stand_candidates(
     degenerate diameter/height data (build_species_strata's
     DegenerateSpeciesDataError, see aggregate_species_group) -- caught here
     and turned into a StandSkipped for the whole stand, rather than letting
-    artificial data flow forward into a ValidStand."""
+    artificial data flow forward into a ParsedStand."""
     candidates: list[StandCandidate] = []
     skipped: list[StandSkipped] = []
     treestratum_treestandid = pd.to_numeric(treestratum["treestandid"], errors="coerce")
@@ -552,20 +550,23 @@ def build_stand_candidates(
             skipped.append(StandSkipped(stand_id=stand_id, reason=str(error)))
             continue
 
-        site = StandSiteAttributes(
-            subgroup=int(row["subgroup"]),
-            fertilityclass=int(row["fertilityclass"]),
-            developmentclass=int(row["developmentclass"]),
-            drainagestate=(
-                int(row["drainagestate"])
-                if pd.notna(row.get("drainagestate"))
-                else DRAINAGESTATE_DRAINED[0]
-            ),
-            soiltype=(int(row["soiltype"]) if pd.notna(row.get("soiltype")) else None),
-        )
-
         candidates.append(
-            StandCandidate(id=stand_id, site=site, strata=strata, geometry=geometry)
+            StandCandidate(
+                id=stand_id,
+                subgroup=int(row["subgroup"]),
+                fertilityclass=int(row["fertilityclass"]),
+                developmentclass=int(row["developmentclass"]),
+                drainagestate=(
+                    int(row["drainagestate"])
+                    if pd.notna(row.get("drainagestate"))
+                    else DRAINAGESTATE_DRAINED[0]
+                ),
+                soiltype=(
+                    int(row["soiltype"]) if pd.notna(row.get("soiltype")) else None
+                ),
+                strata=strata,
+                geometry=geometry,
+            )
         )
 
     return candidates, skipped
@@ -621,14 +622,15 @@ def centroid_to_ykj(geometry: BaseGeometry) -> tuple[int, int]:
     return point_to_ykj(geometry.centroid.x, geometry.centroid.y)
 
 
-def build_valid_stand(candidate: StandCandidate) -> ValidStand:
-    """Builds the final stand record from an already-viable candidate
-    (nonzero total basal area, guaranteed by partition_viable_candidates;
-    non-empty geometry, guaranteed by build_stand_candidates). Not fully
-    total, though: centroid_to_ykj can still raise for a geometry that's
-    present and non-empty but otherwise degenerate (e.g. all-coincident
-    points) -- callers processing a batch should use build_valid_stands,
-    which isolates that per candidate instead of aborting the whole run."""
+def build_stand(candidate: StandCandidate) -> ParsedStand:
+    """
+    Builds the final stand record from an already-viable candidate
+    Not final, though: centroid_to_ykj can still raise for a geometry that's
+    present and non-empty but otherwise degenerate (e.g. all-coincident points)
+
+    Also where `area` gets computed (candidate.geometry.area, m^2 under
+    this tool's EPSG:3067 input CRS, converted to the ha StandData.stand_area expects)
+    """
     strata = candidate.strata
     stand_total_ba = total_basal_area(strata)
 
@@ -655,9 +657,13 @@ def build_valid_stand(candidate: StandCandidate) -> ValidStand:
     )
     x_ykj, y_ykj = centroid_to_ykj(candidate.geometry)
 
-    return ValidStand(
+    return ParsedStand(
         id=candidate.id,
-        site=candidate.site,
+        subgroup=candidate.subgroup,
+        fertilityclass=candidate.fertilityclass,
+        developmentclass=candidate.developmentclass,
+        drainagestate=candidate.drainagestate,
+        soiltype=candidate.soiltype,
         strata=strata,
         stand_meanage=float(stand_age),
         stand_basalarea=float(stand_total_ba),
@@ -665,24 +671,25 @@ def build_valid_stand(candidate: StandCandidate) -> ValidStand:
         stand_meandiameter=float(stand_diameter),
         x_ykj=x_ykj,
         y_ykj=y_ykj,
+        area=candidate.geometry.area / 10_000.0,
         geometry=candidate.geometry,
         dominant_species=dominant_species,
         subdominant_species=subdominant_species,
     )
 
 
-def build_valid_stands(
+def build_stands(
     candidates: list[StandCandidate],
-) -> tuple[list[ValidStand], list[StandSkipped]]:
-    """Batch build_valid_stand, isolating one candidate's failure (see
-    build_valid_stand's docstring) as a StandSkipped instead of letting it
+) -> tuple[list[ParsedStand], list[StandSkipped]]:
+    """Batch build_stand, isolating one candidate's failure (see
+    build_stand's docstring) as a StandSkipped instead of letting it
     abort every other stand in the run -- the same per-stand isolation
     principle process_stand already applies to the growth-table stage."""
-    built: list[ValidStand] = []
+    built: list[ParsedStand] = []
     skipped: list[StandSkipped] = []
     for candidate in candidates:
         try:
-            built.append(build_valid_stand(candidate))
+            built.append(build_stand(candidate))
         except Exception as error:  # noqa: BLE001 -- one bad stand's geometry math must not abort the batch
             skipped.append(StandSkipped(stand_id=candidate.id, reason=str(error)))
     return built, skipped
@@ -773,121 +780,18 @@ def write_allometry_csv(table: pd.DataFrame, output_path: Path) -> None:
     table_with_species.to_csv(output_path, index=False)
 
 
-def valid_stand_to_json_dict(stand: ValidStand) -> dict:
-    """dataclasses.asdict() alone already walks the whole ValidStand
-    structure correctly -- TreeStratum is a (pydantic) dataclass too, and
-    `id` (a StandID, i.e. plain str) needs no conversion -- except for
-    `geometry`, a shapely object asdict() can copy but json.dumps cannot
-    serialize, so that one field is overridden with its WKT text."""
-    data = dataclasses.asdict(stand)
-    data["geometry"] = stand.geometry.wkt
-    return data
-
-
-def dump_valid_stands_json(stands: list[ValidStand], output_path: Path) -> None:
-    """Informational dump of every processed stand's data, including the
-    filter/stratum columns -- mirrors xml_to_allometry.py's
-    extra_xml_info.json for anyone who wants to regroup or audit later."""
-    payload = {"stands": [valid_stand_to_json_dict(stand) for stand in stands]}
-    output_path.write_text(json.dumps(payload, indent=2))
-
-
-def _stratum_xml_block(stratum: TreeStratum, tree_species_code: int) -> str:
-    return (
-        "        <tst:TreeStratum>\n"
-        f"          <tst:TreeSpecies>{tree_species_code}</tst:TreeSpecies>\n"
-        f"          <tst:Age>{stratum.age}</tst:Age>\n"
-        f"          <tst:BasalArea>{stratum.basal_area:.6f}</tst:BasalArea>\n"
-        f"          <tst:StemCount>{stratum.stem_count}</tst:StemCount>\n"
-        f"          <tst:MeanDiameter>{stratum.mean_diameter:.4f}</tst:MeanDiameter>\n"
-        f"          <tst:MeanHeight>{stratum.mean_height:.4f}</tst:MeanHeight>\n"
-        "        </tst:TreeStratum>\n"
-    )
-
-
-def stand_to_xml_block(stand: ValidStand) -> str:
-    """Renders one stand as a <st:Stand> block in the Finnish
-    ForestPropertyData schema -- the format xml_to_allometry.py reads.
-
-    soiltype is Optional (see StandSiteAttributes): when it's None, the
-    <st:SoilType> tag is omitted entirely rather than writing a fabricated
-    number. xml_to_allometry.py's reader already tolerates a missing tag
-    (reads it back as None, matching its own soil_type: Optional[int])."""
-    coords_str = " ".join(f"{x},{y}" for x, y in stand.geometry.exterior.coords)
-    strata_block = (
-        _stratum_xml_block(stand.strata.pine, 1)
-        + _stratum_xml_block(stand.strata.spruce, 2)
-        + _stratum_xml_block(stand.strata.deciduous, 3)
-    )
-    soiltype_line = (
-        f"        <st:SoilType>{stand.site.soiltype}</st:SoilType>\n"
-        if stand.site.soiltype is not None
-        else ""
-    )
-    return (
-        f'    <st:Stand id="{stand.id}">\n'
-        "      <st:StandBasicData>\n"
-        f"        <st:FertilityClass>{stand.site.fertilityclass}</st:FertilityClass>\n"
-        f"        <st:MainGroup>{MAINGROUP_FOREST_LAND}</st:MainGroup>\n"
-        f"        <st:SubGroup>{stand.site.subgroup}</st:SubGroup>\n"
-        f"{soiltype_line}"
-        f"        <st:DrainageState>{stand.site.drainagestate}</st:DrainageState>\n"
-        f"        <st:Area>0</st:Area>\n"
-        "        <gdt:PolygonGeometry>\n"
-        "          <gml:polygonProperty>\n"
-        "            <gml:Polygon>\n"
-        "              <gml:exterior>\n"
-        "                <gml:LinearRing>\n"
-        f"                  <gml:coordinates>{coords_str}</gml:coordinates>\n"
-        "                </gml:LinearRing>\n"
-        "              </gml:exterior>\n"
-        "            </gml:Polygon>\n"
-        "          </gml:polygonProperty>\n"
-        "        </gdt:PolygonGeometry>\n"
-        "      </st:StandBasicData>\n"
-        "      <ts:TreeStandData>\n"
-        "        <ts:TreeStandDataDate>\n"
-        "          <tss:TreeStandSummary>\n"
-        f"            <tss:MeanAge>{round(stand.stand_meanage)}</tss:MeanAge>\n"
-        f"            <tss:BasalArea>{stand.stand_basalarea:.6f}</tss:BasalArea>\n"
-        f"            <tss:MeanHeight>{stand.stand_meanheight:.4f}</tss:MeanHeight>\n"
-        f"            <tss:MeanDiameter>{stand.stand_meandiameter:.4f}</tss:MeanDiameter>\n"
-        "            <tss:Volume>0.0</tss:Volume>\n"
-        "          </tss:TreeStandSummary>\n"
-        "          <tst:TreeStrata>\n"
-        f"{strata_block}"
-        "          </tst:TreeStrata>\n"
-        "        </ts:TreeStandDataDate>\n"
-        "      </ts:TreeStandData>\n"
-        "    </st:Stand>\n"
-    )
-
-
-def write_stands_xml(stands: list[ValidStand], output_path: Path) -> None:
-    """Writes every processed stand into ONE ForestPropertyData XML file, not
-    one file per stand: xml_to_allometry.py's own reader (xmltodict) returns
-    a dict instead of a list when a document contains exactly one <st:Stand>,
-    which would break the very replay this file exists for. A per-run batch
-    file sidesteps that (a run with a single stand is the one remaining edge
-    case, same as documented in xml_to_allometry.py)."""
-    stands_xml = "".join(stand_to_xml_block(stand) for stand in stands)
-    output_path.write_text(
-        '<?xml version="1.0" encoding="utf-8"?>\n'
-        "<ForestPropertyData>\n"
-        "  <st:Stands>\n"
-        f"{stands_xml}"
-        "  </st:Stands>\n"
-        "</ForestPropertyData>\n",
-        encoding="utf-8",
-    )
+def dump_stand_data_document(output_dir: Path, document: StandDataDocument) -> None:
+    json_output = output_dir / STAND_DATA_FILENAME
+    json_output.write_text(document.model_dump_json())
+    return None
 
 
 # %% Per-stand orchestration
 
 
-def plan_stand_outputs(stand: ValidStand, output_dir: Path) -> StandPlanned:
+def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
     """Which files this stand produces, and where. Pure, total, and cheap: it
-    reads only what partition_viable_candidates and build_valid_stand have
+    reads only what partition_viable_candidates and build_stand have
     already settled, so it can run long before the growth model does.
 
     Both paths go through here -- process_stand for a real run, main() for a
@@ -912,25 +816,27 @@ def plan_stand_outputs(stand: ValidStand, output_dir: Path) -> StandPlanned:
 
 
 def process_stand(
-    stand: ValidStand, config: ExtractionConfig, output_dir: Path
+    stand: ParsedStand, config: ExtractionConfig, output_dir: Path
 ) -> StandOutcome:
     """Builds the dominant canopy layer's allometry CSV (always) and the
     subdominant's (only when a genuine second species is present -- see
-    StandWritten.subdominant_csv). Any failure here is this one stand's
-    problem, not the run's: it's caught and turned into a StandSkipped
-    rather than aborting the batch.
+    StandWritten.subdominant_csv), then the shared StandData record those
+    files (plus this stand's other metadata) are wrapped into. Any failure
+    here is this one stand's problem, not the run's: it's caught and turned
+    into a StandSkipped rather than aborting the batch.
 
-    Both growth tables are computed in full BEFORE either is written to
-    disk: if the subdominant table's computation fails, we must not have
-    already written the dominant CSV -- otherwise a StandSkipped outcome
-    would leave a stray, unreferenced CSV behind, contradicting the
-    reported result."""
+    Both growth tables are computed in full, and the StandData record below
+    is built (and pydantic-validated -- e.g. against a degenerate
+    stand.area) BEFORE anything is written to disk: if any of that fails,
+    we must not have already written the dominant CSV -- otherwise a
+    StandSkipped outcome would leave a stray, unreferenced CSV behind,
+    contradicting the reported result."""
     plan = plan_stand_outputs(stand, output_dir)
     try:
         dominant_table = build_growth_and_yield_table(
             stand.strata,
             stand.dominant_species,
-            stand.site.fertilityclass,
+            stand.fertilityclass,
             stand.x_ykj,
             stand.y_ykj,
             config.altitude,
@@ -946,7 +852,7 @@ def process_stand(
             subdominant_table = build_growth_and_yield_table(
                 stand.strata,
                 stand.subdominant_species,
-                stand.site.fertilityclass,
+                stand.fertilityclass,
                 stand.x_ykj,
                 stand.y_ykj,
                 config.altitude,
@@ -957,8 +863,36 @@ def process_stand(
                 config.step_years,
             )
 
+        canopy_layer_files: dict[CanopyLayerName, AllometryFileAndSpecies] = {
+            CanopyLayerName.dominant: AllometryFileAndSpecies(
+                file_path=plan.dominant_csv, species_id=stand.dominant_species
+            ),
+        }
+        if plan.subdominant_csv is not None:
+            canopy_layer_files[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
+                file_path=plan.subdominant_csv, species_id=stand.subdominant_species
+            )
+
+        stand_data = StandData(
+            site_fertility_class=stand.fertilityclass,
+            canopy_layer_files=canopy_layer_files,
+            x_ykj=stand.x_ykj,
+            y_ykj=stand.y_ykj,
+            stand_area=stand.area,
+            main_group=MAINGROUP_FOREST_LAND,
+            sub_group=stand.subgroup,
+            basal_area=stand.stand_basalarea,
+            mean_height=stand.stand_meanheight,
+            mean_diameter=stand.stand_meandiameter,
+            developmentclass=stand.developmentclass,
+            drainagestate=stand.drainagestate,
+            soil_type=stand.soiltype,
+            mean_age=stand.stand_meanage,
+        )
+
         # Both tables computed successfully (or there is no subdominant
-        # layer to compute) -- only now do we write anything to disk.
+        # layer to compute), and the StandData record above validated --
+        # only now do we write anything to disk.
         write_allometry_csv(dominant_table, plan.dominant_csv)
 
         if subdominant_table is not None:
@@ -967,6 +901,7 @@ def process_stand(
 
         return StandWritten(
             stand_id=plan.stand_id,
+            stand_data=stand_data,
             dominant_csv=plan.dominant_csv,
             subdominant_csv=plan.subdominant_csv,
         )
@@ -1020,19 +955,11 @@ def parse_CLI_arguments() -> CLIArguments:
         ),
     )
     parser.add_argument(
-        "--emit-xml",
-        action="store_true",
-        help=(
-            "Also write a combined ForestPropertyData XML alongside the CSVs, "
-            "replayable through xml_to_allometry.py independently of the .gpkg."
-        ),
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
             "Report what the run would produce, then exit having written "
-            "nothing at all: no CSVs, no JSON, no XML, not even the output "
+            "nothing at all: no CSVs, no JSON, not even the output "
             "folder. Stops before the growth model, which is what makes a "
             "real run slow, so the filter report arrives in a fraction of "
             "the time."
@@ -1064,7 +991,6 @@ def parse_CLI_arguments() -> CLIArguments:
         config_path=config_path,
         project_dir=args.project_dir,
         allow_out_of_range_values=args.allow_out_of_range_values,
-        emit_xml=args.emit_xml,
         dry_run=args.dry_run,
     )
 
@@ -1096,14 +1022,13 @@ def print_dry_run_plan(
     plans: list[StandPlanned],
     output_dir: Path,
     project_dir: Path,
-    emit_xml: bool,
 ) -> None:
     """The dry run's stand-in for the real run's writing report: the same
     counts and the same file names, with nothing on disk. The folder is named
     as the one that WOULD be created -- parse_CLI_arguments has already
     refused the run if it exists, so this path is known to be free."""
     dominant, subdominant = csv_counts(plans)
-    json_path = output_dir / "extra_gpkg_info.json"
+    json_path = output_dir / STAND_DATA_FILENAME
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
@@ -1112,8 +1037,6 @@ def print_dry_run_plan(
         f"{subdominant:,} subdominant = {dominant + subdominant:,} CSV(s)"
     )
     print(f"Would write informational JSON: {json_path}")
-    if emit_xml:
-        print(f"Would write XML: {output_dir / f'{project_dir.name}.xml'}")
     print()
     # The dry run stops before build_growth_and_yield_table, so the failures
     # process_stand would catch (growth model or coordinate math raising for
@@ -1207,11 +1130,11 @@ def main() -> None:
     print(f"   -> {len(viable_candidates):,} / {len(candidates):,} stands kept")
     print_skips(ba_skips, "   Skipped (zero basal area)")
 
-    valid_stands, build_skips = build_valid_stands(viable_candidates)
+    parsed_stands, build_skips = build_stands(viable_candidates)
     print_skips(build_skips, "   Skipped (could not build stand record)")
     print()
 
-    print(f"Stands ready for allometry: {len(valid_stands):,}")
+    print(f"Stands ready for allometry: {len(parsed_stands):,}")
 
     # Everything above this point is identical in a dry run: the filters and
     # the skip reports are precisely what a dry run exists to show. What it
@@ -1219,8 +1142,8 @@ def main() -> None:
     # time) and every write, the output folder included.
     if cli_args.dry_run:
         print_section("Writing (dry run -- nothing is written)")
-        plans = [plan_stand_outputs(stand, output_dir) for stand in valid_stands]
-        print_dry_run_plan(plans, output_dir, cli_args.project_dir, cli_args.emit_xml)
+        plans = [plan_stand_outputs(stand, output_dir) for stand in parsed_stands]
+        print_dry_run_plan(plans, output_dir, cli_args.project_dir)
         return
 
     print_section("Writing")
@@ -1232,7 +1155,7 @@ def main() -> None:
     print()
 
     outcomes = [
-        process_stand(stand, cli_args.config, output_dir) for stand in valid_stands
+        process_stand(stand, cli_args.config, output_dir) for stand in parsed_stands
     ]
     written: list[StandWritten] = [o for o in outcomes if isinstance(o, StandWritten)]
     processing_skips: list[StandSkipped] = [
@@ -1249,14 +1172,19 @@ def main() -> None:
     )
     print_skips(processing_skips, "Skipped (processing failure)")
 
-    json_path = output_dir / "extra_gpkg_info.json"
-    dump_valid_stands_json(valid_stands, json_path)
+    final_stands: dict[StandID, StandData] = {
+        outcome.stand_id: outcome.stand_data for outcome in written
+    }
+    json_path = output_dir / STAND_DATA_FILENAME
+    dump_stand_data_document(
+        output_dir=output_dir,
+        document=StandDataDocument(
+            altitude=cli_args.config.altitude,
+            ddy=cli_args.config.ddy,
+            stands=final_stands,
+        ),
+    )
     print(f"Informational JSON written: {json_path}")
-
-    if cli_args.emit_xml:
-        xml_path = output_dir / f"{cli_args.project_dir.name}.xml"
-        write_stands_xml(valid_stands, xml_path)
-        print(f"XML written: {xml_path}")
 
 
 if __name__ == "__main__":
