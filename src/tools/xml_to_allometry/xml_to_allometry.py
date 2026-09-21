@@ -443,7 +443,9 @@ def parse_CLI_arguments() -> CLIArguments:
 
     # --config defaults to config.toml directly inside --project-dir -- the
     # layout the docs have the user set up beforehand.
-    config_path = resolve_config_path(args.config, args.project_dir, parser)
+    config_path = resolve_config_path(
+        args.config, args.project_dir, parser, "config.toml"
+    )
     config = load_xml_config(config_path)
 
     validate_altitude_ddy(

@@ -16,6 +16,7 @@ from susi.io.extra_pydantic_types import (
     PositiveFloat,
     PositiveInt,
 )
+from tools.shared_allometry_tool_utils.shared_utils import YkjEasting, YkjNorthing
 
 
 STAND_DATA_FILENAME = "stand_data.json"
@@ -31,15 +32,11 @@ class StandData(StrictFrozenModel):
     canopy_layer_files: dict[CanopyLayerName, AllometryFileAndSpecies] = Field(
         description="Allometry file and species per canopy layer (dominant/subdominant/under)."
     )
-    x_ykj: int = Field(
-        ge=250,
-        le=400,
-        description="Stand location, YKJ grid easting (10 km units). Computed from the source geometry via shared_utils.point_to_ykj.",
+    x_ykj: YkjEasting = Field(
+        description="Stand location, YKJ grid easting (10 km units). Computed from the source geometry via shared_utils.point_to_ykj, and bounded by the X_YKJ_MIN/MAX defined alongside it.",
     )
-    y_ykj: int = Field(
-        ge=6500,
-        le=7800,
-        description="Stand location, YKJ grid northing (1 km units). Computed from the source geometry via shared_utils.point_to_ykj.",
+    y_ykj: YkjNorthing = Field(
+        description="Stand location, YKJ grid northing (1 km units). Computed from the source geometry via shared_utils.point_to_ykj, and bounded by the Y_YKJ_MIN/MAX defined alongside it.",
     )
     polygon: str | None = Field(
         default=None,

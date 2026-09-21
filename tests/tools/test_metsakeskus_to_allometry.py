@@ -1300,8 +1300,13 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
         document=StandDataDocument(
             altitude=config.altitude,
             ddy=config.ddy,
+            # Built from the two locals the isinstance asserts above already
+            # narrowed to StandWritten, not from outcomes.values(): only a
+            # StandWritten carries stand_data, and main() likewise builds
+            # this document from its written list alone.
             stands={
-                outcome.stand_id: outcome.stand_data for outcome in outcomes.values()
+                outcome.stand_id: outcome.stand_data
+                for outcome in (outcome_1, outcome_2)
             },
         ),
     )

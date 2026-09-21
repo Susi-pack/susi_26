@@ -36,14 +36,20 @@ def resolve_config_path(
     explicit_config: Optional[Path],
     project_dir: Path,
     parser: argparse.ArgumentParser,
+    config_filename: str,
 ) -> Path:
-    """--config defaults to config.toml directly inside --project-dir -- the
-    layout the docs have the user set up beforehand. An explicit --config
-    always wins over that default lookup."""
+    """--config defaults to `config_filename` directly inside --project-dir
+    -- the layout the docs have the user set up beforehand. An explicit
+    --config always wins over that default lookup.
+
+    Each tool passes its own filename rather than sharing one default:
+    several tools' configs can sit in the same project folder, so a single
+    `config.toml` would collide. Required, not defaulted, so no tool picks
+    up a neighbour's filename by accident."""
     if explicit_config is not None:
         return explicit_config
 
-    config_path = project_dir / "config.toml"
+    config_path = project_dir / config_filename
     if not config_path.exists() or not config_path.is_file():
         parser.error(
             f"No config file found at the default location: {config_path}. "

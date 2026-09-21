@@ -169,6 +169,98 @@ def test_validate_altitude_ddy_rejects_nan_even_with_override(capsys):
     assert "altitude" in capsys.readouterr().err
 
 
+# %% input_validation.validate_x_y_ykj
+#
+# Pure bounds logic over the YKJ grid units point_to_ykj produces, applied
+# by new_growth_allometry.py to whichever pair of coordinates a run
+# resolved -- converted from the config's ETRS-TM35FIN x/y in standalone
+# mode, read straight off a StandData in sourced mode. The validator
+# itself never learns which, which is exactly why one set of tests covers
+# both.
+#
+# The bounds themselves belong to shared_utils, next to point_to_ykj, and
+# StandData's x_ykj/y_ykj fields use the same ones -- see
+# test_stand_data_bounds_come_from_the_shared_ykj_range below.
+
+IN_RANGE_X_YKJ = 338  # a real Finnish stand's easting, 10 km units
+IN_RANGE_Y_YKJ = 7042  # ... and its northing, 1 km units
+
+
+def test_validate_x_y_ykj_accepts_in_range_values_without_warning(capsys):
+    input_validation.validate_x_y_ykj(_parser(), IN_RANGE_X_YKJ, IN_RANGE_Y_YKJ, False)
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "x_ykj, y_ykj",
+    [
+        (shared_utils.X_YKJ_MIN, shared_utils.Y_YKJ_MIN),
+        (shared_utils.X_YKJ_MAX, shared_utils.Y_YKJ_MAX),
+    ],
+)
+def test_validate_x_y_ykj_accepts_its_own_bounds(x_ykj, y_ykj, capsys):
+    # The bounds are inclusive, same as the altitude/ddy ones.
+    input_validation.validate_x_y_ykj(_parser(), x_ykj, y_ykj, False)
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    "x_ykj, y_ykj, expected_name",
+    [
+        (shared_utils.X_YKJ_MIN - 1, IN_RANGE_Y_YKJ, "x_ykj"),
+        (shared_utils.X_YKJ_MAX + 1, IN_RANGE_Y_YKJ, "x_ykj"),
+        (IN_RANGE_X_YKJ, shared_utils.Y_YKJ_MIN - 1, "y_ykj"),
+        (IN_RANGE_X_YKJ, shared_utils.Y_YKJ_MAX + 1, "y_ykj"),
+    ],
+)
+def test_validate_x_y_ykj_blocks_just_outside_each_bound(
+    x_ykj, y_ykj, expected_name, capsys
+):
+    with pytest.raises(SystemExit):
+        input_validation.validate_x_y_ykj(_parser(), x_ykj, y_ykj, False)
+    stderr = capsys.readouterr().err
+    assert expected_name in stderr
+    assert "--allow-out-of-range-values" in stderr
+
+
+def test_validate_x_y_ykj_reports_both_violations_together(capsys):
+    with pytest.raises(SystemExit):
+        input_validation.validate_x_y_ykj(_parser(), 0, 0, False)
+    stderr = capsys.readouterr().err
+    assert "x_ykj" in stderr
+    assert "y_ykj" in stderr
+
+
+def test_validate_x_y_ykj_allows_out_of_range_with_override(capsys):
+    input_validation.validate_x_y_ykj(_parser(), 0, 0, True)
+    assert "Warning" in capsys.readouterr().out
+
+
+@given(
+    x_ykj=st.integers(
+        min_value=shared_utils.X_YKJ_MIN, max_value=shared_utils.X_YKJ_MAX
+    ),
+    y_ykj=st.integers(
+        min_value=shared_utils.Y_YKJ_MIN, max_value=shared_utils.Y_YKJ_MAX
+    ),
+)
+def test_validate_x_y_ykj_accepts_anything_inside_the_box(x_ykj, y_ykj):
+    input_validation.validate_x_y_ykj(_parser(), x_ykj, y_ykj, False)
+
+
+@given(
+    x_ykj=st.integers(min_value=-100_000, max_value=100_000),
+    y_ykj=st.integers(min_value=-100_000, max_value=100_000),
+)
+def test_validate_x_y_ykj_rejects_anything_outside_the_box(x_ykj, y_ykj):
+    assume(
+        not (shared_utils.X_YKJ_MIN <= x_ykj <= shared_utils.X_YKJ_MAX)
+        or not (shared_utils.Y_YKJ_MIN <= y_ykj <= shared_utils.Y_YKJ_MAX)
+    )
+    with pytest.raises(SystemExit):
+        input_validation.validate_x_y_ykj(_parser(), x_ykj, y_ykj, False)
+
+
 # %% input_validation.load_toml_config
 #
 # check_config_fields (the manual presence/unknown-field checker
@@ -224,40 +316,76 @@ def test_check_output_dir_available_refuses_an_existing_folder(tmp_path, capsys)
 
 
 # %% project_layout.resolve_config_path
+#
+# config_filename is passed in by each tool rather than shared: several
+# tools' configs can live in one project folder, so they must not all
+# default to the same name. Parametrized over both names in use to keep the
+# helper honestly filename-agnostic.
+
+CONFIG_FILENAMES = ["config.toml", "new_growth_config.toml"]
 
 
-def test_resolve_config_path_prefers_explicit_config(tmp_path):
+@pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
+def test_resolve_config_path_prefers_explicit_config(tmp_path, config_filename):
     explicit = tmp_path / "somewhere_else.toml"
     explicit.write_text("")
     project_dir = tmp_path / "myproject"
     project_dir.mkdir()
-    (project_dir / "config.toml").write_text("")
+    (project_dir / config_filename).write_text("")
 
     assert (
-        project_layout.resolve_config_path(explicit, project_dir, _parser()) == explicit
+        project_layout.resolve_config_path(
+            explicit, project_dir, _parser(), config_filename
+        )
+        == explicit
     )
 
 
-def test_resolve_config_path_defaults_to_config_toml_in_project_dir(tmp_path):
+@pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
+def test_resolve_config_path_defaults_to_the_given_name_in_project_dir(
+    tmp_path, config_filename
+):
     project_dir = tmp_path / "myproject"
     project_dir.mkdir()
-    default_config = project_dir / "config.toml"
+    default_config = project_dir / config_filename
     default_config.write_text("")
 
     assert (
-        project_layout.resolve_config_path(None, project_dir, _parser())
+        project_layout.resolve_config_path(
+            None, project_dir, _parser(), config_filename
+        )
         == default_config
     )
 
 
-def test_resolve_config_path_errors_when_default_is_missing(tmp_path, capsys):
+@pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
+def test_resolve_config_path_errors_when_default_is_missing(
+    tmp_path, capsys, config_filename
+):
     project_dir = tmp_path / "myproject"
     project_dir.mkdir()
     with pytest.raises(SystemExit):
-        project_layout.resolve_config_path(None, project_dir, _parser())
+        project_layout.resolve_config_path(
+            None, project_dir, _parser(), config_filename
+        )
     stderr = capsys.readouterr().err
-    assert str(project_dir / "config.toml") in stderr
+    assert str(project_dir / config_filename) in stderr
     assert "--config" in stderr
+
+
+def test_resolve_config_path_ignores_another_tools_config_file(tmp_path, capsys):
+    # The whole point of the parameter: new_growth_allometry.py must not
+    # pick up the config.toml that xml_to_allometry.py left in the same
+    # project folder.
+    project_dir = tmp_path / "myproject"
+    project_dir.mkdir()
+    (project_dir / "config.toml").write_text("")
+
+    with pytest.raises(SystemExit):
+        project_layout.resolve_config_path(
+            None, project_dir, _parser(), "new_growth_config.toml"
+        )
+    assert "new_growth_config.toml" in capsys.readouterr().err
 
 
 # %% print_formatting
@@ -373,6 +501,57 @@ def test_tree_stratum_recurses_correctly_under_dataclasses_asdict():
     }
 
 
+# %% The single YKJ range, shared by the data model and the CLI check
+#
+# shared_utils owns the bounds, next to the point_to_ykj call that produces
+# coordinates in those units. Both enforcement points read them from there,
+# so a coordinate is held to the same range however it reaches the tools.
+# These tests fail if either consumer ever grows its own numbers again.
+
+
+@pytest.mark.parametrize(
+    "field_name, min_value, max_value",
+    [
+        ("x_ykj", shared_utils.X_YKJ_MIN, shared_utils.X_YKJ_MAX),
+        ("y_ykj", shared_utils.Y_YKJ_MIN, shared_utils.Y_YKJ_MAX),
+    ],
+)
+def test_stand_data_bounds_come_from_the_shared_ykj_range(
+    field_name, min_value, max_value
+):
+    constraints = stand_data.StandData.model_fields[field_name].metadata
+    assert {type(constraint).__name__: constraint for constraint in constraints}[
+        "Ge"
+    ].ge == min_value
+    assert {type(constraint).__name__: constraint for constraint in constraints}[
+        "Le"
+    ].le == max_value
+
+
+@pytest.mark.parametrize(
+    "field_name, x_ykj, y_ykj",
+    [
+        ("x_ykj", shared_utils.X_YKJ_MAX + 1, 6675),
+        ("x_ykj", shared_utils.X_YKJ_MIN - 1, 6675),
+        ("y_ykj", 339, shared_utils.Y_YKJ_MAX + 1),
+        ("y_ykj", 339, shared_utils.Y_YKJ_MIN - 1),
+    ],
+)
+def test_stand_data_rejects_a_coordinate_the_cli_check_would_also_reject(
+    field_name, x_ykj, y_ykj
+):
+    # The same value validate_x_y_ykj blocks in standalone mode is
+    # unrepresentable in a StandData -- which is what "one source of truth"
+    # has to mean in practice.
+    with pytest.raises(pydantic.ValidationError, match=field_name):
+        stand_data.StandData(
+            site_fertility_class=3,
+            canopy_layer_files={},
+            x_ykj=x_ykj,
+            y_ykj=y_ykj,
+        )
+
+
 # %% stand_data.StandData / StandDataDocument round-trip
 
 # Fabricated AllometryFileAndSpecies values, mirroring
@@ -397,21 +576,28 @@ safe_text_strategy = st.text(
 
 _optional_positive_int = st.one_of(st.none(), st.integers(min_value=1, max_value=20))
 _optional_nonneg_float = st.one_of(
-    st.none(), st.floats(min_value=0, max_value=2000, allow_nan=False, allow_infinity=False)
+    st.none(),
+    st.floats(min_value=0, max_value=2000, allow_nan=False, allow_infinity=False),
 )
 
 stand_data_strategy = st.builds(
     stand_data.StandData,
     site_fertility_class=st.integers(min_value=1, max_value=10),
     canopy_layer_files=canopy_layer_files_strategy,
-    x_ykj=st.integers(min_value=250, max_value=400),
-    y_ykj=st.integers(min_value=6500, max_value=7800),
+    x_ykj=st.integers(
+        min_value=shared_utils.X_YKJ_MIN, max_value=shared_utils.X_YKJ_MAX
+    ),
+    y_ykj=st.integers(
+        min_value=shared_utils.Y_YKJ_MIN, max_value=shared_utils.Y_YKJ_MAX
+    ),
     polygon=st.one_of(st.none(), safe_text_strategy),
     main_group=_optional_positive_int,
     sub_group=_optional_positive_int,
     stand_area=st.one_of(
         st.none(),
-        st.floats(min_value=0.01, max_value=10_000, allow_nan=False, allow_infinity=False),
+        st.floats(
+            min_value=0.01, max_value=10_000, allow_nan=False, allow_infinity=False
+        ),
     ),
     basal_area=_optional_nonneg_float,
     mean_height=_optional_nonneg_float,
@@ -424,7 +610,9 @@ stand_data_strategy = st.builds(
 
 stand_data_document_strategy = st.builds(
     stand_data.StandDataDocument,
-    altitude=st.floats(min_value=-500, max_value=3000, allow_nan=False, allow_infinity=False),
+    altitude=st.floats(
+        min_value=-500, max_value=3000, allow_nan=False, allow_infinity=False
+    ),
     ddy=st.floats(min_value=0, max_value=3000, allow_nan=False, allow_infinity=False),
     stands=st.dictionaries(
         keys=st.text(min_size=1, max_size=10).map(StandID),
@@ -523,7 +711,9 @@ def test_build_stand_params_matches_with_single_allometry_per_layer():
 
 
 @given(
-    canopy_layer_files=canopy_layer_files_strategy.filter(lambda layers: len(layers) > 0),
+    canopy_layer_files=canopy_layer_files_strategy.filter(
+        lambda layers: len(layers) > 0
+    ),
     n1=st.integers(min_value=0, max_value=30),
     n2=st.integers(min_value=0, max_value=30),
 )

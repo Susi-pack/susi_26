@@ -1,8 +1,8 @@
 """
 CLI-argument and config validation shared by xml_to_allometry.py,
 metsakeskus_to_allometry.py, and new_growth_allometry.py: file/directory
-validator factories for argparse, and the altitude/ddy enforced-range
-checks.
+validator factories for argparse, and the altitude/ddy and YKJ-coordinate
+enforced-range checks.
 
 Each tool's config is its own StrictFrozenModel (susi.io.extra_pydantic_types)
 now, loaded via load_toml_config below -- presence/unknown-field checking,
@@ -14,7 +14,14 @@ import argparse
 import math
 import tomllib
 from pathlib import Path
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Iterable, Optional, TypeVar
+
+from tools.shared_allometry_tool_utils.shared_utils import (
+    X_YKJ_MAX,
+    X_YKJ_MIN,
+    Y_YKJ_MAX,
+    Y_YKJ_MIN,
+)
 
 T = TypeVar("T")
 
@@ -24,6 +31,11 @@ ALTITUDE_MIN = 0.0  # metres above sea level
 ALTITUDE_MAX = 1000.0
 DDY_MIN = 500.0  # temperature sum, degree days per year
 DDY_MAX = 2000.0
+
+# The YKJ grid bounds are NOT defined here: they live in shared_utils, next
+# to the point_to_ykj call that produces coordinates in those units, and
+# StandData's x_ykj/y_ykj fields import the same ones. Imported rather than
+# restated so the CLI check below and the data model can never drift apart.
 
 
 def make_existing_file_validator(suffix: str) -> Callable[[str], Path]:
@@ -95,17 +107,57 @@ def validate_altitude_ddy(
     if nan_names:
         parser.error(f"{', '.join(nan_names)} must be a real number, not NaN.")
 
-    # Collect every out-of-range violation before reporting, so the user
-    # learns about all of them in one run instead of fixing them one at a
-    # time across repeated invocations.
+    _report_out_of_range(
+        parser,
+        (
+            ("altitude", altitude, ALTITUDE_MIN, ALTITUDE_MAX),
+            ("ddy", ddy, DDY_MIN, DDY_MAX),
+        ),
+        allow_out_of_range_values,
+    )
+
+
+def validate_x_y_ykj(
+    parser: argparse.ArgumentParser,
+    x_ykj: int,
+    y_ykj: int,
+    allow_out_of_range_values: bool,
+) -> None:
+    """The same warn/block flow as validate_altitude_ddy, applied to a
+    stand's YKJ grid coordinates once they are in hand -- whichever way they
+    got there. new_growth_allometry.py converts them itself from the
+    config's ETRS-TM35FIN x/y in standalone mode and reads them straight off
+    a StandData in sourced mode; this check runs identically in both, so a
+    coordinate that landed somewhere impossible is caught either way.
+
+    There is no NaN check here, unlike validate_altitude_ddy: YKJ grid
+    coordinates are ints by the time they reach this function (point_to_ykj
+    rounds, StandData.x_ykj/.y_ykj are int fields), so NaN cannot occur."""
+    _report_out_of_range(
+        parser,
+        (
+            ("x_ykj", x_ykj, X_YKJ_MIN, X_YKJ_MAX),
+            ("y_ykj", y_ykj, Y_YKJ_MIN, Y_YKJ_MAX),
+        ),
+        allow_out_of_range_values,
+    )
+
+
+def _report_out_of_range(
+    parser: argparse.ArgumentParser,
+    checks: Iterable[tuple[str, float, float, float]],
+    allow_out_of_range_values: bool,
+) -> None:
+    """Collect every out-of-range violation before reporting, so the user
+    learns about all of them in one run instead of fixing them one at a time
+    across repeated invocations. Shared by validate_altitude_ddy and
+    validate_x_y_ykj, which differ only in which (name, value, min, max)
+    tuples they feed in."""
     out_of_range_messages = [
         message
         for message in (
             out_of_range_message(name, value, min_value, max_value)
-            for name, value, min_value, max_value in (
-                ("altitude", altitude, ALTITUDE_MIN, ALTITUDE_MAX),
-                ("ddy", ddy, DDY_MIN, DDY_MAX),
-            )
+            for name, value, min_value, max_value in checks
         )
         if message is not None
     ]
