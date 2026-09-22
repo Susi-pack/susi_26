@@ -10,6 +10,12 @@ from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     StandParams,
 )
+
+# STAND_DATA_FILENAME is owned by susi.io.project_layout, so that `susi/` can
+# name this file without importing `tools/`. Imported back here (the allowed
+# direction) so every tool's existing `stand_data.STAND_DATA_FILENAME` keeps
+# working.
+from susi.io.project_layout import STAND_DATA_FILENAME as STAND_DATA_FILENAME
 from susi.io.extra_pydantic_types import (
     StrictFrozenModel,
     NonNegativeFloat,
@@ -17,9 +23,6 @@ from susi.io.extra_pydantic_types import (
     PositiveInt,
 )
 from tools.shared_allometry_tool_utils.shared_utils import YkjEasting, YkjNorthing
-
-
-STAND_DATA_FILENAME = "stand_data.json"
 
 
 class StandData(StrictFrozenModel):

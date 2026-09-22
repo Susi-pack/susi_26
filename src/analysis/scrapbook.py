@@ -5,11 +5,17 @@ import xarray as xr
 import pandas as pd
 
 import susi.io.utils as io_utils
-from susi.io.app_settings import AppSettings
+from susi.io.project_layout import project_dir, run_dir
 
 # %%
 
-app_settings = AppSettings()
+# Which run to poke at. A scenario's metadata lives at
+# projects/<project>/outputs/<run_id>/<stand_id>/<scenario_id>/, so there is
+# no single global outputs folder to default to any more -- name the run.
+PROJECT_ID = "paroninkorpi"
+RUN_ID = "paroninkorpi"
+
+RUN_DIR = run_dir(project_dir(PROJECT_ID), run_id=RUN_ID)
 
 
 def list_subdirectories(path: Path):
@@ -59,9 +65,7 @@ def modify_after_load(
     return df
 
 
-def load_all_metadatas_from_folder(
-    folder: Path = app_settings.output_folder,
-) -> pd.DataFrame:
+def load_all_metadatas_from_folder(folder: Path) -> pd.DataFrame:
     experiment_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
@@ -77,9 +81,7 @@ def load_all_metadatas_from_folder(
 for stand_n in range(1, 22):
     stand_foldername = f"stand_{stand_n:02d}"
 
-    output_folder = app_settings.output_folder / "paroninkorpi" + stand_foldername
-
-    df = load_all_metadatas_from_folder(folder=output_folder)
+    df = load_all_metadatas_from_folder(folder=RUN_DIR / stand_foldername)
 
 # %% Read netcdf data with xarray into single array (Not complete yet)
 # Example: get all _partialblocking scenarios

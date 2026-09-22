@@ -20,7 +20,11 @@ import seaborn as sns
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 
-from susi.io.app_settings import AppSettings
+from susi.io.project_layout import (
+    inputs_dir_for_project,
+    outputs_dir_for_project,
+    project_dir,
+)
 from system_inputs.parameters.para_2021 import (
     SiteLabel,
     get_scenario_label_from_site_label,
@@ -249,15 +253,14 @@ def plot_scatter_site(
 
 # %%
 
-_app_settings = AppSettings()
+_SUSI_2021_DIR = project_dir("susi_2021")
+_SUSI_2021_INPUTS = inputs_dir_for_project(_SUSI_2021_DIR)
 
-MEASUREMENTS_FOLDER = (
-    _app_settings.project_root_path / "inputs/susi_2021/Pohjavesiaineistot"
-)
+MEASUREMENTS_FOLDER = _SUSI_2021_INPUTS / "Pohjavesiaineistot"
 
-PROJECT_FOLDER = _app_settings.output_folder / "susi_2021"
+PROJECT_FOLDER = outputs_dir_for_project(_SUSI_2021_DIR)
 
-BIO_FILEPATH = _app_settings.project_root_path / "inputs/susi_2021/gr_bio.xlsx"
+BIO_FILEPATH = _SUSI_2021_INPUTS / "gr_bio.xlsx"
 
 WT_MEASUREMENT_INFO: dict[SiteLabel, WTMeasurementInfo] = {
     SiteLabel("ansa21"): WTMeasurementInfo(

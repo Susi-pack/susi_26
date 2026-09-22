@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from tempfile import TemporaryDirectory
 
-from susi.io.app_settings import AppSettings
+import susi.io.utils as io_utils
 from susi.io.metadata_model import SimulationMetaData
 
 
@@ -20,7 +20,7 @@ def test_full_path_of_new_experiment_does_not_exist():
     # This is obviously a very bad idea and should fail.
     with pytest.raises(ValidationError):
         SimulationMetaData(
-            parent_output_folder=AppSettings().project_root_path, experiment_id="tests"
+            parent_output_folder=io_utils.get_project_root(), experiment_id="tests"
         )
 
 

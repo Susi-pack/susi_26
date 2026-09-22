@@ -46,7 +46,11 @@ class SimulationMetaData(BaseModel):
     )
 
     parent_output_folder: DirectoryPath = Field(
-        default=_app_settings.output_folder,
+        # TODO(create-input-structure ticket 15): derive this from `project_id` as
+        # `outputs_dir_for_project(project_dir(project_id))`. Until then
+        # the projects root is the nearest surviving stand-in for the
+        # deleted global `outputs/`.
+        default=_app_settings.projects_root,
         description="The directory where the output of the Susi simulation will be stored.",
     )
 

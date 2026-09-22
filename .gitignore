@@ -1,15 +1,11 @@
 # Ignore the contents of the some folders,
 # but track the folders themselves
 
-outputs/*
-!outputs/.gitkeep
+projects/*
+!projects/.gitkeep
 
 src/analysis/exports/*
 !src/analysis/exports/.gitkeep
-
-inputs/*
-!inputs/.gitkeep
-
 
 #python stuff
 venv/
@@ -59,7 +55,6 @@ requirements_inaki.txt
 
 analysis/eyeballing.py
 pyrightconfig.json
-paroninkorpi/
 tests/golden_file_test/golden_file_new_experiment
 
 # docs

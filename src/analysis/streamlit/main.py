@@ -8,7 +8,7 @@ def load_default_settings_into_session_state() -> None:
     # guard ensuring initialization only happens once, not on every rerender
     if "settings" not in st.session_state:
         st.session_state.settings: dict["str", Path] = {
-            "data_folder": AppSettings().output_folder,
+            "projects_root": AppSettings().projects_root,
         }
 
     return None
@@ -27,9 +27,7 @@ pages = [
     st.Page(
         "pages/compare_scenarios_for_stand.py", title="Compare scenarios single stand"
     ),
-    st.Page(
-        "pages/single_scenario_dashboard.py", title="Single scenario dashboard"
-    ),
+    st.Page("pages/single_scenario_dashboard.py", title="Single scenario dashboard"),
     st.Page("pages/optimization.py", title="Optimization"),
     st.Page("pages/9_settings.py", title="Settings"),
 ]

@@ -19,7 +19,8 @@ from susi.io.execution_config import SimulationParams
 from susi.io import load_output_data
 from susi.core.susi_main import Susi
 from system_inputs.parameters import golden_test
-from susi.io.metadata_model import SimulationMetaData, _app_settings
+from susi.io.metadata_model import SimulationMetaData
+import susi.io.utils as io_utils
 
 
 def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
@@ -76,7 +77,7 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
 
 
 def test_golden_susi():
-    project_root_path = _app_settings.project_root_path
+    project_root_path = io_utils.get_project_root()
     GOLDEN_NETCDF_FILE_PATH = project_root_path / Path(
         "tests/golden_file_test/golden_susi.nc"
     )

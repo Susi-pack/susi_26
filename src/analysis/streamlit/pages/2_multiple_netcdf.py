@@ -8,7 +8,7 @@ from analysis.streamlit.components import folder_selection
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(
-        dir_path=st.session_state.settings["data_folder"], label="project"
+        dir_path=st.session_state.settings["projects_root"], label="project"
     ),
     label="stand",
 )

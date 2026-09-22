@@ -17,7 +17,7 @@ import warnings
 from pathlib import Path
 
 import susi.io.load_output_data as load_output
-from susi.io.app_settings import AppSettings
+import susi.io.utils as io_utils
 from susi.io.load_output_data import StandID
 from susi.io.utils import read_json_file
 
@@ -29,7 +29,7 @@ _PARONINKORPI_PROJECT_NAME = "paroninkorpi"
 # Paroninkorpi's areas live in the JSON produced alongside its XML-derived
 # allometry. Kept relative and resolved against the repo root at call time
 # (rather than as an import-time constant) so that merely importing this
-# module never touches AppSettings or the filesystem.
+# module never touches the filesystem.
 #
 # Note this folder is untracked user data: it is gitignored, so the path only
 # resolves on a machine where that data has actually been generated.
@@ -72,7 +72,7 @@ def stand_areas_for_project(project_dirpath: Path) -> dict[StandID, float]:
 
 def _read_paroninkorpi_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
     """Read Paroninkorpi's areas file and map it onto project_dirpath's stands."""
-    project_root_path = AppSettings().project_root_path
+    project_root_path = io_utils.get_project_root()
     areas_json_path = project_root_path / _PARONINKORPI_AREAS_JSON_RELPATH
     if not areas_json_path.exists():
         # Fall back to the pre-#278 filename rather than failing outright --

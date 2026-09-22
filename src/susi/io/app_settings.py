@@ -1,23 +1,54 @@
+import os
 from pathlib import Path
 
-from pydantic import BaseModel, DirectoryPath, Field
+from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
 import susi.io.utils as io_utils
 
+# Overrides where `projects/` is looked for. This is what makes running on a
+# cluster (CSC) work: compute nodes routinely want the data on a different
+# filesystem from the code. A symlink would do the same job with no code at
+# all, but creating one on Windows needs Developer Mode or admin rights, and
+# this repo has Windows collaborators -- so an env var is the portable option.
+PROJECTS_ROOT_ENV_VAR = "SUSI_PROJECTS_ROOT"
+
+
+def _default_projects_root() -> Path:
+    """`$SUSI_PROJECTS_ROOT` when set, else `<repo root>/projects`.
+
+    A set-but-wrong env var fails here, loudly and by name, rather than
+    surfacing later as pydantic's generic "path does not point to a
+    directory" against a path the user never typed into any field.
+    """
+    env_value = os.environ.get(PROJECTS_ROOT_ENV_VAR)
+    if env_value is None:
+        return io_utils.get_project_root() / "projects"
+
+    projects_root = Path(env_value)
+    if not projects_root.is_dir():
+        raise ValueError(
+            f"{PROJECTS_ROOT_ENV_VAR} is set to {env_value!r}, which is not an "
+            "existing directory. Point it at the folder holding your project "
+            f"folders, or unset {PROJECTS_ROOT_ENV_VAR} to fall back to "
+            "<repo root>/projects."
+        )
+    return projects_root
+
 
 class AppSettings(BaseModel):
-    project_root_path: DirectoryPath = io_utils.get_project_root()
-    input_folder: DirectoryPath = project_root_path / Path("src/inputs/")
-    user_input_folder: DirectoryPath = Field(
-        default=(project_root_path / Path("inputs/")),
+    # Pydantic does not validate defaults unless asked to, so without this a
+    # nonexistent default would be accepted silently despite the
+    # DirectoryPath annotation. Safe to switch on because `projects/.gitkeep`
+    # is tracked: the default always exists on a fresh clone, so this check
+    # fires only when someone pointed the settings somewhere wrong.
+    model_config = ConfigDict(validate_default=True)
+
+    projects_root: DirectoryPath = Field(
+        default_factory=_default_projects_root,
         description=(
-            "Root folder for user-authored, untracked datasets "
-            "(e.g. site-specific parameter models, weather files) "
-            "used to build SusiParams. Distinct from input_folder, "
-            "which holds the tracked, repo-shipped system inputs."
+            "Root folder holding one folder per project, each with its own "
+            "inputs/ and outputs/. Defaults to <repo root>/projects, "
+            f"overridable with the {PROJECTS_ROOT_ENV_VAR} environment "
+            "variable."
         ),
-    )
-    output_folder: DirectoryPath = Field(
-        default=(project_root_path / Path("outputs/")),
-        description="Root folder where all outputs go.",
     )

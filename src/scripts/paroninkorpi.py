@@ -25,7 +25,7 @@ from shapely.geometry import Polygon, mapping
 from rasterio.mask import mask
 import xmltodict
 
-from susi.io.app_settings import AppSettings
+import susi.io.utils as io_utils
 
 from susi.io.susi_parameter_model import (
     PeatTypes,
@@ -59,9 +59,7 @@ from susi.io.metadata_model import SimulationMetaData
 
 def load_file_pointers() -> dict:
     """Load file paths from the external configuration file."""
-    config_path = (
-        AppSettings().project_root_path / "inputs/paroninkorpi/file_pointers.json"
-    )
+    config_path = io_utils.get_project_root() / "inputs/paroninkorpi/file_pointers.json"
 
     if not config_path.exists():
         print("ERROR: Configuration file not found!")
@@ -304,7 +302,7 @@ def prepare_susi_params(
     scenario: str,
 ) -> SimulationParams:
 
-    weather_file_path = AppSettings().project_root_path / FILE_POINTERS["weather_file"]
+    weather_file_path = io_utils.get_project_root() / FILE_POINTERS["weather_file"]
 
     start_date = datetime.datetime(2005, 1, 1)
     # Fertilized at the start year if scen == fertilization.
@@ -519,7 +517,7 @@ def run(
 
 # %% Get pre-computed allometry files from folder
 ALLOMETRY_FILES_DIRECTORY_PATH: Path = (
-    AppSettings().project_root_path / FILE_POINTERS["allometry_directory"]
+    io_utils.get_project_root() / FILE_POINTERS["allometry_directory"]
 )
 
 
@@ -554,7 +552,7 @@ class DataFromXml:
 
 def get_XML_data_for_each_stand() -> list[DataFromXml]:
 
-    xml_path = AppSettings().project_root_path / FILE_POINTERS["forest_data_xml"]
+    xml_path = io_utils.get_project_root() / FILE_POINTERS["forest_data_xml"]
     with open(xml_path, encoding="utf8") as fd:
         forestdata = xmltodict.parse(fd.read())
 
@@ -646,7 +644,7 @@ def get_XML_data_for_each_stand() -> list[DataFromXml]:
 def get_ditch_depth_from_raster_by_stand(xml_data: list[DataFromXml]) -> list[float]:
     """initial ditch depth, m"""
     ditch_depth_raster_filepath = (
-        AppSettings().project_root_path / FILE_POINTERS["ditch_depth_raster"]
+        io_utils.get_project_root() / FILE_POINTERS["ditch_depth_raster"]
     )
 
     n_stands = len(xml_data)

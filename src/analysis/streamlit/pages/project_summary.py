@@ -10,7 +10,7 @@ import susi.io.load_output_data as load_output
 st.header("Project summary")
 
 dir_path = folder_selection.build_folder_selection_widget(
-    dir_path=st.session_state.settings["data_folder"], label="project"
+    dir_path=st.session_state.settings["projects_root"], label="project"
 )
 
 stand_folderpaths = load_output.list_subdirectories(path=dir_path)

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import NewType
 import datetime
 
-from susi.io.app_settings import AppSettings
+from susi.io.project_layout import inputs_dir_for_project, project_dir
 from susi.io.susi_parameter_model import (
     PeatTypes,
     SiteParams,
@@ -28,8 +28,6 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
-
-_app_settings = AppSettings()
 
 
 @dataclass(frozen=True)
@@ -472,7 +470,7 @@ def _rho_mor_from_sfc(sfc: int) -> float:
 
 
 def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
-    data_folder = _app_settings.project_root_path / "inputs/susi_2021"
+    data_folder = inputs_dir_for_project(project_dir("susi_2021"))
     site_params = PARAMS_PER_SITE[site_label]
 
     L = site_params.Swidth

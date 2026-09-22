@@ -5,7 +5,7 @@ from analysis.streamlit.components import (
     netcdf_variable_explorer,
 )
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
-from susi.io.app_settings import AppSettings
+import susi.io.utils as io_utils
 import susi.io.load_output_data as load_output
 
 import analysis.optimization.core as opti_core
@@ -16,7 +16,7 @@ st.header("Optimization")
 # %% Choose project
 
 dir_path = folder_selection.build_folder_selection_widget(
-    dir_path=st.session_state.settings["data_folder"], label="project"
+    dir_path=st.session_state.settings["projects_root"], label="project"
 )
 
 # %% Specify stand areas
@@ -34,7 +34,7 @@ with st.expander("View stand areas", expanded=False):
 # %% Choose Netcdf variabales
 # The golden test netcdf is used to read the variable structure  of the netcdf file
 sample_netcdf_filepath = (
-    AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
+    io_utils.get_project_root() / "tests/golden_file_test/golden_susi.nc"
 )
 all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 

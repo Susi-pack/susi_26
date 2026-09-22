@@ -4,15 +4,12 @@ from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
 from susi.io.metadata_model import SimulationMetaData
 
-from susi.io.app_settings import AppSettings
 from system_inputs.parameters.para_2021 import (
     SiteLabel,
     get_stand_label_from_site_label,
     get_scenario_label_from_site_label,
     assign_susi_params_to_site,
 )
-
-_app_settings = AppSettings()
 
 # ***************** local call for SUSI*****************************************************
 folderName = (

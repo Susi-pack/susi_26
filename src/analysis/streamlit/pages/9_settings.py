@@ -18,16 +18,16 @@ st.header("Settings")
 col1, col2, col3 = st.columns([2, 3, 1])
 
 with col1:
-    st.markdown("**Data folder**")
+    st.markdown("**Projects root**")
 
 with col2:
-    st.write(st.session_state.settings["data_folder"])
+    st.write(st.session_state.settings["projects_root"])
 
 with col3:
     if st.button("Browse…", use_container_width=True):
         result = pick_folder()
         if result:
-            st.session_state.settings["data_folder"] = result
+            st.session_state.settings["projects_root"] = result
             st.rerun()
 
 st.write()
