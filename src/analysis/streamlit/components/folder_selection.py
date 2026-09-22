@@ -1,9 +1,11 @@
 import streamlit as st
+from dataclasses import dataclass
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog
 
 import susi.io.load_output_data as load_output
+import susi.io.project_layout as project_layout
 from susi.io.project_layout import require_outputs_dir
 
 
@@ -30,9 +32,32 @@ def build_folder_selection_widget(dir_path: Path, label: str) -> Path:
     return dir_path / selected_dir_name
 
 
-def build_project_and_run_selection_widget(projects_root: Path) -> Path:
+@dataclass(frozen=True)
+class ProjectAndRunSelection:
     """
-    Pick a project and then one of its runs, returning the run's folder.
+    What the project and run dropdowns together picked.
+
+    Both halves are kept, not just the run folder they compose into: the
+    stand-area lookup needs the *project* (its `inputs/stand_data.json`) as
+    well as the run (its stand folders), and recovering the project by walking
+    `run_dir.parent.parent` back up would re-derive by convention something the
+    picker already knows.
+    """
+
+    project_dir: Path
+    run_id: str
+
+    @property
+    def run_dir(self) -> Path:
+        """`<project_dir>/outputs/<run_id>` -- what the stand dropdown chains off."""
+        return project_layout.run_dir(project_dir=self.project_dir, run_id=self.run_id)
+
+
+def build_project_and_run_selection_widget(
+    projects_root: Path,
+) -> ProjectAndRunSelection:
+    """
+    Pick a project and then one of its runs.
 
     The full output path is
     `<projects_root>/<project>/outputs/<run_id>/<stand_id>/<scenario_id>`, so
@@ -42,7 +67,8 @@ def build_project_and_run_selection_widget(projects_root: Path) -> Path:
     they were stands. So only the project and the run are chosen; the
     `outputs/` hop is composed in.
 
-    Stand and scenario dropdowns chain off the returned path the usual way.
+    Stand and scenario dropdowns chain off the returned `.run_dir` the usual
+    way.
     """
     project_dirpath = build_folder_selection_widget(
         dir_path=projects_root, label="project"
@@ -53,4 +79,6 @@ def build_project_and_run_selection_widget(projects_root: Path) -> Path:
     # fail on a missing directory.
     outputs_dirpath = require_outputs_dir(project_dirpath)
 
-    return build_folder_selection_widget(dir_path=outputs_dirpath, label="run")
+    run_dirpath = build_folder_selection_widget(dir_path=outputs_dirpath, label="run")
+
+    return ProjectAndRunSelection(project_dir=project_dirpath, run_id=run_dirpath.name)

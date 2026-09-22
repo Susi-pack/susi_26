@@ -9,25 +9,25 @@ import susi.io.utils as io_utils
 import susi.io.load_output_data as load_output
 
 import analysis.optimization.core as opti_core
-from analysis.optimization.stand_areas import stand_areas_for_project
+from analysis.optimization.stand_areas import stand_areas_for_run
 
 st.header("Optimization")
 
 # %% Choose project and run
 
-# The optimization works over the folder holding one subfolder per stand,
-# which is a run's folder, not the project's. (`project_dirpath` below is the
-# parameter name it still has; ticket 09 renames it.)
-dir_path = folder_selection.build_project_and_run_selection_widget(
+# Both halves of the selection are used below: the run's folder holds one
+# subfolder per stand, while the project is where those stands' areas come
+# from.
+selection = folder_selection.build_project_and_run_selection_widget(
     projects_root=st.session_state.settings["projects_root"]
 )
+run_dirpath = selection.run_dir
 
 # %% Specify stand areas
-# Paroninkorpi-only, and raises for any other project; generalizing that is
-# issue #216. Shared with the notebook port so both frontends read the same
-# areas the same way.
-stand_areas_ha: dict[load_output.StandID, float] = stand_areas_for_project(
-    project_dirpath=dir_path
+# Read from the project's own inputs/stand_data.json. Shared with the notebook
+# port so both frontends read the same areas the same way.
+stand_areas_ha: dict[load_output.StandID, float] = stand_areas_for_run(
+    project_dir=selection.project_dir, run_id=selection.run_id
 )
 
 st.subheader("Stand areas")
@@ -97,7 +97,7 @@ if submitted:
     with st.spinner("Running optimization..."):
         results = opti_core.run_optimization(
             variable_info=chosen_var_properties,
-            project_dirpath=dir_path,
+            project_dirpath=run_dirpath,
             stand_areas=stand_areas_ha,
             epsilon=epsilon,
             n_random_points=10000,

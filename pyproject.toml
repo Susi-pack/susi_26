@@ -52,8 +52,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["susi*", "analysis*"]
-namespaces = false
+include = ["susi*", "analysis*", "tools*"]
+namespaces = true
 
 [project.scripts]
 susi-analyze = "analysis.streamlit.__main__:main"

@@ -18,13 +18,17 @@ Optimization" submit button. A notebook needs neither: running the next cell
 is the submit, and there is no re-run-on-every-widget-change to guard
 against.
 
-Stand areas are still Paroninkorpi-only, exactly as in the Streamlit page --
-they come from the shared `analysis.optimization.stand_areas`, whose
-generalization is issue #216.
+Stand areas come from the shared `analysis.optimization.stand_areas`, exactly
+as in the Streamlit page. That lookup needs both halves of the project/run
+selection -- the project for its `inputs/stand_data.json`, the run for the
+stands it actually simulated -- so `display_stand_areas` takes both rather than
+the run folder alone.
 
 Typical usage, one call per cell:
 
-    stand_areas_ha = optimization.display_stand_areas(project_dropdown.value)
+    stand_areas_ha = optimization.display_stand_areas(
+        project_dir=project_dropdown.value, run_id=run_dropdown.value.name
+    )
 
     # -- next cell, after ticking variables in a variable_selection selector --
     config = optimization.build_target_config(chosen_netcdf_variables)
@@ -43,7 +47,7 @@ from IPython.display import display
 
 import analysis.optimization.core as opti_core
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
-from analysis.optimization.stand_areas import stand_areas_for_project
+from analysis.optimization.stand_areas import stand_areas_for_run
 from susi.io.load_output_data import NetcdfVariablePath, StandID
 
 _INVERT_SIGN_TOOLTIP = (
@@ -54,20 +58,19 @@ _INVERT_SIGN_TOOLTIP = (
 )
 
 
-def display_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
+def display_stand_areas(project_dir: Path, run_id: str) -> dict[StandID, float]:
     """
     Display the area in hectares of every stand in a run, and return them.
 
-    project_dirpath is the folder holding one subfolder per stand, which is
-    one run of a project -- `projects/<project>/outputs/<run_id>/`, the
-    `.value` of `folder_selection.build_run_dropdown()`. (The parameter keeps
-    the older name; ticket 09 renames it.) The returned dict is what
-    `core.prepare_optimization_data()` expects as `stand_areas`.
+    project_dir is the project's own folder -- the `.value` of the project
+    dropdown -- and run_id names one of its runs, i.e. the `.name` of the
+    `folder_selection.build_run_dropdown()` selection. The returned dict is
+    what `core.prepare_optimization_data()` expects as `stand_areas`.
 
-    Raises for any project other than Paroninkorpi (#216); see
-    `analysis.optimization.stand_areas`.
+    Raises if the project's `stand_data.json` carries no area for one of the
+    run's stands; see `analysis.optimization.stand_areas`.
     """
-    stand_areas_ha = stand_areas_for_project(project_dirpath=project_dirpath)
+    stand_areas_ha = stand_areas_for_run(project_dir=project_dir, run_id=run_id)
 
     areas_dataframe = pd.DataFrame(
         {

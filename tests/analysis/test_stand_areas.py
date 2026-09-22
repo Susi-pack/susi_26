@@ -1,147 +1,142 @@
-import json
-import warnings
+"""
+Tests for the optimization's stand-area lookup.
+
+The lookup is a pure function over a loaded `StandDataDocument` plus a list of
+stand IDs, so almost everything is testable against an in-memory document.
+Exactly one test goes through the filesystem, to pin down that the document is
+really read from the path `susi.io.project_layout` computes.
+"""
+
 from pathlib import Path
 
 import pytest
 
-import analysis.optimization.stand_areas as stand_areas_module
 from analysis.optimization.stand_areas import (
-    areas_from_stand_datas,
-    stand_areas_for_project,
+    areas_from_stand_data_document,
+    stand_areas_for_run,
 )
+import susi.io.project_layout as project_layout
 from susi.io.load_output_data import StandID
-
-# Shaped like the "stand_datas" entry of Paroninkorpi's extra_xml_info.json:
-# stand number as a string key, and many more properties per stand than the
-# area this module cares about.
-_STAND_DATAS = {
-    "1": {"area": 2.4, "mean_height": 22.1},
-    "2": {"area": 1.9, "mean_height": 18.7},
-    "10": {"area": 0.5, "mean_height": 20.0},
-}
+from susi.io.susi_parameter_model import AllometryFileAndSpecies, CanopyLayerName
+from tools.shared_allometry_tool_utils.stand_data import (
+    StandData,
+    StandDataDocument,
+)
 
 
-class TestAreasFromStandDatas:
+def _stand_data(stand_area: float | None) -> StandData:
+    """A StandData carrying stand_area, with plausible values for the rest."""
+    return StandData(
+        site_fertility_class=3,
+        canopy_layer_files={
+            CanopyLayerName.dominant: AllometryFileAndSpecies(
+                file_path=Path("pines.csv"), species_id=1
+            )
+        },
+        x_ykj=339,
+        y_ykj=6675,
+        stand_area=stand_area,
+    )
+
+
+def _document(areas_by_stand_id: dict[str, float | None]) -> StandDataDocument:
+    return StandDataDocument(
+        altitude=100.0,
+        ddy=1200.0,
+        stands={
+            StandID(stand_id): _stand_data(stand_area=stand_area)
+            for stand_id, stand_area in areas_by_stand_id.items()
+        },
+    )
+
+
+class TestAreasFromStandDataDocument:
     def test_picks_the_area_of_each_requested_stand(self):
-        areas_ha = areas_from_stand_datas(
-            stand_datas=_STAND_DATAS,
-            stand_ids=[StandID("stand_1"), StandID("stand_10")],
+        document = _document({"stand-1": 2.4, "stand-2": 1.9, "stand-10": 0.5})
+
+        areas_ha = areas_from_stand_data_document(
+            stand_data_document=document,
+            stand_ids=[StandID("stand-1"), StandID("stand-10")],
         )
 
-        assert areas_ha == {StandID("stand_1"): 2.4, StandID("stand_10"): 0.5}
+        assert areas_ha == {StandID("stand-1"): 2.4, StandID("stand-10"): 0.5}
 
-    def test_result_is_keyed_by_stand_id_not_by_stand_number(self):
-        areas_ha = areas_from_stand_datas(
-            stand_datas=_STAND_DATAS, stand_ids=[StandID("stand_2")]
-        )
+    def test_stands_the_document_does_not_know_raise_naming_all_of_them(self):
+        # Every offending stand at once: a user fixing their data one
+        # error message at a time would otherwise rerun the optimization
+        # once per missing stand.
+        document = _document({"stand-1": 2.4})
 
-        assert list(areas_ha) == [StandID("stand_2")]
-
-    def test_stand_missing_from_the_file_raises_naming_that_stand(self):
-        # A bare KeyError here would otherwise surface much later, inside
-        # core.build_optimization_array, with no clue which stand was missing.
-        with pytest.raises(ValueError, match="stand_7"):
-            areas_from_stand_datas(
-                stand_datas=_STAND_DATAS, stand_ids=[StandID("stand_7")]
+        with pytest.raises(ValueError) as error:
+            areas_from_stand_data_document(
+                stand_data_document=document,
+                stand_ids=[StandID("stand-1"), StandID("stand-7"), StandID("stand-9")],
             )
 
-    def test_stand_folder_not_named_stand_number_raises(self):
-        with pytest.raises(ValueError, match="not_a_stand"):
-            areas_from_stand_datas(
-                stand_datas=_STAND_DATAS, stand_ids=[StandID("not_a_stand")]
+        assert "stand-7" in str(error.value)
+        assert "stand-9" in str(error.value)
+
+    def test_stand_with_no_recorded_area_raises_naming_all_of_them(self):
+        document = _document({"stand-1": None, "stand-2": 1.9, "stand-3": None})
+
+        with pytest.raises(ValueError) as error:
+            areas_from_stand_data_document(
+                stand_data_document=document,
+                stand_ids=[StandID("stand-1"), StandID("stand-2"), StandID("stand-3")],
+            )
+
+        assert "stand-1" in str(error.value)
+        assert "stand-3" in str(error.value)
+
+    def test_error_message_says_to_rerun_the_generating_tool(self):
+        # stand_area is optional in StandData by design, so the fix is on the
+        # data-generation side, not here -- the message has to say so.
+        document = _document({"stand-1": None})
+
+        with pytest.raises(ValueError) as error:
+            areas_from_stand_data_document(
+                stand_data_document=document, stand_ids=[StandID("stand-1")]
+            )
+
+        assert "Rerun the tool that generated stand_data.json" in str(error.value)
+
+    def test_partial_coverage_raises_rather_than_returning_what_it_found(self):
+        # No equal-area fallback and no partial result: mixing real and
+        # invented areas yields a plausible-looking but wrong Pareto front.
+        document = _document({"stand-1": 2.4, "stand-2": None})
+
+        with pytest.raises(ValueError):
+            areas_from_stand_data_document(
+                stand_data_document=document,
+                stand_ids=[StandID("stand-1"), StandID("stand-2")],
             )
 
 
-class TestStandAreasForProject:
-    def test_project_other_than_paroninkorpi_raises_and_points_at_the_issue(self):
-        # Sourcing areas for other projects is #216; until then this must
-        # fail loudly rather than guess.
-        with pytest.raises(ValueError, match="#216"):
-            stand_areas_for_project(project_dirpath=Path("outputs/some_other_site"))
+def test_stand_areas_for_run_reads_the_document_from_the_layouts_path(tmp_path):
+    """
+    The one file-backed test: everything else above is pure.
 
+    It pins down only the wiring -- that the document is loaded from the path
+    `project_layout` computes for the project, and that the stand IDs come
+    from the run folder's subdirectories. The lookup's own behaviour is
+    covered in-memory.
+    """
+    project_dir = tmp_path / "some_project"
 
-class TestReadParoninkorpiStandAreasFilenameFallback:
-    """#282: stand_areas_for_project must still work on a project
-    directory whose areas file was generated by the pre-#278 tool, which
-    wrote the differently-cased extra_XML_info.json."""
+    stand_data_path = project_layout.stand_data_path_for_project(
+        project_dir=project_dir
+    )
+    stand_data_path.parent.mkdir(parents=True)
+    # A third stand the document knows about but this run did not simulate:
+    # the run folder, not the document, decides which keys come back.
+    stand_data_path.write_text(
+        _document({"stand-1": 2.4, "stand-2": 1.9, "stand-3": 7.7}).model_dump_json()
+    )
 
-    def _patch_repo_root(self, monkeypatch, repo_root_path: Path):
-        # Point the repo-root lookup at a tmp_path instead of the real
-        # checkout, so the areas file the test writes is the one found.
-        monkeypatch.setattr(
-            stand_areas_module.io_utils,
-            "repo_root",
-            lambda: repo_root_path,
-        )
+    run_dirpath = project_layout.run_dir(project_dir=project_dir, run_id="run_a")
+    for stand_id in ["stand-1", "stand-2"]:
+        (run_dirpath / stand_id).mkdir(parents=True)
 
-    def _make_project_dir(self, tmp_path: Path) -> Path:
-        project_dirpath = tmp_path / "paroninkorpi"
-        (project_dirpath / "stand_1").mkdir(parents=True)
-        return project_dirpath
+    areas_ha = stand_areas_for_run(project_dir=project_dir, run_id="run_a")
 
-    def _write_areas_json(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"stand_datas": {"1": {"area": 2.4}}}))
-
-    def test_uses_the_current_filename_when_present(self, tmp_path, monkeypatch):
-        self._patch_repo_root(monkeypatch, tmp_path)
-        self._write_areas_json(
-            tmp_path / "xmltoallometry_with_areas" / "extra_xml_info.json"
-        )
-        project_dirpath = self._make_project_dir(tmp_path)
-
-        areas_ha = stand_areas_module._read_paroninkorpi_stand_areas(
-            project_dirpath=project_dirpath
-        )
-
-        assert areas_ha == {StandID("stand_1"): 2.4}
-
-    def test_falls_back_to_the_legacy_filename_with_a_warning(
-        self, tmp_path, monkeypatch
-    ):
-        self._patch_repo_root(monkeypatch, tmp_path)
-        self._write_areas_json(
-            tmp_path / "xmltoallometry_with_areas" / "extra_XML_info.json"
-        )
-        project_dirpath = self._make_project_dir(tmp_path)
-
-        with pytest.warns(UserWarning, match="extra_XML_info.json"):
-            areas_ha = stand_areas_module._read_paroninkorpi_stand_areas(
-                project_dirpath=project_dirpath
-            )
-
-        assert areas_ha == {StandID("stand_1"): 2.4}
-
-    def test_prefers_the_current_filename_over_the_legacy_one(
-        self, tmp_path, monkeypatch
-    ):
-        self._patch_repo_root(monkeypatch, tmp_path)
-        self._write_areas_json(
-            tmp_path / "xmltoallometry_with_areas" / "extra_xml_info.json"
-        )
-        # A stale legacy file with a different value must not be picked up
-        # ahead of the current one.
-        self._write_areas_json(
-            tmp_path / "xmltoallometry_with_areas" / "extra_XML_info.json"
-        )
-        (tmp_path / "xmltoallometry_with_areas" / "extra_XML_info.json").write_text(
-            json.dumps({"stand_datas": {"1": {"area": 99.9}}})
-        )
-        project_dirpath = self._make_project_dir(tmp_path)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            areas_ha = stand_areas_module._read_paroninkorpi_stand_areas(
-                project_dirpath=project_dirpath
-            )
-
-        assert areas_ha == {StandID("stand_1"): 2.4}
-
-    def test_raises_when_neither_filename_exists(self, tmp_path, monkeypatch):
-        self._patch_repo_root(monkeypatch, tmp_path)
-        project_dirpath = self._make_project_dir(tmp_path)
-
-        with pytest.raises(FileNotFoundError, match="extra_xml_info.json"):
-            stand_areas_module._read_paroninkorpi_stand_areas(
-                project_dirpath=project_dirpath
-            )
+    assert areas_ha == {StandID("stand-1"): 2.4, StandID("stand-2"): 1.9}

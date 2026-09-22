@@ -12,7 +12,7 @@ st.header("Project summary")
 # The stands are one level below a run, not below the project itself.
 dir_path = folder_selection.build_project_and_run_selection_widget(
     projects_root=st.session_state.settings["projects_root"]
-)
+).run_dir
 
 stand_folderpaths = load_output.list_subdirectories(path=dir_path)
 
