@@ -62,10 +62,6 @@ class StandData(StrictFrozenModel):
             "filter-before-building caveat as main_group."
         ),
     )
-    basal_area: NonNegativeFloat | None = Field(
-        default=None,
-        description="Stand basal area, m2/ha. Plain metadata, no current reader.",
-    )
     mean_height: NonNegativeFloat | None = Field(
         default=None,
         description="Mean tree height, m. Plain metadata, no current reader.",
@@ -77,10 +73,6 @@ class StandData(StrictFrozenModel):
     total_volume: NonNegativeFloat | None = Field(
         default=None,
         description="Total stem volume, m3/ha. Plain metadata, no current reader.",
-    )
-    stem_count: NonNegativeFloat | None = Field(
-        default=None,
-        description="Stem count, trees/ha. Plain metadata, no current reader.",
     )
     developmentclass: PositiveInt | None = Field(
         default=None,
@@ -117,6 +109,43 @@ class StandData(StrictFrozenModel):
             "expected to eventually feed an initial-stand-age field on "
             "SiteParams (susi_parameter_model.py), analogous to how "
             "initial_canopylayer_age_years is set today."
+        ),
+    )
+    basal_area: NonNegativeFloat | None = Field(
+        default=None,
+        description="Stand basal area, m2/ha. Use to store basal area that is not species specific.",
+    )
+    basal_area_pine: NonNegativeFloat | None = Field(
+        default=None, description="Basal area of pines (m^2/ha)."
+    )
+    basal_area_spruce: NonNegativeFloat | None = Field(
+        default=None, description="Basal area of spruces (m^2/ha)."
+    )
+    basal_area_deciduous: NonNegativeFloat | None = Field(
+        default=None,
+        description=(
+            "Basal area of deciduous trees (m^2/ha): the bucket for every "
+            "species code >= 3, which at this inventory layer is a real mix "
+            "of species rather than SUSI's birch simplification -- the "
+            "engine's TreeSpecies.birch is the same bucket under the name "
+            "src/susi/core uses. See CONTEXT.md, Species."
+        ),
+    )
+    stem_count: NonNegativeFloat | None = Field(
+        default=None,
+        description="Stem count, trees/ha. Use to store number of stems that is not species specific.",
+    )
+    stem_count_pine: NonNegativeFloat | None = Field(
+        default=None, description="Number of pines per hectare, trees/ha"
+    )
+    stem_count_spruce: NonNegativeFloat | None = Field(
+        default=None, description="Number of spruces per hectare, trees/ha"
+    )
+    stem_count_deciduous: NonNegativeFloat | None = Field(
+        default=None,
+        description=(
+            "Number of deciduous trees per hectare, trees/ha. Same "
+            "species-code >= 3 bucketing as basal_area_deciduous."
         ),
     )
 

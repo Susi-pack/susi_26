@@ -780,8 +780,12 @@ def write_allometry_csv(table: pd.DataFrame, output_path: Path) -> None:
     table_with_species.to_csv(output_path, index=False)
 
 
-def dump_stand_data_document(output_dir: Path, document: StandDataDocument) -> None:
-    json_output = output_dir / STAND_DATA_FILENAME
+def dump_stand_data_document(project_dir: Path, document: StandDataDocument) -> None:
+    """Writes stand_data.json directly into the project directory -- a sibling
+    of the allometry/ folder holding the per-stand CSVs, not a file inside it.
+    The document describes the whole project, so it does not belong under the
+    allometry output folder."""
+    json_output = project_dir / STAND_DATA_FILENAME
     json_output.write_text(document.model_dump_json())
     return None
 
@@ -888,6 +892,11 @@ def process_stand(
             drainagestate=stand.drainagestate,
             soil_type=stand.soiltype,
             mean_age=stand.stand_meanage,
+            # StandData's per-species basal_area_*/stem_count_* fields are
+            # deliberately left unset here, the same way drainagestate and
+            # developmentclass are only ever populated by one source tool:
+            # xml_to_allometry.py is the tool whose consumer (paroninkorpi.py)
+            # needs them.
         )
 
         # Both tables computed successfully (or there is no subdominant
@@ -1028,9 +1037,11 @@ def print_dry_run_plan(
     """The dry run's stand-in for the real run's writing report: the same
     counts and the same file names, with nothing on disk. The folder is named
     as the one that WOULD be created -- parse_CLI_arguments has already
-    refused the run if it exists, so this path is known to be free."""
+    refused the run if it exists, so this path is known to be free. The CSVs
+    go in output_dir (<project-dir>/allometry/), the JSON next to it in
+    project_dir -- same split as the real run's."""
     dominant, subdominant = csv_counts(plans)
-    json_path = output_dir / STAND_DATA_FILENAME
+    json_path = project_dir / STAND_DATA_FILENAME
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
@@ -1177,9 +1188,9 @@ def main() -> None:
     final_stands: dict[StandID, StandData] = {
         outcome.stand_id: outcome.stand_data for outcome in written
     }
-    json_path = output_dir / STAND_DATA_FILENAME
+    json_path = cli_args.project_dir / STAND_DATA_FILENAME
     dump_stand_data_document(
-        output_dir=output_dir,
+        project_dir=cli_args.project_dir,
         document=StandDataDocument(
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

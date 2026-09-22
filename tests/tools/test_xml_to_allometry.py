@@ -436,20 +436,53 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.mean_age == parsed_stand.mean_age
 
 
+def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_path):
+    # The two-species fixture stand: a pine stratum (species 1, G 20.0 /
+    # N 500) and a spruce one (species 2, G 8.0 / N 300). Nothing with a
+    # species code >= 3, so the "deciduous" slot stays at ZERO_STRATUM.
+    parsed_stand = _parsed_stand_data("1", include_second_species=True)
+    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+
+    stand_data = xml_to_allometry.process_stand(
+        config, parsed_stand, PEAT=1, output_dir=tmp_path
+    )
+
+    # Raw XML figures, not adjusted by any thinning heuristic.
+    assert stand_data.basal_area_pine == 20.0
+    assert stand_data.basal_area_spruce == 8.0
+    assert stand_data.stem_count_pine == 500
+    assert stand_data.stem_count_spruce == 300
+
+    # A species with no stratum is the ZERO_STRATUM sentinel, so it records a
+    # real 0.0 ("measured, none there") rather than None ("not recorded").
+    assert stand_data.basal_area_deciduous == 0.0
+    assert stand_data.stem_count_deciduous == 0.0
+
+
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
+    # The real layout: CSVs under <project-dir>/allometry/, the JSON document
+    # beside that folder in <project-dir> itself.
+    project_dir = tmp_path
+    output_dir = project_dir / "allometry"
+    output_dir.mkdir()
+
     parsed_stand = _parsed_stand_data("1")
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
     stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
+        config, parsed_stand, PEAT=1, output_dir=output_dir
     )
     document = StandDataDocument(
         altitude=config.altitude, ddy=config.ddy, stands={parsed_stand.id: stand_data}
     )
 
-    xml_to_allometry.dump_stand_data_document(output_dir=tmp_path, document=document)
+    xml_to_allometry.dump_stand_data_document(
+        project_dir=project_dir, document=document
+    )
 
-    json_path = tmp_path / "stand_data.json"
+    json_path = project_dir / "stand_data.json"
     assert json_path.exists()
+    # Not inside the allometry output folder, where it used to land.
+    assert not (output_dir / "stand_data.json").exists()
     payload = json.loads(json_path.read_text())
     assert "1" in payload["stands"]
 
@@ -465,14 +498,17 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
 
 
 def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
-    output_dir = tmp_path / "allometry"
+    project_dir = tmp_path
+    output_dir = project_dir / "allometry"
     parsed_stands = [_parsed_stand_data("1"), _parsed_stand_data("2")]
 
-    xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir)
+    xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir, project_dir)
 
     printed = capsys.readouterr().out
     assert "2 stand(s) -- 2 CSV(s)" in printed
-    assert "stand_data.json" in printed
+    # The JSON is reported beside the allometry folder, not inside it.
+    assert str(project_dir / "stand_data.json") in printed
+    assert str(output_dir / "stand_data.json") not in printed
     assert not output_dir.exists()
 
 

@@ -305,8 +305,12 @@ def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
     return parsed_stands, skipped
 
 
-def dump_stand_data_document(output_dir: Path, document: StandDataDocument) -> None:
-    json_output = output_dir / STAND_DATA_FILENAME
+def dump_stand_data_document(project_dir: Path, document: StandDataDocument) -> None:
+    """Writes stand_data.json directly into the project directory -- a sibling
+    of the allometry/ folder holding the per-stand CSVs, not a file inside it.
+    The document describes the whole project, so it does not belong under the
+    allometry output folder."""
+    json_output = project_dir / STAND_DATA_FILENAME
     json_output.write_text(document.model_dump_json())
     return None
 
@@ -388,6 +392,19 @@ def process_stand(
         mean_diameter=parsed_stand.mean_diameter,
         total_volume=parsed_stand.total_volume,
         stem_count=parsed_stand.stem_count,
+        # Per-species figures straight off the fixed species slots
+        # get_tree_strata_data filled (0 = pine, 1 = spruce, 2 = every species
+        # code >= 3, bucketed as "deciduous"). Raw, exactly as the XML recorded
+        # them: any thinning-decision adjustment (e.g. paroninkorpi.py's
+        # sapling thinning rate) belongs to the consumer making that decision,
+        # not to the stand record. A species with no stratum is ZERO_STRATUM,
+        # so its figures are 0.0 here rather than None.
+        basal_area_pine=strata_basal_areas_per_stratum[0],
+        basal_area_spruce=strata_basal_areas_per_stratum[1],
+        basal_area_deciduous=strata_basal_areas_per_stratum[2],
+        stem_count_pine=strata_stem_counts_per_stratum[0],
+        stem_count_spruce=strata_stem_counts_per_stratum[1],
+        stem_count_deciduous=strata_stem_counts_per_stratum[2],
     )
 
 
@@ -470,10 +487,14 @@ def parse_CLI_arguments() -> CLIArguments:
 # %% Progress-report printing (side-effecting; kept out of the pure layer above)
 
 
-def print_dry_run_plan(parsed_stands: list[ParsedStand], output_dir: Path) -> None:
+def print_dry_run_plan(
+    parsed_stands: list[ParsedStand], output_dir: Path, project_dir: Path
+) -> None:
     """The dry run's stand-in for the real run's writing report: the same
-    counts and file names, with nothing on disk."""
-    json_path = output_dir / STAND_DATA_FILENAME
+    counts and file names, with nothing on disk. The CSVs go in output_dir
+    (<project-dir>/allometry/), the JSON next to it in project_dir -- same
+    split as the real run's."""
+    json_path = project_dir / STAND_DATA_FILENAME
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
@@ -519,7 +540,7 @@ def main():
     # folder included.
     if cli_args.dry_run:
         print_section("Writing (dry run -- nothing is written)")
-        print_dry_run_plan(parsed_stands, output_dir)
+        print_dry_run_plan(parsed_stands, output_dir, cli_args.project_dir)
         return
 
     print_section("Writing")
@@ -544,9 +565,9 @@ def main():
         f"{len(final_stands):,} CSV(s)"
     )
 
-    json_path = output_dir / STAND_DATA_FILENAME
+    json_path = cli_args.project_dir / STAND_DATA_FILENAME
     dump_stand_data_document(
-        output_dir=output_dir,
+        project_dir=cli_args.project_dir,
         document=StandDataDocument(
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

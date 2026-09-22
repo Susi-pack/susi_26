@@ -1064,6 +1064,29 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.mean_diameter == pytest.approx(stand.stand_meandiameter)
 
 
+def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
+    """The per-species basal_area_*/stem_count_* fields are populated only by
+    xml_to_allometry.py, whose consumer needs them -- the same single-source
+    pattern drainagestate and developmentclass follow in the other direction.
+    None here means "this source tool records nothing", not zero."""
+    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    stand_data = outcome.stand_data
+    assert stand_data.basal_area_pine is None
+    assert stand_data.basal_area_spruce is None
+    assert stand_data.basal_area_deciduous is None
+    assert stand_data.stem_count_pine is None
+    assert stand_data.stem_count_spruce is None
+    assert stand_data.stem_count_deciduous is None
+
+
 def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
     candidate = _candidate("1", pine_ba=10, soiltype=None)
     stand = m.build_stand(candidate)
@@ -1112,12 +1135,18 @@ def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path
 
 
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
+    # The real layout: CSVs under <project-dir>/allometry/, the JSON document
+    # beside that folder in <project-dir> itself.
+    project_dir = tmp_path
+    output_dir = project_dir / "allometry"
+    output_dir.mkdir()
+
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, output_dir)
     assert isinstance(outcome, m.StandWritten)
     document = StandDataDocument(
         altitude=config.altitude,
@@ -1125,10 +1154,12 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
         stands={stand.id: outcome.stand_data},
     )
 
-    m.dump_stand_data_document(output_dir=tmp_path, document=document)
+    m.dump_stand_data_document(project_dir=project_dir, document=document)
 
-    json_path = tmp_path / "stand_data.json"
+    json_path = project_dir / "stand_data.json"
     assert json_path.exists()
+    # Not inside the allometry output folder, where it used to land.
+    assert not (output_dir / "stand_data.json").exists()
     payload = json.loads(json_path.read_text())
     assert "1" in payload["stands"]
 
@@ -1296,7 +1327,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
 
     json_path = tmp_path / "stand_data.json"
     m.dump_stand_data_document(
-        output_dir=tmp_path,
+        project_dir=tmp_path,
         document=StandDataDocument(
             altitude=config.altitude,
             ddy=config.ddy,

@@ -108,13 +108,14 @@ tool finds it there automatically.
 
 Add `--stand-data` and `--stand-id`. The `stand_data.json` is the one
 `xml_to_allometry.py`/`metsakeskus_to_allometry.py` wrote into *their*
-output folder, and `--stand-id` is the id of the stand being clear cut —
+`--project-dir` — directly in it, beside the `allometry/` folder holding
+that project's per-stand CSVs, not inside it. `--stand-id` is the id of the stand being clear cut —
 the same key those tools used, which you can read straight out of the JSON:
 
 ```bash
 python src/tools/new_growth_allometry/new_growth_allometry.py \
     --project-dir inputs/my_project \
-    --stand-data inputs/my_earlier_project/allometry/stand_data.json \
+    --stand-data inputs/my_earlier_project/stand_data.json \
     --stand-id 12345
 ```
 
@@ -189,7 +190,7 @@ Tool initialized with:
     - output_dir      = /path/to/inputs/my_project/allometry
     - species         = pine
     - stems_count     = 2000 stems/ha
-    - stand_data      = /path/to/inputs/my_earlier_project/allometry/stand_data.json
+    - stand_data      = /path/to/inputs/my_earlier_project/stand_data.json
     - stand_id        = 12345
     - fertility_class = 3 (from stand)
     - altitude        = 100.0 (from document root)
