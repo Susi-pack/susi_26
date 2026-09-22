@@ -289,11 +289,12 @@ def test_build_growth_and_yield_table_writes_a_csv_round_tripping_through_the_re
 
 @pytest.fixture
 def project_dir(tmp_path):
-    # --project-dir must already exist (shared valid_existing_directory) --
-    # the folder the docs have the user set up beforehand, with
-    # new_growth_config.toml inside it.
+    # --project-dir is the project root, and must already exist (shared
+    # valid_existing_directory). Everything this tool reads and writes lives
+    # in its inputs/ folder: new_growth_config.toml going in, the allometry
+    # CSV coming out.
     path = tmp_path / "myproject"
-    path.mkdir()
+    (path / "inputs").mkdir(parents=True)
     return path
 
 
@@ -329,12 +330,12 @@ def test_parse_CLI_arguments_reports_a_missing_default_config(
 def test_parse_CLI_arguments_finds_its_own_config_inside_project_dir_by_default(
     monkeypatch, project_dir
 ):
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text(
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         "altitude = 150.0\nddy = 1200.0\nfertility_class = 3\n"
         'x = 379930.3\ny = 7039150.8\nspecies = "spruce"\nstems_count = 1800\n'
     )
     cli_args = _run_parse_CLI_arguments(monkeypatch, [f"--project-dir={project_dir}"])
-    assert cli_args.config_path == project_dir / nga.DEFAULT_CONFIG_FILENAME
+    assert cli_args.config_path == project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME
     assert cli_args.config.species == nga.Species.SPRUCE
 
 
@@ -345,7 +346,7 @@ def test_parse_CLI_arguments_ignores_another_tools_config_toml(
     # config.toml, and all three tools can share a project folder. Picking
     # up a neighbour's config would be silently wrong, so this tool looks
     # only for its own name.
-    (project_dir / "config.toml").write_text(
+    (project_dir / "inputs" / "config.toml").write_text(
         "altitude = 150.0\nddy = 1200.0\nfertility_class = 3\n"
         'x = 379930.3\ny = 7039150.8\nspecies = "pine"\nstems_count = 2000\n'
     )
@@ -357,7 +358,7 @@ def test_parse_CLI_arguments_ignores_another_tools_config_toml(
 def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
     monkeypatch, dummy_config_file, project_dir
 ):
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text(
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         ""
     )  # would fail to parse if used
     cli_args = _run_parse_CLI_arguments(
@@ -419,7 +420,7 @@ def test_parse_CLI_arguments_rejects_an_invalid_species(
 def test_parse_CLI_arguments_refuses_existing_default_output_dir(
     monkeypatch, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -434,7 +435,7 @@ def test_parse_CLI_arguments_creates_no_output_folder(
     _run_parse_CLI_arguments(
         monkeypatch, [f"--config={dummy_config_file}", f"--project-dir={project_dir}"]
     )
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 def test_parse_CLI_arguments_dry_run_defaults_to_false(
@@ -449,7 +450,7 @@ def test_parse_CLI_arguments_dry_run_defaults_to_false(
 def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
     monkeypatch, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -476,7 +477,9 @@ def _write_valid_config(project_dir: Path, **overrides) -> None:
         f'species = "{raw["species"]}"',
         f"stems_count = {raw['stems_count']}",
     ]
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text("\n".join(lines) + "\n")
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
+        "\n".join(lines) + "\n"
+    )
 
 
 def test_main_dry_run_writes_nothing(monkeypatch, project_dir, capsys):
@@ -486,7 +489,7 @@ def test_main_dry_run_writes_nothing(monkeypatch, project_dir, capsys):
         ["new_growth_allometry.py", f"--project-dir={project_dir}", "--dry-run"],
     )
     nga.main()
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
     assert "Would write" in capsys.readouterr().out
 
 
@@ -497,7 +500,7 @@ def test_main_real_run_writes_the_expected_csv(monkeypatch, project_dir):
     )
     nga.main()
 
-    output_path = project_dir / "allometry" / "new_growth_birch.csv"
+    output_path = project_dir / "inputs" / "allometry" / "new_growth_birch.csv"
     assert output_path.exists()
     df = read_allometry_info_from_csv(output_path)
     assert df["Age"].min() == 1
@@ -680,10 +683,10 @@ def stand_data_file(tmp_path):
 
 @pytest.fixture
 def sourced_config_file(project_dir):
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text(
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         'species = "pine"\nstems_count = 2000\n'
     )
-    return project_dir / nga.DEFAULT_CONFIG_FILENAME
+    return project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME
 
 
 def test_parse_CLI_arguments_rejects_stand_data_without_stand_id(
@@ -766,7 +769,7 @@ def test_parse_CLI_arguments_reports_an_unknown_stand_id(
 def test_parse_CLI_arguments_rejects_a_sourced_config_holding_a_sourced_field(
     monkeypatch, project_dir, stand_data_file
 ):
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text(
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         'species = "pine"\nstems_count = 2000\naltitude = 100.0\n'
     )
     with pytest.raises(ValueError, match="altitude"):
@@ -875,7 +878,7 @@ def test_a_malformed_stand_data_document_is_a_clean_cli_error(
 def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     monkeypatch, project_dir, stand_data_file, capsys
 ):
-    (project_dir / nga.DEFAULT_CONFIG_FILENAME).write_text(
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         'species = "spruce"\nstems_count = 1800\n'
     )
     monkeypatch.setattr(
@@ -889,7 +892,7 @@ def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     )
     nga.main()
 
-    output_path = project_dir / "allometry" / "new_growth_spruce.csv"
+    output_path = project_dir / "inputs" / "allometry" / "new_growth_spruce.csv"
     assert output_path.exists()
     assert read_allometry_info_from_csv(output_path)["Age"].min() == 1
 

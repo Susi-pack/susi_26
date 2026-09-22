@@ -1135,11 +1135,11 @@ def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path
 
 
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
-    # The real layout: CSVs under <project-dir>/allometry/, the JSON document
-    # beside that folder in <project-dir> itself.
+    # The real layout: CSVs under <project-dir>/inputs/allometry/, the JSON
+    # document beside that folder in <project-dir>/inputs/.
     project_dir = tmp_path
-    output_dir = project_dir / "allometry"
-    output_dir.mkdir()
+    output_dir = project_dir / "inputs" / "allometry"
+    output_dir.mkdir(parents=True)
 
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
@@ -1156,10 +1156,13 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
 
     m.dump_stand_data_document(project_dir=project_dir, document=document)
 
-    json_path = project_dir / "stand_data.json"
+    json_path = project_dir / "inputs" / "stand_data.json"
     assert json_path.exists()
-    # Not inside the allometry output folder, where it used to land.
+    # Not inside the allometry output folder, where it used to land -- and
+    # not loose in the project root either: the document is an input, so it
+    # sits with the project's other inputs.
     assert not (output_dir / "stand_data.json").exists()
+    assert not (project_dir / "stand_data.json").exists()
     payload = json.loads(json_path.read_text())
     assert "1" in payload["stands"]
 
@@ -1325,7 +1328,12 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert outcome_2.subdominant_csv is not None
     assert outcome_2.subdominant_csv.exists()
 
-    json_path = tmp_path / "stand_data.json"
+    # tmp_path plays the project root here, so the document lands in its
+    # inputs/ folder. A real run creates that folder on its way to writing
+    # inputs/allometry/; this test writes the CSVs straight into tmp_path,
+    # so it has to make it itself.
+    (tmp_path / "inputs").mkdir()
+    json_path = tmp_path / "inputs" / "stand_data.json"
     m.dump_stand_data_document(
         project_dir=tmp_path,
         document=StandDataDocument(
@@ -1433,22 +1441,18 @@ def dummy_config_file(tmp_path):
 
 @pytest.fixture
 def project_dir(tmp_path):
-    # --project-dir must already exist (shared valid_existing_directory) --
-    # this is the folder the docs have the user set up beforehand, with the
-    # .gpkg and config.toml colocated inside it.
+    # --project-dir is the project root, and must already exist (shared
+    # valid_existing_directory). Everything this tool reads and writes lives
+    # in its inputs/ folder: config.toml going in, the allometry CSVs and
+    # stand_data.json coming out.
     path = tmp_path / "myproject"
-    path.mkdir()
+    (path / "inputs").mkdir(parents=True)
     return path
 
 
 def _run_parse_CLI_arguments(monkeypatch, argv):
     monkeypatch.setattr("sys.argv", ["metsakeskus_to_allometry.py", *argv])
     return m.parse_CLI_arguments()
-
-
-def test_output_dir_for_project_appends_allometry(tmp_path):
-    project_dir = tmp_path / "uusimaa"
-    assert m.output_dir_for_project(project_dir) == project_dir / "allometry"
 
 
 # m.valid_existing_directory (--project-dir's validator) is now the shared
@@ -1481,20 +1485,20 @@ def test_parse_CLI_arguments_reports_a_missing_default_config(
             monkeypatch, [str(dummy_gpkg_file), f"--project-dir={project_dir}"]
         )
     stderr = capsys.readouterr().err
-    assert str(project_dir / "config.toml") in stderr
+    assert str(project_dir / "inputs" / "config.toml") in stderr
     assert "--config" in stderr
 
 
 def test_parse_CLI_arguments_finds_config_toml_inside_project_dir_by_default(
     monkeypatch, dummy_gpkg_file, project_dir
 ):
-    (project_dir / "config.toml").write_text(
+    (project_dir / "inputs" / "config.toml").write_text(
         "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
     )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch, [str(dummy_gpkg_file), f"--project-dir={project_dir}"]
     )
-    assert cli_args.config_path == project_dir / "config.toml"
+    assert cli_args.config_path == project_dir / "inputs" / "config.toml"
     assert cli_args.config.target_year == 2018
 
 
@@ -1503,7 +1507,7 @@ def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
 ):
     # A config.toml also happens to sit inside project_dir; an explicit
     # --config must still win over the default lookup.
-    (project_dir / "config.toml").write_text(
+    (project_dir / "inputs" / "config.toml").write_text(
         "target_year = 1999\naltitude = 10.0\nddy = 600.0\n"
     )
     cli_args = _run_parse_CLI_arguments(
@@ -1524,8 +1528,8 @@ def test_parse_CLI_arguments_rejects_a_second_positional_argument(
     monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, tmp_path, capsys
 ):
     # The output folder used to be an optional second positional. It is gone:
-    # <project-dir>/allometry/ is now the only place output can land, so a
-    # leftover invocation must fail loudly rather than be ignored.
+    # <project-dir>/inputs/allometry/ is now the only place output can land,
+    # so a leftover invocation must fail loudly rather than be ignored.
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -1552,7 +1556,7 @@ def test_parse_CLI_arguments_creates_no_output_folder(
             f"--project-dir={project_dir}",
         ],
     )
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 def test_parse_CLI_arguments_dry_run_defaults_to_false(
@@ -1585,7 +1589,7 @@ def test_parse_CLI_arguments_dry_run_creates_no_output_folder(
         ],
     )
     assert cli_args.dry_run is True
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 def test_parse_CLI_arguments_refuses_existing_default_output_dir(
@@ -1594,7 +1598,7 @@ def test_parse_CLI_arguments_refuses_existing_default_output_dir(
     # A folder already there -- e.g. left over from a previous run -- must
     # stop the tool instead of being silently written into (see the removed
     # clear_previous_outputs: it used to delete whatever was already there).
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
 
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
@@ -1615,7 +1619,7 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
 ):
     # A dry run reports what the real run would do -- and what the real run
     # would do here is refuse to start. Catching that is exactly the point.
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
 
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(

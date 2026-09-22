@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.io.extra_pydantic_types import StrictFrozenModel
+from susi.io.project_layout import (
+    allometry_dir_for_project,
+    stand_data_path_for_project,
+)
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
@@ -27,13 +31,11 @@ from tools.shared_allometry_tool_utils.print_formatting import (
 )
 from tools.shared_allometry_tool_utils.project_layout import (
     check_output_dir_available,
-    output_dir_for_project,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
 from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
 from tools.shared_allometry_tool_utils.stand_data import (
-    STAND_DATA_FILENAME,
     StandData,
     StandDataDocument,
 )
@@ -306,11 +308,12 @@ def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
 
 
 def dump_stand_data_document(project_dir: Path, document: StandDataDocument) -> None:
-    """Writes stand_data.json directly into the project directory -- a sibling
+    """Writes stand_data.json into the project's inputs/ folder -- a sibling
     of the allometry/ folder holding the per-stand CSVs, not a file inside it.
     The document describes the whole project, so it does not belong under the
-    allometry output folder."""
-    json_output = project_dir / STAND_DATA_FILENAME
+    allometry output folder; and it is something the project is simulated
+    *from*, so it belongs with the project's other inputs."""
+    json_output = stand_data_path_for_project(project_dir)
     json_output.write_text(document.model_dump_json())
     return None
 
@@ -425,8 +428,8 @@ def parse_CLI_arguments() -> CLIArguments:
         type=make_existing_file_validator(".toml"),
         default=None,
         help=(
-            "Path to the TOML config file. Defaults to config.toml directly "
-            "inside --project-dir."
+            "Path to the TOML config file. Defaults to config.toml inside "
+            "the project's inputs/ folder."
         ),
     )
     parser.add_argument(
@@ -434,9 +437,11 @@ def parse_CLI_arguments() -> CLIArguments:
         required=True,
         type=valid_existing_directory,
         help=(
-            "Path to the project's folder. Decides the output directory, "
-            "<project-dir>/allometry/, and -- unless --config is given -- "
-            "where the config file is looked up: <project-dir>/config.toml."
+            "Path to the project's folder -- the project root, the folder "
+            "holding its inputs/ and outputs/. Decides the output directory, "
+            "<project-dir>/inputs/allometry/, and -- unless --config is "
+            "given -- where the config file is looked up: "
+            "<project-dir>/inputs/config.toml."
         ),
     )
     parser.add_argument(
@@ -458,8 +463,8 @@ def parse_CLI_arguments() -> CLIArguments:
 
     args = parser.parse_args()
 
-    # --config defaults to config.toml directly inside --project-dir -- the
-    # layout the docs have the user set up beforehand.
+    # --config defaults to config.toml inside the project's inputs/ folder
+    # -- the layout the docs have the user set up beforehand.
     config_path = resolve_config_path(
         args.config, args.project_dir, parser, "config.toml"
     )
@@ -471,7 +476,7 @@ def parse_CLI_arguments() -> CLIArguments:
 
     # Refuse to reuse an existing folder rather than silently overwriting
     # whatever a prior run left there. This check runs in dry-run mode too:
-    output_dir = output_dir_for_project(args.project_dir)
+    output_dir = allometry_dir_for_project(args.project_dir)
     check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
@@ -492,9 +497,9 @@ def print_dry_run_plan(
 ) -> None:
     """The dry run's stand-in for the real run's writing report: the same
     counts and file names, with nothing on disk. The CSVs go in output_dir
-    (<project-dir>/allometry/), the JSON next to it in project_dir -- same
-    split as the real run's."""
-    json_path = project_dir / STAND_DATA_FILENAME
+    (<project-dir>/inputs/allometry/), the JSON next to that folder in
+    <project-dir>/inputs/ -- same split as the real run's."""
+    json_path = stand_data_path_for_project(project_dir)
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
@@ -509,7 +514,7 @@ def print_dry_run_plan(
 
 def main():
     cli_args = parse_CLI_arguments()
-    output_dir = output_dir_for_project(cli_args.project_dir)
+    output_dir = allometry_dir_for_project(cli_args.project_dir)
 
     print_section("Reading")
     print("Tool initialized with:")
@@ -565,7 +570,7 @@ def main():
         f"{len(final_stands):,} CSV(s)"
     )
 
-    json_path = cli_args.project_dir / STAND_DATA_FILENAME
+    json_path = stand_data_path_for_project(cli_args.project_dir)
     dump_stand_data_document(
         project_dir=cli_args.project_dir,
         document=StandDataDocument(

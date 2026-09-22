@@ -15,6 +15,7 @@ from pydantic import ValidationError, field_validator
 from susi.core.allometric_road_map import Growth_and_Yield_Table
 from susi.io.extra_pydantic_types import PositiveInt, StrictFrozenModel
 from susi.io.load_output_data import StandID
+from susi.io.project_layout import allometry_dir_for_project
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
@@ -25,7 +26,6 @@ from tools.shared_allometry_tool_utils.input_validation import (
 from tools.shared_allometry_tool_utils.print_formatting import print_section
 from tools.shared_allometry_tool_utils.project_layout import (
     check_output_dir_available,
-    output_dir_for_project,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
@@ -67,9 +67,9 @@ STARTING_HEIGHT = {
 
 OUTPUT_FILENAME_PREFIX = "new_growth_"
 
-# What --config falls back to inside --project-dir. Tool-specific on
-# purpose: a project folder can hold several tools' configs at once, so a
-# bare "config.toml" would collide with xml_to_allometry.py's and
+# What --config falls back to inside the project's inputs/ folder.
+# Tool-specific on purpose: a project can hold several tools' configs at
+# once, so a bare "config.toml" would collide with xml_to_allometry.py's and
 # metsakeskus_to_allometry.py's.
 DEFAULT_CONFIG_FILENAME = "new_growth_config.toml"
 
@@ -349,7 +349,7 @@ def parse_CLI_arguments() -> CLIArguments:
         default=None,
         help=(
             f"Path to the TOML config file. Defaults to "
-            f"{DEFAULT_CONFIG_FILENAME} directly inside --project-dir."
+            f"{DEFAULT_CONFIG_FILENAME} inside the project's inputs/ folder."
         ),
     )
     parser.add_argument(
@@ -357,10 +357,11 @@ def parse_CLI_arguments() -> CLIArguments:
         required=True,
         type=valid_existing_directory,
         help=(
-            "Path to the project's folder. Decides the output directory, "
-            "<project-dir>/allometry/, and -- unless --config is given -- "
-            "where the config file is looked up: "
-            f"<project-dir>/{DEFAULT_CONFIG_FILENAME}."
+            "Path to the project's folder -- the project root, the folder "
+            "holding its inputs/ and outputs/. Decides the output directory, "
+            "<project-dir>/inputs/allometry/, and -- unless --config is "
+            "given -- where the config file is looked up: "
+            f"<project-dir>/inputs/{DEFAULT_CONFIG_FILENAME}."
         ),
     )
     parser.add_argument(
@@ -368,10 +369,12 @@ def parse_CLI_arguments() -> CLIArguments:
         type=make_existing_file_validator(".json"),
         default=None,
         help=(
-            "Path to a project's stand_data.json, as written by "
-            "xml_to_allometry.py/metsakeskus_to_allometry.py. Selects sourced "
-            "mode: altitude, ddy, fertility_class and the YKJ coordinates are "
-            "read from the document instead of the config file. Must be given "
+            "Path to a project's stand_data.json -- normally "
+            "<project-dir>/inputs/stand_data.json, as written there by "
+            "xml_to_allometry.py/metsakeskus_to_allometry.py, though any "
+            "project's document may be pointed at. Selects sourced mode: "
+            "altitude, ddy, fertility_class and the YKJ coordinates are read "
+            "from the document instead of the config file. Must be given "
             "together with --stand-id."
         ),
     )
@@ -412,8 +415,8 @@ def parse_CLI_arguments() -> CLIArguments:
             "run in sourced mode, or neither to run in standalone mode."
         )
 
-    # --config defaults to DEFAULT_CONFIG_FILENAME directly inside
-    # --project-dir -- the layout the docs have the user set up beforehand.
+    # --config defaults to DEFAULT_CONFIG_FILENAME inside the project's
+    # inputs/ folder -- the layout the docs have the user set up beforehand.
     config_path = resolve_config_path(
         args.config, args.project_dir, parser, DEFAULT_CONFIG_FILENAME
     )
@@ -467,7 +470,7 @@ def parse_CLI_arguments() -> CLIArguments:
     # whatever a prior run left there. This check runs in dry-run mode too:
     # "would this run even start?" is exactly what a dry run is for.
     # Creating the folder is main()'s job, and only on a real run.
-    output_dir = output_dir_for_project(args.project_dir)
+    output_dir = allometry_dir_for_project(args.project_dir)
     check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
@@ -487,7 +490,7 @@ def parse_CLI_arguments() -> CLIArguments:
 def main():
     cli_args = parse_CLI_arguments()
     config = cli_args.config
-    output_dir = output_dir_for_project(cli_args.project_dir)
+    output_dir = allometry_dir_for_project(cli_args.project_dir)
 
     # Resolved during argument parsing, printed here: with no informational
     # JSON dump for this tool (there is no extraction step to audit), the

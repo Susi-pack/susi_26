@@ -290,16 +290,6 @@ def test_load_toml_config_reads_the_file_and_hands_the_raw_dict_to_parse(tmp_pat
     assert config == _DummyConfig(required_field=3)
 
 
-# %% project_layout.output_dir_for_project
-
-
-def test_output_dir_for_project_appends_allometry(tmp_path):
-    project_dir = tmp_path / "myproject"
-    assert (
-        project_layout.output_dir_for_project(project_dir) == project_dir / "allometry"
-    )
-
-
 # %% project_layout.check_output_dir_available
 
 
@@ -318,20 +308,27 @@ def test_check_output_dir_available_refuses_an_existing_folder(tmp_path, capsys)
 # %% project_layout.resolve_config_path
 #
 # config_filename is passed in by each tool rather than shared: several
-# tools' configs can live in one project folder, so they must not all
-# default to the same name. Parametrized over both names in use to keep the
-# helper honestly filename-agnostic.
+# tools' configs can live in one project's inputs/ folder, so they must not
+# all default to the same name. Parametrized over both names in use to keep
+# the helper honestly filename-agnostic.
 
 CONFIG_FILENAMES = ["config.toml", "new_growth_config.toml"]
+
+
+def _project_with_inputs(tmp_path) -> Path:
+    """A project folder shaped the way the tools now expect: a root with an
+    inputs/ folder under it, which is where the config file is looked up."""
+    project_dir = tmp_path / "myproject"
+    (project_dir / "inputs").mkdir(parents=True)
+    return project_dir
 
 
 @pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
 def test_resolve_config_path_prefers_explicit_config(tmp_path, config_filename):
     explicit = tmp_path / "somewhere_else.toml"
     explicit.write_text("")
-    project_dir = tmp_path / "myproject"
-    project_dir.mkdir()
-    (project_dir / config_filename).write_text("")
+    project_dir = _project_with_inputs(tmp_path)
+    (project_dir / "inputs" / config_filename).write_text("")
 
     assert (
         project_layout.resolve_config_path(
@@ -342,12 +339,11 @@ def test_resolve_config_path_prefers_explicit_config(tmp_path, config_filename):
 
 
 @pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
-def test_resolve_config_path_defaults_to_the_given_name_in_project_dir(
+def test_resolve_config_path_defaults_to_the_given_name_in_project_inputs(
     tmp_path, config_filename
 ):
-    project_dir = tmp_path / "myproject"
-    project_dir.mkdir()
-    default_config = project_dir / config_filename
+    project_dir = _project_with_inputs(tmp_path)
+    default_config = project_dir / "inputs" / config_filename
     default_config.write_text("")
 
     assert (
@@ -359,27 +355,41 @@ def test_resolve_config_path_defaults_to_the_given_name_in_project_dir(
 
 
 @pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
+def test_resolve_config_path_ignores_a_config_loose_in_the_project_root(
+    tmp_path, config_filename
+):
+    # --project-dir is the project root, not the folder the config sits in.
+    # A file left directly in the root is not the default location, and
+    # picking it up would quietly reinstate the old layout.
+    project_dir = _project_with_inputs(tmp_path)
+    (project_dir / config_filename).write_text("")
+
+    with pytest.raises(SystemExit):
+        project_layout.resolve_config_path(
+            None, project_dir, _parser(), config_filename
+        )
+
+
+@pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
 def test_resolve_config_path_errors_when_default_is_missing(
     tmp_path, capsys, config_filename
 ):
-    project_dir = tmp_path / "myproject"
-    project_dir.mkdir()
+    project_dir = _project_with_inputs(tmp_path)
     with pytest.raises(SystemExit):
         project_layout.resolve_config_path(
             None, project_dir, _parser(), config_filename
         )
     stderr = capsys.readouterr().err
-    assert str(project_dir / config_filename) in stderr
+    assert str(project_dir / "inputs" / config_filename) in stderr
     assert "--config" in stderr
 
 
 def test_resolve_config_path_ignores_another_tools_config_file(tmp_path, capsys):
     # The whole point of the parameter: new_growth_allometry.py must not
     # pick up the config.toml that xml_to_allometry.py left in the same
-    # project folder.
-    project_dir = tmp_path / "myproject"
-    project_dir.mkdir()
-    (project_dir / "config.toml").write_text("")
+    # project's inputs/ folder.
+    project_dir = _project_with_inputs(tmp_path)
+    (project_dir / "inputs" / "config.toml").write_text("")
 
     with pytest.raises(SystemExit):
         project_layout.resolve_config_path(

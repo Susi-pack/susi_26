@@ -460,11 +460,11 @@ def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_p
 
 
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
-    # The real layout: CSVs under <project-dir>/allometry/, the JSON document
-    # beside that folder in <project-dir> itself.
+    # The real layout: CSVs under <project-dir>/inputs/allometry/, the JSON
+    # document beside that folder in <project-dir>/inputs/.
     project_dir = tmp_path
-    output_dir = project_dir / "allometry"
-    output_dir.mkdir()
+    output_dir = project_dir / "inputs" / "allometry"
+    output_dir.mkdir(parents=True)
 
     parsed_stand = _parsed_stand_data("1")
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
@@ -479,10 +479,13 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
         project_dir=project_dir, document=document
     )
 
-    json_path = project_dir / "stand_data.json"
+    json_path = project_dir / "inputs" / "stand_data.json"
     assert json_path.exists()
-    # Not inside the allometry output folder, where it used to land.
+    # Not inside the allometry output folder, where it used to land -- and
+    # not loose in the project root either: the document is an input, so it
+    # sits with the project's other inputs.
     assert not (output_dir / "stand_data.json").exists()
+    assert not (project_dir / "stand_data.json").exists()
     payload = json.loads(json_path.read_text())
     assert "1" in payload["stands"]
 
@@ -499,15 +502,16 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
 
 def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
     project_dir = tmp_path
-    output_dir = project_dir / "allometry"
+    output_dir = project_dir / "inputs" / "allometry"
     parsed_stands = [_parsed_stand_data("1"), _parsed_stand_data("2")]
 
     xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir, project_dir)
 
     printed = capsys.readouterr().out
     assert "2 stand(s) -- 2 CSV(s)" in printed
-    # The JSON is reported beside the allometry folder, not inside it.
-    assert str(project_dir / "stand_data.json") in printed
+    # The JSON is reported beside the allometry folder in inputs/, not
+    # inside it.
+    assert str(project_dir / "inputs" / "stand_data.json") in printed
     assert str(output_dir / "stand_data.json") not in printed
     assert not output_dir.exists()
 
@@ -526,11 +530,12 @@ def dummy_xml_file(tmp_path):
 
 @pytest.fixture
 def project_dir(tmp_path):
-    # --project-dir must already exist (shared valid_existing_directory) --
-    # the folder the docs have the user set up beforehand, with the XML file
-    # and config.toml colocated inside it.
+    # --project-dir is the project root, and must already exist (shared
+    # valid_existing_directory). Everything this tool reads and writes lives
+    # in its inputs/ folder: config.toml going in, the allometry CSVs and
+    # stand_data.json coming out.
     path = tmp_path / "myproject"
-    path.mkdir()
+    (path / "inputs").mkdir(parents=True)
     return path
 
 
@@ -564,25 +569,29 @@ def test_parse_CLI_arguments_reports_a_missing_default_config(
             monkeypatch, [str(dummy_xml_file), f"--project-dir={project_dir}"]
         )
     stderr = capsys.readouterr().err
-    assert str(project_dir / "config.toml") in stderr
+    assert str(project_dir / "inputs" / "config.toml") in stderr
     assert "--config" in stderr
 
 
 def test_parse_CLI_arguments_finds_config_toml_inside_project_dir_by_default(
     monkeypatch, dummy_xml_file, project_dir
 ):
-    (project_dir / "config.toml").write_text("altitude = 150.0\nddy = 1200.0\n")
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\n"
+    )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch, [str(dummy_xml_file), f"--project-dir={project_dir}"]
     )
-    assert cli_args.config_path == project_dir / "config.toml"
+    assert cli_args.config_path == project_dir / "inputs" / "config.toml"
     assert cli_args.config.altitude == 150.0
 
 
 def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
     monkeypatch, dummy_xml_file, dummy_config_file, project_dir
 ):
-    (project_dir / "config.toml").write_text("altitude = 10.0\nddy = 600.0\n")
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 10.0\nddy = 600.0\n"
+    )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
         [
@@ -655,7 +664,7 @@ def test_parse_CLI_arguments_rejects_nan_even_with_override(
 def test_parse_CLI_arguments_refuses_existing_default_output_dir(
     monkeypatch, dummy_xml_file, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -681,7 +690,7 @@ def test_parse_CLI_arguments_creates_no_output_folder(
             f"--project-dir={project_dir}",
         ],
     )
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 def test_parse_CLI_arguments_dry_run_defaults_to_false(
@@ -711,13 +720,13 @@ def test_parse_CLI_arguments_dry_run_creates_no_output_folder(
         ],
     )
     assert cli_args.dry_run is True
-    assert not (project_dir / "allometry").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
     monkeypatch, dummy_xml_file, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "allometry").mkdir()
+    (project_dir / "inputs" / "allometry").mkdir()
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
