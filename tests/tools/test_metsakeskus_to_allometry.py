@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 from shapely.geometry import Point, Polygon
 
 from susi.io.load_output_data import StandID
+from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
 from tools.shared_allometry_tool_utils import input_validation, shared_utils
@@ -105,11 +106,7 @@ def test_load_extraction_config_reads_toml(tmp_path):
 # ExtractionConfig's own field defaults -- see that file's header comment.
 
 DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / "src"
-    / "tools"
-    / "metsakeskus_to_allometry"
-    / "default_config.toml"
+    SRC_DIR / "tools" / "metsakeskus_to_allometry" / "default_config.toml"
 )
 
 

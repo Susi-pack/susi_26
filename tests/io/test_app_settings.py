@@ -10,7 +10,7 @@ class TestProjectsRoot:
         # clone -- which is what makes validate_default=True safe to turn on.
         monkeypatch.delenv(PROJECTS_ROOT_ENV_VAR, raising=False)
 
-        assert AppSettings().projects_root == io_utils.get_project_root() / "projects"
+        assert AppSettings().projects_root == io_utils.repo_root() / "projects"
 
     def test_env_var_overrides_the_default(self, monkeypatch, tmp_path):
         # The override that makes running on a cluster possible: the data

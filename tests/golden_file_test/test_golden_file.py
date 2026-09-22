@@ -77,11 +77,11 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
 
 
 def test_golden_susi():
-    project_root_path = io_utils.get_project_root()
-    GOLDEN_NETCDF_FILE_PATH = project_root_path / Path(
+    repo_root_path = io_utils.repo_root()
+    GOLDEN_NETCDF_FILE_PATH = repo_root_path / Path(
         "tests/golden_file_test/golden_susi.nc"
     )
-    GOLDEN_TEST_PARENT_OUTPUT_FOLDER = project_root_path / Path(
+    GOLDEN_TEST_PARENT_OUTPUT_FOLDER = repo_root_path / Path(
         "tests/golden_file_test"
     )
 

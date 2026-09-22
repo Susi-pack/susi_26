@@ -18,7 +18,7 @@ def _default_projects_root() -> Path:
     """
     env_value = os.environ.get(PROJECTS_ROOT_ENV_VAR)
     if env_value is None:
-        return io_utils.get_project_root() / "projects"
+        return io_utils.repo_root() / "projects"
 
     projects_root = Path(env_value)
     if not projects_root.is_dir():

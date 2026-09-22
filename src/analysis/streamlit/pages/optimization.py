@@ -37,7 +37,7 @@ with st.expander("View stand areas", expanded=False):
 # %% Choose Netcdf variabales
 # The golden test netcdf is used to read the variable structure  of the netcdf file
 sample_netcdf_filepath = (
-    io_utils.get_project_root() / "tests/golden_file_test/golden_susi.nc"
+    io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
 )
 all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 

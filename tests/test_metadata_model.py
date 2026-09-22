@@ -49,7 +49,7 @@ def test_full_path_of_new_simulation_does_not_exist():
     # This is obviously a very bad idea and should fail.
     with pytest.raises(ValidationError):
         SimulationMetaData(
-            parent_output_folder=io_utils.get_project_root(),
+            parent_output_folder=io_utils.repo_root(),
             project_id="my_project",
             run_id="tests",
         )

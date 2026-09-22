@@ -73,15 +73,15 @@ def stand_areas_for_project(project_dirpath: Path) -> dict[StandID, float]:
 
 def _read_paroninkorpi_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
     """Read Paroninkorpi's areas file and map it onto project_dirpath's stands."""
-    project_root_path = io_utils.get_project_root()
-    areas_json_path = project_root_path / _PARONINKORPI_AREAS_JSON_RELPATH
+    repo_root_path = io_utils.repo_root()
+    areas_json_path = repo_root_path / _PARONINKORPI_AREAS_JSON_RELPATH
     if not areas_json_path.exists():
         # Fall back to the pre-#278 filename rather than failing outright --
         # a machine that already generated Paroninkorpi's areas before that
         # rename would otherwise break until someone reruns the tool or
         # manually renames the file (#282).
         legacy_areas_json_path = (
-            project_root_path / _PARONINKORPI_LEGACY_AREAS_JSON_RELPATH
+            repo_root_path / _PARONINKORPI_LEGACY_AREAS_JSON_RELPATH
         )
         if not legacy_areas_json_path.exists():
             raise FileNotFoundError(

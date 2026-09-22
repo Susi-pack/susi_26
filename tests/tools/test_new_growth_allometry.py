@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from susi.io.load_output_data import StandID
+from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
@@ -167,13 +168,7 @@ def test_new_growth_config_coerces_a_numeric_string_stems_count():
 # altitude/ddy support a real --allow-out-of-range-values override that
 # species/stems_count do not.
 
-DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / "src"
-    / "tools"
-    / "new_growth_allometry"
-    / "default_config.toml"
-)
+DEFAULT_CONFIG_PATH = SRC_DIR / "tools" / "new_growth_allometry" / "default_config.toml"
 
 
 def _read_raw_default_config() -> dict:

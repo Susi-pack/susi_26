@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pytest
 import xmltodict
@@ -7,6 +6,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from susi.io.load_output_data import StandID
+from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from tools.shared_allometry_tool_utils import input_validation
 from tools.shared_allometry_tool_utils.stand_data import (
@@ -96,13 +96,7 @@ def test_load_xml_config_reads_toml(tmp_path):
 # Guards against the shipped default/template config drifting from
 # XmlConfig's own field defaults -- see that file's header comment.
 
-DEFAULT_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / "src"
-    / "tools"
-    / "xml_to_allometry"
-    / "default_config.toml"
-)
+DEFAULT_CONFIG_PATH = SRC_DIR / "tools" / "xml_to_allometry" / "default_config.toml"
 
 
 def test_default_config_toml_optional_fields_match_model_defaults():

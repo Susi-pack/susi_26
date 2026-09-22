@@ -4,17 +4,6 @@
 # from in its `inputs/`, everything its runs produce in its `outputs/`, and
 # its own run script alongside them. `susi.io.project_layout` owns that
 # layout; this tool is the one place that *creates* it.
-#
-# What a new project deliberately does NOT get:
-#   - `inputs/allometry/`. The allometry tools refuse to run into an
-#     existing output folder (check_output_dir_available), so pre-creating
-#     it would break every fresh project on its very first tool run.
-#   - `index.ipynb`. Its links are relative to its siblings in
-#     src/analysis/notebooks/, so every one of them would be broken on
-#     arrival here -- and rewriting them breaks again the moment
-#     SUSI_PROJECTS_ROOT moves the projects root off the repo.
-#   - a git repository. No prompt, no `git init`: the folder is the user's
-#     to version or not. The completion message says so.
 
 # %% Imports
 import argparse
@@ -29,30 +18,25 @@ from susi.io.project_layout import (
     outputs_dir_for_project,
     project_dir,
 )
+from susi.io.utils import SRC_DIR
 
 # %% Constants
 
-# `src/`: this file is src/tools/init_project/init_project.py.
-SRC_DIR = Path(__file__).resolve().parents[2]
-
-# The script every new project is seeded with -- the simplest runnable SUSI
-# call there is, about twenty lines of pure wiring.
-#
-# It is *copied*, not imported from: there is nothing in it the engine can
-# invalidate, and the user is meant to edit it. The location lives here, in
-# one named constant and nowhere else, so that moving src/scripts/ to
-# src/example_scripts/ (ticket 17) is a one-line change.
+# Copy susi_calls.py, the easiest possible SUSI project there is. The path
+# is composed from `susi.io.utils.SRC_DIR`, the one place that knows where
+# the checkout is, and kept in a single named constant here so that moving
+# src/scripts/ to src/example_scripts/ (ticket 17) is a one-line change.
 SEED_SCRIPT_PATH = SRC_DIR / "scripts" / "susi_calls.py"
 
-# Not a per-tool name: `config.toml` inside the project's inputs/ folder is
-# what xml_to_allometry.py and metsakeskus_to_allometry.py both look up when
-# --config is not given.
+# What xml_to_allometry.py and metsakeskus_to_allometry.py both look up when --config is not given.
 CONFIG_FILENAME = "config.toml"
 
 
 class DataSource(Enum):
-    """Where a project's stand data comes from -- which decides which tool's
-    config template is seeded into `inputs/`, and nothing else."""
+    """
+    Where a project's stand data comes from.
+    Decides which tool's config template is seeded into `inputs/`.
+    """
 
     XML = "xml"
     METSAKESKUS = "metsakeskus"
@@ -61,15 +45,14 @@ class DataSource(Enum):
 
 @dataclass(frozen=True)
 class SourceSeed:
-    """Everything that differs between the `--source` choices, in one place
-    per choice: adding a fourth generating tool is one entry here, not an
-    edit to three parallel dicts that can silently fall out of step."""
+    """
+    Everything that differs between the `--source` choices.
+    """
 
     # How the numbered prompt describes this choice.
     prompt_label: str
     # The generating tool's own template config, copied in as the project's
-    # config.toml rather than restated here -- a second copy of those
-    # REQUIRED fields would go stale the first time a tool gained one.
+    # config.toml rather than restated here
     # None for DataSource.NONE: no config at all is written.
     config_template_path: Optional[Path]
     # What to tell the user to do next, printed on completion.
@@ -111,8 +94,6 @@ SOURCE_SEEDS = {
 
 # Printed last, whatever was created. The folder is not this repo's, and the
 # most useful thing a team can do with it is make it a repository of its own
-# -- which, counter-intuitively, is also what protects it from a
-# `git clean -xdf` run in the SUSI checkout (see README_TEMPLATE).
 UNTRACKED_NOTE = (
     "This folder is not tracked by the SUSI repository -- it is yours, and may be "
     "used as a git repository of its own."
