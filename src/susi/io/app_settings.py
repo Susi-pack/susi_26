@@ -5,20 +5,16 @@ from pydantic import BaseModel, ConfigDict, DirectoryPath, Field
 
 import susi.io.utils as io_utils
 
-# Overrides where `projects/` is looked for. This is what makes running on a
-# cluster (CSC) work: compute nodes routinely want the data on a different
-# filesystem from the code. A symlink would do the same job with no code at
-# all, but creating one on Windows needs Developer Mode or admin rights, and
-# this repo has Windows collaborators -- so an env var is the portable option.
+# Overrides where `projects/` is looked for.
+# This is what makes running on CSC work: CSC wants data on a different filesystem from the code.
 PROJECTS_ROOT_ENV_VAR = "SUSI_PROJECTS_ROOT"
 
 
 def _default_projects_root() -> Path:
-    """`$SUSI_PROJECTS_ROOT` when set, else `<repo root>/projects`.
+    """
+    `$SUSI_PROJECTS_ROOT` when set, else `<repo root>/projects`.
 
-    A set-but-wrong env var fails here, loudly and by name, rather than
-    surfacing later as pydantic's generic "path does not point to a
-    directory" against a path the user never typed into any field.
+    A set-but-wrong env var fails here.
     """
     env_value = os.environ.get(PROJECTS_ROOT_ENV_VAR)
     if env_value is None:

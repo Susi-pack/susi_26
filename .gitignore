@@ -71,12 +71,6 @@ devlog/
 # streamlit
 .streamlit/
 
-# Output from simulations and other stuff
-xmltomotti_no_thinning
-xmltomotti_yes_thinning
-xmltoallometry_with_areas
-susi_2021/
-
 # LLM stuf
 .scratch/
 CONTEXT.md
@@ -88,6 +82,11 @@ tmp
 
 # Data
 DATA/
+paroninkorpi/
+xmltomotti_no_thinning
+xmltomotti_yes_thinning
+xmltoallometry_with_areas
+susi_2021/
 
 # Jupyter stuff
 .jupyter_ystore.db
