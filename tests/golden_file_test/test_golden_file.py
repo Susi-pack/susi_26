@@ -81,13 +81,15 @@ def test_golden_susi():
     GOLDEN_NETCDF_FILE_PATH = project_root_path / Path(
         "tests/golden_file_test/golden_susi.nc"
     )
-    NEW_SUSI_EXPERIMENT_FOLDER_PATH = project_root_path / Path("tests/golden_file_test")
+    GOLDEN_TEST_PARENT_OUTPUT_FOLDER = project_root_path / Path(
+        "tests/golden_file_test"
+    )
 
-    new_golden_output_folder_name = "golden_file_new_experiment"
+    new_golden_output_folder_name = "golden_file_new_run"
 
     # Remove previous golden test output folder if exists
     new_golden_output_folderpath = (
-        NEW_SUSI_EXPERIMENT_FOLDER_PATH / new_golden_output_folder_name
+        GOLDEN_TEST_PARENT_OUTPUT_FOLDER / new_golden_output_folder_name
     )
     if new_golden_output_folderpath.is_dir():
         shutil.rmtree(new_golden_output_folderpath)
@@ -97,7 +99,7 @@ def test_golden_susi():
         metadata=SimulationMetaData(
             # Explicit, so the golden run writes next to the golden netcdf
             # rather than into a project's outputs/.
-            parent_output_folder=NEW_SUSI_EXPERIMENT_FOLDER_PATH,
+            parent_output_folder=GOLDEN_TEST_PARENT_OUTPUT_FOLDER,
             project_id="golden_file_test",
             run_id=new_golden_output_folder_name,
         ),

@@ -40,7 +40,7 @@ def mock_output_dir():
                     {
                         "stand_id": "stand_01",
                         "scenario_id": scen_id,
-                        "experiment_folder_path": str(scen_dir),
+                        "simulation_folder_path": str(scen_dir),
                     },
                     f,
                 )

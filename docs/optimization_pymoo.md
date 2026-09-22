@@ -93,7 +93,7 @@ from susi.io.load_output_data import (
 )
 
 # 1. Load metadata from stand folders
-stands_folder = Path("output/my_experiment")
+stands_folder = Path("projects/my_project/outputs/my_run")
 stand_folders = list_subdirectories(stands_folder)
 metadata_by_stand = load_all_metadatas_from_stands(stand_folders)
 

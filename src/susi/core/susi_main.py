@@ -668,10 +668,10 @@ class Susi:
         # del stand, groundvegetation, esmass, esN, esP, esK, ferti, cpy, moss, stp, pt
 
     def create_output_folder(self) -> None:
-        assert self.metadata.experiment_folder_path is not None
-        assert not self.metadata.experiment_folder_path.is_dir()
-        assert not self.metadata.experiment_folder_path.exists()
-        io_utils.create_folder(path=self.metadata.experiment_folder_path)
+        assert self.metadata.simulation_folder_path is not None
+        assert not self.metadata.simulation_folder_path.is_dir()
+        assert not self.metadata.simulation_folder_path.exists()
+        io_utils.create_folder(path=self.metadata.simulation_folder_path)
         return None
 
     def write_params_and_metadata(self) -> None:

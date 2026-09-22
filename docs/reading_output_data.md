@@ -87,7 +87,7 @@ from susi.io.load_output_data import NetcdfVariablePath
 
 # 1. Read params from JSON (fast!)
 params = load_output.read_params_from_jsons(
-    experiment_folderpath=Path("data/paroninkorpi/stand_1/baseline")
+    simulation_folderpath=Path("data/paroninkorpi/stand_1/baseline")
 )
 
 # 2. Locate the NetCDF file and list all available variables

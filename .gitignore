@@ -55,7 +55,7 @@ requirements_inaki.txt
 
 analysis/eyeballing.py
 pyrightconfig.json
-tests/golden_file_test/golden_file_new_experiment
+tests/golden_file_test/golden_file_new_run
 
 # docs
 site/

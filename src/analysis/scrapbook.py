@@ -22,8 +22,8 @@ def list_subdirectories(path: Path):
     return (x for x in path.iterdir() if x.is_dir())
 
 
-def _load_single_experiment_metadatas(
-    experiment_folderpath: Path,
+def _load_single_simulation_metadatas(
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> pd.DataFrame:
@@ -31,8 +31,8 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
+    metadata_filepath = simulation_folderpath.joinpath(metadata_filename)
+    params_filepath = simulation_folderpath.joinpath(params_filename)
 
     metadata, params = map(
         io_utils.read_json_file, [metadata_filepath, params_filepath]
@@ -66,11 +66,11 @@ def modify_after_load(
 
 
 def load_all_metadatas_from_folder(folder: Path) -> pd.DataFrame:
-    experiment_folderpaths = list_subdirectories(folder)
+    simulation_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
-            for exp_fpath in experiment_folderpaths
+            _load_single_simulation_metadatas(exp_fpath)
+            for exp_fpath in simulation_folderpaths
         ]
     )
 
@@ -104,9 +104,9 @@ df = df[df["run_id"].str.contains("partialblocking")]
 # Netcdf data is saved in a dictionary where the run_id is the key.
 data = {}
 
-for _, experiment_info in df.iterrows():
-    netcdf_filepath = Path(experiment_info["netcdf_output_filepath"])
-    data[experiment_info["run_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
+for _, simulation_info in df.iterrows():
+    netcdf_filepath = Path(simulation_info["netcdf_output_filepath"])
+    data[simulation_info["run_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
 
 
 # %% Experimental widgets
@@ -117,9 +117,9 @@ from IPython.display import display
 
 output = ipywidgets.Output()
 
-experiment_ID_dropdown = ipywidgets.Dropdown(
-    options=sorted(list(data.keys())), description="Experiment ID"
+run_id_dropdown = ipywidgets.Dropdown(
+    options=sorted(list(data.keys())), description="Run ID"
 )
 
 
-display(experiment_ID_dropdown)
+display(run_id_dropdown)

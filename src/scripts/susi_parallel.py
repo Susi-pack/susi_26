@@ -53,7 +53,7 @@ deep = create_depth_scenarios(
 all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth_experiment",
+            project_id="ditch_depth",
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
@@ -62,7 +62,7 @@ all_parameters = [
     ),
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth_experiment",
+            project_id="ditch_depth",
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",

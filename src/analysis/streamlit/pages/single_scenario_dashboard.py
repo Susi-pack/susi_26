@@ -41,7 +41,7 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 
 params = load_output.read_params_from_jsons(
-    experiment_folderpath=chosen_scenario_folder
+    simulation_folderpath=chosen_scenario_folder
 )
 
 chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])

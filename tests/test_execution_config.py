@@ -262,7 +262,7 @@ def two_duplicate_susi_params(valid_susi_params) -> list[SimulationParams]:
 
 
 @pytest.fixture
-def two_duplicate_experiment_folder_paths(
+def two_duplicate_simulation_folder_paths(
     valid_susi_params, another_valid_susi_params
 ) -> list[SimulationParams]:
     return [
@@ -343,15 +343,15 @@ def test_duplicate_susi_params(two_duplicate_susi_params):
         )
 
 
-def test_duplicate_folder_names(two_duplicate_experiment_folder_paths):
+def test_duplicate_folder_names(two_duplicate_simulation_folder_paths):
     """
     Storing Susi results twice in the same folder
     would rewrite the previous contents of the folder
     """
-    with pytest.raises(ValueError, match="Duplicate experiment folder paths"):
+    with pytest.raises(ValueError, match="Duplicate simulation folder paths"):
         MultipleSusis(
             n_parallel_processes=1,
-            simulation_parameter_list=two_duplicate_experiment_folder_paths,
+            simulation_parameter_list=two_duplicate_simulation_folder_paths,
         )
 
 

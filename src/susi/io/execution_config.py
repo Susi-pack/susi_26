@@ -62,7 +62,7 @@ class MultipleSusis(BaseModel):
             seen.add(serialized)
         return None
 
-    def _check_for_duplicated_experiment_folder_paths(self) -> None:
+    def _check_for_duplicated_simulation_folder_paths(self) -> None:
         """
         We don't want two Susi simulations to write outputs to the same folder,
         for this would overwrite one with the other.
@@ -72,13 +72,13 @@ class MultipleSusis(BaseModel):
         seen = set()
 
         for simulation_run in self.simulation_parameter_list:
-            experiment_folder_path = simulation_run.metadata.experiment_folder_path
+            simulation_folder_path = simulation_run.metadata.simulation_folder_path
 
-            if experiment_folder_path in seen:
-                raise ValueError("Duplicate experiment folder paths detected.")
+            if simulation_folder_path in seen:
+                raise ValueError("Duplicate simulation folder paths detected.")
 
             else:
-                seen.add(experiment_folder_path)
+                seen.add(simulation_folder_path)
 
         return None
 
@@ -114,6 +114,6 @@ class MultipleSusis(BaseModel):
         self._check_single_run_id()
         self._check_not_more_processes_than_runs()
         self._check_for_duplicated_susi_params()
-        self._check_for_duplicated_experiment_folder_paths()
+        self._check_for_duplicated_simulation_folder_paths()
 
         return self

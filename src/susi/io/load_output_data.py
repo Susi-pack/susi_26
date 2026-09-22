@@ -242,12 +242,12 @@ def list_subdirectories_sorted(path: Path) -> list[Path]:
 
 
 def read_params_from_jsons(
-    experiment_folderpath: Path,
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> SimulationParamsFromJSON:
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
+    metadata_filepath = simulation_folderpath.joinpath(metadata_filename)
+    params_filepath = simulation_folderpath.joinpath(params_filename)
 
     metadata, params = map(
         io_utils.read_json_file, [metadata_filepath, params_filepath]
@@ -255,8 +255,8 @@ def read_params_from_jsons(
     return SimulationParamsFromJSON(metadata=metadata, susi_params=params)
 
 
-def _load_single_experiment_metadatas(
-    experiment_folderpath: Path,
+def _load_single_simulation_metadatas(
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> pd.DataFrame:
@@ -265,7 +265,7 @@ def _load_single_experiment_metadatas(
     Returns dict of all json values.
     """
     params_from_json = read_params_from_jsons(
-        experiment_folderpath, metadata_filename, params_filename
+        simulation_folderpath, metadata_filename, params_filename
     )
 
     return pd.json_normalize(params_from_json.metadata | params_from_json.susi_params)
@@ -291,11 +291,11 @@ def modify_after_load(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _load_all_metadatas_from_single_stand(folder: Path) -> pd.DataFrame:
-    experiment_folderpaths = list_subdirectories(folder)
+    simulation_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
-            for exp_fpath in experiment_folderpaths
+            _load_single_simulation_metadatas(exp_fpath)
+            for exp_fpath in simulation_folderpaths
         ]
     )
 

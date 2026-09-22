@@ -43,9 +43,9 @@ def test_parent_output_folder_exists():
         )
 
 
-def test_full_path_of_new_experiment_does_not_exist():
+def test_full_path_of_new_simulation_does_not_exist():
     # Attempts to use the folder /susi_26/tests (which obviously exists) as a
-    # new folder for a Susi experiment output.
+    # new folder for a Susi simulation output.
     # This is obviously a very bad idea and should fail.
     with pytest.raises(ValidationError):
         SimulationMetaData(
@@ -62,7 +62,7 @@ def test_single_run_folder_path():
             run_id="my_run",
             parent_output_folder=Path(tmpdir),
         )
-        assert metadata.experiment_folder_path == Path(tmpdir) / "my_run"
+        assert metadata.simulation_folder_path == Path(tmpdir) / "my_run"
 
 
 def test_batch_run_folder_path():
@@ -75,7 +75,7 @@ def test_batch_run_folder_path():
             scenario_id="scenario_1",
         )
         assert (
-            metadata.experiment_folder_path
+            metadata.simulation_folder_path
             == Path(tmpdir) / "my_run" / "stand_A" / "scenario_1"
         )
 
@@ -135,7 +135,7 @@ def test_parent_output_folder_derived_from_project_id(projects_root):
     metadata = SimulationMetaData(project_id="my_project", run_id="my_run")
 
     assert metadata.parent_output_folder == project_dir / "outputs"
-    assert metadata.experiment_folder_path == project_dir / "outputs" / "my_run"
+    assert metadata.simulation_folder_path == project_dir / "outputs" / "my_run"
 
 
 def test_derived_parent_output_folder_keeps_stand_and_scenario_levels(projects_root):
@@ -149,7 +149,7 @@ def test_derived_parent_output_folder_keeps_stand_and_scenario_levels(projects_r
     )
 
     assert (
-        metadata.experiment_folder_path
+        metadata.simulation_folder_path
         == project_dir / "outputs" / "my_run" / "stand_A" / "scenario_1"
     )
 
@@ -166,7 +166,7 @@ def test_explicit_parent_output_folder_wins_over_project_id(projects_root, tmp_p
     )
 
     assert metadata.parent_output_folder == elsewhere
-    assert metadata.experiment_folder_path == elsewhere / "my_run"
+    assert metadata.simulation_folder_path == elsewhere / "my_run"
 
 
 def test_project_without_outputs_folder_raises(projects_root):

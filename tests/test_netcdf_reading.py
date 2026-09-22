@@ -13,7 +13,7 @@ from susi.io.load_output_data import (
     coerce_datetime_format,
     modify_after_load,
     list_subdirectories,
-    _load_single_experiment_metadatas,
+    _load_single_simulation_metadatas,
     _load_all_metadatas_from_single_stand,
     load_all_metadatas_from_stands,
     NetcdfVariablePath,
@@ -174,7 +174,7 @@ def test_list_subdirectories():
         assert result_names == {"dir1", "dir2"}
 
 
-def create_mock_experiment_folder(base_path: Path, run_id: str):
+def create_mock_simulation_folder(base_path: Path, run_id: str):
     exp_dir = base_path / run_id
     exp_dir.mkdir()
 
@@ -195,18 +195,18 @@ def create_mock_experiment_folder(base_path: Path, run_id: str):
 
 
 @pytest.fixture
-def mock_experiment_folders():
+def mock_simulation_folders():
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        create_mock_experiment_folder(base, "exp1")
-        create_mock_experiment_folder(base, "exp2")
+        create_mock_simulation_folder(base, "exp1")
+        create_mock_simulation_folder(base, "exp2")
         yield base
 
 
-def test_load_single_experiment_metadatas(mock_experiment_folders):
-    exp_folder = mock_experiment_folders / "exp1"
+def test_load_single_simulation_metadatas(mock_simulation_folders):
+    exp_folder = mock_simulation_folders / "exp1"
 
-    result = _load_single_experiment_metadatas(exp_folder)
+    result = _load_single_simulation_metadatas(exp_folder)
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
@@ -214,20 +214,20 @@ def test_load_single_experiment_metadatas(mock_experiment_folders):
     assert result.iloc[0]["param1"] == 1.0
 
 
-def test_load_all_metadatas_from_single_folder(mock_experiment_folders):
-    result = _load_all_metadatas_from_single_stand(mock_experiment_folders)
+def test_load_all_metadatas_from_single_folder(mock_simulation_folders):
+    result = _load_all_metadatas_from_single_stand(mock_simulation_folders)
 
     assert len(result) == 2
     assert set(result["run_id"]) == {"exp1", "exp2"}
 
 
-def test_load_all_metadatas_from_stands(mock_experiment_folders):
-    folder1 = mock_experiment_folders / "stand_A"
-    folder2 = mock_experiment_folders / "stand_B"
+def test_load_all_metadatas_from_stands(mock_simulation_folders):
+    folder1 = mock_simulation_folders / "stand_A"
+    folder2 = mock_simulation_folders / "stand_B"
     folder1.mkdir()
     folder2.mkdir()
-    create_mock_experiment_folder(folder1, "exp3")
-    create_mock_experiment_folder(folder2, "exp4")
+    create_mock_simulation_folder(folder1, "exp3")
+    create_mock_simulation_folder(folder2, "exp4")
 
     result = load_all_metadatas_from_stands([folder1, folder2])
 

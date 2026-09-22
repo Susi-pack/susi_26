@@ -34,7 +34,7 @@ class SimulationMetaData(BaseModel):
     )
 
     run_id: str = Field(
-        description="A name that identifies this particular run of the project. It becomes the first output folder level under the project's `outputs/`, so that two runs of the same project -- before and after a parameter change -- sit side by side instead of colliding. The full `experiment_folder_path` must not exist: otherwise we would be overwriting a previous run's results.",
+        description="A name that identifies this particular run of the project. It becomes the first output folder level under the project's `outputs/`, so that two runs of the same project -- before and after a parameter change -- sit side by side instead of colliding. The full `simulation_folder_path` must not exist: otherwise we would be overwriting a previous run's results.",
     )
 
     stand_id: str | None = Field(
@@ -57,17 +57,17 @@ class SimulationMetaData(BaseModel):
     metadata_output_filename: str = Field(
         frozen=True,
         default="metadata.json",
-        description="Name of the output metadata file. Needs to be JSON. It will be stored inside the `experiment_folder_path`.",
+        description="Name of the output metadata file. Needs to be JSON. It will be stored inside the `simulation_folder_path`.",
     )
     parameter_output_filename: str = Field(
         frozen=True,
         default="params.json",
-        description="Name of the output parameters file. Needs to be JSON. It will be stored inside the `experiment_folder_path`.",
+        description="Name of the output parameters file. Needs to be JSON. It will be stored inside the `simulation_folder_path`.",
     )
     netcdf_output_filename: str = Field(
         frozen=True,
         default="susi.nc",
-        description="Name of the output netcdf file. Needs to have extension '.nc'. It will be stored inside the `experiment_folder_path`.",
+        description="Name of the output netcdf file. Needs to have extension '.nc'. It will be stored inside the `simulation_folder_path`.",
     )
 
     timestamp_start: datetime.datetime = Field(
@@ -110,7 +110,7 @@ class SimulationMetaData(BaseModel):
 
     @computed_field
     @property
-    def experiment_folder_path(self) -> NewPath:
+    def simulation_folder_path(self) -> NewPath:
         """
         Directory Path for Susi simulation results: metadata, parameters, and netcdf file.
         If stand_id and scenario_id are not given it results in `parent_output_folder`/`run_id`.
@@ -129,20 +129,20 @@ class SimulationMetaData(BaseModel):
     @computed_field
     @property
     def metadata_output_filepath(self) -> Path:
-        assert self.experiment_folder_path is not None
-        return self.experiment_folder_path.joinpath(self.metadata_output_filename)
+        assert self.simulation_folder_path is not None
+        return self.simulation_folder_path.joinpath(self.metadata_output_filename)
 
     @computed_field
     @property
     def parameter_output_filepath(self) -> Path:
-        assert self.experiment_folder_path is not None
-        return self.experiment_folder_path.joinpath(self.parameter_output_filename)
+        assert self.simulation_folder_path is not None
+        return self.simulation_folder_path.joinpath(self.parameter_output_filename)
 
     @computed_field
     @property
     def netcdf_output_filepath(self) -> Path:
-        assert self.experiment_folder_path is not None
-        return self.experiment_folder_path.joinpath(self.netcdf_output_filename)
+        assert self.simulation_folder_path is not None
+        return self.simulation_folder_path.joinpath(self.netcdf_output_filename)
 
     @field_validator("stand_id", "scenario_id")
     def validate_folder_names(cls, v):
@@ -154,9 +154,9 @@ class SimulationMetaData(BaseModel):
 
         return v
 
-    # Must stay defined before `check_experiment_folder_path_does_not_exist`:
+    # Must stay defined before `check_simulation_folder_path_does_not_exist`:
     # pydantic runs "after" validators in class-body order, and that one reads
-    # `experiment_folder_path`, which needs `parent_output_folder` filled in.
+    # `simulation_folder_path`, which needs `parent_output_folder` filled in.
     @model_validator(mode="after")
     def _derive_parent_output_folder(self) -> Self:
         """
@@ -191,10 +191,10 @@ class SimulationMetaData(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def check_experiment_folder_path_does_not_exist(self) -> Self:
-        if self.experiment_folder_path.exists():
+    def check_simulation_folder_path_does_not_exist(self) -> Self:
+        if self.simulation_folder_path.exists():
             raise ValueError(
-                "A file or a directory with the same path as the new Susi experiment folder already exists. The new path must not exist."
+                "A file or a directory with the same path as the new Susi simulation folder already exists. The new path must not exist."
             )
         return self
 

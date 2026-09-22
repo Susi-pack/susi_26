@@ -22,10 +22,10 @@ chosen_susi_folders = st.multiselect(
 
 if len(chosen_susi_folders) == 2:
     params_0 = load_output.read_params_from_jsons(
-        experiment_folderpath=chosen_susi_folders[0]
+        simulation_folderpath=chosen_susi_folders[0]
     )
     params_1 = load_output.read_params_from_jsons(
-        experiment_folderpath=chosen_susi_folders[1]
+        simulation_folderpath=chosen_susi_folders[1]
     )
 
     chosen_netcdf_filepath_0 = Path(params_0.metadata["netcdf_output_filepath"])
