@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Sep 30 14:10:42 2020
-
-@author: alauren
-"""
 
 from susi.io.execution_config import SimulationParams
 from susi.core.susi_main import Susi

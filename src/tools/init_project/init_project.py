@@ -68,7 +68,8 @@ SOURCE_SEEDS = {
         / "default_config.toml",
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
-            "xml_to_allometry.py against your XML export -- see README.md."
+            "xml_to_allometry.py against your XML export -- see "
+            "docs/how_to_generate_allometry_from_xml.md."
         ),
     ),
     DataSource.METSAKESKUS: SourceSeed(
@@ -79,7 +80,8 @@ SOURCE_SEEDS = {
         / "default_config.toml",
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
-            "metsakeskus_to_allometry.py against your .gpkg -- see README.md."
+            "metsakeskus_to_allometry.py against your .gpkg -- see "
+            "docs/how_to_generate_allometry_from_metsakeskus.md."
         ),
     ),
     DataSource.NONE: SourceSeed(
@@ -115,13 +117,18 @@ SEED_SCRIPT_HEADER = """# Your project's run script, copied when this project wa
 #
 # Then, with the SUSI environment active:
 #     python susi_calls.py
-#
-# See README.md next to this file.
-
+{readme_pointer}
 """
 
-# Written whether or not the user ever runs `git init`: harmless if unused,
-# correct if they version the project later.
+# The last lines of that header, when a README was written beside the
+# script. Empty otherwise: a header that says "see README.md" in a project
+# with no README is worse than a header that stops at the run command.
+# Carries its own newline, so the blank line before the copied script is the
+# same either way.
+SEED_SCRIPT_README_POINTER = "#\n# See README.md next to this file.\n"
+
+# Written only when asked for (--gitignore): harmless if the project never
+# becomes a git repository, correct if it does.
 GITIGNORE_CONTENTS = """# What to keep out of version control, if this project becomes a git
 # repository of its own. It is not tracked by the SUSI repo either way.
 #
@@ -166,8 +173,7 @@ produce, and the script that runs it, in one folder. Created by
 │   └── ...              <- your weather.csv, XML export, rasters, ...
 ├── outputs/             <- outputs/<run_id>/<stand_id>/<scenario_id>/
 ├── susi_calls.py        <- your run script. Start here.
-├── README.md
-└── .gitignore
+{layout_tail}
 ```
 
 ## Start here
@@ -211,7 +217,7 @@ it a git repository of its own (`git init` here) -- the SUSI checkout's
 checkout **deletes** an ordinary, data-only project folder, but **skips** a
 nested git repository. Only `git clean -xdff` destroys a nested one. Making
 this project a repository is, counter-intuitively, what protects it.
-
+{gitignore_note}
 One git quirk to know if you do: git does not track empty folders, so
 committing this project before its first run leaves `inputs/` and `outputs/`
 out of the commit, and a clone of it arrives without them. SUSI then refuses
@@ -223,11 +229,36 @@ the pre-commit hooks only see the repo's own tracked files. Run
 `uv run ty check <this folder>` yourself if you want it covered.
 """
 
+# The Layout block's last lines. README.md is always among them -- the block
+# only exists inside a README -- but .gitignore is listed only when one was
+# actually written, so the tree never advertises a file the project does not
+# have. Two whole lines rather than one conditional entry because the
+# box-drawing character of the last entry differs.
+LAYOUT_TAIL_WITH_GITIGNORE = "├── README.md\n└── .gitignore"
+LAYOUT_TAIL_WITHOUT_GITIGNORE = "└── README.md"
+
+# Spliced into the README's git section when no .gitignore was written. That
+# section tells the user that making this folder a repository is what
+# protects it from `git clean -xdf`; following that advice without a
+# .gitignore commits every netcdf the project will ever produce. Carries its
+# own blank lines, so the empty case leaves the section's paragraphs spaced
+# exactly as they are written above.
+NO_GITIGNORE_NOTE = """
+**This project has no `.gitignore`.** Write one before you commit anything, or
+`*.nc` and `*.tif` -- the simulation outputs and the rasters -- go into the
+repository with everything else. `susi-init-project --gitignore` writes a
+starting point you can copy.
+"""
+
 # %% Creating a project
 
 
 def create_project(
-    project_id: str, source: DataSource, project_dir: Path
+    project_id: str,
+    source: DataSource,
+    project_dir: Path,
+    with_readme: bool,
+    with_gitignore: bool,
 ) -> list[Path]:
     """Create one project folder, seeded, and return every path it created.
 
@@ -236,6 +267,12 @@ def create_project(
     the single responsibility of deciding *where* a project goes.
     `project_id` is passed alongside it, redundantly, because it is the name
     the README and the seeded script talk about -- not a path.
+
+    `with_readme` and `with_gitignore` decide whether the two optional files
+    are written at all. Both are asked for rather than assumed: the folder
+    is the user's, and a README and a .gitignore are exactly the two files
+    most likely to clash with conventions -- or a repository -- they already
+    have. There is no default here; main() is where "no" is the default.
 
     Raises FileExistsError if the folder is already there: never seed into
     someone's existing data. main() catches that case earlier, with a
@@ -265,17 +302,26 @@ def create_project(
         shutil.copyfile(config_template_path, config_path)
         created.append(config_path)
 
-    created.append(write_seed_script(project_id, project_dir))
-    created.append(write_readme(project_id, project_dir))
-    created.append(write_gitignore(project_dir))
+    created.append(write_seed_script(project_id, project_dir, with_readme))
+    # The README describes the layout, so it has to know whether a
+    # .gitignore is part of it.
+    if with_readme:
+        created.append(write_readme(project_id, project_dir, with_gitignore))
+    if with_gitignore:
+        created.append(write_gitignore(project_dir))
     return created
 
 
-def write_seed_script(project_id: str, project_dir: Path) -> Path:
-    """Copy SEED_SCRIPT_PATH in under a header saying what to edit first."""
+def write_seed_script(project_id: str, project_dir: Path, with_readme: bool) -> Path:
+    """Copy SEED_SCRIPT_PATH in under a header saying what to edit first.
+
+    `with_readme` decides whether that header ends by pointing at the
+    README -- which exists only if this run wrote one."""
     seed_script_path = project_dir / SEED_SCRIPT_PATH.name
     header = SEED_SCRIPT_HEADER.format(
-        seed_script_path=SEED_SCRIPT_PATH, project_id=project_id
+        seed_script_path=SEED_SCRIPT_PATH,
+        project_id=project_id,
+        readme_pointer=SEED_SCRIPT_README_POINTER if with_readme else "",
     )
     # Explicit utf-8 on both ends: the seed script is not pure ASCII, and
     # the default encoding is not utf-8 on Windows.
@@ -285,19 +331,33 @@ def write_seed_script(project_id: str, project_dir: Path) -> Path:
     return seed_script_path
 
 
-def write_readme(project_id: str, project_dir: Path) -> Path:
+def write_readme(project_id: str, project_dir: Path, with_gitignore: bool) -> Path:
     """Write the project's own README: its layout, how to fill it, where the
     standard analysis notebooks are, and what git does and does not do to
-    this folder."""
+    this folder.
+
+    `with_gitignore` says whether one was written beside it, which the
+    README's Layout block lists and its git section warns about the absence
+    of. Passed in rather than probed off the filesystem: what this run
+    created is the question, not what happens to be in the folder."""
     readme_path = project_dir / "README.md"
     readme_path.write_text(
-        README_TEMPLATE.format(project_id=project_id), encoding="utf-8"
+        README_TEMPLATE.format(
+            project_id=project_id,
+            layout_tail=(
+                LAYOUT_TAIL_WITH_GITIGNORE
+                if with_gitignore
+                else LAYOUT_TAIL_WITHOUT_GITIGNORE
+            ),
+            gitignore_note="" if with_gitignore else NO_GITIGNORE_NOTE,
+        ),
+        encoding="utf-8",
     )
     return readme_path
 
 
 def write_gitignore(project_dir: Path) -> Path:
-    """Write the project's .gitignore, whether or not it is ever a git
+    """Write the project's .gitignore, for if it ever becomes a git
     repository -- see GITIGNORE_CONTENTS for what it keeps and drops."""
     gitignore_path = project_dir / ".gitignore"
     gitignore_path.write_text(GITIGNORE_CONTENTS, encoding="utf-8")
@@ -312,6 +372,8 @@ class CLIArguments:
     project_id: str
     source: DataSource
     project_dir: Path
+    with_readme: bool
+    with_gitignore: bool
 
 
 def valid_project_id(value: str) -> str:
@@ -352,7 +414,8 @@ def ask(question: str) -> str:
         return input(question)
     except EOFError:
         raise SystemExit(
-            "\nNo answer given (stdin is closed). Pass --name and --source instead."
+            "\nNo answer given (stdin is closed). Pass the flags instead: "
+            "--name, --source, --readme/--no-readme, --gitignore/--no-gitignore."
         )
 
 
@@ -379,15 +442,32 @@ def prompt_for_source() -> DataSource:
             print(f"Not one of the choices: {answer!r}")
 
 
+def prompt_yes_no(question: str) -> bool:
+    """Ask a yes/no question whose default -- a bare Enter -- is no.
+
+    No for every question asked through here, which is why the default is
+    baked in rather than passed: these are the optional extras in a folder
+    that belongs to the user, so the answer that adds nothing is the one
+    they get for free.
+    """
+    while True:
+        answer = ask(f"{question} [y/N]: ").strip().lower()
+        if answer in {"", "n", "no"}:
+            return False
+        if answer in {"y", "yes"}:
+            return True
+        print(f"Answer y or n -- Enter for no: {answer!r}")
+
+
 # %% CLI
 
 
 def parse_CLI_arguments() -> CLIArguments:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a new SUSI project folder -- its inputs/ and outputs/, a "
-            "run script to edit, a README and a .gitignore -- under the "
-            "projects root."
+            "Create a new SUSI project folder -- its inputs/ and outputs/ and "
+            "a run script to edit -- under the projects root. A README and a "
+            ".gitignore are optional extras, off unless asked for."
         )
     )
     parser.add_argument(
@@ -410,26 +490,75 @@ def parse_CLI_arguments() -> CLIArguments:
             "writes no config at all. Prompted for if omitted."
         ),
     )
+    # BooleanOptionalAction, so each of these is a pair: --readme and
+    # --no-readme. Their default is None rather than False, which is what
+    # separates "the user said no" from "the user said nothing" -- the
+    # latter is what the prompt is for, the same way --name and --source
+    # work. The prompt's own default is no, so an omitted flag and a bare
+    # Enter land in the same place.
+    parser.add_argument(
+        "--readme",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Write a README.md describing this project's layout, how to fill "
+            "it, where the analysis notebooks are and what git does to the "
+            "folder. Prompted for if omitted, and the prompt's default is no."
+        ),
+    )
+    parser.add_argument(
+        "--gitignore",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Write a .gitignore keeping this project's netcdfs and rasters "
+            "out of version control, for if the folder becomes a git "
+            "repository of its own. Prompted for if omitted, and the "
+            "prompt's default is no."
+        ),
+    )
 
     args = parser.parse_args()
 
     project_id = args.name if args.name is not None else prompt_for_project_id()
-    source = DataSource(args.source) if args.source is not None else prompt_for_source()
 
     new_project_dir = project_dir(project_id)
+    # Checked here, before anything else is asked for: the name is all this
+    # needs, and a user whose project already exists should hear so at once
+    # rather than after answering three more questions.
+    #
     # The same refusal the allometry tools make about their output folder,
     # for the same reason: seeding into an existing project would drop a
-    # fresh README and .gitignore on top of someone's work. Not
-    # check_output_dir_available, whose message tells the user to "pass a
-    # different --project-dir", a flag this tool does not have.
+    # fresh run script -- and whatever else was asked for -- on top of
+    # someone's work. Not check_output_dir_available, whose message tells
+    # the user to "pass a different --project-dir", a flag this tool does
+    # not have.
     if new_project_dir.exists():
         parser.error(
             f"Project folder already exists: {new_project_dir}. Pick a different "
             "--name, or work in that project directly."
         )
 
+    source = DataSource(args.source) if args.source is not None else prompt_for_source()
+    with_readme = (
+        args.readme
+        if args.readme is not None
+        else prompt_yes_no("Add a README.md describing this project?")
+    )
+    with_gitignore = (
+        args.gitignore
+        if args.gitignore is not None
+        else prompt_yes_no(
+            "Add a .gitignore, in case this project becomes a git repository?"
+        )
+    )
+
     return CLIArguments(
-        project_id=project_id, source=source, project_dir=new_project_dir
+        project_id=project_id,
+        source=source,
+        project_dir=new_project_dir,
+        with_readme=with_readme,
+        with_gitignore=with_gitignore,
     )
 
 
@@ -439,7 +568,13 @@ def parse_CLI_arguments() -> CLIArguments:
 def main() -> None:
     cli_args = parse_CLI_arguments()
 
-    created = create_project(cli_args.project_id, cli_args.source, cli_args.project_dir)
+    created = create_project(
+        cli_args.project_id,
+        cli_args.source,
+        cli_args.project_dir,
+        cli_args.with_readme,
+        cli_args.with_gitignore,
+    )
 
     print(f"\nCreated project {cli_args.project_id}:")
     for path in created:

@@ -57,6 +57,7 @@ namespaces = false
 
 [project.scripts]
 susi-analyze = "analysis.streamlit.__main__:main"
+susi-init-project = "tools.init_project.init_project:main"
 
 [tool.ty.src]
 include = ["src", "tests", "src/susi/core/main.py"]
