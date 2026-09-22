@@ -81,6 +81,13 @@ exclude = [
     "src/susi/core/thinning_models.py",
     "src/analysis/scrapbook.py",
     "src/analysis/figures.py",
+    # TEMPORARY, owned by create-input-structure ticket 11b, which must remove
+    # it. Ticket 15 renamed `SimulationMetaData.experiment_id` to `run_id` and
+    # added a required `project_id`, but deliberately left `paroninkorpi.py`
+    # alone: 11b rewrites that constructor by hand anyway. Without this
+    # exclude `uv run ty check` stays red for every ticket in between, and a
+    # red baseline signals nothing.
+    "src/scripts/paroninkorpi.py",
 ]
 
 [tool.ruff]

@@ -9,8 +9,9 @@ import susi.io.load_output_data as load_output
 
 st.header("Project summary")
 
-dir_path = folder_selection.build_folder_selection_widget(
-    dir_path=st.session_state.settings["projects_root"], label="project"
+# The stands are one level below a run, not below the project itself.
+dir_path = folder_selection.build_run_selection_widget(
+    projects_root=st.session_state.settings["projects_root"]
 )
 
 stand_folderpaths = load_output.list_subdirectories(path=dir_path)

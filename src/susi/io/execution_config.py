@@ -95,23 +95,23 @@ class MultipleSusis(BaseModel):
                     "SimulationMetadata without `stand_id` and/or `scenario_id` detected."
                 )
 
-    def _check_single_experiment_id(self) -> None:
+    def _check_single_run_id(self) -> None:
         seen = set()
         for simulation_run in self.simulation_parameter_list:
-            experiment_id = simulation_run.metadata.experiment_id
-            if experiment_id not in seen:
-                seen.add(experiment_id)
+            run_id = simulation_run.metadata.run_id
+            if run_id not in seen:
+                seen.add(run_id)
 
         if len(seen) > 1:
             raise ValueError(
-                f"All MultipleSusi runs must have the same experiment_id. Found the following instead: {seen}."
+                f"All MultipleSusi runs must have the same run_id. Found the following instead: {seen}."
             )
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
         self._check_stand_and_scenario_ids_are_set()
-        self._check_single_experiment_id()
+        self._check_single_run_id()
         self._check_not_more_processes_than_runs()
         self._check_for_duplicated_susi_params()
         self._check_for_duplicated_experiment_folder_paths()

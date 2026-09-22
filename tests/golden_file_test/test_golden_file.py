@@ -95,8 +95,11 @@ def test_golden_susi():
     # Initiate susi parameters
     simulation_parameters = SimulationParams(
         metadata=SimulationMetaData(
+            # Explicit, so the golden run writes next to the golden netcdf
+            # rather than into a project's outputs/.
             parent_output_folder=NEW_SUSI_EXPERIMENT_FOLDER_PATH,
-            experiment_id=new_golden_output_folder_name,
+            project_id="golden_file_test",
+            run_id=new_golden_output_folder_name,
         ),
         susi_params=golden_test.PARAMETERS,
     )

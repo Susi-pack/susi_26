@@ -49,7 +49,8 @@ def create_all_simulation_params(
         all_parameters.append(
             SimulationParams(
                 metadata=SimulationMetaData(
-                    experiment_id="susi_2021",
+                    project_id="susi_2021",
+                    run_id="run_01",
                     stand_id=stand_label,
                     scenario_id=scenario_label,
                 ),

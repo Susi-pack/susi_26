@@ -14,9 +14,7 @@ from pydantic import (
 )
 
 import susi.io.utils as io_utils
-from susi.io.app_settings import AppSettings
-
-_app_settings = AppSettings()
+from susi.io.project_layout import outputs_dir_for_project, project_dir
 
 
 def does_filename_have_extension(filename: str, extension: str) -> None:
@@ -31,8 +29,12 @@ class SimulationMetaData(BaseModel):
         extra="forbid",
     )
 
-    experiment_id: str = Field(
-        description="A name that identifies the simulation experiment. This will be the name of the folder where Susi outputs are stored. In single Susi runs `experiment_id` becomes the root folder of the experiment. The full path of `parent_output_folder` / `experiment_id` must not exist: otherwise we would be overwriting previous simulations' results.",
+    project_id: str = Field(
+        description="The project this run belongs to: the user-chosen name grouping one simulation study, e.g. 'paroninkorpi'. It names the folder `projects/<project_id>/` under the projects root, and it is what `parent_output_folder` is derived from when the caller does not supply one.",
+    )
+
+    run_id: str = Field(
+        description="A name that identifies this particular run of the project. It becomes the first output folder level under the project's `outputs/`, so that two runs of the same project -- before and after a parameter change -- sit side by side instead of colliding. The full `experiment_folder_path` must not exist: otherwise we would be overwriting a previous run's results.",
     )
 
     stand_id: str | None = Field(
@@ -45,13 +47,9 @@ class SimulationMetaData(BaseModel):
         default=None,
     )
 
-    parent_output_folder: DirectoryPath = Field(
-        # TODO(create-input-structure ticket 15): derive this from `project_id` as
-        # `outputs_dir_for_project(project_dir(project_id))`. Until then
-        # the projects root is the nearest surviving stand-in for the
-        # deleted global `outputs/`.
-        default=_app_settings.projects_root,
-        description="The directory where the output of the Susi simulation will be stored.",
+    parent_output_folder: DirectoryPath | None = Field(
+        default=None,
+        description="The directory the run's output folders are created under. Leave it out and `_derive_parent_output_folder` fills it in from `project_id`, as the project's `outputs/` folder -- which is where a run's results belong. Set it explicitly only to write somewhere that is not a project at all, as the golden-file test does.",
     )
 
     metadata_schema_version: int = 1
@@ -115,12 +113,15 @@ class SimulationMetaData(BaseModel):
     def experiment_folder_path(self) -> NewPath:
         """
         Directory Path for Susi simulation results: metadata, parameters, and netcdf file.
-        If stand_id and scenario_id are not given it results in `parent_output_folder`/`experiment_id`.
-        If stand_id and scenario_id are give it results in `parent_output_folder/experiment_id/stand_id/scenario_id`
+        If stand_id and scenario_id are not given it results in `parent_output_folder`/`run_id`.
+        If stand_id and scenario_id are give it results in `parent_output_folder/run_id/stand_id/scenario_id`
         The resulting path must not exist.
         """
 
-        base = self.parent_output_folder / self.experiment_id
+        # `_derive_parent_output_folder` runs before any computed field can be
+        # read, so the field is never still None here.
+        assert self.parent_output_folder is not None
+        base = self.parent_output_folder / self.run_id
         if self.stand_id and self.scenario_id:
             return base / self.stand_id / self.scenario_id
         return base
@@ -152,6 +153,39 @@ class SimulationMetaData(BaseModel):
             raise ValueError("Folder names must not contain path separators '/' or ''.")
 
         return v
+
+    # Must stay defined before `check_experiment_folder_path_does_not_exist`:
+    # pydantic runs "after" validators in class-body order, and that one reads
+    # `experiment_folder_path`, which needs `parent_output_folder` filled in.
+    @model_validator(mode="after")
+    def _derive_parent_output_folder(self) -> Self:
+        """
+        Default `parent_output_folder` to the project's own `outputs/` folder.
+
+        This cannot be a field default: pydantic has no way to default one
+        field from the value of another, and the folder depends on
+        `project_id`.
+
+        `AppSettings()` is constructed here, inside the validator (via
+        `project_dir`), rather than once at module level. That way importing
+        this module never touches the filesystem, and a mistyped
+        `SUSI_PROJECTS_ROOT` fails when you build a simulation -- with a
+        message naming the variable -- instead of failing the import of
+        `susi.io.metadata_model`.
+        """
+        if self.parent_output_folder is not None:
+            return self
+
+        outputs_dir = outputs_dir_for_project(project_dir(self.project_id))
+        if not outputs_dir.is_dir():
+            raise ValueError(
+                f"Project {self.project_id!r} has no outputs/ folder (expected "
+                f"at {outputs_dir}). A project keeps everything its runs "
+                "produce in outputs/; create the folder, or pass "
+                "`parent_output_folder` to write somewhere outside a project."
+            )
+        self.parent_output_folder = outputs_dir
+        return self
 
     @model_validator(mode="after")
     def check_experiment_folder_path_does_not_exist(self) -> Self:

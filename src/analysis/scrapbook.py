@@ -48,7 +48,7 @@ def coerce_datetime_format(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def modify_after_load(
-    df: pd.DataFrame, set_experiment_id_as_index: bool = False
+    df: pd.DataFrame, set_run_id_as_index: bool = False
 ) -> pd.DataFrame:
     df = df.copy()
 
@@ -58,9 +58,9 @@ def modify_after_load(
     # sort by starting date first
     df = df.sort_values(by="timestamp_start", ignore_index=True, ascending=False)
 
-    # set experiment_id as index
-    if set_experiment_id_as_index:
-        df = df.set_index(keys="experiment_id")
+    # set run_id as index
+    if set_run_id_as_index:
+        df = df.set_index(keys="run_id")
 
     return df
 
@@ -96,17 +96,17 @@ xr.open_mfdataset(paths=partialblocking_paths, decode_times=False)
 
 # %% Query and filter as desired
 # Example: get all _partialblocking
-df = df[df["experiment_id"].str.contains("partialblocking")]
+df = df[df["run_id"].str.contains("partialblocking")]
 
 
 # %% Read ncdf data into python dictionary with netcdf
 
-# Netcdf data is saved in a dictionary where the experimentID is the key.
+# Netcdf data is saved in a dictionary where the run_id is the key.
 data = {}
 
 for _, experiment_info in df.iterrows():
     netcdf_filepath = Path(experiment_info["netcdf_output_filepath"])
-    data[experiment_info["experiment_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
+    data[experiment_info["run_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
 
 
 # %% Experimental widgets

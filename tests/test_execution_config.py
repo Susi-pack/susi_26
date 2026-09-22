@@ -3,6 +3,7 @@ import pytest
 from pathlib import Path
 from pydantic import ValidationError
 
+from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
@@ -27,6 +28,26 @@ from susi.io.susi_parameter_model import (
     Thinning,
     CuttingManagementParams,
 )
+
+
+# Every `SimulationMetaData` below leaves `parent_output_folder` to be derived
+# from `project_id`, so they all need a project that actually exists on disk.
+TEST_PROJECT_ID = "test_project"
+
+
+@pytest.fixture(autouse=True)
+def test_project(tmp_path, monkeypatch) -> Path:
+    """
+    A throwaway `projects/test_project/outputs/` for every test in this module.
+
+    Autouse because the point of these tests is batch validation, not output
+    locations: spelling the project setup out in each one would only obscure
+    what is being asserted.
+    """
+    project_dir = tmp_path / "projects" / TEST_PROJECT_ID
+    (project_dir / "outputs").mkdir(parents=True)
+    monkeypatch.setenv(PROJECTS_ROOT_ENV_VAR, str(tmp_path / "projects"))
+    return project_dir
 
 
 @pytest.fixture
@@ -229,7 +250,7 @@ def two_duplicate_susi_params(valid_susi_params) -> list[SimulationParams]:
     return [
         SimulationParams(
             susi_params=valid_susi_params,
-            metadata=SimulationMetaData(experiment_id=str(i)),
+            metadata=SimulationMetaData(project_id=TEST_PROJECT_ID, run_id=str(i)),
         )
         for i in range(2)
     ]
@@ -242,11 +263,15 @@ def two_duplicate_experiment_folder_paths(
     return [
         SimulationParams(
             susi_params=valid_susi_params,
-            metadata=SimulationMetaData(experiment_id=str("THE_SAME")),
+            metadata=SimulationMetaData(
+                project_id=TEST_PROJECT_ID, run_id=str("THE_SAME")
+            ),
         ),
         SimulationParams(
             susi_params=another_valid_susi_params,
-            metadata=SimulationMetaData(experiment_id=str("THE_SAME")),
+            metadata=SimulationMetaData(
+                project_id=TEST_PROJECT_ID, run_id=str("THE_SAME")
+            ),
         ),
     ]
 
@@ -259,7 +284,8 @@ def two_valid_simus(
         SimulationParams(
             susi_params=valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="one",
+                project_id=TEST_PROJECT_ID,
+                run_id="run_one",
                 stand_id="stand_A",
                 scenario_id="scenario_1",
             ),
@@ -267,7 +293,8 @@ def two_valid_simus(
         SimulationParams(
             susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="two",
+                project_id=TEST_PROJECT_ID,
+                run_id="run_two",
                 stand_id="stand_B",
                 scenario_id="scenario_1",
             ),
@@ -283,7 +310,8 @@ def one_hundred_valid_simus(valid_susi_params) -> list[SimulationParams]:
                 update={"params_schema_version": i}
             ),
             metadata=SimulationMetaData(
-                experiment_id=str(i),
+                project_id=TEST_PROJECT_ID,
+                run_id=str(i),
                 stand_id=f"stand_{i}",
                 scenario_id="scenario_1",
             ),
@@ -341,7 +369,8 @@ def test_valid_batch_multiple_stands_scenarios(
         SimulationParams(
             susi_params=valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="batch_exp",
+                project_id=TEST_PROJECT_ID,
+                run_id="batch_run",
                 stand_id="stand_A",
                 scenario_id="scenario_1",
             ),
@@ -349,7 +378,8 @@ def test_valid_batch_multiple_stands_scenarios(
         SimulationParams(
             susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="batch_exp",
+                project_id=TEST_PROJECT_ID,
+                run_id="batch_run",
                 stand_id="stand_A",
                 scenario_id="scenario_2",
             ),
@@ -359,13 +389,14 @@ def test_valid_batch_multiple_stands_scenarios(
     assert multiple is not None
 
 
-def test_different_experiment_ids_raise(valid_susi_params, another_valid_susi_params):
-    """Different experiment_ids in the same batch should raise error."""
+def test_different_run_ids_raise(valid_susi_params, another_valid_susi_params):
+    """Different run_ids in the same batch should raise error."""
     simus = [
         SimulationParams(
             susi_params=valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="exp_one",
+                project_id=TEST_PROJECT_ID,
+                run_id="run_one",
                 stand_id="stand_A",
                 scenario_id="scenario_1",
             ),
@@ -373,13 +404,14 @@ def test_different_experiment_ids_raise(valid_susi_params, another_valid_susi_pa
         SimulationParams(
             susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(
-                experiment_id="exp_two",
+                project_id=TEST_PROJECT_ID,
+                run_id="run_two",
                 stand_id="stand_B",
                 scenario_id="scenario_1",
             ),
         ),
     ]
-    with pytest.raises(ValueError, match="same experiment_id"):
+    with pytest.raises(ValueError, match="same run_id"):
         MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
 
 
@@ -387,7 +419,8 @@ def test_missing_stand_id_in_batch_raises():
     """Missing stand_id in batch run should raise error at metadata creation."""
     with pytest.raises(ValidationError, match="stand_id and scenario_id"):
         SimulationMetaData(
-            experiment_id="batch_exp",
+            project_id=TEST_PROJECT_ID,
+            run_id="batch_run",
             scenario_id="scenario_1",
         )
 
@@ -396,6 +429,7 @@ def test_missing_scenario_id_in_batch_raises():
     """Missing scenario_id in batch run should raise error at metadata creation."""
     with pytest.raises(ValidationError, match="stand_id and scenario_id"):
         SimulationMetaData(
-            experiment_id="batch_exp",
+            project_id=TEST_PROJECT_ID,
+            run_id="batch_run",
             stand_id="stand_A",
         )

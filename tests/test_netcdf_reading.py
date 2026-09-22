@@ -134,7 +134,7 @@ def test_modify_after_load():
         {
             "timestamp_start": ["2020-01-01", "2020-01-02"],
             "timestamp_end": ["2020-12-31", "2020-12-30"],
-            "experiment_id": ["exp1", "exp2"],
+            "run_id": ["exp1", "exp2"],
             "value": [1, 2],
         }
     )
@@ -150,7 +150,7 @@ def test_modify_after_load_with_index():
         {
             "timestamp_start": ["2020-01-01", "2020-01-02"],
             "timestamp_end": ["2020-12-31", "2020-12-30"],
-            "experiment_id": ["exp1", "exp2"],
+            "run_id": ["exp1", "exp2"],
             "value": [1, 2],
         }
     )
@@ -158,7 +158,7 @@ def test_modify_after_load_with_index():
     result = modify_after_load(df)
 
     assert pd.api.types.is_datetime64_any_dtype(result["timestamp_start"])
-    assert "experiment_id" in result.columns
+    assert "run_id" in result.columns
 
 
 def test_list_subdirectories():
@@ -174,12 +174,12 @@ def test_list_subdirectories():
         assert result_names == {"dir1", "dir2"}
 
 
-def create_mock_experiment_folder(base_path: Path, experiment_id: str):
-    exp_dir = base_path / experiment_id
+def create_mock_experiment_folder(base_path: Path, run_id: str):
+    exp_dir = base_path / run_id
     exp_dir.mkdir()
 
     metadata = {
-        "experiment_id": experiment_id,
+        "run_id": run_id,
         "timestamp_start": "2020-01-01T00:00:00",
         "timestamp_end": "2020-12-31T00:00:00",
     }
@@ -210,7 +210,7 @@ def test_load_single_experiment_metadatas(mock_experiment_folders):
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
-    assert result.iloc[0]["experiment_id"] == "exp1"
+    assert result.iloc[0]["run_id"] == "exp1"
     assert result.iloc[0]["param1"] == 1.0
 
 
@@ -218,7 +218,7 @@ def test_load_all_metadatas_from_single_folder(mock_experiment_folders):
     result = _load_all_metadatas_from_single_stand(mock_experiment_folders)
 
     assert len(result) == 2
-    assert set(result["experiment_id"]) == {"exp1", "exp2"}
+    assert set(result["run_id"]) == {"exp1", "exp2"}
 
 
 def test_load_all_metadatas_from_stands(mock_experiment_folders):
