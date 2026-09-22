@@ -36,13 +36,15 @@ def test_create_project_creates_the_layout(new_project):
     assert (new_project / ".gitignore").is_file()
 
 
-def test_create_project_gitkeeps_outputs(new_project):
-    # Without it, a project that is git init-ed and committed before its
-    # first run arrives at a clone with no outputs/ at all -- and the first
-    # run there fails, because deriving a run folder needs outputs/ to exist.
+def test_create_project_leaves_the_folders_empty(new_project):
+    # No .gitkeep in either folder. A project committed to a git repository
+    # of its own before its first run loses both (git does not track empty
+    # directories), but that repository is the user's to manage -- this tool
+    # does not create it and does not work around it. README.md says so.
     init_project.create_project("paroninkorpi", DataSource.NONE, new_project)
 
-    assert (new_project / "outputs" / ".gitkeep").is_file()
+    assert list((new_project / "outputs").iterdir()) == []
+    assert list((new_project / "inputs").iterdir()) == []
 
 
 def test_create_project_never_creates_the_allometry_folder(new_project):
@@ -204,6 +206,9 @@ def test_readme_warns_about_git_clean(new_project):
 
     readme = (new_project / "README.md").read_text(encoding="utf-8")
     assert "git clean -xdf" in readme
+    # ...and about the empty folders a first commit would drop, which is why
+    # no .gitkeep is written for them.
+    assert "does not track empty folders" in readme
 
 
 # %% valid_project_id

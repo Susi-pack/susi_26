@@ -23,8 +23,21 @@ def create_folder(path: Path) -> None:
 
 
 def get_git_revision_short_hash() -> str:
+    """The SUSI checkout's current commit, for `SimulationMetaData`'s
+    provenance record.
+
+    `cwd` is the checkout, not the process's working directory. Without it
+    git answers about whatever repository it finds by searching upward from
+    wherever the run was started -- so a run launched from inside a project
+    folder that is its own git repository recorded *that* repository's
+    commit, and a run launched from a project outside any repository (what
+    SUSI_PROJECTS_ROOT is for) crashed before the simulation began.
+    `get_project_root()` walks up from this file, so it names the code that
+    is actually running whatever the caller's cwd is."""
     return (
-        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+        subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=get_project_root()
+        )
         .decode("ascii")
         .strip()
     )

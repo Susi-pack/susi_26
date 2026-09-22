@@ -231,6 +231,12 @@ checkout **deletes** an ordinary, data-only project folder, but **skips** a
 nested git repository. Only `git clean -xdff` destroys a nested one. Making
 this project a repository is, counter-intuitively, what protects it.
 
+One git quirk to know if you do: git does not track empty folders, so
+committing this project before its first run leaves `inputs/` and `outputs/`
+out of the commit, and a clone of it arrives without them. SUSI then refuses
+to run, naming the folder it wants; `mkdir` it, or commit a placeholder file
+inside each.
+
 Nothing in the SUSI repo checks the code in here, either: type checking and
 the pre-commit hooks only see the repo's own tracked files. Run
 `uv run ty check <this folder>` yourself if you want it covered.
@@ -266,16 +272,12 @@ def create_project(
     outputs_dir.mkdir()
     created = [project_dir, inputs_dir, outputs_dir]
 
-    # Git does not track empty directories, so without this a project that is
-    # committed before its first run arrives at a clone with no outputs/ at
-    # all -- and the first run there fails, because deriving a run folder
-    # requires outputs/ to exist. The SUSI repo uses the same trick for
-    # projects/.gitkeep. inputs/ needs no equivalent: it is where the user's
-    # own data goes.
-    gitkeep_path = outputs_dir / ".gitkeep"
-    gitkeep_path.touch()
-    created.append(gitkeep_path)
-
+    # No .gitkeep in either folder, deliberately. Git does not track empty
+    # directories, so a project committed to a repository of its own before
+    # its first run arrives at a clone with no inputs/ or outputs/ -- but
+    # that is the user's repository to manage, not this tool's, and the
+    # failure it produces (require_outputs_dir / require_project_dir) names
+    # the missing folder and says to create it. README.md mentions it.
     config_template_path = SOURCE_SEEDS[source].config_template_path
     if config_template_path is not None:
         config_path = inputs_dir / CONFIG_FILENAME
