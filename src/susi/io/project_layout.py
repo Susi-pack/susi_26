@@ -65,6 +65,26 @@ def run_dir(project_dir: Path, run_id: str) -> Path:
     return outputs_dir_for_project(project_dir) / run_id
 
 
+def require_outputs_dir(project_dir: Path) -> Path:
+    """
+    Return a project's `outputs/`, failing with a message that says what is missing.
+
+    Its callers -- `SimulationMetaData`'s `parent_output_folder` default and
+    both analysis frontends' run pickers -- all hit the same case: a project
+    that exists but has never been run. One message for it, next to the path
+    composition it is about.
+    """
+    outputs_dir = outputs_dir_for_project(project_dir)
+    if not outputs_dir.is_dir():
+        raise FileNotFoundError(
+            f"Project {project_dir.name} has no outputs/ folder (expected at "
+            f"{outputs_dir}). A project keeps everything its runs produce "
+            "in outputs/; create the folder if nothing has been run for this "
+            "project yet."
+        )
+    return outputs_dir
+
+
 def require_project_dir(project_dir: Path) -> None:
     """
     Fail with a message that says what is missing.

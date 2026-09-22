@@ -48,13 +48,14 @@ _PARONINKORPI_LEGACY_AREAS_JSON_RELPATH = Path(
 
 def stand_areas_for_project(project_dirpath: Path) -> dict[StandID, float]:
     """
-    Return the area in hectares of every stand in a project output folder.
+    Return the area in hectares of every stand in a run's output folder.
 
-    project_dirpath is a project folder holding one subfolder per stand --
-    e.g. `outputs/paroninkorpi`, the `.value` of a project-level
-    `folder_selection.build_dropdown()`. Stand IDs are taken from those
-    subfolders, so the result covers exactly the stands the optimization
-    will later iterate over.
+    project_dirpath is the folder holding one subfolder per stand, which is
+    one *run* of a project -- `projects/<project>/outputs/<run_id>/`, the
+    `.value` of the run-level dropdown. (The parameter keeps the older name;
+    ticket 09 renames this function and its argument.) Stand IDs are taken
+    from those subfolders, so the result covers exactly the stands the
+    optimization will later iterate over.
 
     Raises ValueError for any project other than Paroninkorpi: there is no
     general way to source stand areas yet (#216), and silently guessing them

@@ -14,7 +14,7 @@ from pydantic import (
 )
 
 import susi.io.utils as io_utils
-from susi.io.project_layout import outputs_dir_for_project, project_dir
+from susi.io.project_layout import project_dir, require_outputs_dir
 
 
 def does_filename_have_extension(filename: str, extension: str) -> None:
@@ -176,15 +176,18 @@ class SimulationMetaData(BaseModel):
         if self.parent_output_folder is not None:
             return self
 
-        outputs_dir = outputs_dir_for_project(project_dir(self.project_id))
-        if not outputs_dir.is_dir():
-            raise ValueError(
-                f"Project {self.project_id!r} has no outputs/ folder (expected "
-                f"at {outputs_dir}). A project keeps everything its runs "
-                "produce in outputs/; create the folder, or pass "
-                "`parent_output_folder` to write somewhere outside a project."
+        try:
+            self.parent_output_folder = require_outputs_dir(
+                project_dir(self.project_id)
             )
-        self.parent_output_folder = outputs_dir
+        except FileNotFoundError as error:
+            # Re-raised as a ValueError because that is the only exception
+            # pydantic collects into a ValidationError; anything else escapes
+            # the constructor on its own.
+            raise ValueError(
+                f"{error} Alternatively, pass `parent_output_folder` to write "
+                "somewhere outside a project."
+            ) from error
         return self
 
     @model_validator(mode="after")

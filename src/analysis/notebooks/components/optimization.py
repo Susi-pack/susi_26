@@ -56,11 +56,13 @@ _INVERT_SIGN_TOOLTIP = (
 
 def display_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
     """
-    Display the area in hectares of every stand in a project, and return them.
+    Display the area in hectares of every stand in a run, and return them.
 
-    project_dirpath is a project output folder -- e.g. the `.value` of a
-    project-level `folder_selection.build_dropdown()`. The returned dict is
-    what `core.prepare_optimization_data()` expects as `stand_areas`.
+    project_dirpath is the folder holding one subfolder per stand, which is
+    one run of a project -- `projects/<project>/outputs/<run_id>/`, the
+    `.value` of `folder_selection.build_run_dropdown()`. (The parameter keeps
+    the older name; ticket 09 renames it.) The returned dict is what
+    `core.prepare_optimization_data()` expects as `stand_areas`.
 
     Raises for any project other than Paroninkorpi (#216); see
     `analysis.optimization.stand_areas`.
@@ -203,9 +205,7 @@ def target_variable_properties(
     """
     return {
         var_path: opti_core.TargetVariableProperties(
-            aggregation_function=opti_core.AGGREGATION_METHODS_BY_LABEL[
-                dropdown.value
-            ],
+            aggregation_function=opti_core.AGGREGATION_METHODS_BY_LABEL[dropdown.value],
             invert_optimization=config.invert_checkboxes[var_path].value,
         )
         for var_path, dropdown in config.aggregation_dropdowns.items()

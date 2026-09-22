@@ -18,7 +18,7 @@ st.header("Optimization")
 # The optimization works over the folder holding one subfolder per stand,
 # which is a run's folder, not the project's. (`project_dirpath` below is the
 # parameter name it still has; ticket 09 renames it.)
-dir_path = folder_selection.build_run_selection_widget(
+dir_path = folder_selection.build_project_and_run_selection_widget(
     projects_root=st.session_state.settings["projects_root"]
 )
 

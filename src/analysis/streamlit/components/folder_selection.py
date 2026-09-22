@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog
 
 import susi.io.load_output_data as load_output
-from susi.io.project_layout import outputs_dir_for_project
+from susi.io.project_layout import require_outputs_dir
 
 
 def pick_folder_popup() -> Path:
@@ -30,7 +30,7 @@ def build_folder_selection_widget(dir_path: Path, label: str) -> Path:
     return dir_path / selected_dir_name
 
 
-def build_run_selection_widget(projects_root: Path) -> Path:
+def build_project_and_run_selection_widget(projects_root: Path) -> Path:
     """
     Pick a project and then one of its runs, returning the run's folder.
 
@@ -48,13 +48,9 @@ def build_run_selection_widget(projects_root: Path) -> Path:
         dir_path=projects_root, label="project"
     )
 
-    outputs_dirpath = outputs_dir_for_project(project_dirpath)
-    if not outputs_dirpath.is_dir():
-        # A project that has inputs but has never been run. Say so here,
-        # rather than letting the run dropdown fail on a missing directory.
-        raise ValueError(
-            f"Project {project_dirpath.name} has no outputs/ folder (expected "
-            f"at {outputs_dirpath}). Nothing has been run for it yet."
-        )
+    # `require_outputs_dir` rather than plain path composition: it reports a
+    # project that has never been run, instead of leaving the run dropdown to
+    # fail on a missing directory.
+    outputs_dirpath = require_outputs_dir(project_dirpath)
 
     return build_folder_selection_widget(dir_path=outputs_dirpath, label="run")

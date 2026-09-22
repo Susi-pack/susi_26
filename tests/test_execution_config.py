@@ -250,7 +250,12 @@ def two_duplicate_susi_params(valid_susi_params) -> list[SimulationParams]:
     return [
         SimulationParams(
             susi_params=valid_susi_params,
-            metadata=SimulationMetaData(project_id=TEST_PROJECT_ID, run_id=str(i)),
+            metadata=SimulationMetaData(
+                project_id=TEST_PROJECT_ID,
+                run_id="batch_run",
+                stand_id=f"stand_{i}",
+                scenario_id="scenario_1",
+            ),
         )
         for i in range(2)
     ]
@@ -264,13 +269,19 @@ def two_duplicate_experiment_folder_paths(
         SimulationParams(
             susi_params=valid_susi_params,
             metadata=SimulationMetaData(
-                project_id=TEST_PROJECT_ID, run_id=str("THE_SAME")
+                project_id=TEST_PROJECT_ID,
+                run_id="batch_run",
+                stand_id="stand_A",
+                scenario_id="scenario_1",
             ),
         ),
         SimulationParams(
             susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(
-                project_id=TEST_PROJECT_ID, run_id=str("THE_SAME")
+                project_id=TEST_PROJECT_ID,
+                run_id="batch_run",
+                stand_id="stand_A",
+                scenario_id="scenario_1",
             ),
         ),
     ]
@@ -285,7 +296,7 @@ def two_valid_simus(
             susi_params=valid_susi_params,
             metadata=SimulationMetaData(
                 project_id=TEST_PROJECT_ID,
-                run_id="run_one",
+                run_id="batch_run",
                 stand_id="stand_A",
                 scenario_id="scenario_1",
             ),
@@ -294,7 +305,7 @@ def two_valid_simus(
             susi_params=another_valid_susi_params,
             metadata=SimulationMetaData(
                 project_id=TEST_PROJECT_ID,
-                run_id="run_two",
+                run_id="batch_run",
                 stand_id="stand_B",
                 scenario_id="scenario_1",
             ),
@@ -311,7 +322,7 @@ def one_hundred_valid_simus(valid_susi_params) -> list[SimulationParams]:
             ),
             metadata=SimulationMetaData(
                 project_id=TEST_PROJECT_ID,
-                run_id=str(i),
+                run_id="batch_run",
                 stand_id=f"stand_{i}",
                 scenario_id="scenario_1",
             ),
@@ -325,7 +336,7 @@ def test_duplicate_susi_params(two_duplicate_susi_params):
     Computing the same twice would not make sense
     Make sure there are no duplicated simulation parameters
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Duplicate Susi Parameter models"):
         MultipleSusis(
             n_parallel_processes=1,
             simulation_parameter_list=two_duplicate_susi_params,
@@ -337,7 +348,7 @@ def test_duplicate_folder_names(two_duplicate_experiment_folder_paths):
     Storing Susi results twice in the same folder
     would rewrite the previous contents of the folder
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Duplicate experiment folder paths"):
         MultipleSusis(
             n_parallel_processes=1,
             simulation_parameter_list=two_duplicate_experiment_folder_paths,
@@ -346,7 +357,7 @@ def test_duplicate_folder_names(two_duplicate_experiment_folder_paths):
 
 def test_maximum_number_of_parallel_processes_validation(one_hundred_valid_simus):
     # No more than 40 cores are allowed in multiprocessing
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="less than or equal to 40"):
         MultipleSusis(
             n_parallel_processes=41,
             simulation_parameter_list=one_hundred_valid_simus,
@@ -354,7 +365,7 @@ def test_maximum_number_of_parallel_processes_validation(one_hundred_valid_simus
 
 
 def test_less_parallel_processes_than_simus(two_valid_simus):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="at most one process per run"):
         MultipleSusis(
             n_parallel_processes=3,
             simulation_parameter_list=two_valid_simus,

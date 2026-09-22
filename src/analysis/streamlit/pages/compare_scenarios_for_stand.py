@@ -26,7 +26,7 @@ with col3:
             st.rerun()
 
 dir_path = folder_selection.build_folder_selection_widget(
-    dir_path=folder_selection.build_run_selection_widget(
+    dir_path=folder_selection.build_project_and_run_selection_widget(
         projects_root=st.session_state.settings["projects_root"]
     ),
     label="stand",

@@ -35,9 +35,9 @@ def display_summary_table(dir_path: Path) -> pd.DataFrame:
     """
     Compute and display the per-stand/scenario summary table for dir_path.
 
-    dir_path is a project folder containing one subfolder per stand, each
-    holding one subfolder per scenario -- e.g. the `.value` of a project-level
-    `folder_selection.build_dropdown()`.
+    dir_path is one run of a project -- `projects/<project>/outputs/<run_id>/`,
+    the `.value` of `folder_selection.build_run_dropdown()`. It contains one
+    subfolder per stand, each holding one subfolder per scenario.
 
     Returns the aggregated DataFrame (sorted by stand, then scenario) so a
     later cell can reuse it without recomputing.

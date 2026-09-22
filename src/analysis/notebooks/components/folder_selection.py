@@ -40,7 +40,7 @@ from IPython.display import display
 from ipyfilechooser import FileChooser
 
 import susi.io.load_output_data as load_output
-from susi.io.project_layout import outputs_dir_for_project
+from susi.io.project_layout import require_outputs_dir
 
 
 def build_dropdown(dir_path: Path | str, label: str) -> widgets.Dropdown:
@@ -88,15 +88,10 @@ def build_run_dropdown(project_dirpath: Path | str) -> widgets.Dropdown:
 
     The stand dropdown chains off the returned widget's `.value` as usual.
     """
-    outputs_dirpath = outputs_dir_for_project(Path(project_dirpath))
-    if not outputs_dirpath.is_dir():
-        # A project that has inputs but has never been run. Said here rather
-        # than left to build_dropdown, which would report the project's
-        # missing outputs/ folder as a missing "run" folder.
-        raise ValueError(
-            f"Project {Path(project_dirpath).name} has no outputs/ folder "
-            f"(expected at {outputs_dirpath}). Nothing has been run for it yet."
-        )
+    # `require_outputs_dir` rather than plain path composition: it reports a
+    # project that has never been run, where build_dropdown would report the
+    # missing outputs/ folder as a missing "run" folder.
+    outputs_dirpath = require_outputs_dir(Path(project_dirpath))
 
     return build_dropdown(outputs_dirpath, label="run")
 
