@@ -5,15 +5,18 @@
 
 import datetime
 
-from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
+    StandardNPKFertilizationParameters,
+    NutrientFertilizationParameters,
     SiteParams,
     StandParams,
     WeatherParams,
     SimulationConfig,
     SusiParams,
     CanopyLayerAllometry,
+    AllometryFileAndSpecies,
+    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -21,19 +24,16 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerName,
-    AllometryFileAndSpecies,
+    ClearCut,
+    CuttingManagementParams,
 )
-
-_app_settings = AppSettings()
+from system_inputs import SYSTEM_INPUTS_DIR
 
 _N_SOIL_COLS = 20
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        FMI_weather_filepath=_app_settings.input_folder.joinpath(
-            "system/weather/CFw.csv"
-        ),
+        FMI_weather_filepath=SYSTEM_INPUTS_DIR.joinpath("weather/CFw.csv"),
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
@@ -44,9 +44,7 @@ PARAMETERS = SusiParams(
         canopy_layer_allometry=CanopyLayerAllometry(
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    file_path=_app_settings.input_folder.joinpath(
-                        "system/allometry/CF_41.csv"
-                    ),
+                    file_path=SYSTEM_INPUTS_DIR.joinpath("allometry/CF_41.csv"),
                     species_id=1,
                 )
             },
@@ -102,11 +100,43 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_management=None,
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
-        fertilization=None,
+        fertilization=StandardNPKFertilizationParameters(
+            application_year=2004,
+            N=NutrientFertilizationParameters(
+                dose=0.0,
+                decay_k=0.5,
+                eff=1.0,
+            ),  # fertilization dose in kg ha-1, decay_k in yr-1
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.1, eff=1.0),  # 45
+            K=NutrientFertilizationParameters(dose=120.0, decay_k=0.1, eff=1.0),  # 100
+            pH_increment=0.5,
+        ),
         peat_temperature=PeatTemperatureParams(),
+        cutting_management=CuttingManagementParams(
+            application_yr=2008,
+            management_type=ClearCut(
+                # Post-clearcut allometry has to start from age=1, so it needs
+                # its own file: CF_41.csv above starts from age 60.
+                new_growth_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=SYSTEM_INPUTS_DIR.joinpath(
+                                "allometry/new_growth_pine.csv"
+                            ),
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                strips_to_cut=[True] * _N_SOIL_COLS,
+            ),
+        ),
     ),
 )

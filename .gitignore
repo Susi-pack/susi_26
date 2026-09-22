@@ -11,20 +11,6 @@ inputs/*
 !inputs/.gitkeep
 
 
-# Ignore src/inputs/, except for src/inputs/system/ (tracked dev data needed
-# for susi tests and examples) and src/inputs/user_parameters/ (tracked as an
-# empty folder; its own contents stay untracked, see below). The negations
-# for user_parameters/ must live in this same block: git won't recurse into
-# an already-excluded directory, so a later, separate `!.../.gitkeep` rule
-# can't re-include anything inside it.
-src/inputs/*
-!src/inputs/system/
-!src/inputs/user_parameters/
-
-src/inputs/user_parameters/*
-!src/inputs/user_parameters/.gitkeep
-
-
 #python stuff
 venv/
 *.pyc

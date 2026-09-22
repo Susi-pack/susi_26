@@ -1,5 +1,7 @@
-# Create a meaningless but valid Susi parameter file
-# to run some tests with it.
+# The parameters contained in this file are the
+# parameters to replicate the default Susi simulation
+# from the original code.
+# The site parameters correspond to the "develop_scens" scenario
 
 import datetime
 
@@ -11,7 +13,6 @@ from susi.io.susi_parameter_model import (
     SimulationConfig,
     SusiParams,
     CanopyLayerAllometry,
-    CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
     OutputParams,
@@ -19,13 +20,12 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    Thinning,
-    CuttingManagementParams,
+    CanopyLayerName,
     AllometryFileAndSpecies,
 )
 from system_inputs import SYSTEM_INPUTS_DIR
 
-_N_SOIL_COLS = 5
+_N_SOIL_COLS = 20
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
@@ -33,7 +33,7 @@ PARAMETERS = SusiParams(
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
-        end_date=datetime.datetime(2007, 12, 31),
+        end_date=datetime.datetime(2017, 12, 31),
     ),
     stand_params=StandParams(
         site_fertility_class=4,
@@ -57,9 +57,8 @@ PARAMETERS = SusiParams(
     photo_parameters=get_photo_parameters_by_location(
         location=LocationsForPhotoParams("All_data")
     ),
-    # The meaninglessness is only here.
     site_parameters=SiteParams(
-        L=10.0,
+        L=40.0,
         n=_N_SOIL_COLS,
         initial_canopylayer_age_years={
             CanopyLayerName.dominant: 60.0,
@@ -78,7 +77,7 @@ PARAMETERS = SusiParams(
         ditch_depth_20y_west=[-0.5],
         ditch_depth_20y_east=[-0.5],
         scenario_name=["D60"],  # kasvunlisaykset
-        drain_age=100.0,
+        drain_age=50.0,
         initial_h=-0.2,
         slope=0.0,
         peat_type=[PeatTypes.generic] * 8,
@@ -97,10 +96,7 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_management=CuttingManagementParams(
-            application_yr=2004,
-            management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
-        ),
+        cutting_management=None,
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,

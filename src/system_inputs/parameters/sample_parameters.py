@@ -5,7 +5,6 @@
 
 import datetime
 
-from susi.io.app_settings import AppSettings
 from susi.io.susi_parameter_model import (
     PeatTypes,
     StandardNPKFertilizationParameters,
@@ -26,16 +25,13 @@ from susi.io.susi_parameter_model import (
     h_mor_from_drainage_and_mass_mor_Pitkanen,
     AllometryFileAndSpecies,
 )
-
-_app_settings = AppSettings()
+from system_inputs import SYSTEM_INPUTS_DIR
 
 _N_SOIL_COLS = 20
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        FMI_weather_filepath=_app_settings.input_folder.joinpath(
-            "system/weather/CFw.csv"
-        ),
+        FMI_weather_filepath=SYSTEM_INPUTS_DIR.joinpath("weather/CFw.csv"),
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
@@ -46,9 +42,7 @@ PARAMETERS = SusiParams(
         canopy_layer_allometry=CanopyLayerAllometry(
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    file_path=_app_settings.input_folder.joinpath(
-                        "system/allometry/CF_41.csv"
-                    ),
+                    file_path=SYSTEM_INPUTS_DIR.joinpath("allometry/CF_41.csv"),
                     species_id=1,
                 )
             },

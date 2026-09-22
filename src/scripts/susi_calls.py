@@ -7,7 +7,7 @@ Created on Wed Sep 30 14:10:42 2020
 
 from susi.io.execution_config import SimulationParams
 from susi.core.susi_main import Susi
-from inputs.system.parameters import sample_parameters
+from system_inputs.parameters import sample_parameters
 from susi.io.metadata_model import SimulationMetaData
 
 # read weather input
