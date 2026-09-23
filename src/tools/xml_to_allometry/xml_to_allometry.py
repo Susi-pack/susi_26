@@ -12,53 +12,57 @@ import xmltodict
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from susi.core.allometric_road_map import Growth_and_Yield_Table
-from susi.io.extra_pydantic_types import StrictFrozenModel
 from susi.io.project_layout import (
     allometry_dir_for_project,
     stand_data_path_for_project,
+)
+from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
+    AllometryGenerationDefaults,
+)
+from tools.shared_allometry_tool_utils.growth_and_yield_table import (
+    build_growth_and_yield_table,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
-    validate_altitude_ddy,
 )
 from tools.shared_allometry_tool_utils.print_formatting import (
     StandSkipped,
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.project_layout import (
-    check_output_dir_available,
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
-from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
+from tools.shared_allometry_tool_utils.tree_stratum import (
+    PerSpecies,
+    TreeStratum,
+    ZERO_STRATUM,
+)
 from tools.shared_allometry_tool_utils.stand_data import (
     StandData,
     StandDataDocument,
+    dump_stand_data_document,
 )
 
 
 # %% Config
 
 
-class XmlConfig(StrictFrozenModel):
+class XmlConfig(AllometryGenerationDefaults):
     """
-    Defaulted and required parameters, loaded from a TOML file.
+    Defaulted and required parameters, loaded from a TOML file. Subclasses
+    AllometryGenerationDefaults for the shared n_trees/start_year/end_year/
+    step_years defaults, the same ones metsakeskus_to_allometry.py's
+    ExtractionConfig and new_growth_allometry.py's NewGrowthSourcedConfig use.
     """
 
     # Required, no defaults
     altitude: float
     ddy: float
-
-    # Defaulted -- the same values metsakeskus_to_allometry.py's
-    # ExtractionConfig already uses.
-    n_trees: int = 20
-    start_year: int = 5
-    end_year: int = 80
-    step_years: int = 5
 
 
 def load_xml_config(config_path: Path) -> XmlConfig:
@@ -95,7 +99,7 @@ class ParsedStand:
     id: StandID
     fertility_class: int
     polygon: str
-    tree_strata: tuple[TreeStratum, TreeStratum, TreeStratum]
+    tree_strata: PerSpecies[TreeStratum]
     main_species: int
     x_ykj: int
     y_ykj: int
@@ -160,13 +164,13 @@ def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[float, float], .
 
 def get_tree_strata_data(
     tree_strata_xml_data: list,
-) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
+) -> PerSpecies[TreeStratum]:
     """
-    Map strata into fixed species slots:
+    Map strata into the fixed SUSI species slots:
 
-    index 0 -> TreeSpecies 1
-    index 1 -> TreeSpecies 2
-    index 2 -> TreeSpecies >= 3
+    TreeSpecies 1  -> pine
+    TreeSpecies 2  -> spruce
+    TreeSpecies >= 3 -> deciduous
 
     Missing species are represented by the shared ZERO_STRATUM -- TreeStratum
     is immutable, so there is nothing a shared instance in all three slots
@@ -177,7 +181,7 @@ def get_tree_strata_data(
     if isinstance(tree_strata_xml_data, dict):
         tree_strata_xml_data = [tree_strata_xml_data]
 
-    strata = [ZERO_STRATUM, ZERO_STRATUM, ZERO_STRATUM]
+    pine, spruce, deciduous = ZERO_STRATUM, ZERO_STRATUM, ZERO_STRATUM
 
     for stratum in tree_strata_xml_data:
         tree_species = int(stratum["tst:TreeSpecies"])
@@ -191,13 +195,13 @@ def get_tree_strata_data(
         )
 
         if tree_species == 1:
-            strata[0] = tree_stratum
+            pine = tree_stratum
         elif tree_species == 2:
-            strata[1] = tree_stratum
+            spruce = tree_stratum
         else:
-            strata[2] = tree_stratum
+            deciduous = tree_stratum
 
-    return (strata[0], strata[1], strata[2])
+    return PerSpecies(pine=pine, spruce=spruce, deciduous=deciduous)
 
 
 def get_stand_data_from_xml(stand: dict) -> ParsedStand:
@@ -230,11 +234,16 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
 
     tree_strata = get_tree_strata_data(tree_strata_xml_data)
 
-    strata_basal_areas_per_stratum = []
-    strata_stem_counts_per_stratum = []
-    for tree_stratum in tree_strata:
-        strata_basal_areas_per_stratum.append(tree_stratum.basal_area)
-        strata_stem_counts_per_stratum.append(tree_stratum.stem_count)
+    strata_basal_areas_per_stratum = [
+        tree_strata.pine.basal_area,
+        tree_strata.spruce.basal_area,
+        tree_strata.deciduous.basal_area,
+    ]
+    strata_stem_counts_per_stratum = [
+        tree_strata.pine.stem_count,
+        tree_strata.spruce.stem_count,
+        tree_strata.deciduous.stem_count,
+    ]
 
     # The main species is the one with the largest basal area
     #           index 0 -> TreeSpecies 1 (Pine)
@@ -307,15 +316,9 @@ def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
     return parsed_stands, skipped
 
 
-def dump_stand_data_document(project_dir: Path, document: StandDataDocument) -> None:
-    """Writes stand_data.json into the project's inputs/ folder -- a sibling
-    of the allometry/ folder holding the per-stand CSVs, not a file inside it.
-    The document describes the whole project, so it does not belong under the
-    allometry output folder; and it is something the project is simulated
-    *from*, so it belongs with the project's other inputs."""
-    json_output = stand_data_path_for_project(project_dir)
-    json_output.write_text(document.model_dump_json())
-    return None
+# dump_stand_data_document is now the shared
+# tools.shared_allometry_tool_utils.stand_data function, imported above --
+# it used to be a local copy.
 
 
 def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> Path:
@@ -333,41 +336,20 @@ def process_stand(
     """
     Builds the single allometry CSV for this stand
     """
-    strata_basal_areas_per_stratum = [
-        stratum.basal_area for stratum in parsed_stand.tree_strata
-    ]
-    strata_stem_counts_per_stratum = [
-        stratum.stem_count for stratum in parsed_stand.tree_strata
-    ]
+    strata = parsed_stand.tree_strata
 
-    gy = Growth_and_Yield_Table(
-        age_1=parsed_stand.tree_strata[0].age,
-        G_1=strata_basal_areas_per_stratum[0],
-        N_1=strata_stem_counts_per_stratum[0],
-        Dg_1=parsed_stand.tree_strata[0].mean_diameter,
-        Hg_1=parsed_stand.tree_strata[0].mean_height,
-        age_2=parsed_stand.tree_strata[1].age,
-        G_2=strata_basal_areas_per_stratum[1],
-        N_2=strata_stem_counts_per_stratum[1],
-        Dg_2=parsed_stand.tree_strata[1].mean_diameter,
-        Hg_2=parsed_stand.tree_strata[1].mean_height,
-        age_3=parsed_stand.tree_strata[2].age,
-        G_3=strata_basal_areas_per_stratum[2],
-        N_3=strata_stem_counts_per_stratum[2],
-        Dg_3=parsed_stand.tree_strata[2].mean_diameter,
-        Hg_3=parsed_stand.tree_strata[2].mean_height,
-        DDY=config.ddy,  # Temperature sum, degree days
+    page_1 = build_growth_and_yield_table(
+        strata=strata,
         fertility_class=parsed_stand.fertility_class,
-        peat=PEAT,
-        y=parsed_stand.y_ykj,
-        x=parsed_stand.x_ykj,
-        altitude=config.altitude,  # Altitude above the sea level
+        x_ykj=parsed_stand.x_ykj,
+        y_ykj=parsed_stand.y_ykj,
+        altitude=config.altitude,
+        ddy=config.ddy,
         n_trees=config.n_trees,
-    )
-    page_1 = gy.get_table(
         start_year=config.start_year,
         end_year=config.end_year,
         step_years=config.step_years,
+        peat=PEAT,
     )
 
     output_path = plan_stand_output(parsed_stand, output_dir)
@@ -396,18 +378,19 @@ def process_stand(
         total_volume=parsed_stand.total_volume,
         stem_count=parsed_stand.stem_count,
         # Per-species figures straight off the fixed species slots
-        # get_tree_strata_data filled (0 = pine, 1 = spruce, 2 = every species
-        # code >= 3, bucketed as "deciduous"). Raw, exactly as the XML recorded
-        # them: any thinning-decision adjustment (e.g. paroninkorpi.py's
-        # sapling thinning rate) belongs to the consumer making that decision,
-        # not to the stand record. A species with no stratum is ZERO_STRATUM,
-        # so its figures are 0.0 here rather than None.
-        basal_area_pine=strata_basal_areas_per_stratum[0],
-        basal_area_spruce=strata_basal_areas_per_stratum[1],
-        basal_area_deciduous=strata_basal_areas_per_stratum[2],
-        stem_count_pine=strata_stem_counts_per_stratum[0],
-        stem_count_spruce=strata_stem_counts_per_stratum[1],
-        stem_count_deciduous=strata_stem_counts_per_stratum[2],
+        # get_tree_strata_data filled (pine/spruce/deciduous, the last one
+        # bucketing every species code >= 3). Raw, exactly as the XML
+        # recorded them: any thinning-decision adjustment (e.g.
+        # paroninkorpi.py's sapling thinning rate) belongs to the consumer
+        # making that decision, not to the stand record. A species with no
+        # stratum is ZERO_STRATUM, so its figures are 0.0 here rather than
+        # None.
+        basal_area_pine=strata.pine.basal_area,
+        basal_area_spruce=strata.spruce.basal_area,
+        basal_area_deciduous=strata.deciduous.basal_area,
+        stem_count_pine=strata.pine.stem_count,
+        stem_count_spruce=strata.spruce.stem_count,
+        stem_count_deciduous=strata.deciduous.stem_count,
     )
 
 
@@ -470,14 +453,11 @@ def parse_CLI_arguments() -> CLIArguments:
     )
     config = load_xml_config(config_path)
 
-    validate_altitude_ddy(
-        parser, config.altitude, config.ddy, args.allow_out_of_range_values
+    # Validates config.altitude/ddy and refuses to reuse an existing output
+    # folder -- this check runs in dry-run mode too.
+    finalize_cli_config(
+        parser, config.altitude, config.ddy, args.project_dir, args.allow_out_of_range_values
     )
-
-    # Refuse to reuse an existing folder rather than silently overwriting
-    # whatever a prior run left there. This check runs in dry-run mode too:
-    output_dir = allometry_dir_for_project(args.project_dir)
-    check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
         xml_filepath=args.xml_file,
@@ -572,7 +552,7 @@ def main():
 
     json_path = stand_data_path_for_project(cli_args.project_dir)
     dump_stand_data_document(
-        project_dir=cli_args.project_dir,
+        output_path=json_path,
         document=StandDataDocument(
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

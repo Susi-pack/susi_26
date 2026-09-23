@@ -5,6 +5,7 @@ import inspect
 from dataclasses import dataclass
 from pathlib import Path
 
+import pandas as pd
 import pydantic
 import pytest
 from hypothesis import assume, given
@@ -18,9 +19,11 @@ from susi.io.susi_parameter_model import (
 )
 from susi.io import susi_parameter_model
 from tools.shared_allometry_tool_utils import (
+    allometry_generation_defaults,
+    cli_paths,
+    growth_and_yield_table,
     input_validation,
     print_formatting,
-    project_layout,
     shared_utils,
     stand_data,
     tree_stratum,
@@ -290,22 +293,55 @@ def test_load_toml_config_reads_the_file_and_hands_the_raw_dict_to_parse(tmp_pat
     assert config == _DummyConfig(required_field=3)
 
 
-# %% project_layout.check_output_dir_available
+# %% allometry_generation_defaults.AllometryGenerationDefaults
+#
+# ExtractionConfig (metsakeskus_to_allometry.py), XmlConfig
+# (xml_to_allometry.py), and NewGrowthSourcedConfig (new_growth_allometry.py)
+# each subclass this now instead of redeclaring the same four fields; their
+# own test files already cover that each config resolves these defaults
+# unchanged (test_..._config_applies_defaults). This just covers the
+# defaults model itself.
+
+
+def test_allometry_generation_defaults_resolve_to_20_5_80_5():
+    defaults = allometry_generation_defaults.AllometryGenerationDefaults()
+    assert (
+        defaults.n_trees,
+        defaults.start_year,
+        defaults.end_year,
+        defaults.step_years,
+    ) == (20, 5, 80, 5)
+
+
+def test_allometry_generation_defaults_rejects_unknown_field():
+    with pytest.raises(pydantic.ValidationError, match="typo_field"):
+        allometry_generation_defaults.AllometryGenerationDefaults.model_validate(
+            {"typo_field": 1}
+        )
+
+
+def test_allometry_generation_defaults_is_frozen():
+    defaults = allometry_generation_defaults.AllometryGenerationDefaults()
+    with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
+        setattr(defaults, "n_trees", 5)  # noqa: B010 -- setattr, not `.` access, to keep this a runtime-only check
+
+
+# %% cli_paths.check_output_dir_available
 
 
 def test_check_output_dir_available_allows_a_free_folder(tmp_path):
-    project_layout.check_output_dir_available(tmp_path / "allometry", _parser())
+    cli_paths.check_output_dir_available(tmp_path / "allometry", _parser())
 
 
 def test_check_output_dir_available_refuses_an_existing_folder(tmp_path, capsys):
     output_dir = tmp_path / "allometry"
     output_dir.mkdir()
     with pytest.raises(SystemExit):
-        project_layout.check_output_dir_available(output_dir, _parser())
+        cli_paths.check_output_dir_available(output_dir, _parser())
     assert "already exists" in capsys.readouterr().err
 
 
-# %% project_layout.resolve_config_path
+# %% cli_paths.resolve_config_path
 #
 # config_filename is passed in by each tool rather than shared: several
 # tools' configs can live in one project's inputs/ folder, so they must not
@@ -331,7 +367,7 @@ def test_resolve_config_path_prefers_explicit_config(tmp_path, config_filename):
     (project_dir / "inputs" / config_filename).write_text("")
 
     assert (
-        project_layout.resolve_config_path(
+        cli_paths.resolve_config_path(
             explicit, project_dir, _parser(), config_filename
         )
         == explicit
@@ -347,7 +383,7 @@ def test_resolve_config_path_defaults_to_the_given_name_in_project_inputs(
     default_config.write_text("")
 
     assert (
-        project_layout.resolve_config_path(
+        cli_paths.resolve_config_path(
             None, project_dir, _parser(), config_filename
         )
         == default_config
@@ -365,7 +401,7 @@ def test_resolve_config_path_ignores_a_config_loose_in_the_project_root(
     (project_dir / config_filename).write_text("")
 
     with pytest.raises(SystemExit):
-        project_layout.resolve_config_path(
+        cli_paths.resolve_config_path(
             None, project_dir, _parser(), config_filename
         )
 
@@ -376,7 +412,7 @@ def test_resolve_config_path_errors_when_default_is_missing(
 ):
     project_dir = _project_with_inputs(tmp_path)
     with pytest.raises(SystemExit):
-        project_layout.resolve_config_path(
+        cli_paths.resolve_config_path(
             None, project_dir, _parser(), config_filename
         )
     stderr = capsys.readouterr().err
@@ -392,10 +428,67 @@ def test_resolve_config_path_ignores_another_tools_config_file(tmp_path, capsys)
     (project_dir / "inputs" / "config.toml").write_text("")
 
     with pytest.raises(SystemExit):
-        project_layout.resolve_config_path(
+        cli_paths.resolve_config_path(
             None, project_dir, _parser(), "new_growth_config.toml"
         )
     assert "new_growth_config.toml" in capsys.readouterr().err
+
+
+# %% cli_paths.finalize_cli_config
+#
+# The validate-then-resolve-output-dir tail every tool's parse_CLI_arguments
+# repeats once its own config is loaded: metsakeskus_to_allometry.py's and
+# xml_to_allometry.py's altitude/ddy come straight off their config;
+# new_growth_allometry.py passes its *resolved* SiteInputs values instead
+# (see that tool's own parse_CLI_arguments) -- this helper doesn't care
+# which, it only ever sees two plain floats.
+
+
+def test_finalize_cli_config_returns_the_allometry_dir_when_everything_is_fine(
+    tmp_path,
+):
+    output_dir = cli_paths.finalize_cli_config(
+        _parser(), 150.0, 1200.0, tmp_path, False
+    )
+    assert output_dir == tmp_path / "inputs" / "allometry"
+    assert not output_dir.exists()  # creating it is main()'s job, not this one's
+
+
+def test_finalize_cli_config_blocks_out_of_range_altitude_by_default(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, False)
+    assert "altitude" in capsys.readouterr().err
+
+
+def test_finalize_cli_config_allows_out_of_range_with_override(tmp_path, capsys):
+    cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, True)
+    assert "Warning" in capsys.readouterr().out
+
+
+def test_finalize_cli_config_refuses_an_existing_output_dir(tmp_path, capsys):
+    (tmp_path / "inputs" / "allometry").mkdir(parents=True)
+    with pytest.raises(SystemExit):
+        cli_paths.finalize_cli_config(_parser(), 150.0, 1200.0, tmp_path, False)
+    assert "already exists" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "altitude, ddy",
+    [
+        (input_validation.ALTITUDE_MIN, input_validation.DDY_MIN),
+        (input_validation.ALTITUDE_MAX, input_validation.DDY_MAX),
+        (150.0, 1200.0),
+    ],
+)
+def test_finalize_cli_config_accepts_anything_in_range(tmp_path, altitude, ddy):
+    # tmp_path fresh per parametrize case -- avoids the function-scoped-
+    # fixture/@given interaction a Hypothesis property here would run into,
+    # since finalize_cli_config's output_dir check depends on the
+    # filesystem, not just its own arguments.
+    output_dir = cli_paths.finalize_cli_config(
+        _parser(), altitude, ddy, tmp_path, False
+    )
+    assert output_dir == tmp_path / "inputs" / "allometry"
 
 
 # %% print_formatting
@@ -509,6 +602,139 @@ def test_tree_stratum_recurses_correctly_under_dataclasses_asdict():
             "mean_height": 0.0,
         }
     }
+
+
+# %% tree_stratum.PerSpecies
+#
+# Promoted here from metsakeskus_to_allometry.py (ticket 12) -- xml_to_
+# allometry.py and new_growth_allometry.py now use it too, in place of their
+# previous tuple[TreeStratum, TreeStratum, TreeStratum] convention.
+
+
+def test_per_species_holds_one_value_per_species_slot():
+    per_species = tree_stratum.PerSpecies(pine=1, spruce=2, deciduous=3)
+    assert (per_species.pine, per_species.spruce, per_species.deciduous) == (1, 2, 3)
+
+
+def test_per_species_is_frozen():
+    per_species = tree_stratum.PerSpecies(
+        pine=tree_stratum.ZERO_STRATUM,
+        spruce=tree_stratum.ZERO_STRATUM,
+        deciduous=tree_stratum.ZERO_STRATUM,
+    )
+    with pytest.raises(Exception):  # noqa: B017 -- stdlib frozen-dataclass error
+        setattr(per_species, "pine", tree_stratum.ZERO_STRATUM)  # noqa: B010 -- setattr, not `.` access, to keep this a runtime-only check
+
+
+# %% growth_and_yield_table.build_growth_and_yield_table
+#
+# Shared by all three tools now (ticket 12): metsakeskus_to_allometry.py's
+# own build_growth_and_yield_table isolates a layer first (isolate_species_
+# layer) and delegates here; xml_to_allometry.py and new_growth_allometry.py
+# call this directly with their full, never-isolated PerSpecies. Species
+# isolation itself is the caller's job -- this function never isolates
+# anything, so both shapes are exercised here directly, against in-memory
+# PerSpecies fixtures (no real CSV/growth-model output is asserted on
+# beyond basic sanity -- that's read_allometry_info_from_csv round-trip
+# territory, covered per-tool).
+
+
+def _one_species_stratum(stem_count: float) -> tree_stratum.TreeStratum:
+    return tree_stratum.TreeStratum(
+        age=25, basal_area=8.0, stem_count=stem_count, mean_diameter=14.0, mean_height=11.0
+    )
+
+
+@pytest.mark.parametrize("active_field", ["pine", "spruce", "deciduous"])
+def test_build_growth_and_yield_table_uses_whichever_species_slot_is_populated(
+    active_field,
+):
+    # An already-isolated single-species PerSpecies -- the shape
+    # metsakeskus_to_allometry.py's isolate_species_layer produces. Confirms
+    # the deciduous slot feeds the table exactly like pine/spruce do:
+    # nothing here relabels it as "birch" or otherwise treats it specially.
+    stratum = _one_species_stratum(stem_count=500)
+    zero = tree_stratum.ZERO_STRATUM
+    strata = tree_stratum.PerSpecies(
+        pine=stratum if active_field == "pine" else zero,
+        spruce=stratum if active_field == "spruce" else zero,
+        deciduous=stratum if active_field == "deciduous" else zero,
+    )
+
+    table = growth_and_yield_table.build_growth_and_yield_table(
+        strata=strata,
+        fertility_class=3,
+        x_ykj=339,
+        y_ykj=6675,
+        altitude=100.0,
+        ddy=1200.0,
+        n_trees=5,
+        start_year=5,
+        end_year=10,
+        step_years=5,
+    )
+    assert len(table) > 0
+    assert table["N"].iloc[0] == pytest.approx(500, rel=0.1)
+    assert table["Age"].iloc[0] == 25
+
+
+def test_build_growth_and_yield_table_combines_all_three_populated_species():
+    # A normal, never-isolated 3-species mix -- the shape xml_to_allometry.py
+    # and new_growth_allometry.py always pass.
+    strata = tree_stratum.PerSpecies(
+        pine=_one_species_stratum(300),
+        spruce=_one_species_stratum(250),
+        deciduous=_one_species_stratum(200),
+    )
+
+    table = growth_and_yield_table.build_growth_and_yield_table(
+        strata=strata,
+        fertility_class=3,
+        x_ykj=339,
+        y_ykj=6675,
+        altitude=100.0,
+        ddy=1200.0,
+        n_trees=5,
+        start_year=5,
+        end_year=10,
+        step_years=5,
+    )
+    assert len(table) > 0
+    assert table["N"].iloc[0] == pytest.approx(300 + 250 + 200, rel=0.1)
+
+
+def test_build_growth_and_yield_table_peat_defaults_to_1():
+    strata = tree_stratum.PerSpecies(
+        pine=_one_species_stratum(300),
+        spruce=tree_stratum.ZERO_STRATUM,
+        deciduous=tree_stratum.ZERO_STRATUM,
+    )
+    default_peat = growth_and_yield_table.build_growth_and_yield_table(
+        strata=strata,
+        fertility_class=3,
+        x_ykj=339,
+        y_ykj=6675,
+        altitude=100.0,
+        ddy=1200.0,
+        n_trees=5,
+        start_year=5,
+        end_year=10,
+        step_years=5,
+    )
+    explicit_peat = growth_and_yield_table.build_growth_and_yield_table(
+        strata=strata,
+        fertility_class=3,
+        x_ykj=339,
+        y_ykj=6675,
+        altitude=100.0,
+        ddy=1200.0,
+        n_trees=5,
+        start_year=5,
+        end_year=10,
+        step_years=5,
+        peat=1,
+    )
+    pd.testing.assert_frame_equal(default_peat, explicit_peat)
 
 
 # %% The single YKJ range, shared by the data model and the CLI check
@@ -666,6 +892,45 @@ def test_load_stand_data_document_from_json_reads_a_real_file(tmp_path):
     loaded = stand_data.load_stand_data_document_from_json(path)
 
     assert loaded == document
+
+
+# %% stand_data.dump_stand_data_document
+#
+# Moved here from being duplicated, byte-identically, in both
+# metsakeskus_to_allometry.py and xml_to_allometry.py (ticket 12) -- each
+# tool's own test file now only checks that it imports this function rather
+# than defining a local copy.
+
+
+def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
+    document = stand_data.StandDataDocument(
+        altitude=150.0,
+        ddy=1200.0,
+        stands={
+            StandID("1"): stand_data.StandData(
+                site_fertility_class=3,
+                canopy_layer_files={
+                    CanopyLayerName.dominant: AllometryFileAndSpecies(
+                        file_path=Path("1_dominant.csv"), species_id=1
+                    )
+                },
+                x_ykj=339,
+                y_ykj=6675,
+            )
+        },
+    )
+    # The real layout: the document sits in <project-dir>/inputs/, beside
+    # (not inside) the allometry/ folder holding the per-stand CSVs -- but
+    # this function itself just writes to whatever path it's given; that
+    # layout choice is stand_data_path_for_project's job, exercised by each
+    # tool's own dump_stand_data_document-imports-the-shared-function test.
+    output_path = tmp_path / "inputs" / "stand_data.json"
+    output_path.parent.mkdir(parents=True)
+
+    stand_data.dump_stand_data_document(output_path=output_path, document=document)
+
+    assert output_path.exists()
+    assert stand_data.load_stand_data_document_from_json(output_path) == document
 
 
 # %% stand_data._build_stand_params_from_stand_data_document

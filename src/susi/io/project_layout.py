@@ -17,7 +17,7 @@ co-located by construction:
 Everything here is pure path composition -- no argparse, no I/O -- except
 `require_project_dir`, which exists precisely to hit the filesystem. The
 argparse-flavoured helpers that wrap these paths live in
-`tools/shared_allometry_tool_utils/project_layout.py` instead.
+`tools/shared_allometry_tool_utils/cli_paths.py` instead.
 """
 
 from pathlib import Path

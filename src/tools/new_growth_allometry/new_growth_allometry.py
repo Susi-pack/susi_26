@@ -12,20 +12,24 @@ from enum import Enum
 
 from pydantic import ValidationError, field_validator
 
-from susi.core.allometric_road_map import Growth_and_Yield_Table
-from susi.io.extra_pydantic_types import PositiveInt, StrictFrozenModel
+from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import allometry_dir_for_project
+from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
+    AllometryGenerationDefaults,
+)
+from tools.shared_allometry_tool_utils.growth_and_yield_table import (
+    build_growth_and_yield_table as build_shared_growth_and_yield_table,
+)
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
-    validate_altitude_ddy,
     validate_x_y_ykj,
 )
 from tools.shared_allometry_tool_utils.print_formatting import print_section
-from tools.shared_allometry_tool_utils.project_layout import (
-    check_output_dir_available,
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
@@ -33,7 +37,11 @@ from tools.shared_allometry_tool_utils.stand_data import (
     StandDataDocument,
     load_stand_data_document_from_json,
 )
-from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
+from tools.shared_allometry_tool_utils.tree_stratum import (
+    PerSpecies,
+    TreeStratum,
+    ZERO_STRATUM,
+)
 
 # %% Constants -- hard-coded, non-negotiable
 
@@ -77,7 +85,7 @@ DEFAULT_CONFIG_FILENAME = "new_growth_config.toml"
 # %% Config
 
 
-class NewGrowthSourcedConfig(StrictFrozenModel):
+class NewGrowthSourcedConfig(AllometryGenerationDefaults):
     """
     The config for a *sourced-mode* run (--stand-data/--stand-id): only the
     parameters that a StandDataDocument cannot supply.
@@ -86,21 +94,21 @@ class NewGrowthSourcedConfig(StrictFrozenModel):
     which species is regenerating, at what density, and how far forward to
     project it. The five site facts a sourced run reads from the document
     instead (altitude, ddy, fertility_class, x, y) are declared on
-    NewGrowthConfig below, not here, so StrictFrozenModel's extra="forbid"
-    rejects a sourced-mode config that still hand-types one of them --
-    silently ignoring a stale `altitude = 100` while actually using the
-    document's value would be the worst of both worlds.
+    NewGrowthConfig below, not here, so StrictFrozenModel's (via
+    AllometryGenerationDefaults) extra="forbid" rejects a sourced-mode
+    config that still hand-types one of them -- silently ignoring a stale
+    `altitude = 100` while actually using the document's value would be the
+    worst of both worlds.
+
+    Subclasses AllometryGenerationDefaults for the shared n_trees/
+    start_year/end_year/step_years defaults, the same ones
+    xml_to_allometry.py's XmlConfig and metsakeskus_to_allometry.py's
+    ExtractionConfig use.
     """
 
     # Required, no defaults
     species: Species  # the only species growing here
     stems_count: PositiveInt  # units: stems/ha
-
-    # Defaulted -- the same values xml_to_allometry.py's XmlConfig already uses.
-    n_trees: int = 20
-    start_year: int = 5
-    end_year: int = 80
-    step_years: int = 5
 
     @field_validator("species", mode="before")
     @classmethod
@@ -264,12 +272,11 @@ class CLIArguments:
 # %% Functions
 
 
-def build_strata(
-    species: Species, stems_count: int
-) -> tuple[TreeStratum, TreeStratum, TreeStratum]:
+def build_strata(species: Species, stems_count: int) -> PerSpecies[TreeStratum]:
     """
-    Places the one configured species into its own fixed slot
-    (pine -> index 0, spruce -> index 1, birch -> index 2
+    Places the one configured species into its own PerSpecies slot
+    (pine -> pine, spruce -> spruce, birch -> deciduous), leaving the other
+    two at ZERO_STRATUM.
     """
     stratum = TreeStratum(
         age=AGE,
@@ -278,10 +285,11 @@ def build_strata(
         mean_diameter=MEAN_DIAMETER,
         mean_height=STARTING_HEIGHT[species],
     )
-    strata = [ZERO_STRATUM, ZERO_STRATUM, ZERO_STRATUM]
-    slot = {Species.PINE: 0, Species.SPRUCE: 1, Species.BIRCH: 2}[species]
-    strata[slot] = stratum
-    return (strata[0], strata[1], strata[2])
+    return PerSpecies(
+        pine=stratum if species == Species.PINE else ZERO_STRATUM,
+        spruce=stratum if species == Species.SPRUCE else ZERO_STRATUM,
+        deciduous=stratum if species == Species.BIRCH else ZERO_STRATUM,
+    )
 
 
 def plan_output(config: NewGrowthSourcedConfig, output_dir: Path) -> Path:
@@ -298,39 +306,24 @@ def build_growth_and_yield_table(
     """The one growth table this tool produces. Mode-agnostic by
     construction: it sees the species/density/projection settings from the
     config and the already-resolved SiteInputs, never the raw config fields
-    a standalone run would have had to be told."""
+    a standalone run would have had to be told. Delegates the actual
+    Growth_and_Yield_Table construction to the shared helper, passing the
+    full (never-isolated) PerSpecies straight through -- there is only ever
+    one live species here, the other two already ZERO_STRATUM."""
     strata = build_strata(config.species, config.stems_count)
-
-    gy = Growth_and_Yield_Table(
-        age_1=strata[0].age,
-        G_1=strata[0].basal_area,
-        N_1=strata[0].stem_count,
-        Dg_1=strata[0].mean_diameter,
-        Hg_1=strata[0].mean_height,
-        age_2=strata[1].age,
-        G_2=strata[1].basal_area,
-        N_2=strata[1].stem_count,
-        Dg_2=strata[1].mean_diameter,
-        Hg_2=strata[1].mean_height,
-        age_3=strata[2].age,
-        G_3=strata[2].basal_area,
-        N_3=strata[2].stem_count,
-        Dg_3=strata[2].mean_diameter,
-        Hg_3=strata[2].mean_height,
-        DDY=site_inputs.ddy,
+    return build_shared_growth_and_yield_table(
+        strata=strata,
         fertility_class=site_inputs.site_fertility_class,
-        peat=1,
-        y=site_inputs.y_ykj,
-        x=site_inputs.x_ykj,
+        x_ykj=site_inputs.x_ykj,
+        y_ykj=site_inputs.y_ykj,
         altitude=site_inputs.altitude,
+        ddy=site_inputs.ddy,
         n_trees=config.n_trees,
-    )
-    table = gy.get_table(
         start_year=config.start_year,
         end_year=config.end_year,
         step_years=config.step_years,
+        peat=1,
     )
-    return table
 
 
 # %% CLI
@@ -458,20 +451,24 @@ def parse_CLI_arguments() -> CLIArguments:
             )
 
     # Applied to the resolved values, not to the config file's own fields, so
-    # both modes are held to exactly the same ranges.
-    validate_altitude_ddy(
-        parser, site_inputs.altitude, site_inputs.ddy, args.allow_out_of_range_values
+    # both modes are held to exactly the same ranges. validate_x_y_ykj has no
+    # equivalent in the other two tools (they never resolve a coordinate),
+    # so it stays here rather than moving into finalize_cli_config, which
+    # covers the altitude/ddy-then-output-dir tail every tool does share.
+    # Called after finalize_cli_config (not before) so that when both an
+    # altitude/ddy value and a coordinate are out of range at once,
+    # altitude/ddy is still reported first, same as before this tail moved
+    # into the shared helper.
+    finalize_cli_config(
+        parser,
+        site_inputs.altitude,
+        site_inputs.ddy,
+        args.project_dir,
+        args.allow_out_of_range_values,
     )
     validate_x_y_ykj(
         parser, site_inputs.x_ykj, site_inputs.y_ykj, args.allow_out_of_range_values
     )
-
-    # Refuse to reuse an existing folder rather than silently overwriting
-    # whatever a prior run left there. This check runs in dry-run mode too:
-    # "would this run even start?" is exactly what a dry run is for.
-    # Creating the folder is main()'s job, and only on a real run.
-    output_dir = allometry_dir_for_project(args.project_dir)
-    check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
         config=config,

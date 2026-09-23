@@ -224,18 +224,22 @@ def test_default_config_toml_is_rejected_when_loaded_untouched():
 @pytest.mark.parametrize("species", list(nga.Species))
 def test_build_strata_places_the_species_in_its_own_slot(species):
     strata = nga.build_strata(species, stems_count=1500)
-    slot = {nga.Species.PINE: 0, nga.Species.SPRUCE: 1, nga.Species.BIRCH: 2}[species]
+    field = {
+        nga.Species.PINE: "pine",
+        nga.Species.SPRUCE: "spruce",
+        nga.Species.BIRCH: "deciduous",
+    }[species]
 
-    populated = strata[slot]
+    populated = getattr(strata, field)
     assert populated.age == nga.AGE
     assert populated.basal_area == nga.BASAL_AREA
     assert populated.stem_count == 1500
     assert populated.mean_diameter == nga.MEAN_DIAMETER
     assert populated.mean_height == nga.STARTING_HEIGHT[species]
 
-    for other_slot in range(3):
-        if other_slot != slot:
-            assert strata[other_slot] == tree_stratum.ZERO_STRATUM
+    for other_field in ("pine", "spruce", "deciduous"):
+        if other_field != field:
+            assert getattr(strata, other_field) == tree_stratum.ZERO_STRATUM
 
 
 def test_species_code_covers_every_valid_species_with_distinct_codes():

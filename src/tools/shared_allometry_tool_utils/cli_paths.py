@@ -1,18 +1,23 @@
 """The argparse-flavoured half of the `--project-dir` convention shared by
 xml_to_allometry.py, metsakeskus_to_allometry.py and new_growth_allometry.py:
-the refuse-if-it-already-exists check on the output folder, and the
-`--config` defaults-to-`<project-dir>/inputs/<name>` resolution.
+the refuse-if-it-already-exists check on the output folder, the `--config`
+defaults-to-`<project-dir>/inputs/<name>` resolution, and finalize_cli_config,
+the validate-then-resolve-output-dir tail every tool's parse_CLI_arguments
+shares.
 
-`--project-dir` is the project root -- `projects/<project>/` -- so every
-path under it is composed by `susi.io.project_layout`, which owns the
-layout. Nothing here joins `"inputs"` or `"allometry"` onto a path itself.
+Named cli_paths, not project_layout: `--project-dir` is the project root --
+`projects/<project>/` -- so every path under it is actually composed by
+`susi.io.project_layout`, which owns the layout. Nothing here joins
+`"inputs"` or `"allometry"` onto a path itself; this module only wraps that
+composition in argparse-flavoured validation.
 """
 
 import argparse
 from pathlib import Path
 from typing import Optional
 
-from susi.io.project_layout import inputs_dir_for_project
+from susi.io.project_layout import allometry_dir_for_project, inputs_dir_for_project
+from tools.shared_allometry_tool_utils.input_validation import validate_altitude_ddy
 
 
 def check_output_dir_available(
@@ -58,3 +63,27 @@ def resolve_config_path(
     if config_path.suffix.lower() != ".toml":
         parser.error(f"Default config path is not a .toml file: {config_path}")
     return config_path
+
+
+def finalize_cli_config(
+    parser: argparse.ArgumentParser,
+    altitude: float,
+    ddy: float,
+    project_dir: Path,
+    allow_out_of_range_values: bool,
+) -> Path:
+    """The validate-then-resolve-output-dir tail every tool's
+    parse_CLI_arguments repeats once its own config is loaded:
+    validate_altitude_ddy, then refuse an already-existing output folder.
+    Returns the validated, available allometry output dir.
+
+    Takes altitude/ddy as plain floats rather than a whole config object, so
+    it stays independent of the fact that ExtractionConfig/XmlConfig/
+    NewGrowthConfig are three unrelated types -- and so new_growth_
+    allometry.py can pass its *resolved* SiteInputs values (standalone or
+    sourced) instead of a raw config field."""
+    validate_altitude_ddy(parser, altitude, ddy, allow_out_of_range_values)
+
+    output_dir = allometry_dir_for_project(project_dir)
+    check_output_dir_available(output_dir, parser)
+    return output_dir

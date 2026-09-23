@@ -13,14 +13,11 @@ import argparse
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, TypeVar
 
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry.base import BaseGeometry
 
-from susi.core.allometric_road_map import Growth_and_Yield_Table
-from susi.io.extra_pydantic_types import StrictFrozenModel
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
     allometry_dir_for_project,
@@ -30,26 +27,36 @@ from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
 )
+from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
+    AllometryGenerationDefaults,
+)
+from tools.shared_allometry_tool_utils.growth_and_yield_table import (
+    build_growth_and_yield_table as build_isolated_growth_and_yield_table,
+)
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
-    validate_altitude_ddy,
 )
 from tools.shared_allometry_tool_utils.print_formatting import (
     StandSkipped,
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.project_layout import (
-    check_output_dir_available,
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
-from tools.shared_allometry_tool_utils.tree_stratum import TreeStratum, ZERO_STRATUM
+from tools.shared_allometry_tool_utils.tree_stratum import (
+    PerSpecies,
+    TreeStratum,
+    ZERO_STRATUM,
+)
 from tools.shared_allometry_tool_utils.stand_data import (
     StandData,
     StandDataDocument,
+    dump_stand_data_document,
 )
 
 # %% Constants -- hard-coded, non-negotiable
@@ -85,18 +92,9 @@ TREESTAND_MEASURED_TYPE = 1
 
 # %% dataclasses
 
-T = TypeVar("T")
-
-
-@dataclass(frozen=True)
-class PerSpecies(Generic[T]):
-    """
-    One value per SUSI growth-model species.
-    """
-
-    pine: T
-    spruce: T
-    deciduous: T
+# PerSpecies[T] now lives in tools.shared_allometry_tool_utils.tree_stratum
+# (imported above), shared with xml_to_allometry.py and
+# new_growth_allometry.py -- it used to be defined here only.
 
 
 @dataclass(frozen=True)
@@ -157,12 +155,14 @@ class GpkgLayers:
     treestratum: pd.DataFrame
 
 
-class ExtractionConfig(StrictFrozenModel):
+class ExtractionConfig(AllometryGenerationDefaults):
     """
     Defaulted/required parameters, loaded from a TOML file. Hard-coded,
     non-negotiable parameters live as module constants above instead.
 
-    StrictFrozenModel (susi.io.extra_pydantic_types) gives us presence
+    Subclasses AllometryGenerationDefaults (not StrictFrozenModel directly)
+    for the shared n_trees/start_year/end_year/step_years defaults --
+    StrictFrozenModel (susi.io.extra_pydantic_types) still gives us presence
     checking for the required fields below (no default -> required),
     rejection of unknown fields (extra="forbid"), and immutability
     (frozen=True) for free -- replacing check_config_fields,
@@ -182,10 +182,6 @@ class ExtractionConfig(StrictFrozenModel):
     # peatland fertility classes of interest
     # restricting to 2-5 excludes the very richest and very poorest extremes.
     fertilityclass_filter: tuple[int, ...] = (2, 3, 4, 5)
-    n_trees: int = 20
-    start_year: int = 5
-    end_year: int = 80
-    step_years: int = 5
 
 
 @dataclass(frozen=True)
@@ -740,35 +736,26 @@ def build_growth_and_yield_table(
     step_years: int,
 ) -> pd.DataFrame:
     """One canopy layer's allometric growth trajectory (get_table's age-indexed
-    rows from start_year to end_year), modeled as active_species growing alone."""
-    layer = isolate_species_layer(strata, active_species)
+    rows from start_year to end_year), modeled as active_species growing alone.
 
-    growth_and_yield_table = Growth_and_Yield_Table(
-        age_1=layer.pine.age,
-        G_1=layer.pine.basal_area,
-        N_1=layer.pine.stem_count,
-        Dg_1=layer.pine.mean_diameter,
-        Hg_1=layer.pine.mean_height,
-        age_2=layer.spruce.age,
-        G_2=layer.spruce.basal_area,
-        N_2=layer.spruce.stem_count,
-        Dg_2=layer.spruce.mean_diameter,
-        Hg_2=layer.spruce.mean_height,
-        age_3=layer.deciduous.age,
-        G_3=layer.deciduous.basal_area,
-        N_3=layer.deciduous.stem_count,
-        Dg_3=layer.deciduous.mean_diameter,
-        Hg_3=layer.deciduous.mean_height,
-        DDY=ddy,
+    Isolates the layer locally (the only one of the three tools that needs
+    per-layer isolation -- xml_to_allometry.py and new_growth_allometry.py
+    pass their full, never-isolated PerSpecies straight through instead),
+    then delegates the actual Growth_and_Yield_Table construction to the
+    shared helper."""
+    layer = isolate_species_layer(strata, active_species)
+    return build_isolated_growth_and_yield_table(
+        strata=layer,
         fertility_class=fertility_class,
-        peat=PEAT,
-        y=y_ykj,
-        x=x_ykj,
+        x_ykj=x_ykj,
+        y_ykj=y_ykj,
         altitude=altitude,
+        ddy=ddy,
         n_trees=n_trees,
-    )
-    return growth_and_yield_table.get_table(
-        start_year=start_year, end_year=end_year, step_years=step_years
+        start_year=start_year,
+        end_year=end_year,
+        step_years=step_years,
+        peat=PEAT,
     )
 
 
@@ -782,15 +769,9 @@ def write_allometry_csv(table: pd.DataFrame, output_path: Path) -> None:
     table_with_species.to_csv(output_path, index=False)
 
 
-def dump_stand_data_document(project_dir: Path, document: StandDataDocument) -> None:
-    """Writes stand_data.json into the project's inputs/ folder -- a sibling
-    of the allometry/ folder holding the per-stand CSVs, not a file inside it.
-    The document describes the whole project, so it does not belong under the
-    allometry output folder; and it is something the project is simulated
-    *from*, so it belongs with the project's other inputs."""
-    json_output = stand_data_path_for_project(project_dir)
-    json_output.write_text(document.model_dump_json())
-    return None
+# dump_stand_data_document is now the shared
+# tools.shared_allometry_tool_utils.stand_data function, imported above --
+# it used to be a local copy.
 
 
 # %% Per-stand orchestration
@@ -990,17 +971,14 @@ def parse_CLI_arguments() -> CLIArguments:
     )
     config = load_extraction_config(config_path)
 
-    validate_altitude_ddy(
-        parser, config.altitude, config.ddy, args.allow_out_of_range_values
+    # Validates config.altitude/ddy and refuses to reuse an existing output
+    # folder -- both checked here (dry-run mode included: "would this run
+    # even start?" is exactly what a dry run is for) so a run that fails
+    # while reading or filtering leaves no empty folder behind. Creating the
+    # folder is main()'s job, and only on a real run.
+    finalize_cli_config(
+        parser, config.altitude, config.ddy, args.project_dir, args.allow_out_of_range_values
     )
-
-    # Refuse to reuse an existing folder rather than silently overwriting
-    # (or, previously, deleting) whatever a prior run left there -- the user
-    # must pick a different --project-dir instead. This check runs in dry-run
-    # mode too: "would this run even start?" is exactly what a dry run is for.
-    # Creating the folder is main()'s job, and only on a real run.
-    output_dir = allometry_dir_for_project(args.project_dir)
-    check_output_dir_available(output_dir, parser)
 
     return CLIArguments(
         input_gpkg=args.input_gpkg,
@@ -1196,7 +1174,7 @@ def main() -> None:
     }
     json_path = stand_data_path_for_project(cli_args.project_dir)
     dump_stand_data_document(
-        project_dir=cli_args.project_dir,
+        output_path=json_path,
         document=StandDataDocument(
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

@@ -1,4 +1,3 @@
-import json
 import math
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
 from tools.shared_allometry_tool_utils import input_validation, shared_utils
 from tools.shared_allometry_tool_utils.stand_data import (
     StandDataDocument,
+    dump_stand_data_document as shared_dump_stand_data_document,
     load_stand_data_document_from_json,
 )
 
@@ -1131,44 +1131,11 @@ def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path
     assert CanopyLayerName.subdominant not in canopy_layer_files
 
 
-def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
-    # The real layout: CSVs under <project-dir>/inputs/allometry/, the JSON
-    # document beside that folder in <project-dir>/inputs/.
-    project_dir = tmp_path
-    output_dir = project_dir / "inputs" / "allometry"
-    output_dir.mkdir(parents=True)
-
-    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
-    )
-    outcome = m.process_stand(stand, config, output_dir)
-    assert isinstance(outcome, m.StandWritten)
-    document = StandDataDocument(
-        altitude=config.altitude,
-        ddy=config.ddy,
-        stands={stand.id: outcome.stand_data},
-    )
-
-    m.dump_stand_data_document(project_dir=project_dir, document=document)
-
-    json_path = project_dir / "inputs" / "stand_data.json"
-    assert json_path.exists()
-    # Not inside the allometry output folder, where it used to land -- and
-    # not loose in the project root either: the document is an input, so it
-    # sits with the project's other inputs.
-    assert not (output_dir / "stand_data.json").exists()
-    assert not (project_dir / "stand_data.json").exists()
-    payload = json.loads(json_path.read_text())
-    assert "1" in payload["stands"]
-
-    reloaded = load_stand_data_document_from_json(json_path)
-    assert reloaded.stands[StandID("1")].site_fertility_class == stand.fertilityclass
-    assert CanopyLayerName.dominant in reloaded.stands[StandID("1")].canopy_layer_files
-    assert (
-        CanopyLayerName.subdominant in reloaded.stands[StandID("1")].canopy_layer_files
-    )
+def test_dump_stand_data_document_is_the_shared_function():
+    # dump_stand_data_document now lives in tools.shared_allometry_tool_utils.
+    # stand_data, imported here instead of a local copy -- its write-to-disk
+    # behavior is tested once, in test_shared_allometry_tool_utils.py.
+    assert m.dump_stand_data_document is shared_dump_stand_data_document
 
 
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
@@ -1332,7 +1299,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     (tmp_path / "inputs").mkdir()
     json_path = tmp_path / "inputs" / "stand_data.json"
     m.dump_stand_data_document(
-        project_dir=tmp_path,
+        output_path=json_path,
         document=StandDataDocument(
             altitude=config.altitude,
             ddy=config.ddy,

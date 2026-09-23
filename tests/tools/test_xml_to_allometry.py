@@ -1,5 +1,3 @@
-import json
-
 import pytest
 import xmltodict
 from hypothesis import given
@@ -10,8 +8,7 @@ from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from tools.shared_allometry_tool_utils import input_validation
 from tools.shared_allometry_tool_utils.stand_data import (
-    StandDataDocument,
-    load_stand_data_document_from_json,
+    dump_stand_data_document as shared_dump_stand_data_document,
 )
 from tools.xml_to_allometry import xml_to_allometry
 
@@ -285,7 +282,7 @@ def test_get_stand_data_from_xml_parses_a_full_stand():
     assert parsed_stand.id == StandID("1")
     assert parsed_stand.fertility_class == 3
     assert parsed_stand.main_species == 1
-    assert parsed_stand.tree_strata[0].basal_area == pytest.approx(20.0)
+    assert parsed_stand.tree_strata.pine.basal_area == pytest.approx(20.0)
     assert parsed_stand.soil_type is None
     assert parsed_stand.mean_age == 40
 
@@ -453,45 +450,11 @@ def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_p
     assert stand_data.stem_count_deciduous == 0.0
 
 
-def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
-    # The real layout: CSVs under <project-dir>/inputs/allometry/, the JSON
-    # document beside that folder in <project-dir>/inputs/.
-    project_dir = tmp_path
-    output_dir = project_dir / "inputs" / "allometry"
-    output_dir.mkdir(parents=True)
-
-    parsed_stand = _parsed_stand_data("1")
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
-    stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=output_dir
-    )
-    document = StandDataDocument(
-        altitude=config.altitude, ddy=config.ddy, stands={parsed_stand.id: stand_data}
-    )
-
-    xml_to_allometry.dump_stand_data_document(
-        project_dir=project_dir, document=document
-    )
-
-    json_path = project_dir / "inputs" / "stand_data.json"
-    assert json_path.exists()
-    # Not inside the allometry output folder, where it used to land -- and
-    # not loose in the project root either: the document is an input, so it
-    # sits with the project's other inputs.
-    assert not (output_dir / "stand_data.json").exists()
-    assert not (project_dir / "stand_data.json").exists()
-    payload = json.loads(json_path.read_text())
-    assert "1" in payload["stands"]
-
-    reloaded = load_stand_data_document_from_json(json_path)
-    assert reloaded.stands[StandID("1")].site_fertility_class == (
-        parsed_stand.fertility_class
-    )
-    assert CanopyLayerName.dominant in reloaded.stands[StandID("1")].canopy_layer_files
-    assert (
-        CanopyLayerName.subdominant
-        not in reloaded.stands[StandID("1")].canopy_layer_files
-    )
+def test_dump_stand_data_document_is_the_shared_function():
+    # dump_stand_data_document now lives in tools.shared_allometry_tool_utils.
+    # stand_data, imported here instead of a local copy -- its write-to-disk
+    # behavior is tested once, in test_shared_allometry_tool_utils.py.
+    assert xml_to_allometry.dump_stand_data_document is shared_dump_stand_data_document
 
 
 def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):

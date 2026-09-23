@@ -13,6 +13,9 @@ a pydantic BaseModel:
   the full discussion.
 """
 
+from dataclasses import dataclass as stdlib_dataclass
+from typing import Generic, TypeVar
+
 from pydantic.dataclasses import dataclass
 
 
@@ -36,3 +39,33 @@ ZERO_STRATUM = TreeStratum(
     mean_diameter=0.0,
     mean_height=0.0,
 )
+
+
+T = TypeVar("T")
+
+
+@stdlib_dataclass(frozen=True)
+class PerSpecies(Generic[T]):
+    """One value per SUSI growth-model species slot.
+
+    Promoted here from metsakeskus_to_allometry.py, the tool that
+    originated it: all three allometry-generating tools store "one
+    TreeStratum per species slot" this way now, instead of
+    xml_to_allometry.py/new_growth_allometry.py's previous
+    tuple[TreeStratum, TreeStratum, TreeStratum] convention (index
+    0/1/2, documented only in comments).
+
+    Field stays `deciduous`, not `birch` -- this is not a naming
+    inconsistency to clean up. src/susi/core (the simulation engine)
+    always calls the third species-code bucket `birch` (TreeSpecies enum,
+    susi_utils.py/gvegetation.py's "1 pine, 2 spruce, 3 birch"
+    convention). But tools/ -- StandData, PerSpecies, TreeStratum
+    aggregation -- is the raw inventory layer, where that bucket is a
+    genuine mix of species, not yet collapsed into SUSI's
+    birch-simplification. See CONTEXT.md's Species entry for the full
+    rationale.
+    """
+
+    pine: T
+    spruce: T
+    deciduous: T

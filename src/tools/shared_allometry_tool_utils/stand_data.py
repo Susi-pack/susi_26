@@ -172,6 +172,16 @@ def load_stand_data_document_from_json(path: Path) -> StandDataDocument:
     return StandDataDocument.model_validate_json(path.read_text())
 
 
+def dump_stand_data_document(output_path: Path, document: StandDataDocument) -> None:
+    """Writes a StandDataDocument as JSON to output_path -- the project's
+    stand_data.json, normally susi.io.project_layout.stand_data_path_for_project.
+    Takes the already-resolved path rather than a project_dir: both
+    xml_to_allometry.py's and metsakeskus_to_allometry.py's main() already
+    need that same path for their own status printing, so they derive it
+    once and pass it in here, instead of each deriving it a second time."""
+    output_path.write_text(document.model_dump_json())
+
+
 def _build_stand_params_from_stand_data_document(
     stand_data_document: StandDataDocument,
     stand_id: StandID,
