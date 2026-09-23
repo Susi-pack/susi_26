@@ -10,6 +10,7 @@ every stand that survives filtering is turned into an allometry CSV file.
 
 # %% Imports
 import argparse
+import dataclasses
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -50,7 +51,6 @@ from tools.shared_allometry_tool_utils.cli_paths import (
 from tools.shared_allometry_tool_utils.shared_utils import (
     SOURCE_CRS,
     centroid_to_ykj,
-    require_source_crs,
 )
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,
@@ -250,18 +250,24 @@ def load_gpkg_layers(gpkg_path: Path) -> GpkgLayers:
     )
 
 
-def check_stand_layer_crs(stand: gpd.GeoDataFrame) -> None:
+def stand_layer_in_source_crs(stand: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
-    Fails the run unless the stand layer declares SOURCE_CRS (EPSG:3067), the
-    only CRS centroid_to_ykj and StandDataDocument.crs support. A wrong CRS is
-    a whole-file problem, so this raises rather than skipping stands.
+    The stand layer in SOURCE_CRS (EPSG:3067), where centroid_to_ykj and
+    StandDataDocument.crs need it: returned as-is when it's already there,
+    reprojected as a whole otherwise -- the layer-at-once counterpart of
+    shared_utils.to_source_crs, which does one polygon at a time.
+
+    Raises ValueError when the layer declares no CRS: there is nothing to
+    reproject from, and that's a whole-file problem, so it aborts the run
+    rather than skipping stands.
     """
-    # to_string() gives "EPSG:3067" for a CRS pyproj can match to an EPSG
-    # code, which is how the real MV_Uusimaa.gpkg stand layer reads back.
-    require_source_crs(
-        stand.crs.to_string() if stand.crs is not None else None,
-        where="The gpkg stand layer",
-    )
+    if stand.crs is None:
+        raise ValueError(
+            "The gpkg stand layer declares no CRS, so it can't be reprojected"
+        )
+    if stand.crs == SOURCE_CRS:
+        return stand
+    return stand.to_crs(SOURCE_CRS)
 
 
 # %% Filtering
@@ -1091,7 +1097,10 @@ def main() -> None:
     print()
 
     layers = load_gpkg_layers(cli_args.input_gpkg)
-    check_stand_layer_crs(layers.stand)
+    stand_in_source_crs = stand_layer_in_source_crs(layers.stand)
+    if stand_in_source_crs is not layers.stand:
+        print(f"stand layer reprojected: {layers.stand.crs} -> {SOURCE_CRS}")
+    layers = dataclasses.replace(layers, stand=stand_in_source_crs)
     print(f"stand      : {len(layers.stand):>7,} rows")
     print(f"treestand  : {len(layers.treestand):>7,} rows")
     print(f"treestratum: {len(layers.treestratum):>7,} rows")
@@ -1201,7 +1210,7 @@ def main() -> None:
     dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
-            # check_stand_layer_crs has already refused any other CRS.
+            # stand_layer_in_source_crs has already reprojected the layer into it.
             crs=SOURCE_CRS,
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

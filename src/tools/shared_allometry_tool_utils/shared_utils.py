@@ -1,6 +1,12 @@
-"""The YKJ coordinate-transform arithmetic shared by xml_to_allometry.py and
-metsakeskus_to_allometry.py: EPSG:3067 (ETRS-TM35FIN, what both tools' input
-data ships in) -> EPSG:2393 (YKJ, what Growth_and_Yield_Table's x/y expect),
+"""The coordinate arithmetic shared by xml_to_allometry.py and
+metsakeskus_to_allometry.py.
+
+Stand geometry is brought into SOURCE_CRS (EPSG:3067, ETRS-TM35FIN) as soon
+as it's read -- to_source_crs below for one polygon; the Metsäkeskus tool
+reprojects its whole stand layer at once -- so everything downstream,
+stand_data.json included, only ever sees EPSG:3067.
+
+From there, EPSG:3067 -> EPSG:2393 (YKJ, what Growth_and_Yield_Table's x/y expect),
 rounded/scaled to the grid units it wants (10 km easting units, 1 km
 northing units).
 
@@ -15,10 +21,12 @@ from functools import lru_cache
 from typing import Annotated
 
 from pydantic import Field
+import shapely.ops
 from pyproj import Transformer
+from pyproj.exceptions import CRSError
 from shapely.geometry import Polygon
 
-SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS both tools' input geometries ship in
+SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS all stand geometry is brought into
 YKJ_CRS = "EPSG:2393"  # Finnish YKJ grid, what Growth_and_Yield_Table's x/y expect
 
 # The plausible range of a YKJ grid coordinate, in exactly the units
@@ -68,12 +76,48 @@ def centroid_to_ykj(polygon: Polygon) -> tuple[int, int]:
 
 
 def require_source_crs(declared_crs: str | None, where: str) -> None:
-    """The one "is this SOURCE_CRS?" check, shared by both generating tools'
-    source checks and StandDataDocument.crs. point_to_ykj hard-codes
-    SOURCE_CRS, so geometry in any other CRS would give wrong YKJ grid cells
-    (and wrong raster pixels downstream) without any error. `where` names
-    what declared the CRS, for the error message."""
+    """The "is this SOURCE_CRS?" check behind StandDataDocument.crs.
+    point_to_ykj hard-codes SOURCE_CRS, so geometry in any other CRS would
+    give wrong YKJ grid cells (and wrong raster pixels downstream) without
+    any error. The generating tools never hit this: they reproject into
+    SOURCE_CRS on the way in (to_source_crs). `where` names what declared
+    the CRS, for the error message."""
     if declared_crs != SOURCE_CRS:
         raise ValueError(
             f"{where} is in CRS {declared_crs!r}, but only {SOURCE_CRS} is supported"
         )
+
+
+@lru_cache(maxsize=None)
+def _to_source_crs_transformer(declared_crs: str) -> Transformer:
+    """One Transformer per source CRS, reused: an XML export repeats the
+    same srsName on every stand."""
+    return Transformer.from_crs(declared_crs, SOURCE_CRS, always_xy=True)
+
+
+def to_source_crs(polygon: Polygon, declared_crs: str | None, where: str) -> Polygon:
+    """
+    A polygon in declared_crs -> the same polygon in SOURCE_CRS, holes
+    included. Returned as-is when it's already there.
+
+    Coordinates are read x-first (easting/longitude before northing/
+    latitude), whatever axis order the CRS officially declares: the same
+    always_xy convention point_to_ykj and geopandas use.
+
+    Raises ValueError when there is no declared CRS (there is nothing to
+    reproject from, and guessing would give silently wrong geometry) or when
+    pyproj doesn't recognise it. `where` names what declared the CRS, for
+    the error message.
+    """
+    if declared_crs is None:
+        raise ValueError(f"{where} declares no CRS, so it can't be reprojected")
+    if declared_crs == SOURCE_CRS:
+        return polygon
+    try:
+        transformer = _to_source_crs_transformer(declared_crs)
+    except CRSError as error:
+        raise ValueError(
+            f"{where} declares CRS {declared_crs!r}, which pyproj doesn't "
+            f"recognise: {error}"
+        ) from error
+    return shapely.ops.transform(transformer.transform, polygon)

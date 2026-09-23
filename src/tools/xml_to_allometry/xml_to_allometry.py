@@ -41,7 +41,7 @@ from tools.shared_allometry_tool_utils.cli_paths import (
 from tools.shared_allometry_tool_utils.shared_utils import (
     SOURCE_CRS,
     centroid_to_ykj,
-    require_source_crs,
+    to_source_crs,
 )
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,
@@ -170,18 +170,16 @@ def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[float, float], .
 
 def parse_stand_polygon(stand_id: StandID, gml_polygon: dict) -> Polygon:
     """
-    One stand's <gml:Polygon> -> a shapely Polygon: the gml:exterior ring
-    plus every gml:interior ring as a hole.
+    One stand's <gml:Polygon> -> a shapely Polygon in SOURCE_CRS: the
+    gml:exterior ring plus every gml:interior ring as a hole, reprojected
+    from the polygon's srsName when that's another CRS.
 
-    Raises ValueError if the polygon's srsName isn't SOURCE_CRS (a missing
-    srsName included). Deliberately not a NoTreeStrataError-style skip: a
-    wrong CRS is a whole-export problem, so build_stands lets it abort the
-    run instead of dropping stands one by one.
+    Raises ValueError when the srsName is missing or pyproj doesn't
+    recognise it (see shared_utils.to_source_crs). Deliberately not a
+    NoTreeStrataError-style skip: a missing or unusable CRS is a whole-export
+    problem, so build_stands lets it abort the run instead of dropping
+    stands one by one.
     """
-    require_source_crs(
-        gml_polygon.get("@srsName"), where=f"Stand {stand_id}'s gml:Polygon"
-    )
-
     exterior = parse_polygon_to_coords(
         gml_polygon["gml:exterior"]["gml:LinearRing"]["gml:coordinates"]
     )
@@ -196,7 +194,11 @@ def parse_stand_polygon(stand_id: StandID, gml_polygon: dict) -> Polygon:
         for interior in interiors
     ]
 
-    return Polygon(exterior, holes)
+    return to_source_crs(
+        Polygon(exterior, holes),
+        gml_polygon.get("@srsName"),
+        where=f"Stand {stand_id}'s gml:Polygon",
+    )
 
 
 def get_tree_strata_data(
@@ -341,7 +343,7 @@ def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
     (NoTreeStrataError -- see get_stand_data_from_xml) as a StandSkipped
     instead of a discarded None sentinel, so the Filtering section can
     report which stands were dropped and why. Every other error, a polygon
-    outside SOURCE_CRS included (see parse_stand_polygon), aborts the run.
+    with no usable CRS included (see parse_stand_polygon), aborts the run.
     """
     parsed_stands: list[ParsedStand] = []
     skipped: list[StandSkipped] = []
@@ -597,7 +599,7 @@ def main():
     dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
-            # parse_stand_polygon has already refused any polygon in another CRS.
+            # parse_stand_polygon has already reprojected every polygon into it.
             crs=SOURCE_CRS,
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,

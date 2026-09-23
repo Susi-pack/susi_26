@@ -239,8 +239,9 @@ class StandDataDocument(StrictFrozenModel):
     crs: DocumentCrs = Field(
         description=(
             "The CRS every stand polygon in this document is in -- one per "
-            "document, never per stand. Must be shared_utils.SOURCE_CRS "
-            "(EPSG:3067); see docs/adr/0004."
+            "document, never per stand. Always shared_utils.SOURCE_CRS "
+            "(EPSG:3067): the generating tools reproject a source in any "
+            "other CRS into it on the way in. See docs/adr/0004."
         ),
     )
     altitude: float = Field(description="Project altitude, m.")

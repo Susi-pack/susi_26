@@ -9,8 +9,10 @@ import pandas as pd
 import pydantic
 import pytest
 import shapely
+import shapely.ops
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from pyproj import Transformer
 from shapely.geometry import MultiPolygon, Point, Polygon
 
 from susi.io.load_output_data import StandID
@@ -589,6 +591,59 @@ def test_require_source_crs_accepts_the_source_crs():
 def test_require_source_crs_rejects_anything_else_naming_the_source(declared):
     with pytest.raises(ValueError, match="test input.*EPSG:3067"):
         shared_utils.require_source_crs(declared, where="test input")
+
+
+# %% shared_utils.to_source_crs
+
+
+# A 50x50 m square with a 10x10 m hole, in EPSG:3067 near Helsinki.
+_POLYGON_IN_SOURCE_CRS = Polygon(
+    [(385_000, 6_685_000), (385_050, 6_685_000), (385_050, 6_685_050), (385_000, 6_685_050)],
+    [[(385_010, 6_685_010), (385_020, 6_685_010), (385_020, 6_685_020), (385_010, 6_685_020)]],
+)
+
+
+def _reprojected(polygon: Polygon, from_crs: str, to_crs: str) -> Polygon:
+    transformer = Transformer.from_crs(from_crs, to_crs, always_xy=True)
+    return shapely.ops.transform(transformer.transform, polygon)
+
+
+def test_to_source_crs_returns_a_polygon_already_in_the_source_crs_unchanged():
+    result = shared_utils.to_source_crs(
+        _POLYGON_IN_SOURCE_CRS, shared_utils.SOURCE_CRS, where="test input"
+    )
+    assert result is _POLYGON_IN_SOURCE_CRS
+
+
+@pytest.mark.parametrize(
+    "declared_crs",
+    [
+        pytest.param("EPSG:4326", id="WGS84-lon-lat"),
+        pytest.param("EPSG:2393", id="YKJ"),
+        pytest.param("EPSG:3035", id="LAEA-Europe"),
+    ],
+)
+def test_to_source_crs_reprojects_other_crss_holes_included(declared_crs):
+    source = _reprojected(_POLYGON_IN_SOURCE_CRS, shared_utils.SOURCE_CRS, declared_crs)
+
+    result = shared_utils.to_source_crs(source, declared_crs, where="test input")
+
+    # Back where it started, to well under a millimetre.
+    assert result.equals_exact(_POLYGON_IN_SOURCE_CRS, tolerance=1e-3)
+    assert len(result.interiors) == 1
+
+
+def test_to_source_crs_fails_without_a_declared_crs():
+    # Nothing to reproject from: guessing would give silently wrong geometry.
+    with pytest.raises(ValueError, match="test input.*no CRS"):
+        shared_utils.to_source_crs(_POLYGON_IN_SOURCE_CRS, None, where="test input")
+
+
+def test_to_source_crs_fails_on_an_unrecognised_crs():
+    with pytest.raises(ValueError, match="test input.*EPSG:999999"):
+        shared_utils.to_source_crs(
+            _POLYGON_IN_SOURCE_CRS, "EPSG:999999", where="test input"
+        )
 
 
 # %% tree_stratum.TreeStratum / ZERO_STRATUM

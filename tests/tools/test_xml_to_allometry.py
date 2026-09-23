@@ -2,6 +2,7 @@ import pytest
 import xmltodict
 from hypothesis import given
 from hypothesis import strategies as st
+from pyproj import Transformer
 from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
@@ -407,26 +408,59 @@ def test_centroid_to_ykj_is_the_shared_function():
     assert xml_to_allometry.centroid_to_ykj is shared_utils.centroid_to_ykj
 
 
+def _coordinates_in(crs: str) -> str:
+    """_polygon_coordinates' square, reprojected from EPSG:3067 into crs and
+    written back out as gml:coordinates pairs (x first, as the tool reads
+    them)."""
+    transformer = Transformer.from_crs(shared_utils.SOURCE_CRS, crs, always_xy=True)
+    pairs = xml_to_allometry.parse_polygon_to_coords(_polygon_coordinates())
+    return " ".join("{},{}".format(*transformer.transform(x, y)) for x, y in pairs)
+
+
 @pytest.mark.parametrize(
     "srs_name",
+    [pytest.param("EPSG:4326", id="WGS84"), pytest.param("EPSG:2393", id="YKJ")],
+)
+def test_get_stand_data_from_xml_reprojects_a_polygon_in_another_crs(srs_name):
+    in_source_crs = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand("1", include_tree_strata=True)
+    )
+    in_other_crs = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand(
+            "1",
+            include_tree_strata=True,
+            srs_name=srs_name,
+            exterior_coordinates=_coordinates_in(srs_name),
+        )
+    )
+
+    assert in_other_crs.polygon.equals_exact(in_source_crs.polygon, tolerance=1e-3)
+    assert (in_other_crs.x_ykj, in_other_crs.y_ykj) == (
+        in_source_crs.x_ykj,
+        in_source_crs.y_ykj,
+    )
+
+
+@pytest.mark.parametrize(
+    ("srs_name", "message"),
     [
-        pytest.param("EPSG:2393", id="YKJ"),
-        pytest.param("EPSG:4326", id="WGS84"),
-        pytest.param(None, id="missing-srsName"),
+        pytest.param(None, "no CRS", id="missing-srsName"),
+        pytest.param("EPSG:999999", "EPSG:999999", id="unknown-srsName"),
     ],
 )
-def test_build_stands_fails_the_run_on_a_polygon_not_in_the_source_crs(srs_name):
-    # A wrong CRS is a whole-export problem: it must abort build_stands, not
-    # turn into a per-stand StandSkipped the way a missing TreeStrata does.
+def test_build_stands_fails_the_run_on_a_polygon_with_no_usable_crs(srs_name, message):
+    # Nothing to reproject from is a whole-export problem: it must abort
+    # build_stands, not turn into a per-stand StandSkipped the way a
+    # missing TreeStrata does.
     stands = [
         _parsed_stand("1", include_tree_strata=True),
         _parsed_stand("2", include_tree_strata=True, srs_name=srs_name),
     ]
 
-    with pytest.raises(ValueError, match="EPSG:3067") as error:
+    with pytest.raises(ValueError, match=message) as error:
         xml_to_allometry.build_stands(stands)
     assert not isinstance(error.value, xml_to_allometry.NoTreeStrataError)
-    assert "2" in str(error.value)
+    assert "Stand 2" in str(error.value)
 
 
 def test_get_stand_data_from_xml_raises_no_tree_strata_error_when_missing():

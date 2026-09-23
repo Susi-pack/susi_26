@@ -1152,7 +1152,9 @@ def test_dump_stand_data_document_is_the_shared_function():
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
 
 
-def _write_synthetic_gpkg(path: Path, crs: str = shared_utils.SOURCE_CRS) -> None:
+def _write_synthetic_gpkg(
+    path: Path, crs: str | None = shared_utils.SOURCE_CRS
+) -> None:
     """A minimal 3-layer gpkg exercising load_gpkg_layers + the whole
     filter/merge/aggregate chain: two stands that survive filtering (one
     pine-only monoculture, one pine+spruce mix) and three that each fail a
@@ -1170,9 +1172,14 @@ def _write_synthetic_gpkg(path: Path, crs: str = shared_utils.SOURCE_CRS) -> Non
             ),  # excluded: no type=1 snapshot in target year
         ],
         geometry="geometry",
-        crs=crs,
+        # The geometry below is EPSG:3067. Left unlabelled only when the
+        # test asks for a layer with no CRS at all.
+        crs=shared_utils.SOURCE_CRS if crs is not None else None,
     )
     stand["geometry"] = [helsinki_area] * 5
+    if crs is not None:
+        # The same stands, really in `crs`: reprojected, not just relabelled.
+        stand = stand.to_crs(crs)
 
     treestand = pd.DataFrame(
         [
@@ -1336,21 +1343,30 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert reloaded_polygon.equals(layers.stand.geometry.iloc[0])
 
 
-# %% check_stand_layer_crs
+# %% stand_layer_in_source_crs
 
 
-def test_check_stand_layer_crs_accepts_the_source_crs():
-    m.check_stand_layer_crs(_make_stand_gdf([_stand_row(1)]))
+def test_stand_layer_in_source_crs_returns_a_source_crs_layer_as_is():
+    stand = _make_stand_gdf([_stand_row(1)])
+    assert m.stand_layer_in_source_crs(stand) is stand
 
 
-@pytest.mark.parametrize(
-    "crs",
-    [pytest.param("EPSG:4326", id="WGS84"), pytest.param(None, id="no-crs")],
-)
-def test_check_stand_layer_crs_rejects_anything_else(crs):
-    stand = gpd.GeoDataFrame([_stand_row(1)], geometry="geometry", crs=crs)
-    with pytest.raises(ValueError, match="EPSG:3067"):
-        m.check_stand_layer_crs(stand)
+def test_stand_layer_in_source_crs_reprojects_another_crs():
+    in_source_crs = _make_stand_gdf([_stand_row(1)])
+    in_wgs84 = in_source_crs.to_crs("EPSG:4326")
+
+    result = m.stand_layer_in_source_crs(in_wgs84)
+
+    assert result.crs == shared_utils.SOURCE_CRS
+    assert result.geometry.iloc[0].equals_exact(
+        in_source_crs.geometry.iloc[0], tolerance=1e-3
+    )
+
+
+def test_stand_layer_in_source_crs_fails_without_a_crs():
+    stand = gpd.GeoDataFrame([_stand_row(1)], geometry="geometry", crs=None)
+    with pytest.raises(ValueError, match="no CRS"):
+        m.stand_layer_in_source_crs(stand)
 
 
 # %% main
@@ -1382,13 +1398,35 @@ def test_main_writes_crs_and_polygons_into_stand_data_json(
     assert all(stand.polygon is not None for stand in document.stands.values())
 
 
-def test_main_fails_the_run_on_a_stand_layer_in_another_crs(
+def test_main_reprojects_a_stand_layer_in_another_crs(
+    monkeypatch, tmp_path, project_dir
+):
+    reference_gpkg = tmp_path / "reference.gpkg"
+    _write_synthetic_gpkg(reference_gpkg)
+    wgs84_gpkg = tmp_path / "wgs84.gpkg"
+    _write_synthetic_gpkg(wgs84_gpkg, crs="EPSG:4326")
+
+    _run_main(monkeypatch, wgs84_gpkg, project_dir)
+
+    document = load_stand_data_document_from_json(
+        project_dir / "inputs" / "stand_data.json"
+    )
+    assert document.crs == shared_utils.SOURCE_CRS
+    reference_polygon = gpd.read_file(reference_gpkg, layer="stand").geometry.iloc[0]
+    for stand in document.stands.values():
+        assert stand.polygon is not None
+        assert stand.polygon.equals_exact(reference_polygon, tolerance=1e-3)
+
+
+def test_main_fails_the_run_on_a_stand_layer_without_a_crs(
     monkeypatch, tmp_path, project_dir
 ):
     gpkg_path = tmp_path / "synthetic.gpkg"
-    _write_synthetic_gpkg(gpkg_path, crs="EPSG:3035")
+    # geopandas warns when writing a layer with no CRS -- that's the point.
+    with pytest.warns(UserWarning, match="crs"):
+        _write_synthetic_gpkg(gpkg_path, crs=None)
 
-    with pytest.raises(ValueError, match="EPSG:3067"):
+    with pytest.raises(ValueError, match="no CRS"):
         _run_main(monkeypatch, gpkg_path, project_dir)
 
     assert not (project_dir / "inputs" / "stand_data.json").exists()
