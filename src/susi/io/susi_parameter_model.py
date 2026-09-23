@@ -870,6 +870,42 @@ class SusiParams(StrictFrozenModel):
         )
 
     @model_validator(mode="after")
+    def allometry_files_exist(self) -> Self:
+        """
+        Every allometry file this run will read must exist: the stand's own
+        registry, plus a ClearCut's new-growth registry.
+        It lives here instead of in AllometryFileAndSpecies.file_path
+        because building allometry models or loading
+        stand_data.json doesn't need the files to be there yet.
+
+        Defined first on purpose: pydantic runs "after" model validators in
+        definition order, and later ones (stand_age_vs_allometry_pathway) read
+        the CSVs, which would fail on a missing one with a bare
+        FileNotFoundError before this could list them all.
+        """
+        registries = [self.stand_params.canopy_layer_allometry.allometry_file_registry]
+        cutting_management = self.site_parameters.cutting_management
+        if cutting_management is not None and isinstance(
+            cutting_management.management_type, ClearCut
+        ):
+            registries.append(
+                cutting_management.management_type.new_growth_allometry.allometry_file_registry
+            )
+
+        missing = [
+            file_and_species.file_path
+            for registry in registries
+            for file_and_species in registry.values()
+            if not file_and_species.file_path.is_file()
+        ]
+        if missing:
+            raise ValueError(
+                "Allometry file(s) not found: "
+                + ", ".join(str(file_path) for file_path in missing)
+            )
+        return self
+
+    @model_validator(mode="after")
     def check_cutting_within_years(self) -> Self:
         config = self.simulation_config
         site = self.site_parameters

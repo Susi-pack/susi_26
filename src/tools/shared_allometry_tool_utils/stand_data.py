@@ -8,7 +8,12 @@ from pydantic import (
     Field,
     PlainSerializer,
     PlainValidator,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    ValidationInfo,
     WithJsonSchema,
+    model_serializer,
+    model_validator,
 )
 from shapely.errors import ShapelyError
 from shapely.geometry import Polygon
@@ -95,8 +100,15 @@ class StandData(StrictFrozenModel):
     """
 
     site_fertility_class: PositiveInt = Field(description="Site fertility class")
-    canopy_layer_files: dict[CanopyLayerName, AllometryFileAndSpecies] = Field(
-        description="Allometry file and species per canopy layer (dominant/subdominant/under)."
+    allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = Field(
+        description=(
+            "Allometry file and species per canopy layer (dominant/subdominant/"
+            "under). Same element type StandParams uses; build_stand_params "
+            "expands it into a CanopyLayerAllometry. Inside a "
+            "StandDataDocument, each file_path is absolute in memory and "
+            "relative to the folder holding stand_data.json on disk -- see "
+            "docs/adr/0005."
+        )
     )
     x_ykj: YkjEasting = Field(
         description=(
@@ -230,10 +242,149 @@ class StandData(StrictFrozenModel):
     )
 
 
+# Pydantic context key through which load_stand_data_document_from_json and
+# dump_stand_data_document tell StandDataDocument which folder the document
+# sits in: the folder every allometry file_path is relative to on disk.
+DOCUMENT_DIR_CONTEXT_KEY = "stand_data_document_dir"
+
+
+def _document_dir_from_context(context: Any) -> Path | None:
+    if not isinstance(context, dict):
+        return None
+    return context.get(DOCUMENT_DIR_CONTEXT_KEY)
+
+
+def _absolute_allometry_file_path(
+    file_path: str | Path, stand_id: StandID, document_dir: Path | None
+) -> Path:
+    """
+    The in-memory (absolute) form of one allometry file_path.
+
+    With document_dir (loading stand_data.json), file_path is the on-disk
+    form: it must be relative, stay inside document_dir (no `..`), and is
+    joined onto document_dir. Without it (a document built in memory, or
+    validated with no context), file_path must already be absolute: a
+    relative path is never quietly resolved against the current folder,
+    since that's the bug docs/adr/0005 removes.
+    """
+    path = Path(file_path)
+    if document_dir is None:
+        if not path.is_absolute():
+            raise ValueError(
+                f"Stand {stand_id!r}: allometry file_path {str(path)!r} is relative, "
+                "but no document folder to resolve it against was given. Read "
+                "stand_data.json with load_stand_data_document_from_json, or build "
+                "the document in memory with absolute paths."
+            )
+        return path
+    if path.is_absolute():
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file_path {str(path)!r} in "
+            "stand_data.json is absolute; it must be relative to the folder "
+            "holding stand_data.json."
+        )
+    if ".." in path.parts:
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file_path {str(path)!r} in "
+            "stand_data.json contains '..'; allometry files must be inside the "
+            "folder holding stand_data.json."
+        )
+    return document_dir / path
+
+
+def _with_absolute_allometry_paths(
+    stand: Any, stand_id: StandID, document_dir: Path | None
+) -> Any:
+    """
+    Returns `stand` with every allometry file_path made absolute (see
+    _absolute_allometry_file_path). A stand arrives either as raw data (a
+    dict, from JSON or keyword arguments) or as an already-built StandData
+    (when the document is built in memory); anything else is left for
+    pydantic's own validation to reject.
+    """
+
+    def absolute(entry: Any) -> Any:
+        if isinstance(entry, AllometryFileAndSpecies):
+            return entry.model_copy(
+                update={
+                    "file_path": _absolute_allometry_file_path(
+                        entry.file_path, stand_id, document_dir
+                    )
+                }
+            )
+        if isinstance(entry, dict) and isinstance(entry.get("file_path"), (str, Path)):
+            # str, not Path: when validating JSON, pydantic still validates
+            # this raw dict in JSON mode afterwards, where a Path field only
+            # accepts a string.
+            return {
+                **entry,
+                "file_path": str(
+                    _absolute_allometry_file_path(
+                        entry["file_path"], stand_id, document_dir
+                    )
+                ),
+            }
+        return entry
+
+    if isinstance(stand, StandData):
+        # StandData is frozen: model_copy is the only way to swap a field.
+        # It skips validation, which is fine -- absolute() only replaces a
+        # Path with another Path.
+        return stand.model_copy(
+            update={
+                "allometry_file_per_layer": {
+                    layer: absolute(entry)
+                    for layer, entry in stand.allometry_file_per_layer.items()
+                }
+            }
+        )
+    if isinstance(stand, dict) and isinstance(
+        stand.get("allometry_file_per_layer"), dict
+    ):
+        return {
+            **stand,
+            "allometry_file_per_layer": {
+                layer: absolute(entry)
+                for layer, entry in stand["allometry_file_per_layer"].items()
+            },
+        }
+    return stand
+
+
+def _relative_allometry_file_path(
+    file_path: Path, stand_id: StandID, document_dir: Path
+) -> str:
+    """
+    The on-disk form of one (absolute, in-memory) allometry file_path:
+    relative to document_dir, as a POSIX string so the document reads the
+    same on any OS. Both sides are resolved first, so a `..` inside
+    file_path, or a symlinked document_dir, can't make a file outside
+    document_dir look inside it (or the reverse).
+    """
+    try:
+        relative = file_path.resolve().relative_to(document_dir.resolve())
+    except ValueError:
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file {str(file_path)!r} is not inside "
+            f"{str(document_dir)!r}, the folder stand_data.json is written to. "
+            "Every allometry file must live inside the project: copy it into "
+            "the project's inputs/ folder first."
+        ) from None
+    return relative.as_posix()
+
+
 class StandDataDocument(StrictFrozenModel):
     """
     The serialized data structure that describes the whole stand data JSON document.
     It contains all stands.
+
+    Allometry file paths are absolute in memory and relative to the
+    document's own folder on disk (docs/adr/0005). This class does the
+    conversion, driven by the DOCUMENT_DIR_CONTEXT_KEY context that
+    load_stand_data_document_from_json and dump_stand_data_document pass --
+    the only two intended ways in and out. AllometryFileAndSpecies itself is
+    left alone, since in SusiParams a relative path still means relative to
+    the current folder.
     """
 
     crs: DocumentCrs = Field(
@@ -250,9 +401,51 @@ class StandDataDocument(StrictFrozenModel):
         description="All stands in the project, keyed by stand ID."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def allometry_paths_are_absolute_in_memory(
+        cls, data: Any, info: ValidationInfo
+    ) -> Any:
+        # mode="before" because StandData is frozen: the paths have to be
+        # absolute before the StandDatas are built, not patched afterwards.
+        if not isinstance(data, dict) or not isinstance(data.get("stands"), dict):
+            return data
+        document_dir = _document_dir_from_context(info.context)
+        return {
+            **data,
+            "stands": {
+                stand_id: _with_absolute_allometry_paths(stand, stand_id, document_dir)
+                for stand_id, stand in data["stands"].items()
+            },
+        }
+
+    @model_serializer(mode="wrap")
+    def allometry_paths_are_relative_on_disk(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        data = handler(self)
+        document_dir = _document_dir_from_context(info.context)
+        # No context (e.g. a bare model_dump for inspection): paths stay
+        # absolute, which a context-free model_validate also accepts.
+        if document_dir is None:
+            return data
+        for stand_id, stand in self.stands.items():
+            dumped_layers = data["stands"][stand_id]["allometry_file_per_layer"]
+            for layer, entry in stand.allometry_file_per_layer.items():
+                dumped_layers[layer]["file_path"] = _relative_allometry_file_path(
+                    entry.file_path, stand_id, document_dir
+                )
+        return data
+
 
 def load_stand_data_document_from_json(path: Path) -> StandDataDocument:
-    return StandDataDocument.model_validate_json(path.read_text())
+    """Reads stand_data.json. Its allometry file paths, relative to the
+    file's own folder on disk, come back absolute. The CSVs themselves need
+    not exist: whether they do is SusiParams' concern (docs/adr/0005)."""
+    return StandDataDocument.model_validate_json(
+        path.read_text(),
+        context={DOCUMENT_DIR_CONTEXT_KEY: path.resolve().parent},
+    )
 
 
 def dump_stand_data_document(output_path: Path, document: StandDataDocument) -> None:
@@ -261,11 +454,18 @@ def dump_stand_data_document(output_path: Path, document: StandDataDocument) -> 
     Takes the already-resolved path rather than a project_dir: both
     xml_to_allometry.py's and metsakeskus_to_allometry.py's main() already
     need that same path for their own status printing, so they derive it
-    once and pass it in here, instead of each deriving it a second time."""
-    output_path.write_text(document.model_dump_json())
+    once and pass it in here, instead of each deriving it a second time.
+
+    Allometry file paths are written relative to output_path's folder;
+    raises if any of them is outside it (see docs/adr/0005)."""
+    output_path.write_text(
+        document.model_dump_json(
+            context={DOCUMENT_DIR_CONTEXT_KEY: output_path.parent}
+        )
+    )
 
 
-def _build_stand_params_from_stand_data_document(
+def build_stand_params(
     stand_data_document: StandDataDocument,
     stand_id: StandID,
     n: int,
@@ -273,27 +473,17 @@ def _build_stand_params_from_stand_data_document(
     """
     Builds a simulation-ready StandParams for one stand out of a whole project's StandDataDocument.
     `n`, the number of soil columns, must be supplied by the caller:
-    It is a property of the run being built, never of the stand data itself
+    It is a property of the run being built, never of the stand data itself.
+    The stand's allometry file paths are used as they are: a loaded
+    document already holds them absolute.
     """
     stand_data = stand_data_document.stands[stand_id]
 
     canopy_layer_allometry = CanopyLayerAllometry.with_single_allometry_per_layer(
-        layers=stand_data.canopy_layer_files, n=n
+        layers=stand_data.allometry_file_per_layer, n=n
     )
 
     return StandParams(
         site_fertility_class=stand_data.site_fertility_class,
         canopy_layer_allometry=canopy_layer_allometry,
-    )
-
-
-def build_stand_params_from_stand_data_json(
-    stand_data_json_path: Path,
-    stand_id: StandID,
-    n: int,
-) -> StandParams:
-    return _build_stand_params_from_stand_data_document(
-        stand_data_document=load_stand_data_document_from_json(stand_data_json_path),
-        stand_id=stand_id,
-        n=n,
     )

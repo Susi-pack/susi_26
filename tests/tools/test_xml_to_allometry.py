@@ -1,3 +1,4 @@
+import json
 import pytest
 import xmltodict
 from hypothesis import given
@@ -551,10 +552,10 @@ def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_p
     assert len(df) > 0
 
     # Only a dominant layer is ever produced by this tool.
-    dominant_file = stand_data.canopy_layer_files[CanopyLayerName.dominant]
+    dominant_file = stand_data.allometry_file_per_layer[CanopyLayerName.dominant]
     assert dominant_file.file_path == output_path
     assert dominant_file.species_id == parsed_stand.main_species
-    assert CanopyLayerName.subdominant not in stand_data.canopy_layer_files
+    assert CanopyLayerName.subdominant not in stand_data.allometry_file_per_layer
 
 
 def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
@@ -878,3 +879,35 @@ def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     polygon = document.stands[StandID("1")].polygon
     assert polygon is not None
     assert len(polygon.interiors) == 1
+
+
+def test_main_records_allometry_paths_relative_to_stand_data_json(
+    monkeypatch, tmp_path, project_dir
+):
+    # Run from project_dir's parent with a relative --project-dir: the
+    # recorded path must not depend on either (docs/adr/0005).
+    xml_path = tmp_path / "stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+    )
+    monkeypatch.chdir(project_dir.parent)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir.name}"],
+    )
+
+    xml_to_allometry.main()
+
+    json_path = project_dir / "inputs" / "stand_data.json"
+    raw = json.loads(json_path.read_text())
+    assert raw["stands"]["1"]["allometry_file_per_layer"]["dominant"]["file_path"] == (
+        "allometry/1.csv"
+    )
+    dominant = load_stand_data_document_from_json(json_path).stands[
+        StandID("1")
+    ].allometry_file_per_layer[CanopyLayerName.dominant]
+    assert dominant.file_path == project_dir / "inputs" / "allometry" / "1.csv"
+    assert dominant.file_path.exists()

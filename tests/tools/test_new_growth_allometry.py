@@ -591,11 +591,14 @@ def _stand_data_document(
     site_fertility_class: int = 3,
     x_ykj: int = 338,
     y_ykj: int = 7042,
+    allometry_dir: Path = Path("/project/inputs/allometry"),
 ) -> stand_data.StandDataDocument:
     """A one-stand document, with only the fields sourced mode actually
-    reads varied. canopy_layer_files is required by StandData but never
+    reads varied. allometry_file_per_layer is required by StandData but never
     looked at here -- this tool generates an allometry file, it does not
-    consume the stand's existing ones."""
+    consume the stand's existing ones -- so the CSV is never written.
+    allometry_dir must be absolute (a document's paths are, in memory), and
+    inside the document's folder if the document is dumped to disk."""
     return stand_data.StandDataDocument(
         crs=shared_utils.SOURCE_CRS,
         altitude=100.0,
@@ -603,9 +606,9 @@ def _stand_data_document(
         stands={
             SOURCED_STAND_ID: stand_data.StandData(
                 site_fertility_class=site_fertility_class,
-                canopy_layer_files={
+                allometry_file_per_layer={
                     CanopyLayerName.dominant: AllometryFileAndSpecies(
-                        file_path=Path("dominant.csv"), species_id=1
+                        file_path=allometry_dir / "dominant.csv", species_id=1
                     )
                 },
                 x_ykj=x_ykj,
@@ -682,7 +685,10 @@ def test_sourced_mode_produces_the_same_table_as_standalone_mode():
 @pytest.fixture
 def stand_data_file(tmp_path):
     path = tmp_path / stand_data.STAND_DATA_FILENAME
-    path.write_text(_stand_data_document().model_dump_json())
+    stand_data.dump_stand_data_document(
+        output_path=path,
+        document=_stand_data_document(allometry_dir=tmp_path / "allometry"),
+    )
     return path
 
 
@@ -843,8 +849,12 @@ def test_a_sourced_out_of_range_ykj_coordinate_is_a_clean_cli_error(
     # here is that it still exits the way every other bad input to these
     # tools does -- parser.error naming the file, not a raw traceback.
     stand_data_path = tmp_path / stand_data.STAND_DATA_FILENAME
+    stand_data.dump_stand_data_document(
+        output_path=stand_data_path,
+        document=_stand_data_document(allometry_dir=tmp_path / "allometry"),
+    )
     stand_data_path.write_text(
-        _stand_data_document().model_dump_json().replace('"y_ykj":7042', '"y_ykj":4002')
+        stand_data_path.read_text().replace('"y_ykj":7042', '"y_ykj":4002')
     )
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(

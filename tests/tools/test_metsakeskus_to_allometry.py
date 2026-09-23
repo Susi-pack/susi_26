@@ -1,3 +1,4 @@
+import json
 import math
 from pathlib import Path
 
@@ -1108,7 +1109,7 @@ def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
     assert outcome.stand_data.soil_type is None
 
 
-def test_process_stand_populates_canopy_layer_files_for_both_layers(tmp_path):
+def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
@@ -1118,16 +1119,16 @@ def test_process_stand_populates_canopy_layer_files_for_both_layers(tmp_path):
     outcome = m.process_stand(stand, config, tmp_path)
 
     assert isinstance(outcome, m.StandWritten)
-    canopy_layer_files = outcome.stand_data.canopy_layer_files
-    dominant = canopy_layer_files[CanopyLayerName.dominant]
+    allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
+    dominant = allometry_file_per_layer[CanopyLayerName.dominant]
     assert dominant.file_path == outcome.dominant_csv
     assert dominant.species_id == stand.dominant_species
-    subdominant = canopy_layer_files[CanopyLayerName.subdominant]
+    subdominant = allometry_file_per_layer[CanopyLayerName.subdominant]
     assert subdominant.file_path == outcome.subdominant_csv
     assert subdominant.species_id == stand.subdominant_species
 
 
-def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path):
+def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
@@ -1137,9 +1138,9 @@ def test_process_stand_monoculture_canopy_layer_files_has_only_dominant(tmp_path
     outcome = m.process_stand(stand, config, tmp_path)
 
     assert isinstance(outcome, m.StandWritten)
-    canopy_layer_files = outcome.stand_data.canopy_layer_files
-    assert CanopyLayerName.dominant in canopy_layer_files
-    assert CanopyLayerName.subdominant not in canopy_layer_files
+    allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
+    assert CanopyLayerName.dominant in allometry_file_per_layer
+    assert CanopyLayerName.subdominant not in allometry_file_per_layer
 
 
 def test_dump_stand_data_document_is_the_shared_function():
@@ -1293,9 +1294,14 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert stand_2.subdominant_species == 2
     assert stand_2.stand_basalarea == pytest.approx(20.0)
 
+    # tmp_path plays the project root here: the CSVs go where a real run
+    # puts them, inside the inputs/ folder stand_data.json is written to --
+    # the document refuses to record a file outside it (docs/adr/0005).
+    allometry_dir = tmp_path / "inputs" / "allometry"
+    allometry_dir.mkdir(parents=True)
     outcomes = {
         str(o.stand_id): o
-        for o in (m.process_stand(s, config, tmp_path) for s in parsed_stands)
+        for o in (m.process_stand(s, config, allometry_dir) for s in parsed_stands)
     }
     outcome_1, outcome_2 = outcomes["1"], outcomes["2"]
     assert isinstance(outcome_1, m.StandWritten)
@@ -1310,11 +1316,6 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert outcome_2.subdominant_csv is not None
     assert outcome_2.subdominant_csv.exists()
 
-    # tmp_path plays the project root here, so the document lands in its
-    # inputs/ folder. A real run creates that folder on its way to writing
-    # inputs/allometry/; this test writes the CSVs straight into tmp_path,
-    # so it has to make it itself.
-    (tmp_path / "inputs").mkdir()
     json_path = tmp_path / "inputs" / "stand_data.json"
     m.dump_stand_data_document(
         output_path=json_path,
@@ -1335,6 +1336,13 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert json_path.exists()
     reloaded = load_stand_data_document_from_json(json_path)
     assert set(str(sid) for sid in reloaded.stands) == {"1", "2"}
+    # Allometry paths come back absolute, pointing at the files written above.
+    assert (
+        reloaded.stands[StandID("2")]
+        .allometry_file_per_layer[CanopyLayerName.subdominant]
+        .file_path
+        == outcome_2.subdominant_csv
+    )
     # The source's own area column (_stand_row's 1.5 ha), and the real
     # polygon, both survive the JSON round-trip.
     assert reloaded.stands[StandID("1")].stand_area == 1.5
@@ -1396,6 +1404,33 @@ def test_main_writes_crs_and_polygons_into_stand_data_json(
     document = load_stand_data_document_from_json(json_path)
     assert document.crs == shared_utils.SOURCE_CRS
     assert all(stand.polygon is not None for stand in document.stands.values())
+
+
+def test_main_records_allometry_paths_relative_to_stand_data_json(
+    monkeypatch, tmp_path, project_dir
+):
+    # Run from project_dir's parent with a relative --project-dir: the
+    # recorded paths must not depend on either (docs/adr/0005).
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+    monkeypatch.chdir(project_dir.parent)
+
+    _run_main(monkeypatch, gpkg_path, Path(project_dir.name))
+
+    json_path = project_dir / "inputs" / "stand_data.json"
+    raw = json.loads(json_path.read_text())
+    recorded = {
+        layer["file_path"]
+        for stand in raw["stands"].values()
+        for layer in stand["allometry_file_per_layer"].values()
+    }
+    assert recorded
+    assert all(path.startswith("allometry/") for path in recorded)
+    document = load_stand_data_document_from_json(json_path)
+    for stand in document.stands.values():
+        for entry in stand.allometry_file_per_layer.values():
+            assert entry.file_path.parent == project_dir / "inputs" / "allometry"
+            assert entry.file_path.exists()
 
 
 def test_main_reprojects_a_stand_layer_in_another_crs(

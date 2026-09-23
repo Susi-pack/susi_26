@@ -2,6 +2,9 @@ import argparse
 import ast
 import dataclasses
 import inspect
+import json
+import shutil
+import string
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -85,6 +88,17 @@ def test_make_existing_file_validator_is_reusable_for_different_suffixes(tmp_pat
 
 def test_valid_existing_directory_accepts_an_existing_directory(tmp_path):
     assert input_validation.valid_existing_directory(str(tmp_path)) == tmp_path
+
+
+def test_valid_existing_directory_returns_a_relative_directory_absolute(
+    tmp_path, monkeypatch
+):
+    (tmp_path / "project").mkdir()
+    monkeypatch.chdir(tmp_path)
+
+    assert input_validation.valid_existing_directory("project") == (
+        tmp_path / "project"
+    )
 
 
 @pytest.mark.parametrize("bad_value", ["", "   "])
@@ -371,9 +385,7 @@ def test_resolve_config_path_prefers_explicit_config(tmp_path, config_filename):
     (project_dir / "inputs" / config_filename).write_text("")
 
     assert (
-        cli_paths.resolve_config_path(
-            explicit, project_dir, _parser(), config_filename
-        )
+        cli_paths.resolve_config_path(explicit, project_dir, _parser(), config_filename)
         == explicit
     )
 
@@ -387,9 +399,7 @@ def test_resolve_config_path_defaults_to_the_given_name_in_project_inputs(
     default_config.write_text("")
 
     assert (
-        cli_paths.resolve_config_path(
-            None, project_dir, _parser(), config_filename
-        )
+        cli_paths.resolve_config_path(None, project_dir, _parser(), config_filename)
         == default_config
     )
 
@@ -405,9 +415,7 @@ def test_resolve_config_path_ignores_a_config_loose_in_the_project_root(
     (project_dir / config_filename).write_text("")
 
     with pytest.raises(SystemExit):
-        cli_paths.resolve_config_path(
-            None, project_dir, _parser(), config_filename
-        )
+        cli_paths.resolve_config_path(None, project_dir, _parser(), config_filename)
 
 
 @pytest.mark.parametrize("config_filename", CONFIG_FILENAMES)
@@ -416,9 +424,7 @@ def test_resolve_config_path_errors_when_default_is_missing(
 ):
     project_dir = _project_with_inputs(tmp_path)
     with pytest.raises(SystemExit):
-        cli_paths.resolve_config_path(
-            None, project_dir, _parser(), config_filename
-        )
+        cli_paths.resolve_config_path(None, project_dir, _parser(), config_filename)
     stderr = capsys.readouterr().err
     assert str(project_dir / "inputs" / config_filename) in stderr
     assert "--config" in stderr
@@ -560,7 +566,12 @@ def test_centroid_to_ykj_uses_the_centroid_not_the_first_vertex():
     # 20 km wide: the first vertex and the centroid sit 10 km apart in
     # easting, one whole YKJ easting unit, so the two choices can't agree.
     polygon = Polygon(
-        [(380_000, 6_685_000), (400_000, 6_685_000), (400_000, 6_686_000), (380_000, 6_686_000)]
+        [
+            (380_000, 6_685_000),
+            (400_000, 6_685_000),
+            (400_000, 6_686_000),
+            (380_000, 6_686_000),
+        ]
     )
     first_vertex_x, _ = shared_utils.point_to_ykj(*polygon.exterior.coords[0])
     centroid_x, _ = shared_utils.point_to_ykj(polygon.centroid.x, polygon.centroid.y)
@@ -598,8 +609,20 @@ def test_require_source_crs_rejects_anything_else_naming_the_source(declared):
 
 # A 50x50 m square with a 10x10 m hole, in EPSG:3067 near Helsinki.
 _POLYGON_IN_SOURCE_CRS = Polygon(
-    [(385_000, 6_685_000), (385_050, 6_685_000), (385_050, 6_685_050), (385_000, 6_685_050)],
-    [[(385_010, 6_685_010), (385_020, 6_685_010), (385_020, 6_685_020), (385_010, 6_685_020)]],
+    [
+        (385_000, 6_685_000),
+        (385_050, 6_685_000),
+        (385_050, 6_685_050),
+        (385_000, 6_685_050),
+    ],
+    [
+        [
+            (385_010, 6_685_010),
+            (385_020, 6_685_010),
+            (385_020, 6_685_020),
+            (385_010, 6_685_020),
+        ]
+    ],
 )
 
 
@@ -749,7 +772,11 @@ def test_per_species_is_frozen():
 
 def _one_species_stratum(stem_count: float) -> tree_stratum.TreeStratum:
     return tree_stratum.TreeStratum(
-        age=25, basal_area=8.0, stem_count=stem_count, mean_diameter=14.0, mean_height=11.0
+        age=25,
+        basal_area=8.0,
+        stem_count=stem_count,
+        mean_diameter=14.0,
+        mean_height=11.0,
     )
 
 
@@ -890,7 +917,7 @@ def test_stand_data_rejects_a_coordinate_the_cli_check_would_also_reject(
     with pytest.raises(pydantic.ValidationError, match=field_name):
         stand_data.StandData(
             site_fertility_class=3,
-            canopy_layer_files={},
+            allometry_file_per_layer={},
             x_ykj=x_ykj,
             y_ykj=y_ykj,
         )
@@ -900,18 +927,22 @@ def test_stand_data_rejects_a_coordinate_the_cli_check_would_also_reject(
 
 # Fabricated AllometryFileAndSpecies values, mirroring
 # tests/test_canopy_layer_allometry.py's strategy -- no real CSV is ever read here.
+# Absolute, because that's what a StandDataDocument holds in memory (a
+# relative one is rejected without a document folder -- docs/adr/0005).
+_FAKE_ALLOMETRY_DIR = Path("/project/inputs/allometry")
 allometry_file_and_species_strategy = st.builds(
     AllometryFileAndSpecies,
-    file_path=st.text(min_size=1, max_size=20).map(lambda name: Path(f"{name}.csv")),
+    file_path=st.text(
+        alphabet=string.ascii_letters + string.digits + "_-", min_size=1, max_size=20
+    ).map(lambda name: _FAKE_ALLOMETRY_DIR / f"{name}.csv"),
     species_id=st.integers(min_value=1, max_value=100),
 )
 
-canopy_layer_files_strategy = st.dictionaries(
+allometry_file_per_layer_strategy = st.dictionaries(
     keys=st.sampled_from(list(CanopyLayerName)),
     values=allometry_file_and_species_strategy,
     max_size=len(CanopyLayerName),
 )
-
 
 
 @st.composite
@@ -926,7 +957,12 @@ def stand_polygon_strategy(draw):
     y0 = draw(coordinate.filter(lambda v: 6_600_000 <= v <= 7_800_000))
     width = draw(st.floats(min_value=10, max_value=2_000))
     height = draw(st.floats(min_value=10, max_value=2_000))
-    exterior = [(x0, y0), (x0 + width, y0), (x0 + width, y0 + height), (x0, y0 + height)]
+    exterior = [
+        (x0, y0),
+        (x0 + width, y0),
+        (x0 + width, y0 + height),
+        (x0, y0 + height),
+    ]
     holes = []
     if draw(st.booleans()):
         # Middle third of the rectangle: always strictly inside it.
@@ -945,7 +981,7 @@ _optional_nonneg_float = st.one_of(
 stand_data_strategy = st.builds(
     stand_data.StandData,
     site_fertility_class=st.integers(min_value=1, max_value=10),
-    canopy_layer_files=canopy_layer_files_strategy,
+    allometry_file_per_layer=allometry_file_per_layer_strategy,
     x_ykj=st.integers(
         min_value=shared_utils.X_YKJ_MIN, max_value=shared_utils.X_YKJ_MAX
     ),
@@ -987,79 +1023,194 @@ stand_data_document_strategy = st.builds(
 
 @given(document=stand_data_document_strategy)
 def test_stand_data_document_roundtrips_through_json_in_memory(document):
-    # Pure property, no file involved -- load_stand_data_document_from_json's
-    # own file-reading behaviour is covered separately below.
+    # Pure property, no file involved, so no document folder either: the
+    # (absolute) allometry paths pass through unchanged. The on-disk,
+    # relative-to-the-document form is covered through dump/load below.
     dumped = document.model_dump_json()
     assert stand_data.StandDataDocument.model_validate_json(dumped) == document
 
 
-# %% stand_data.load_stand_data_document_from_json
-
-
-def test_load_stand_data_document_from_json_reads_a_real_file(tmp_path):
-    document = stand_data.StandDataDocument(
-        crs=shared_utils.SOURCE_CRS,
-        altitude=100.0,
-        ddy=1200.0,
-        stands={
-            StandID("stand-1"): stand_data.StandData(
-                site_fertility_class=3,
-                canopy_layer_files={
-                    CanopyLayerName.dominant: AllometryFileAndSpecies(
-                        file_path=Path("pines.csv"), species_id=1
-                    )
-                },
-                x_ykj=339,
-                y_ykj=6675,
-            )
-        },
-    )
-    path = tmp_path / stand_data.STAND_DATA_FILENAME
-    path.write_text(document.model_dump_json())
-
-    loaded = stand_data.load_stand_data_document_from_json(path)
-
-    assert loaded == document
-
-
-# %% stand_data.dump_stand_data_document
+# %% stand_data.load_stand_data_document_from_json / dump_stand_data_document
 #
-# Moved here from being duplicated, byte-identically, in both
-# metsakeskus_to_allometry.py and xml_to_allometry.py (ticket 12) -- each
-# tool's own test file now only checks that it imports this function rather
-# than defining a local copy.
+# dump_stand_data_document moved here from being duplicated, byte-identically,
+# in both metsakeskus_to_allometry.py and xml_to_allometry.py (ticket 12) --
+# each tool's own test file now only checks that it imports this function
+# rather than defining a local copy.
+#
+# The pair is the seam for allometry paths (ticket 23, docs/adr/0005):
+# relative to the document's folder on disk, absolute in memory.
 
 
-def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
-    document = stand_data.StandDataDocument(
+def _document_with_allometry(files_per_stand: dict[str, Path]):
+    """A StandDataDocument with one dominant-layer allometry file per stand."""
+    return stand_data.StandDataDocument(
         crs=shared_utils.SOURCE_CRS,
         altitude=150.0,
         ddy=1200.0,
         stands={
-            StandID("1"): stand_data.StandData(
+            StandID(stand_id): stand_data.StandData(
                 site_fertility_class=3,
-                canopy_layer_files={
+                allometry_file_per_layer={
                     CanopyLayerName.dominant: AllometryFileAndSpecies(
-                        file_path=Path("1_dominant.csv"), species_id=1
+                        file_path=file_path, species_id=1
                     )
                 },
                 x_ykj=339,
                 y_ykj=6675,
             )
+            for stand_id, file_path in files_per_stand.items()
         },
     )
-    # The real layout: the document sits in <project-dir>/inputs/, beside
-    # (not inside) the allometry/ folder holding the per-stand CSVs -- but
-    # this function itself just writes to whatever path it's given; that
-    # layout choice is stand_data_path_for_project's job, exercised by each
-    # tool's own dump_stand_data_document-imports-the-shared-function test.
-    output_path = tmp_path / "inputs" / "stand_data.json"
-    output_path.parent.mkdir(parents=True)
 
-    stand_data.dump_stand_data_document(output_path=output_path, document=document)
 
-    assert output_path.exists()
-    assert stand_data.load_stand_data_document_from_json(output_path) == document
+def _project_inputs_with_allometry(root: Path, stand_ids: list[str]):
+    """The real layout: <root>/inputs/stand_data.json beside (not inside)
+    <root>/inputs/allometry/<id>.csv. Returns (document, stand_data.json path);
+    the CSVs are written, the document isn't."""
+    inputs_dir = root / "inputs"
+    allometry_dir = inputs_dir / "allometry"
+    allometry_dir.mkdir(parents=True)
+    files = {stand_id: allometry_dir / f"{stand_id}.csv" for stand_id in stand_ids}
+    for file_path in files.values():
+        file_path.write_text("Age\n1\n")
+    return _document_with_allometry(files), inputs_dir / stand_data.STAND_DATA_FILENAME
+
+
+def _raw_file_paths(json_path: Path) -> dict[str, str]:
+    """stand ID -> the dominant layer's file_path, exactly as written on disk."""
+    raw = json.loads(json_path.read_text())
+    return {
+        stand_id: stand["allometry_file_per_layer"]["dominant"]["file_path"]
+        for stand_id, stand in raw["stands"].items()
+    }
+
+
+def _write_raw_document_with_file_path(json_path: Path, file_path: str) -> None:
+    """A stand_data.json whose one stand holds `file_path` verbatim."""
+    raw = json.loads(
+        _document_with_allometry({"1": Path("/placeholder.csv")}).model_dump_json()
+    )
+    raw["stands"]["1"]["allometry_file_per_layer"]["dominant"]["file_path"] = file_path
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(raw))
+
+
+def test_dump_writes_allometry_paths_relative_to_the_document(tmp_path):
+    document, json_path = _project_inputs_with_allometry(tmp_path, ["1", "2"])
+
+    stand_data.dump_stand_data_document(output_path=json_path, document=document)
+
+    assert _raw_file_paths(json_path) == {"1": "allometry/1.csv", "2": "allometry/2.csv"}
+    # And nothing in the file names the folder it happens to be in.
+    assert str(tmp_path) not in json_path.read_text()
+
+
+def test_load_gives_back_the_original_absolute_paths(tmp_path):
+    document, json_path = _project_inputs_with_allometry(tmp_path, ["1", "2"])
+    stand_data.dump_stand_data_document(output_path=json_path, document=document)
+
+    loaded = stand_data.load_stand_data_document_from_json(json_path)
+
+    assert loaded == document
+    for stand in loaded.stands.values():
+        for entry in stand.allometry_file_per_layer.values():
+            assert entry.file_path.is_absolute()
+
+
+def test_a_moved_document_points_into_its_new_location(tmp_path):
+    document, json_path = _project_inputs_with_allometry(tmp_path / "old", ["1"])
+    stand_data.dump_stand_data_document(output_path=json_path, document=document)
+
+    new_inputs_dir = tmp_path / "somewhere" / "else" / "inputs"
+    new_inputs_dir.parent.mkdir(parents=True)
+    shutil.move(json_path.parent, new_inputs_dir)
+    loaded = stand_data.load_stand_data_document_from_json(
+        new_inputs_dir / stand_data.STAND_DATA_FILENAME
+    )
+
+    dominant = loaded.stands[StandID("1")].allometry_file_per_layer[
+        CanopyLayerName.dominant
+    ]
+    assert dominant.file_path == new_inputs_dir / "allometry" / "1.csv"
+    assert dominant.file_path.exists()
+
+
+def test_load_does_not_need_the_allometry_files_to_exist(tmp_path):
+    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    _write_raw_document_with_file_path(json_path, "allometry/never-written.csv")
+
+    loaded = stand_data.load_stand_data_document_from_json(json_path)
+
+    dominant = loaded.stands[StandID("1")].allometry_file_per_layer[
+        CanopyLayerName.dominant
+    ]
+    assert dominant.file_path == json_path.parent / "allometry" / "never-written.csv"
+    assert not dominant.file_path.exists()
+
+
+@pytest.mark.parametrize(
+    "outside",
+    [
+        pytest.param(lambda root: root / "elsewhere" / "1.csv", id="sibling-folder"),
+        pytest.param(
+            lambda root: root / "inputs" / ".." / "elsewhere" / "1.csv",
+            id="dotdot-escape",
+        ),
+    ],
+)
+def test_dump_rejects_an_allometry_file_outside_the_document_folder(tmp_path, outside):
+    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    json_path.parent.mkdir()
+    file_path = outside(tmp_path)
+    document = _document_with_allometry({"stand-7": file_path})
+
+    with pytest.raises(ValueError) as error:
+        stand_data.dump_stand_data_document(output_path=json_path, document=document)
+
+    assert "stand-7" in str(error.value)
+    assert str(file_path) in str(error.value)
+    assert not json_path.exists()
+
+
+@pytest.mark.parametrize(
+    "bad_file_path",
+    [
+        pytest.param("/abs/allometry/1.csv", id="absolute"),
+        pytest.param("../allometry/1.csv", id="leading-dotdot"),
+        pytest.param("allometry/../../1.csv", id="inner-dotdot"),
+    ],
+)
+def test_load_rejects_absolute_and_dotdot_paths(tmp_path, bad_file_path):
+    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    _write_raw_document_with_file_path(json_path, bad_file_path)
+
+    with pytest.raises(pydantic.ValidationError) as error:
+        stand_data.load_stand_data_document_from_json(json_path)
+
+    assert "'1'" in str(error.value)
+    assert bad_file_path in str(error.value)
+
+
+def test_a_relative_path_without_a_document_folder_is_rejected():
+    # No silent fallback to the current folder: outside
+    # load_stand_data_document_from_json there's nothing to resolve against.
+    raw = json.loads(
+        _document_with_allometry({"stand-3": Path("/placeholder.csv")}).model_dump_json()
+    )
+    raw["stands"]["stand-3"]["allometry_file_per_layer"]["dominant"]["file_path"] = (
+        "allometry/3.csv"
+    )
+
+    with pytest.raises(pydantic.ValidationError) as error:
+        stand_data.StandDataDocument.model_validate_json(json.dumps(raw))
+
+    assert "stand-3" in str(error.value)
+    assert "allometry/3.csv" in str(error.value)
+
+
+def test_building_a_document_in_memory_with_a_relative_path_is_rejected():
+    with pytest.raises(pydantic.ValidationError, match="pines.csv"):
+        _document_with_allometry({"1": Path("pines.csv")})
 
 
 # %% stand_data.StandPolygon (StandData.polygon) and StandDataDocument.crs
@@ -1067,15 +1218,27 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
 # A 10x10 m square with a 2x2 m hole, in EPSG:3067 metres near Paroninkorpi.
 # shapely's area excludes the hole: 100 - 4 = 96.
 _SQUARE_WITH_HOLE = Polygon(
-    [(377_000.0, 6_767_000.0), (377_010.0, 6_767_000.0), (377_010.0, 6_767_010.0), (377_000.0, 6_767_010.0)],
-    [[(377_004.0, 6_767_004.0), (377_006.0, 6_767_004.0), (377_006.0, 6_767_006.0), (377_004.0, 6_767_006.0)]],
+    [
+        (377_000.0, 6_767_000.0),
+        (377_010.0, 6_767_000.0),
+        (377_010.0, 6_767_010.0),
+        (377_000.0, 6_767_010.0),
+    ],
+    [
+        [
+            (377_004.0, 6_767_004.0),
+            (377_006.0, 6_767_004.0),
+            (377_006.0, 6_767_006.0),
+            (377_004.0, 6_767_006.0),
+        ]
+    ],
 )
 
 
 def _stand_with_polygon(polygon) -> stand_data.StandData:
     return stand_data.StandData(
         site_fertility_class=3,
-        canopy_layer_files={},
+        allometry_file_per_layer={},
         x_ykj=338,
         y_ykj=6770,
         polygon=polygon,
@@ -1121,12 +1284,8 @@ def test_stand_polygon_accepts_a_wkt_string_in_python_mode_too():
 @pytest.mark.parametrize(
     "bad_polygon",
     [
-        pytest.param(
-            MultiPolygon([_SQUARE_WITH_HOLE]), id="MultiPolygon-object"
-        ),
-        pytest.param(
-            MultiPolygon([_SQUARE_WITH_HOLE]).wkt, id="MultiPolygon-wkt"
-        ),
+        pytest.param(MultiPolygon([_SQUARE_WITH_HOLE]), id="MultiPolygon-object"),
+        pytest.param(MultiPolygon([_SQUARE_WITH_HOLE]).wkt, id="MultiPolygon-wkt"),
         pytest.param(Polygon(), id="empty-Polygon"),
         pytest.param("POLYGON EMPTY", id="empty-wkt"),
         pytest.param("POINT (377000 6767000)", id="Point-wkt"),
@@ -1175,10 +1334,10 @@ def test_stand_data_document_accepts_the_source_crs():
     assert document.crs == "EPSG:3067"
 
 
-# %% stand_data._build_stand_params_from_stand_data_document
+# %% stand_data.build_stand_params
 
 
-def _single_stand_document(canopy_layer_files, site_fertility_class=3):
+def _single_stand_document(allometry_file_per_layer, site_fertility_class=3):
     return stand_data.StandDataDocument(
         crs=shared_utils.SOURCE_CRS,
         altitude=100.0,
@@ -1186,7 +1345,7 @@ def _single_stand_document(canopy_layer_files, site_fertility_class=3):
         stands={
             StandID("known"): stand_data.StandData(
                 site_fertility_class=site_fertility_class,
-                canopy_layer_files=canopy_layer_files,
+                allometry_file_per_layer=allometry_file_per_layer,
                 x_ykj=339,
                 y_ykj=6675,
             )
@@ -1195,61 +1354,61 @@ def _single_stand_document(canopy_layer_files, site_fertility_class=3):
 
 
 def test_build_stand_params_raises_a_clear_error_for_an_unknown_stand_id():
-    document = _single_stand_document(canopy_layer_files={})
+    document = _single_stand_document(allometry_file_per_layer={})
 
     with pytest.raises(KeyError, match="unknown"):
-        stand_data._build_stand_params_from_stand_data_document(
+        stand_data.build_stand_params(
             document, StandID("unknown"), n=3
         )
 
 
 def test_build_stand_params_matches_with_single_allometry_per_layer():
-    canopy_layer_files = {
+    allometry_file_per_layer = {
         CanopyLayerName.dominant: AllometryFileAndSpecies(
-            file_path=Path("pines.csv"), species_id=1
+            file_path=_FAKE_ALLOMETRY_DIR / "pines.csv", species_id=1
         ),
         CanopyLayerName.under: AllometryFileAndSpecies(
-            file_path=Path("spruces.csv"), species_id=2
+            file_path=_FAKE_ALLOMETRY_DIR / "spruces.csv", species_id=2
         ),
     }
     document = _single_stand_document(
-        canopy_layer_files=canopy_layer_files, site_fertility_class=4
+        allometry_file_per_layer=allometry_file_per_layer, site_fertility_class=4
     )
 
-    params = stand_data._build_stand_params_from_stand_data_document(
+    params = stand_data.build_stand_params(
         document, StandID("known"), n=5
     )
 
     assert params.site_fertility_class == 4
     assert params.canopy_layer_allometry == (
         CanopyLayerAllometry.with_single_allometry_per_layer(
-            layers=canopy_layer_files, n=5
+            layers=allometry_file_per_layer, n=5
         )
     )
 
 
 @given(
-    canopy_layer_files=canopy_layer_files_strategy.filter(
+    allometry_file_per_layer=allometry_file_per_layer_strategy.filter(
         lambda layers: len(layers) > 0
     ),
     n1=st.integers(min_value=0, max_value=30),
     n2=st.integers(min_value=0, max_value=30),
 )
-def test_build_stand_params_pointer_lengths_track_n(canopy_layer_files, n1, n2):
+def test_build_stand_params_pointer_lengths_track_n(allometry_file_per_layer, n1, n2):
     # Regression test for the bug this design was fixing: a CanopyLayerAllometry
     # built for one n must not be reused/cached for another -- each call must
     # produce pointer lists whose length matches the n passed to that call.
     assume(n1 != n2)
-    document = _single_stand_document(canopy_layer_files=canopy_layer_files)
+    document = _single_stand_document(allometry_file_per_layer=allometry_file_per_layer)
 
-    params1 = stand_data._build_stand_params_from_stand_data_document(
+    params1 = stand_data.build_stand_params(
         document, StandID("known"), n=n1
     )
-    params2 = stand_data._build_stand_params_from_stand_data_document(
+    params2 = stand_data.build_stand_params(
         document, StandID("known"), n=n2
     )
 
-    for layer_name in canopy_layer_files:
+    for layer_name in allometry_file_per_layer:
         pointers1 = params1.canopy_layer_allometry.pointers[layer_name]
         pointers2 = params2.canopy_layer_allometry.pointers[layer_name]
         assert pointers1 is not None

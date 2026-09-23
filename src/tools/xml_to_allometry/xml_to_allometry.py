@@ -400,7 +400,7 @@ def process_stand(
 
     return StandData(
         site_fertility_class=parsed_stand.fertility_class,
-        canopy_layer_files={
+        allometry_file_per_layer={
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=output_path, species_id=parsed_stand.main_species
             ),

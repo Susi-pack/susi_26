@@ -61,7 +61,12 @@ def valid_existing_directory(value: str) -> Path:
     """An argparse `type=` callable for a directory that must already exist
     -- used for --project-dir in both tools: the folder the docs have the
     user set up beforehand, with the input file and config.toml colocated
-    inside it, not a bare name the tool creates on the fly."""
+    inside it, not a bare name the tool creates on the fly.
+
+    Returned absolute, so every path the tools derive from it (the
+    allometry CSVs recorded in stand_data.json, above all) is absolute too,
+    whatever folder the tool was started from -- StandDataDocument refuses a
+    relative one (docs/adr/0005)."""
     if not value.strip():
         raise argparse.ArgumentTypeError("Directory must not be empty")
     path = Path(value)
@@ -69,7 +74,7 @@ def valid_existing_directory(value: str) -> Path:
         raise argparse.ArgumentTypeError(f"Directory does not exist: {value}")
     if not path.is_dir():
         raise argparse.ArgumentTypeError(f"Not a directory: {value}")
-    return path
+    return path.resolve()
 
 
 def out_of_range_message(

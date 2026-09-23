@@ -880,19 +880,19 @@ def process_stand(
                 config.step_years,
             )
 
-        canopy_layer_files: dict[CanopyLayerName, AllometryFileAndSpecies] = {
+        allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=plan.dominant_csv, species_id=stand.dominant_species
             ),
         }
         if plan.subdominant_csv is not None:
-            canopy_layer_files[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
+            allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
                 file_path=plan.subdominant_csv, species_id=stand.subdominant_species
             )
 
         stand_data = StandData(
             site_fertility_class=stand.fertilityclass,
-            canopy_layer_files=canopy_layer_files,
+            allometry_file_per_layer=allometry_file_per_layer,
             x_ykj=stand.x_ykj,
             y_ykj=stand.y_ykj,
             polygon=stand.geometry,
@@ -1007,7 +1007,11 @@ def parse_CLI_arguments() -> CLIArguments:
     # while reading or filtering leaves no empty folder behind. Creating the
     # folder is main()'s job, and only on a real run.
     finalize_cli_config(
-        parser, config.altitude, config.ddy, args.project_dir, args.allow_out_of_range_values
+        parser,
+        config.altitude,
+        config.ddy,
+        args.project_dir,
+        args.allow_out_of_range_values,
     )
 
     return CLIArguments(

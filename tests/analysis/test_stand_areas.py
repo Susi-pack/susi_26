@@ -22,16 +22,25 @@ from tools.shared_allometry_tool_utils.shared_utils import SOURCE_CRS
 from tools.shared_allometry_tool_utils.stand_data import (
     StandData,
     StandDataDocument,
+    dump_stand_data_document,
 )
 
 
-def _stand_data(stand_area: float | None) -> StandData:
+# Where the stands' allometry CSVs notionally live. Never written: reading
+# stand areas doesn't touch them. Absolute, as a StandDataDocument's paths
+# are in memory (docs/adr/0005).
+_ALLOMETRY_DIR = Path("/project/inputs/allometry")
+
+
+def _stand_data(
+    stand_area: float | None, allometry_dir: Path = _ALLOMETRY_DIR
+) -> StandData:
     """A StandData carrying stand_area, with plausible values for the rest."""
     return StandData(
         site_fertility_class=3,
-        canopy_layer_files={
+        allometry_file_per_layer={
             CanopyLayerName.dominant: AllometryFileAndSpecies(
-                file_path=Path("pines.csv"), species_id=1
+                file_path=allometry_dir / "pines.csv", species_id=1
             )
         },
         x_ykj=339,
@@ -40,13 +49,17 @@ def _stand_data(stand_area: float | None) -> StandData:
     )
 
 
-def _document(areas_by_stand_id: dict[str, float | None]) -> StandDataDocument:
+def _document(
+    areas_by_stand_id: dict[str, float | None], allometry_dir: Path = _ALLOMETRY_DIR
+) -> StandDataDocument:
     return StandDataDocument(
         crs=SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={
-            StandID(stand_id): _stand_data(stand_area=stand_area)
+            StandID(stand_id): _stand_data(
+                stand_area=stand_area, allometry_dir=allometry_dir
+            )
             for stand_id, stand_area in areas_by_stand_id.items()
         },
     )
@@ -131,8 +144,12 @@ def test_stand_areas_for_run_reads_the_document_from_the_layouts_path(tmp_path):
     stand_data_path.parent.mkdir(parents=True)
     # A third stand the document knows about but this run did not simulate:
     # the run folder, not the document, decides which keys come back.
-    stand_data_path.write_text(
-        _document({"stand-1": 2.4, "stand-2": 1.9, "stand-3": 7.7}).model_dump_json()
+    dump_stand_data_document(
+        output_path=stand_data_path,
+        document=_document(
+            {"stand-1": 2.4, "stand-2": 1.9, "stand-3": 7.7},
+            allometry_dir=stand_data_path.parent / "allometry",
+        ),
     )
 
     run_dirpath = project_layout.run_dir(project_dir=project_dir, run_id="run_a")
