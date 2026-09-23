@@ -2,13 +2,15 @@ import pytest
 import xmltodict
 from hypothesis import given
 from hypothesis import strategies as st
+from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
-from tools.shared_allometry_tool_utils import input_validation
+from tools.shared_allometry_tool_utils import input_validation, shared_utils
 from tools.shared_allometry_tool_utils.stand_data import (
     dump_stand_data_document as shared_dump_stand_data_document,
+    load_stand_data_document_from_json,
 )
 from tools.xml_to_allometry import xml_to_allometry
 
@@ -125,8 +127,21 @@ def _polygon_coordinates() -> str:
     return "385000,6685000 385050,6685000 385050,6685050 385000,6685050"
 
 
+def _hole_coordinates(offset: float = 0.0) -> str:
+    """A 10x10 m hole strictly inside _polygon_coordinates' 50x50 m square
+    (offset shifts it along x, so two holes don't overlap)."""
+    x0, y0 = 385010 + offset, 6685010
+    return f"{x0},{y0} {x0 + 10},{y0} {x0 + 10},{y0 + 10} {x0},{y0 + 10}"
+
+
 def _stand_xml_block(
-    stand_id: str, *, include_tree_strata: bool, include_second_species: bool = False
+    stand_id: str,
+    *,
+    include_tree_strata: bool,
+    include_second_species: bool = False,
+    srs_name: str | None = shared_utils.SOURCE_CRS,
+    exterior_coordinates: str | None = None,
+    interior_coordinates: tuple[str, ...] = (),
 ) -> str:
     second_stratum_block = (
         """
@@ -159,6 +174,17 @@ def _stand_xml_block(
         if include_tree_strata
         else ""
     )
+    srs_attribute = f' srsName="{srs_name}"' if srs_name is not None else ""
+    interior_blocks = "".join(
+        f"""
+              <gml:interior>
+                <gml:LinearRing>
+                  <gml:coordinates>{coordinates}</gml:coordinates>
+                </gml:LinearRing>
+              </gml:interior>"""
+        for coordinates in interior_coordinates
+    )
+    exterior_coordinates = exterior_coordinates or _polygon_coordinates()
     return f"""
     <st:Stand id="{stand_id}">
       <st:StandBasicData>
@@ -168,12 +194,12 @@ def _stand_xml_block(
         <st:Area>1.5</st:Area>
         <gdt:PolygonGeometry>
           <gml:polygonProperty>
-            <gml:Polygon>
+            <gml:Polygon{srs_attribute}>
               <gml:exterior>
                 <gml:LinearRing>
-                  <gml:coordinates>{_polygon_coordinates()}</gml:coordinates>
+                  <gml:coordinates>{exterior_coordinates}</gml:coordinates>
                 </gml:LinearRing>
-              </gml:exterior>
+              </gml:exterior>{interior_blocks}
             </gml:Polygon>
           </gml:polygonProperty>
         </gdt:PolygonGeometry>
@@ -206,16 +232,23 @@ def _forest_property_xml(stand_blocks: str) -> str:
 
 
 def _parsed_stand(
-    stand_id: str, *, include_tree_strata: bool, include_second_species: bool = False
+    stand_id: str,
+    *,
+    include_tree_strata: bool,
+    include_second_species: bool = False,
+    **polygon_options,
 ) -> dict:
     """One <st:Stand> parsed back into the dict shape
     get_stand_data_from_xml/build_stands expect (i.e. what
-    read_stands_from_xml_file would hand them for a single stand)."""
+    read_stands_from_xml_file would hand them for a single stand).
+    polygon_options go to _stand_xml_block (srs_name, exterior_coordinates,
+    interior_coordinates)."""
     xml_text = _forest_property_xml(
         _stand_xml_block(
             stand_id,
             include_tree_strata=include_tree_strata,
             include_second_species=include_second_species,
+            **polygon_options,
         )
     )
     parsed = xmltodict.parse(xml_text)
@@ -314,6 +347,86 @@ def test_get_stand_data_from_xml_stores_x_ykj_and_y_ykj():
     )
     assert isinstance(parsed_stand.x_ykj, int)
     assert isinstance(parsed_stand.y_ykj, int)
+
+
+def test_get_stand_data_from_xml_builds_a_polygon_from_the_exterior_ring():
+    parsed_stand = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand("1", include_tree_strata=True)
+    )
+
+    assert isinstance(parsed_stand.polygon, Polygon)
+    assert parsed_stand.polygon.equals(
+        Polygon(xml_to_allometry.parse_polygon_to_coords(_polygon_coordinates()))
+    )
+    assert list(parsed_stand.polygon.interiors) == []
+
+
+def test_get_stand_data_from_xml_keeps_a_single_interior_ring_as_a_hole():
+    # Exactly one <gml:interior>: xmltodict hands it over as a bare dict,
+    # not a one-item list.
+    parsed_stand = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand(
+            "1", include_tree_strata=True, interior_coordinates=(_hole_coordinates(),)
+        )
+    )
+
+    assert len(parsed_stand.polygon.interiors) == 1
+    # 50x50 m square minus one 10x10 m hole.
+    assert parsed_stand.polygon.area == pytest.approx(2500 - 100)
+
+
+def test_get_stand_data_from_xml_keeps_several_interior_rings_as_holes():
+    parsed_stand = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand(
+            "1",
+            include_tree_strata=True,
+            interior_coordinates=(_hole_coordinates(0), _hole_coordinates(20)),
+        )
+    )
+
+    assert len(parsed_stand.polygon.interiors) == 2
+    assert parsed_stand.polygon.area == pytest.approx(2500 - 2 * 100)
+
+
+def test_get_stand_data_from_xml_takes_ykj_from_the_polygon_centroid():
+    # 20 km wide, so the first vertex (x=380 km) and the centroid (x=390 km)
+    # land in different YKJ easting units: the old first-vertex choice would
+    # give a different x_ykj.
+    wide = "380000,6685000 400000,6685000 400000,6686000 380000,6686000"
+    parsed_stand = xml_to_allometry.get_stand_data_from_xml(
+        _parsed_stand("1", include_tree_strata=True, exterior_coordinates=wide)
+    )
+
+    assert (parsed_stand.x_ykj, parsed_stand.y_ykj) == shared_utils.centroid_to_ykj(
+        parsed_stand.polygon
+    )
+    assert parsed_stand.x_ykj != shared_utils.point_to_ykj(380000, 6685000)[0]
+
+
+def test_centroid_to_ykj_is_the_shared_function():
+    assert xml_to_allometry.centroid_to_ykj is shared_utils.centroid_to_ykj
+
+
+@pytest.mark.parametrize(
+    "srs_name",
+    [
+        pytest.param("EPSG:2393", id="YKJ"),
+        pytest.param("EPSG:4326", id="WGS84"),
+        pytest.param(None, id="missing-srsName"),
+    ],
+)
+def test_build_stands_fails_the_run_on_a_polygon_not_in_the_source_crs(srs_name):
+    # A wrong CRS is a whole-export problem: it must abort build_stands, not
+    # turn into a per-stand StandSkipped the way a missing TreeStrata does.
+    stands = [
+        _parsed_stand("1", include_tree_strata=True),
+        _parsed_stand("2", include_tree_strata=True, srs_name=srs_name),
+    ]
+
+    with pytest.raises(ValueError, match="EPSG:3067") as error:
+        xml_to_allometry.build_stands(stands)
+    assert not isinstance(error.value, xml_to_allometry.NoTreeStrataError)
+    assert "2" in str(error.value)
 
 
 def test_get_stand_data_from_xml_raises_no_tree_strata_error_when_missing():
@@ -421,7 +534,8 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.site_fertility_class == parsed_stand.fertility_class
     assert stand_data.x_ykj == parsed_stand.x_ykj
     assert stand_data.y_ykj == parsed_stand.y_ykj
-    assert stand_data.polygon == parsed_stand.polygon
+    assert stand_data.polygon is not None
+    assert stand_data.polygon.equals(parsed_stand.polygon)
     assert stand_data.stand_area == parsed_stand.area
     assert stand_data.soil_type == parsed_stand.soil_type
     assert stand_data.mean_age == parsed_stand.mean_age
@@ -695,3 +809,38 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
             ],
         )
     assert "already exists" in capsys.readouterr().err
+
+
+# %% main
+
+
+def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
+    monkeypatch, tmp_path, project_dir
+):
+    xml_path = tmp_path / "stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(
+            _stand_xml_block(
+                "1",
+                include_tree_strata=True,
+                interior_coordinates=(_hole_coordinates(),),
+            )
+        )
+    )
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir}"],
+    )
+
+    xml_to_allometry.main()
+
+    json_path = project_dir / "inputs" / "stand_data.json"
+    assert '"polygon":"POLYGON ((' in json_path.read_text()
+    document = load_stand_data_document_from_json(json_path)
+    assert document.crs == shared_utils.SOURCE_CRS
+    polygon = document.stands[StandID("1")].polygon
+    assert polygon is not None
+    assert len(polygon.interiors) == 1

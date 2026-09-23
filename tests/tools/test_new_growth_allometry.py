@@ -13,7 +13,12 @@ from susi.io.susi_parameter_model import (
     read_allometry_info_from_csv,
 )
 from tools.new_growth_allometry import new_growth_allometry as nga
-from tools.shared_allometry_tool_utils import input_validation, stand_data, tree_stratum
+from tools.shared_allometry_tool_utils import (
+    input_validation,
+    shared_utils,
+    stand_data,
+    tree_stratum,
+)
 
 # %% NewGrowthConfig
 #
@@ -592,6 +597,7 @@ def _stand_data_document(
     looked at here -- this tool generates an allometry file, it does not
     consume the stand's existing ones."""
     return stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={

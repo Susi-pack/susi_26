@@ -8,8 +8,10 @@ from pathlib import Path
 import pandas as pd
 import pydantic
 import pytest
+import shapely
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from shapely.geometry import MultiPolygon, Point, Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import (
@@ -538,6 +540,57 @@ def test_point_to_ykj_reuses_one_transformer_across_calls():
     assert shared_utils._ykj_transformer.cache_info().hits >= 1
 
 
+# %% shared_utils.centroid_to_ykj
+#
+# Moved here from metsakeskus_to_allometry.py (ticket 22), now that
+# xml_to_allometry.py takes its YKJ grid location from the centroid too.
+
+
+def test_centroid_to_ykj_returns_plausible_helsinki_area_coordinates():
+    # A small disc roughly at Helsinki, in ETRS-TM35FIN (EPSG:3067).
+    polygon = Point(385000, 6685000).buffer(50)
+    x, y = shared_utils.centroid_to_ykj(polygon)
+    assert 330 < x < 345
+    assert 6650 < y < 6700
+
+
+def test_centroid_to_ykj_uses_the_centroid_not_the_first_vertex():
+    # 20 km wide: the first vertex and the centroid sit 10 km apart in
+    # easting, one whole YKJ easting unit, so the two choices can't agree.
+    polygon = Polygon(
+        [(380_000, 6_685_000), (400_000, 6_685_000), (400_000, 6_686_000), (380_000, 6_686_000)]
+    )
+    first_vertex_x, _ = shared_utils.point_to_ykj(*polygon.exterior.coords[0])
+    centroid_x, _ = shared_utils.point_to_ykj(polygon.centroid.x, polygon.centroid.y)
+    assert first_vertex_x != centroid_x
+
+    assert shared_utils.centroid_to_ykj(polygon) == shared_utils.point_to_ykj(
+        polygon.centroid.x, polygon.centroid.y
+    )
+
+
+def test_centroid_to_ykj_reuses_one_transformer_across_calls():
+    # It runs once per stand, so it must not rebuild a Transformer every call.
+    shared_utils._ykj_transformer.cache_clear()
+    polygon = Point(385000, 6685000).buffer(50)
+    shared_utils.centroid_to_ykj(polygon)
+    shared_utils.centroid_to_ykj(polygon)
+    assert shared_utils._ykj_transformer.cache_info().hits >= 1
+
+
+# %% shared_utils.require_source_crs
+
+
+def test_require_source_crs_accepts_the_source_crs():
+    shared_utils.require_source_crs(shared_utils.SOURCE_CRS, where="test input")
+
+
+@pytest.mark.parametrize("declared", ["EPSG:4326", "EPSG:2393", None])
+def test_require_source_crs_rejects_anything_else_naming_the_source(declared):
+    with pytest.raises(ValueError, match="test input.*EPSG:3067"):
+        shared_utils.require_source_crs(declared, where="test input")
+
+
 # %% tree_stratum.TreeStratum / ZERO_STRATUM
 
 
@@ -804,11 +857,29 @@ canopy_layer_files_strategy = st.dictionaries(
     max_size=len(CanopyLayerName),
 )
 
-# Printable-ASCII only: st.text()'s default alphabet can produce lone
-# surrogates that json.dumps chokes on, and polygon is the only free-text field.
-safe_text_strategy = st.text(
-    alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=50
-)
+
+
+@st.composite
+def stand_polygon_strategy(draw):
+    """A real stand boundary in EPSG:3067 metres: an axis-aligned rectangle
+    somewhere in Finland's ETRS-TM35FIN extent, optionally with one
+    rectangular hole strictly inside it -- enough to exercise both the
+    exterior ring and an interior ring through the WKT round-trip. Arbitrary
+    (non-round) float coordinates on purpose: WKT must not lose precision."""
+    coordinate = st.floats(allow_nan=False, allow_infinity=False)
+    x0 = draw(coordinate.filter(lambda v: 50_000 <= v <= 750_000))
+    y0 = draw(coordinate.filter(lambda v: 6_600_000 <= v <= 7_800_000))
+    width = draw(st.floats(min_value=10, max_value=2_000))
+    height = draw(st.floats(min_value=10, max_value=2_000))
+    exterior = [(x0, y0), (x0 + width, y0), (x0 + width, y0 + height), (x0, y0 + height)]
+    holes = []
+    if draw(st.booleans()):
+        # Middle third of the rectangle: always strictly inside it.
+        hx0, hy0 = x0 + width / 3, y0 + height / 3
+        hx1, hy1 = x0 + 2 * width / 3, y0 + 2 * height / 3
+        holes.append([(hx0, hy0), (hx1, hy0), (hx1, hy1), (hx0, hy1)])
+    return Polygon(exterior, holes)
+
 
 _optional_positive_int = st.one_of(st.none(), st.integers(min_value=1, max_value=20))
 _optional_nonneg_float = st.one_of(
@@ -826,7 +897,7 @@ stand_data_strategy = st.builds(
     y_ykj=st.integers(
         min_value=shared_utils.Y_YKJ_MIN, max_value=shared_utils.Y_YKJ_MAX
     ),
-    polygon=st.one_of(st.none(), safe_text_strategy),
+    polygon=st.one_of(st.none(), stand_polygon_strategy()),
     main_group=_optional_positive_int,
     sub_group=_optional_positive_int,
     stand_area=st.one_of(
@@ -846,6 +917,7 @@ stand_data_strategy = st.builds(
 
 stand_data_document_strategy = st.builds(
     stand_data.StandDataDocument,
+    crs=st.just(shared_utils.SOURCE_CRS),
     altitude=st.floats(
         min_value=-500, max_value=3000, allow_nan=False, allow_infinity=False
     ),
@@ -871,6 +943,7 @@ def test_stand_data_document_roundtrips_through_json_in_memory(document):
 
 def test_load_stand_data_document_from_json_reads_a_real_file(tmp_path):
     document = stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={
@@ -904,6 +977,7 @@ def test_load_stand_data_document_from_json_reads_a_real_file(tmp_path):
 
 def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
     document = stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS,
         altitude=150.0,
         ddy=1200.0,
         stands={
@@ -933,11 +1007,125 @@ def test_dump_stand_data_document_writes_stand_data_json(tmp_path):
     assert stand_data.load_stand_data_document_from_json(output_path) == document
 
 
+# %% stand_data.StandPolygon (StandData.polygon) and StandDataDocument.crs
+
+# A 10x10 m square with a 2x2 m hole, in EPSG:3067 metres near Paroninkorpi.
+# shapely's area excludes the hole: 100 - 4 = 96.
+_SQUARE_WITH_HOLE = Polygon(
+    [(377_000.0, 6_767_000.0), (377_010.0, 6_767_000.0), (377_010.0, 6_767_010.0), (377_000.0, 6_767_010.0)],
+    [[(377_004.0, 6_767_004.0), (377_006.0, 6_767_004.0), (377_006.0, 6_767_006.0), (377_004.0, 6_767_006.0)]],
+)
+
+
+def _stand_with_polygon(polygon) -> stand_data.StandData:
+    return stand_data.StandData(
+        site_fertility_class=3,
+        canopy_layer_files={},
+        x_ykj=338,
+        y_ykj=6770,
+        polygon=polygon,
+    )
+
+
+def test_stand_polygon_roundtrips_through_dump_and_load_with_its_holes(tmp_path):
+    document = stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS,
+        altitude=120.0,
+        ddy=1250.0,
+        stands={StandID("1"): _stand_with_polygon(_SQUARE_WITH_HOLE)},
+    )
+    output_path = tmp_path / stand_data.STAND_DATA_FILENAME
+
+    stand_data.dump_stand_data_document(output_path=output_path, document=document)
+    loaded = stand_data.load_stand_data_document_from_json(output_path)
+
+    polygon = loaded.stands[StandID("1")].polygon
+    assert isinstance(polygon, Polygon)
+    assert polygon.equals(_SQUARE_WITH_HOLE)
+    assert len(polygon.interiors) == 1
+    assert polygon.area == 96.0
+
+
+def test_stand_polygon_is_written_to_json_as_wkt():
+    stand = _stand_with_polygon(_SQUARE_WITH_HOLE)
+
+    dumped = stand.model_dump(mode="json")["polygon"]
+
+    assert isinstance(dumped, str)
+    assert shapely.from_wkt(dumped).equals(_SQUARE_WITH_HOLE)
+
+
+def test_stand_polygon_accepts_a_wkt_string_in_python_mode_too():
+    # The validator parses a str whichever way it arrives, not only from JSON.
+    stand = _stand_with_polygon(_SQUARE_WITH_HOLE.wkt)
+
+    assert isinstance(stand.polygon, Polygon)
+    assert stand.polygon.equals(_SQUARE_WITH_HOLE)
+
+
+@pytest.mark.parametrize(
+    "bad_polygon",
+    [
+        pytest.param(
+            MultiPolygon([_SQUARE_WITH_HOLE]), id="MultiPolygon-object"
+        ),
+        pytest.param(
+            MultiPolygon([_SQUARE_WITH_HOLE]).wkt, id="MultiPolygon-wkt"
+        ),
+        pytest.param(Polygon(), id="empty-Polygon"),
+        pytest.param("POLYGON EMPTY", id="empty-wkt"),
+        pytest.param("POINT (377000 6767000)", id="Point-wkt"),
+        # The pre-ticket-22 on-disk format: raw gml:coordinates pairs.
+        pytest.param(
+            "377000.0,6767000.0 377010.0,6767000.0 377010.0,6767010.0 377000.0,6767000.0",
+            id="gml-coordinates-string",
+        ),
+        pytest.param(42, id="not-a-string"),
+    ],
+)
+def test_stand_polygon_rejects_anything_but_a_non_empty_polygon(bad_polygon):
+    with pytest.raises(pydantic.ValidationError):
+        _stand_with_polygon(bad_polygon)
+
+
+def test_stand_data_json_schema_still_builds():
+    # The polygon type must not need arbitrary_types_allowed: the model has to
+    # describe itself as JSON, with polygon as a plain string.
+    schema = stand_data.StandDataDocument.model_json_schema()
+
+    polygon_schema = schema["$defs"]["StandData"]["properties"]["polygon"]
+    assert sorted(branch["type"] for branch in polygon_schema["anyOf"]) == [
+        "null",
+        "string",
+    ]
+
+
+def test_stand_data_document_requires_crs():
+    with pytest.raises(pydantic.ValidationError, match="crs"):
+        stand_data.StandDataDocument(altitude=100.0, ddy=1200.0, stands={})  # ty: ignore[missing-argument]
+
+
+def test_stand_data_document_rejects_a_crs_other_than_the_source_crs():
+    with pytest.raises(pydantic.ValidationError, match="EPSG:3067"):
+        stand_data.StandDataDocument(
+            crs="EPSG:4326", altitude=100.0, ddy=1200.0, stands={}
+        )
+
+
+def test_stand_data_document_accepts_the_source_crs():
+    document = stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS, altitude=100.0, ddy=1200.0, stands={}
+    )
+
+    assert document.crs == "EPSG:3067"
+
+
 # %% stand_data._build_stand_params_from_stand_data_document
 
 
 def _single_stand_document(canopy_layer_files, site_fertility_class=3):
     return stand_data.StandDataDocument(
+        crs=shared_utils.SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={

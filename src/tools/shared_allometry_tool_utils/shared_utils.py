@@ -4,9 +4,11 @@ data ships in) -> EPSG:2393 (YKJ, what Growth_and_Yield_Table's x/y expect),
 rounded/scaled to the grid units it wants (10 km easting units, 1 km
 northing units).
 
-Each tool still supplies its own input point -- xml_to_allometry.py uses a
-stand's first polygon vertex, metsakeskus_to_allometry.py uses the stand
-polygon's centroid -- that choice is unchanged and stays with each tool.
+Both tools take a stand's YKJ grid location at its polygon centroid, through
+the one centroid_to_ykj below (xml_to_allometry.py used the first polygon
+vertex until ticket 22). That location feeds only the sawlog-reduction
+equation (StemCurve.sawlogReduction), so it's a growth-model input, not a
+second set of coordinates for the stand.
 """
 
 from functools import lru_cache
@@ -14,6 +16,7 @@ from typing import Annotated
 
 from pydantic import Field
 from pyproj import Transformer
+from shapely.geometry import Polygon
 
 SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS both tools' input geometries ship in
 YKJ_CRS = "EPSG:2393"  # Finnish YKJ grid, what Growth_and_Yield_Table's x/y expect
@@ -56,3 +59,21 @@ def point_to_ykj(x: float, y: float) -> tuple[int, int]:
     transformer = _ykj_transformer()
     easting, northing = transformer.transform(x, y)
     return round(easting / 10000), round(northing / 1000)
+
+
+def centroid_to_ykj(polygon: Polygon) -> tuple[int, int]:
+    """A stand polygon's centroid -> YKJ grid coordinates, via point_to_ykj.
+    The polygon must be in SOURCE_CRS (EPSG:3067)."""
+    return point_to_ykj(polygon.centroid.x, polygon.centroid.y)
+
+
+def require_source_crs(declared_crs: str | None, where: str) -> None:
+    """The one "is this SOURCE_CRS?" check, shared by both generating tools'
+    source checks and StandDataDocument.crs. point_to_ykj hard-codes
+    SOURCE_CRS, so geometry in any other CRS would give wrong YKJ grid cells
+    (and wrong raster pixels downstream) without any error. `where` names
+    what declared the CRS, for the error message."""
+    if declared_crs != SOURCE_CRS:
+        raise ValueError(
+            f"{where} is in CRS {declared_crs!r}, but only {SOURCE_CRS} is supported"
+        )

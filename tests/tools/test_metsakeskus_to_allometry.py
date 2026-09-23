@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from shapely.geometry import Point, Polygon
+from shapely.geometry import MultiPolygon, Point, Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.utils import SRC_DIR
@@ -157,6 +157,7 @@ def _stand_row(standid, maingroup=1, subgroup=2, drainagestate=7, fertilityclass
         "fertilityclass": fertilityclass,
         "developmentclass": 2,
         "soiltype": 10,
+        "area": 1.5,
         "geometry": Point(0, 0).buffer(1),
     }
 
@@ -523,34 +524,14 @@ def test_isolate_species_layer_zeroes_other_species():
 
 
 # %% centroid_to_ykj
+#
+# Now shared_utils.centroid_to_ykj, tested in
+# test_shared_allometry_tool_utils.py -- only the "this tool uses the shared
+# function" check stays here.
 
 
-def test_centroid_to_ykj_returns_plausible_helsinki_area_coordinates():
-    # A point roughly at Helsinki, in ETRS-TM35FIN (EPSG:3067).
-    polygon = Point(385000, 6685000).buffer(50)
-    x, y = m.centroid_to_ykj(polygon)
-    # Real YKJ eastings in southern Finland are ~3.3-3.4 million metres --
-    # scaled by /10000 that's low-to-mid 300s, matching Helsinki's well-known
-    # YKJ coordinates (~3387000, 6673000). (Note: the original script's
-    # REGION_META fallback used x=24 for Uusimaa, which is NOT on this scale
-    # -- apparently miscalibrated. This tool doesn't carry that fallback
-    # forward; x/y always come from each stand's own centroid.)
-    assert 330 < x < 345
-    assert 6650 < y < 6700
-
-
-def test_centroid_to_ykj_reuses_one_transformer_across_calls():
-    # Building a pyproj.Transformer is comparatively expensive; centroid_to_ykj
-    # runs once per viable stand, so it must not rebuild one every call. The
-    # cached Transformer itself now lives in the shared shared_utils module
-    # (centroid_to_ykj delegates to its point_to_ykj) -- see
-    # test_shared_allometry_tool_utils.py for the transform arithmetic's own
-    # coverage.
-    shared_utils._ykj_transformer.cache_clear()
-    polygon = Point(385000, 6685000).buffer(50)
-    m.centroid_to_ykj(polygon)
-    m.centroid_to_ykj(polygon)
-    assert shared_utils._ykj_transformer.cache_info().hits >= 1
+def test_centroid_to_ykj_is_the_shared_function():
+    assert m.centroid_to_ykj is shared_utils.centroid_to_ykj
 
 
 # %% build_stand_candidates
@@ -560,9 +541,10 @@ _DEFAULT_GEOMETRY = Point(385000, 6685000).buffer(50)
 _UNSET = object()
 
 
-def _merged_row(standid=1, treestandid=101, geometry=_UNSET, soiltype=10):
+def _merged_row(standid=1, treestandid=101, geometry=_UNSET, soiltype=10, area=0.8):
     return pd.Series(
         {
+            "area": area,
             "standid": standid,
             "treestandid": treestandid,
             "subgroup": 2,
@@ -617,6 +599,34 @@ def test_build_stand_candidates_skips_empty_geometry():
     )
     assert len(candidates) == 0
     assert len(skipped) == 1
+
+
+def test_build_stand_candidates_skips_a_non_polygon_geometry():
+    # The real stand layer is all single Polygons, but a MultiPolygon (or any
+    # other type) must become a clean skip here, not a StandData validation
+    # failure later on.
+    multipolygon = MultiPolygon([_DEFAULT_GEOMETRY])
+    merged_filtered = pd.DataFrame([_merged_row(geometry=multipolygon)])
+    candidates, skipped = m.build_stand_candidates(
+        merged_filtered, _empty_treestratum()
+    )
+    assert len(candidates) == 0
+    assert len(skipped) == 1
+    assert "MultiPolygon" in skipped[0].reason
+
+
+def test_build_stand_candidates_carries_the_area_column():
+    merged_filtered = pd.DataFrame([_merged_row(area=0.8)])
+    candidates, _ = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert candidates[0].area == 0.8
+
+
+def test_build_stand_candidates_missing_area_stays_none():
+    # "Not recorded", same as a missing soiltype -- stand_areas.py reports
+    # a stand with no stand_area by name rather than guessing one.
+    merged_filtered = pd.DataFrame([_merged_row(area=float("nan"))])
+    candidates, _ = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert candidates[0].area is None
 
 
 def test_build_stand_candidates_skips_missing_treestandid():
@@ -727,8 +737,9 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
 # %% partition_viable_candidates
 
 
-def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10):
+def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8):
     return m.StandCandidate(
+        area=area,
         id=StandID(stand_id),
         subgroup=2,
         fertilityclass=3,
@@ -1020,16 +1031,14 @@ def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
 # %% build_stand's area
 
 
-def test_build_stand_computes_area_from_geometry(tmp_path):
-    # candidate.geometry is a Point buffered to radius 50m (EPSG:3067, i.e.
-    # meters) -- area = pi * 50^2 m^2, converted to the ha StandData.stand_area
-    # expects.
-    candidate = _candidate("1", pine_ba=10)
+def test_build_stand_takes_area_from_the_area_column_not_the_geometry():
+    # candidate.geometry is a 50 m radius disc, ~0.785 ha. The stand layer's
+    # own area column is what the source reports, and that's what's kept
+    # (CONTEXT.md, "Stand area") -- a deliberately different value here
+    # proves the geometry isn't consulted.
+    candidate = _candidate("1", pine_ba=10, area=1.234)
     stand = m.build_stand(candidate)
-    # buffer() approximates the circle with a polygon, so its area is only
-    # close to (not exactly) pi*r^2 -- a loose relative tolerance accounts
-    # for that polygon approximation, not for float imprecision.
-    assert stand.area == pytest.approx((math.pi * 50**2) / 10_000.0, rel=0.01)
+    assert stand.area == 1.234
 
 
 # %% process_stand's StandData / dump_stand_data_document
@@ -1050,6 +1059,8 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.x_ykj == stand.x_ykj
     assert stand_data.y_ykj == stand.y_ykj
     assert stand_data.stand_area == pytest.approx(stand.area)
+    assert stand_data.polygon is not None
+    assert stand_data.polygon.equals(stand.geometry)
     assert stand_data.main_group == m.MAINGROUP_FOREST_LAND
     assert stand_data.sub_group == stand.subgroup
     assert stand_data.developmentclass == stand.developmentclass
@@ -1141,7 +1152,7 @@ def test_dump_stand_data_document_is_the_shared_function():
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
 
 
-def _write_synthetic_gpkg(path: Path) -> None:
+def _write_synthetic_gpkg(path: Path, crs: str = shared_utils.SOURCE_CRS) -> None:
     """A minimal 3-layer gpkg exercising load_gpkg_layers + the whole
     filter/merge/aggregate chain: two stands that survive filtering (one
     pine-only monoculture, one pine+spruce mix) and three that each fail a
@@ -1159,7 +1170,7 @@ def _write_synthetic_gpkg(path: Path) -> None:
             ),  # excluded: no type=1 snapshot in target year
         ],
         geometry="geometry",
-        crs="EPSG:3067",
+        crs=crs,
     )
     stand["geometry"] = [helsinki_area] * 5
 
@@ -1301,6 +1312,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     m.dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
+            crs=shared_utils.SOURCE_CRS,
             altitude=config.altitude,
             ddy=config.ddy,
             # Built from the two locals the isinstance asserts above already
@@ -1316,6 +1328,71 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     assert json_path.exists()
     reloaded = load_stand_data_document_from_json(json_path)
     assert set(str(sid) for sid in reloaded.stands) == {"1", "2"}
+    # The source's own area column (_stand_row's 1.5 ha), and the real
+    # polygon, both survive the JSON round-trip.
+    assert reloaded.stands[StandID("1")].stand_area == 1.5
+    reloaded_polygon = reloaded.stands[StandID("1")].polygon
+    assert reloaded_polygon is not None
+    assert reloaded_polygon.equals(layers.stand.geometry.iloc[0])
+
+
+# %% check_stand_layer_crs
+
+
+def test_check_stand_layer_crs_accepts_the_source_crs():
+    m.check_stand_layer_crs(_make_stand_gdf([_stand_row(1)]))
+
+
+@pytest.mark.parametrize(
+    "crs",
+    [pytest.param("EPSG:4326", id="WGS84"), pytest.param(None, id="no-crs")],
+)
+def test_check_stand_layer_crs_rejects_anything_else(crs):
+    stand = gpd.GeoDataFrame([_stand_row(1)], geometry="geometry", crs=crs)
+    with pytest.raises(ValueError, match="EPSG:3067"):
+        m.check_stand_layer_crs(stand)
+
+
+# %% main
+
+
+def _run_main(monkeypatch, gpkg_path, project_dir):
+    (project_dir / "inputs" / "config.toml").write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["metsakeskus_to_allometry.py", str(gpkg_path), f"--project-dir={project_dir}"],
+    )
+    m.main()
+
+
+def test_main_writes_crs_and_polygons_into_stand_data_json(
+    monkeypatch, tmp_path, project_dir
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+
+    _run_main(monkeypatch, gpkg_path, project_dir)
+
+    json_path = project_dir / "inputs" / "stand_data.json"
+    assert '"polygon":"POLYGON ((' in json_path.read_text()
+    document = load_stand_data_document_from_json(json_path)
+    assert document.crs == shared_utils.SOURCE_CRS
+    assert all(stand.polygon is not None for stand in document.stands.values())
+
+
+def test_main_fails_the_run_on_a_stand_layer_in_another_crs(
+    monkeypatch, tmp_path, project_dir
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path, crs="EPSG:3035")
+
+    with pytest.raises(ValueError, match="EPSG:3067"):
+        _run_main(monkeypatch, gpkg_path, project_dir)
+
+    assert not (project_dir / "inputs" / "stand_data.json").exists()
+    assert not (project_dir / "inputs" / "allometry").exists()
 
 
 # %% plan_stand_outputs / csv_counts

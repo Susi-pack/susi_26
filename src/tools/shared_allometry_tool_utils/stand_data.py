@@ -1,7 +1,17 @@
 # Declares data structures for the JSON document storing external stand data information
 from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic import Field
+import shapely
+from pydantic import (
+    AfterValidator,
+    Field,
+    PlainSerializer,
+    PlainValidator,
+    WithJsonSchema,
+)
+from shapely.errors import ShapelyError
+from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import (
@@ -24,7 +34,58 @@ from susi.io.extra_pydantic_types import (
     PositiveFloat,
     PositiveInt,
 )
-from tools.shared_allometry_tool_utils.shared_utils import YkjEasting, YkjNorthing
+from tools.shared_allometry_tool_utils.shared_utils import (
+    YkjEasting,
+    YkjNorthing,
+    require_source_crs,
+)
+
+
+def _validate_stand_polygon(value: Any) -> Polygon:
+    """
+    StandPolygon's validator: a shapely Polygon passes through as-is, a str is
+    parsed as WKT (what stand_data.json holds), and anything that doesn't end
+    up as a non-empty Polygon is rejected -- a MultiPolygon included, since no
+    source produces one (see ticket 22) and consumers call Polygon-only API.
+    """
+    if isinstance(value, str):
+        try:
+            value = shapely.from_wkt(value)
+        except ShapelyError as error:
+            # Also catches the pre-ticket-22 on-disk format (raw
+            # gml:coordinates pairs), which isn't WKT.
+            raise ValueError(f"polygon is not valid WKT: {error}") from error
+    if not isinstance(value, Polygon):
+        raise ValueError(
+            f"polygon must be a shapely Polygon or its WKT, got {type(value).__name__}"
+        )
+    if value.is_empty:
+        raise ValueError("polygon must not be empty")
+    return value
+
+
+# The stand boundary: a shapely Polygon in memory, a WKT string on disk. See
+# docs/adr/0004 for why WKT, and why the CRS lives on the document rather
+# than inside the string (shapely can't read EWKT's "SRID=...;" prefix).
+# PlainValidator replaces pydantic's own validation for the type, and
+# WithJsonSchema describes it as the string it serializes to -- together they
+# let the model build without arbitrary_types_allowed, which on its own would
+# still leave the model unable to write or read a Polygon as JSON.
+StandPolygon = Annotated[
+    Polygon,
+    PlainValidator(_validate_stand_polygon),
+    PlainSerializer(lambda polygon: polygon.wkt, return_type=str),
+    WithJsonSchema({"type": "string", "description": "WKT POLYGON"}),
+]
+
+
+def _validate_document_crs(crs: str) -> str:
+    """Only SOURCE_CRS is supported -- see shared_utils.require_source_crs."""
+    require_source_crs(crs, where="stand_data.json")
+    return crs
+
+
+DocumentCrs = Annotated[str, AfterValidator(_validate_document_crs)]
 
 
 class StandData(StrictFrozenModel):
@@ -38,14 +99,28 @@ class StandData(StrictFrozenModel):
         description="Allometry file and species per canopy layer (dominant/subdominant/under)."
     )
     x_ykj: YkjEasting = Field(
-        description="Stand location, YKJ grid easting (10 km units). Computed from the source geometry via shared_utils.point_to_ykj, and bounded by the X_YKJ_MIN/MAX defined alongside it.",
+        description=(
+            "The stand's YKJ grid location, easting (10 km units): an input to "
+            "the sawlog-reduction equation (StemCurve.sawlogReduction), taken at "
+            "the polygon centroid via shared_utils.centroid_to_ykj, and read back "
+            "by new_growth_allometry.py in its sourced mode. Not a second set of "
+            "coordinates for the stand. Bounded by X_YKJ_MIN/MAX."
+        ),
     )
     y_ykj: YkjNorthing = Field(
-        description="Stand location, YKJ grid northing (1 km units). Computed from the source geometry via shared_utils.point_to_ykj, and bounded by the Y_YKJ_MIN/MAX defined alongside it.",
+        description=(
+            "The stand's YKJ grid location, northing (1 km units). Same role "
+            "and source as x_ykj. Bounded by Y_YKJ_MIN/MAX."
+        ),
     )
-    polygon: str | None = Field(
+    polygon: StandPolygon | None = Field(
         default=None,
-        description="Stand boundary polygon, as whitespace-separated 'x,y' coordinate pairs in the source CRS. Plain metadata, kept for information/traceability only.",
+        description=(
+            "Stand boundary (exterior ring plus holes), in the document's crs. "
+            "A shapely Polygon in memory, WKT in stand_data.json. Not "
+            "audit-trail-only: paroninkorpi.py reads it for the ditch-depth "
+            "raster lookup."
+        ),
     )
 
     stand_area: PositiveFloat | None = Field(
@@ -161,6 +236,13 @@ class StandDataDocument(StrictFrozenModel):
     It contains all stands.
     """
 
+    crs: DocumentCrs = Field(
+        description=(
+            "The CRS every stand polygon in this document is in -- one per "
+            "document, never per stand. Must be shared_utils.SOURCE_CRS "
+            "(EPSG:3067); see docs/adr/0004."
+        ),
+    )
     altitude: float = Field(description="Project altitude, m.")
     ddy: float = Field(description="Project effective temperature sum (degree days).")
     stands: dict[StandID, StandData] = Field(

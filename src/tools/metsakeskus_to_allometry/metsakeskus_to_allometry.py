@@ -16,7 +16,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry.base import BaseGeometry
+from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
@@ -47,7 +47,11 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     finalize_cli_config,
     resolve_config_path,
 )
-from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
+from tools.shared_allometry_tool_utils.shared_utils import (
+    SOURCE_CRS,
+    centroid_to_ykj,
+    require_source_crs,
+)
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,
     TreeStratum,
@@ -112,7 +116,8 @@ class StandCandidate:
     drainagestate: int
     soiltype: int | None
     strata: PerSpecies[TreeStratum]
-    geometry: BaseGeometry
+    geometry: Polygon
+    area: float | None  # ha, the stand layer's own area column; None if not recorded
 
 
 @dataclass(frozen=True)
@@ -136,8 +141,8 @@ class ParsedStand:
     stand_meandiameter: float
     x_ykj: int
     y_ykj: int
-    area: float  # ha -- see build_stand (geometry.area is m^2, EPSG:3067)
-    geometry: BaseGeometry
+    area: float | None  # ha -- the stand layer's own area column, see build_stand
+    geometry: Polygon
     dominant_species: int
     subdominant_species: int
 
@@ -245,6 +250,20 @@ def load_gpkg_layers(gpkg_path: Path) -> GpkgLayers:
     )
 
 
+def check_stand_layer_crs(stand: gpd.GeoDataFrame) -> None:
+    """
+    Fails the run unless the stand layer declares SOURCE_CRS (EPSG:3067), the
+    only CRS centroid_to_ykj and StandDataDocument.crs support. A wrong CRS is
+    a whole-file problem, so this raises rather than skipping stands.
+    """
+    # to_string() gives "EPSG:3067" for a CRS pyproj can match to an EPSG
+    # code, which is how the real MV_Uusimaa.gpkg stand layer reads back.
+    require_source_crs(
+        stand.crs.to_string() if stand.crs is not None else None,
+        where="The gpkg stand layer",
+    )
+
+
 # %% Filtering
 
 
@@ -335,6 +354,7 @@ def attach_stand_attributes(
         "fertilityclass",
         "drainagestate",
         "soiltype",
+        "area",
         "geometry",
         "developmentclass",
     ]
@@ -513,8 +533,9 @@ def build_stand_candidates(
 ) -> tuple[list[StandCandidate], list[StandSkipped]]:
     """One StandCandidate per row of merged_filtered. A row with no usable
     geometry is excluded here, as a StandSkipped -- not carried downstream as
-    a None geometry. Same treatment for a species with real basal area but
-    degenerate diameter/height data (build_species_strata's
+    a None geometry -- and so is one whose geometry isn't a single Polygon
+    (StandData.polygon accepts nothing else). Same treatment for a species
+    with real basal area but degenerate diameter/height data (build_species_strata's
     DegenerateSpeciesDataError, see aggregate_species_group) -- caught here
     and turned into a StandSkipped for the whole stand, rather than letting
     artificial data flow forward into a ParsedStand."""
@@ -532,6 +553,14 @@ def build_stand_candidates(
         # reported as a clean skip.
         if geometry is None or pd.isna(geometry) or geometry.is_empty:
             skipped.append(StandSkipped(stand_id=stand_id, reason="no usable geometry"))
+            continue
+        if not isinstance(geometry, Polygon):
+            skipped.append(
+                StandSkipped(
+                    stand_id=stand_id,
+                    reason=f"geometry is a {geometry.geom_type}, not a Polygon",
+                )
+            )
             continue
 
         treestandid_value = pd.to_numeric(
@@ -564,6 +593,8 @@ def build_stand_candidates(
                 ),
                 strata=strata,
                 geometry=geometry,
+                # None when the cell is empty: "not recorded", like soiltype.
+                area=(float(row["area"]) if pd.notna(row.get("area")) else None),
             )
         )
 
@@ -612,22 +643,14 @@ def determine_dominant_and_subdominant_species(
     return ranked[0], ranked[1]
 
 
-def centroid_to_ykj(geometry: BaseGeometry) -> tuple[int, int]:
-    """Stand-polygon centroid -> YKJ grid coordinates, via the shared
-    point_to_ykj (the transform arithmetic itself, and its cached
-    Transformer, live there now -- see shared_allometry_tool_utils.
-    shared_utils)."""
-    return point_to_ykj(geometry.centroid.x, geometry.centroid.y)
-
-
 def build_stand(candidate: StandCandidate) -> ParsedStand:
     """
     Builds the final stand record from an already-viable candidate
     Not final, though: centroid_to_ykj can still raise for a geometry that's
     present and non-empty but otherwise degenerate (e.g. all-coincident points)
 
-    Also where `area` gets computed (candidate.geometry.area, m^2 under
-    this tool's EPSG:3067 input CRS, converted to the ha StandData.stand_area expects)
+    `area` is the stand layer's own area column, carried over from the
+    candidate -- not recomputed from the geometry (CONTEXT.md, "Stand area").
     """
     strata = candidate.strata
     stand_total_ba = total_basal_area(strata)
@@ -669,7 +692,7 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         stand_meandiameter=float(stand_diameter),
         x_ykj=x_ykj,
         y_ykj=y_ykj,
-        area=candidate.geometry.area / 10_000.0,
+        area=candidate.area,
         geometry=candidate.geometry,
         dominant_species=dominant_species,
         subdominant_species=subdominant_species,
@@ -866,6 +889,7 @@ def process_stand(
             canopy_layer_files=canopy_layer_files,
             x_ykj=stand.x_ykj,
             y_ykj=stand.y_ykj,
+            polygon=stand.geometry,
             stand_area=stand.area,
             main_group=MAINGROUP_FOREST_LAND,
             sub_group=stand.subgroup,
@@ -1067,6 +1091,7 @@ def main() -> None:
     print()
 
     layers = load_gpkg_layers(cli_args.input_gpkg)
+    check_stand_layer_crs(layers.stand)
     print(f"stand      : {len(layers.stand):>7,} rows")
     print(f"treestand  : {len(layers.treestand):>7,} rows")
     print(f"treestratum: {len(layers.treestratum):>7,} rows")
@@ -1176,6 +1201,8 @@ def main() -> None:
     dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
+            # check_stand_layer_crs has already refused any other CRS.
+            crs=SOURCE_CRS,
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,
             stands=final_stands,

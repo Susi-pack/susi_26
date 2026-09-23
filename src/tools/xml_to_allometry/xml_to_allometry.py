@@ -12,6 +12,8 @@ import xmltodict
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from shapely.geometry import Polygon
+
 from susi.io.project_layout import (
     allometry_dir_for_project,
     stand_data_path_for_project,
@@ -36,7 +38,11 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     finalize_cli_config,
     resolve_config_path,
 )
-from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
+from tools.shared_allometry_tool_utils.shared_utils import (
+    SOURCE_CRS,
+    centroid_to_ykj,
+    require_source_crs,
+)
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,
     TreeStratum,
@@ -98,7 +104,7 @@ class ParsedStand:
 
     id: StandID
     fertility_class: int
-    polygon: str
+    polygon: Polygon
     tree_strata: PerSpecies[TreeStratum]
     main_species: int
     x_ykj: int
@@ -160,6 +166,37 @@ def parse_polygon_to_coords(polygon_string: str) -> tuple[tuple[float, float], .
         x, y = pair.split(",")
         coords.append((float(x), float(y)))
     return tuple(coords)
+
+
+def parse_stand_polygon(stand_id: StandID, gml_polygon: dict) -> Polygon:
+    """
+    One stand's <gml:Polygon> -> a shapely Polygon: the gml:exterior ring
+    plus every gml:interior ring as a hole.
+
+    Raises ValueError if the polygon's srsName isn't SOURCE_CRS (a missing
+    srsName included). Deliberately not a NoTreeStrataError-style skip: a
+    wrong CRS is a whole-export problem, so build_stands lets it abort the
+    run instead of dropping stands one by one.
+    """
+    require_source_crs(
+        gml_polygon.get("@srsName"), where=f"Stand {stand_id}'s gml:Polygon"
+    )
+
+    exterior = parse_polygon_to_coords(
+        gml_polygon["gml:exterior"]["gml:LinearRing"]["gml:coordinates"]
+    )
+
+    interiors = gml_polygon.get("gml:interior", [])
+    # Same xmltodict quirk as read_stands_from_xml_file/get_tree_strata_data:
+    # exactly one <gml:interior> arrives as a bare dict, not a one-item list.
+    if isinstance(interiors, dict):
+        interiors = [interiors]
+    holes = [
+        parse_polygon_to_coords(interior["gml:LinearRing"]["gml:coordinates"])
+        for interior in interiors
+    ]
+
+    return Polygon(exterior, holes)
 
 
 def get_tree_strata_data(
@@ -254,15 +291,14 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
         strata_basal_areas_per_stratum.index(max(strata_basal_areas_per_stratum)) + 1
     )
 
-    polygon = stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
+    gml_polygon = stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
         "gml:Polygon"
-    ]["gml:exterior"]["gml:LinearRing"]["gml:coordinates"]
+    ]
+    polygon = parse_stand_polygon(StandID(stand["@id"]), gml_polygon)
 
-    # Location in YKJ coordinates -- input to Growth_and_Yield_Table and, per
-    # ticket 06, a required (stored, not lazily-derived) StandData field.
-    # Coordinate transformer ETRS-TM35FIN (EPSG:3067) -> YKJ (EPSG:2393)
-    first_vertex = parse_polygon_to_coords(polygon)[0]
-    x_ykj, y_ykj = point_to_ykj(*first_vertex)
+    # The stand's YKJ grid location, taken at the polygon centroid -- the same
+    # shared function metsakeskus_to_allometry.py uses.
+    x_ykj, y_ykj = centroid_to_ykj(polygon)
 
     # Parse and validate all necessary XML data
     return ParsedStand(
@@ -293,6 +329,8 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
         basal_area=float(tree_stand_summary["tss:BasalArea"]),
         mean_height=float(tree_stand_summary["tss:MeanHeight"]),
         total_volume=float(tree_stand_summary["tss:Volume"]),
+        # The area the XML reports (st:Area), not polygon.area: see
+        # CONTEXT.md's "Stand area" entry for why it isn't recomputed.
         area=float(stand_basic_data["st:Area"]),
     )
 
@@ -302,7 +340,8 @@ def build_stands(stands) -> tuple[list[ParsedStand], list[StandSkipped]]:
     Batch get_stand_data_from_xml, isolating the one skippable failure
     (NoTreeStrataError -- see get_stand_data_from_xml) as a StandSkipped
     instead of a discarded None sentinel, so the Filtering section can
-    report which stands were dropped and why.
+    report which stands were dropped and why. Every other error, a polygon
+    outside SOURCE_CRS included (see parse_stand_polygon), aborts the run.
     """
     parsed_stands: list[ParsedStand] = []
     skipped: list[StandSkipped] = []
@@ -456,7 +495,11 @@ def parse_CLI_arguments() -> CLIArguments:
     # Validates config.altitude/ddy and refuses to reuse an existing output
     # folder -- this check runs in dry-run mode too.
     finalize_cli_config(
-        parser, config.altitude, config.ddy, args.project_dir, args.allow_out_of_range_values
+        parser,
+        config.altitude,
+        config.ddy,
+        args.project_dir,
+        args.allow_out_of_range_values,
     )
 
     return CLIArguments(
@@ -554,6 +597,8 @@ def main():
     dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
+            # parse_stand_polygon has already refused any polygon in another CRS.
+            crs=SOURCE_CRS,
             altitude=cli_args.config.altitude,
             ddy=cli_args.config.ddy,
             stands=final_stands,

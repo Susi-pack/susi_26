@@ -18,6 +18,7 @@ from analysis.optimization.stand_areas import (
 import susi.io.project_layout as project_layout
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import AllometryFileAndSpecies, CanopyLayerName
+from tools.shared_allometry_tool_utils.shared_utils import SOURCE_CRS
 from tools.shared_allometry_tool_utils.stand_data import (
     StandData,
     StandDataDocument,
@@ -41,6 +42,7 @@ def _stand_data(stand_area: float | None) -> StandData:
 
 def _document(areas_by_stand_id: dict[str, float | None]) -> StandDataDocument:
     return StandDataDocument(
+        crs=SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={
