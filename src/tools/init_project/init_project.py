@@ -65,7 +65,7 @@ SOURCE_SEEDS = {
         / "default_config.toml",
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
-            "xml_to_allometry.py against your XML export -- see "
+            "susi-xml-to-allometry against your XML export -- see "
             "docs/how_to_generate_allometry_from_xml.md. Then write a run script, "
             "modelled on the projects in example_projects/."
         ),
@@ -78,7 +78,7 @@ SOURCE_SEEDS = {
         / "default_config.toml",
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
-            "metsakeskus_to_allometry.py against your .gpkg -- see "
+            "susi-metsakeskus-to-allometry against your .gpkg -- see "
             "docs/how_to_generate_allometry_from_metsakeskus.md. Then write a run "
             "script, modelled on the projects in example_projects/."
         ),
@@ -133,7 +133,7 @@ README_TEMPLATE = """# {project_id}
 
 A SUSI project: everything this study is simulated from, everything its runs
 produce, and the script that runs it, in one folder. Created by
-`init_project.py`.
+`susi-init-project`.
 
 ## Layout
 
@@ -156,12 +156,13 @@ produce, and the script that runs it, in one folder. Created by
 
 ## Start here
 
-1. Generate this project's allometry from your stand data. Run from the SUSI
-   checkout, pointing `--project-dir` at this folder:
+1. Generate this project's allometry from your stand data. With SUSI's
+   environment active (or prefixed with `uv run` from the SUSI checkout),
+   pointing `--project-dir` at this folder:
 
    ```
-   python src/tools/xml_to_allometry/xml_to_allometry.py <export.xml> --project-dir <this folder>
-   python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py <stands.gpkg> --project-dir <this folder>
+   susi-xml-to-allometry <export.xml> --project-dir <this folder>
+   susi-metsakeskus-to-allometry <stands.gpkg> --project-dir <this folder>
    ```
 
    Fill in the REQUIRED fields of `inputs/config.toml` first; both tools take

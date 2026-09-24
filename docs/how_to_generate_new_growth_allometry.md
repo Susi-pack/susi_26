@@ -97,7 +97,7 @@ projected and at what resolution; they are optional, and documented in the
 ### Standalone mode
 
 ```bash
-python src/tools/new_growth_allometry/new_growth_allometry.py \
+susi-new-growth-allometry \
     --project-dir projects/my_project # <-- your project's folder, from step 1
 ```
 
@@ -113,7 +113,7 @@ inside it. `--stand-id` is the id of the stand being clear cut —
 the same key those tools used, which you can read straight out of the JSON:
 
 ```bash
-python src/tools/new_growth_allometry/new_growth_allometry.py \
+susi-new-growth-allometry \
     --project-dir projects/my_project \
     --stand-data projects/my_project/inputs/stand_data.json \
     --stand-id 12345

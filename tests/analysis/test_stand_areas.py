@@ -18,8 +18,8 @@ from analysis.optimization.stand_areas import (
 import susi.io.project_layout as project_layout
 from susi.io.load_output_data import StandID
 from susi.io.susi_parameter_model import AllometryFileAndSpecies, CanopyLayerName
-from tools.shared_allometry_tool_utils.shared_utils import SOURCE_CRS
-from tools.shared_allometry_tool_utils.stand_data import (
+from susi.io.stand_data import (
+    SOURCE_CRS,
     StandData,
     StandDataDocument,
     dump_stand_data_document,

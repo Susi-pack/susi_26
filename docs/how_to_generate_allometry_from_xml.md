@@ -69,7 +69,7 @@ There are other parameters that modify how far forward each stand's growth is pr
 ## 3. Run the tool
 
 ```bash
-python src/tools/xml_to_allometry/xml_to_allometry.py \
+susi-xml-to-allometry \
     inputs/my_project/stands.xml \ # <-- the XML file from step 1
     --project-dir inputs/my_project # <-- your project's folder, from steps 1-2
 ```

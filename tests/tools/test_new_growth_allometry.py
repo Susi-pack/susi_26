@@ -13,10 +13,9 @@ from susi.io.susi_parameter_model import (
     read_allometry_info_from_csv,
 )
 from tools.new_growth_allometry import new_growth_allometry as nga
+from susi.io import stand_data
 from tools.shared_allometry_tool_utils import (
     input_validation,
-    shared_utils,
-    stand_data,
     tree_stratum,
 )
 
@@ -644,7 +643,7 @@ def _stand_data_document(
     allometry_dir must be absolute (a document's paths are, in memory), and
     inside the document's folder if the document is dumped to disk."""
     return stand_data.StandDataDocument(
-        crs=shared_utils.SOURCE_CRS,
+        crs=stand_data.SOURCE_CRS,
         altitude=100.0,
         ddy=1200.0,
         stands={
@@ -887,7 +886,7 @@ def test_a_sourced_out_of_range_ykj_coordinate_is_a_clean_cli_error(
     monkeypatch, project_dir, sourced_config_file, tmp_path, capsys
 ):
     # StandData.x_ykj/.y_ykj carry the same shared bounds validate_x_y_ykj
-    # checks (shared_utils.X/Y_YKJ_MIN/MAX), so in sourced mode the
+    # checks (stand_data.X/Y_YKJ_MIN/MAX), so in sourced mode the
     # coordinate is stopped while the document is being read rather than by
     # the CLI check afterwards. Same range, earlier catch. What matters
     # here is that it still exits the way every other bad input to these

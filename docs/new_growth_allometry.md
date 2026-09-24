@@ -5,7 +5,7 @@ icon: lucide/sprout
 
 # New-growth allometry file
 
-`src/tools/new_growth_allometry/new_growth_allometry.py` generates the
+`susi-new-growth-allometry` (`src/tools/new_growth_allometry/new_growth_allometry.py`) generates the
 allometry file for one freshly regenerated stand: the single-species stand
 that starts growing, at age 1, immediately after a clear cut. It is meant
 for `ClearCut.new_growth_allometry`, not for a stand's initial pre-cut
@@ -28,7 +28,7 @@ For a walkthrough of an actual run, see
 ## Synopsis
 
 ```bash
-python src/tools/new_growth_allometry/new_growth_allometry.py \
+susi-new-growth-allometry \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
     [--stand-data STAND_DATA.json --stand-id STAND_ID] \
     [--allow-out-of-range-values] [--dry-run]
@@ -142,7 +142,7 @@ then.
 `x_ykj`/`y_ykj` are checked against the **converted** YKJ coordinates, and
 there is exactly one definition of that range: `X_YKJ_MIN/MAX` and
 `Y_YKJ_MIN/MAX` in
-`src/tools/shared_allometry_tool_utils/shared_utils.py`, which sit next to
+`src/susi/io/stand_data.py`, which sit next to
 the `point_to_ykj` call that produces coordinates in those units.
 `StandData.x_ykj`/`.y_ykj` take their field bounds from the same constants,
 so a coordinate is held to the same range however it reaches the tool. What

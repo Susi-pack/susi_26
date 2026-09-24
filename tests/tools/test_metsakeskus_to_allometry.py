@@ -13,8 +13,10 @@ from susi.io.load_output_data import StandID
 from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
-from tools.shared_allometry_tool_utils import input_validation, shared_utils
-from tools.shared_allometry_tool_utils.stand_data import (
+from tools.shared_allometry_tool_utils import input_validation
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    centroid_to_ykj,
     StandDataDocument,
     dump_stand_data_document as shared_dump_stand_data_document,
     load_stand_data_document_from_json,
@@ -526,13 +528,13 @@ def test_isolate_species_layer_zeroes_other_species():
 
 # %% centroid_to_ykj
 #
-# Now shared_utils.centroid_to_ykj, tested in
+# Now stand_data.centroid_to_ykj, tested in
 # test_shared_allometry_tool_utils.py -- only the "this tool uses the shared
 # function" check stays here.
 
 
 def test_centroid_to_ykj_is_the_shared_function():
-    assert m.centroid_to_ykj is shared_utils.centroid_to_ykj
+    assert m.centroid_to_ykj is centroid_to_ykj
 
 
 # %% build_stand_candidates
@@ -1153,9 +1155,7 @@ def test_dump_stand_data_document_is_the_shared_function():
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
 
 
-def _write_synthetic_gpkg(
-    path: Path, crs: str | None = shared_utils.SOURCE_CRS
-) -> None:
+def _write_synthetic_gpkg(path: Path, crs: str | None = SOURCE_CRS) -> None:
     """A minimal 3-layer gpkg exercising load_gpkg_layers + the whole
     filter/merge/aggregate chain: two stands that survive filtering (one
     pine-only monoculture, one pine+spruce mix) and three that each fail a
@@ -1175,7 +1175,7 @@ def _write_synthetic_gpkg(
         geometry="geometry",
         # The geometry below is EPSG:3067. Left unlabelled only when the
         # test asks for a layer with no CRS at all.
-        crs=shared_utils.SOURCE_CRS if crs is not None else None,
+        crs=SOURCE_CRS if crs is not None else None,
     )
     stand["geometry"] = [helsinki_area] * 5
     if crs is not None:
@@ -1320,7 +1320,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     m.dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(
-            crs=shared_utils.SOURCE_CRS,
+            crs=SOURCE_CRS,
             altitude=config.altitude,
             ddy=config.ddy,
             # Built from the two locals the isinstance asserts above already
@@ -1365,7 +1365,7 @@ def test_stand_layer_in_source_crs_reprojects_another_crs():
 
     result = m.stand_layer_in_source_crs(in_wgs84)
 
-    assert result.crs == shared_utils.SOURCE_CRS
+    assert result.crs == SOURCE_CRS
     assert result.geometry.iloc[0].equals_exact(
         in_source_crs.geometry.iloc[0], tolerance=1e-3
     )
@@ -1402,7 +1402,7 @@ def test_main_writes_crs_and_polygons_into_stand_data_json(
     json_path = project_dir / "inputs" / "stand_data.json"
     assert '"polygon":"POLYGON ((' in json_path.read_text()
     document = load_stand_data_document_from_json(json_path)
-    assert document.crs == shared_utils.SOURCE_CRS
+    assert document.crs == SOURCE_CRS
     assert all(stand.polygon is not None for stand in document.stands.values())
 
 
@@ -1446,7 +1446,7 @@ def test_main_reprojects_a_stand_layer_in_another_crs(
     document = load_stand_data_document_from_json(
         project_dir / "inputs" / "stand_data.json"
     )
-    assert document.crs == shared_utils.SOURCE_CRS
+    assert document.crs == SOURCE_CRS
     reference_polygon = gpd.read_file(reference_gpkg, layer="stand").geometry.iloc[0]
     for stand in document.stands.values():
         assert stand.polygon is not None

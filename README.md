@@ -44,6 +44,19 @@ The script `example_projects/minimal/single_simulation.py` runs a single SUSI si
 
 More complete examples live in `example_projects/`: each is a whole project folder (inputs, data, run scripts and outputs), laid out like a project of your own.
 
+## Tools
+Installing SUSI also installs these commands (run them with the environment
+active, or prefixed with `uv run`):
+
+| Command | What it does | Docs |
+|---|---|---|
+| `susi-init-project` | Creates a new, empty project folder | — |
+| `susi-xml-to-allometry` | XML stand export → allometry CSVs + `stand_data.json` | `docs/xml_to_allometry.md` |
+| `susi-metsakeskus-to-allometry` | Metsäkeskus `.gpkg` → allometry CSVs + `stand_data.json` | `docs/metsakeskus_to_allometry.md` |
+| `susi-new-growth-allometry` | Post-clearcut allometry for one stand | `docs/new_growth_allometry.md` |
+
+Each takes `--help`.
+
 ## GUI for output analysis (under development)
 `susi-analyze`
 

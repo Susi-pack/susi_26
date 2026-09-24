@@ -27,17 +27,17 @@ dependencies = [
     "streamlit-tree-select>=0.0.5",
     "tqdm>=4.67.3",
     "xlrd>=2.0.2",
+    "geopandas>=1.1.4",
+    "xmltodict>=1.0.4",
 ]
 [dependency-groups]
 dev = [
-    "geopandas>=1.1.4",
     "griffe-pydantic>=1.3.1",
     "hypothesis>=6.152.9",
     "mkdocstrings[python]>=1.0.4",
     "nbstripout>=0.9.1",
     "pre-commit>=4.0.1",
     "pytest>=9.0.2",
-    "xmltodict>=1.0.4",
     "zensical>=0.0.33",
 ]
 notebook = ["jupyterlab>=4.6,<5", "ipykernel>=6.30"]
@@ -58,9 +58,18 @@ namespaces = true
 [project.scripts]
 susi-analyze = "analysis.streamlit.__main__:main"
 susi-init-project = "tools.init_project.init_project:main"
+susi-xml-to-allometry = "tools.xml_to_allometry.xml_to_allometry:main"
+susi-metsakeskus-to-allometry = "tools.metsakeskus_to_allometry.metsakeskus_to_allometry:main"
+susi-new-growth-allometry = "tools.new_growth_allometry.new_growth_allometry:main"
 
 [tool.ty.src]
-include = ["src", "tests", "test_projects", "example_projects", "src/susi/core/main.py"]
+include = [
+    "src",
+    "tests",
+    "test_projects",
+    "example_projects",
+    "src/susi/core/main.py",
+]
 exclude = [
     "src/susi/core/allometric_road_map.py",
     "src/susi/core/allometry.py",

@@ -75,7 +75,7 @@ There are other parameters that modify, e.g., which fertility and development cl
 ## 3. Run the tool
 
 ```bash
-python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py \
+susi-metsakeskus-to-allometry \
     inputs/uusimaa/MV_Uusimaa.gpkg \ # <-- .gpkg with Metsäkeskus region data
     --project-dir inputs/uusimaa # <-- your project's folder, from steps 1-2
 ```

@@ -33,10 +33,10 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     check_output_file_available,
     resolve_config_path,
 )
-from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
-from tools.shared_allometry_tool_utils.stand_data import (
+from susi.io.stand_data import (
     StandDataDocument,
     load_stand_data_document_from_json,
+    point_to_ykj,
 )
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,

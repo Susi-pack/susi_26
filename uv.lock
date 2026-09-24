@@ -3523,6 +3523,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "altair", extra = ["all"] },
+    { name = "geopandas" },
     { name = "ipyfilechooser" },
     { name = "ipywidgets" },
     { name = "matplotlib" },
@@ -3543,18 +3544,17 @@ dependencies = [
     { name = "streamlit-tree-select" },
     { name = "tqdm" },
     { name = "xlrd" },
+    { name = "xmltodict" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "geopandas" },
     { name = "griffe-pydantic" },
     { name = "hypothesis" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "nbstripout" },
     { name = "pre-commit" },
     { name = "pytest" },
-    { name = "xmltodict" },
     { name = "zensical" },
 ]
 notebook = [
@@ -3565,6 +3565,7 @@ notebook = [
 [package.metadata]
 requires-dist = [
     { name = "altair", extras = ["all"], specifier = ">=6.0.0" },
+    { name = "geopandas", specifier = ">=1.1.4" },
     { name = "ipyfilechooser", specifier = ">=0.6.0" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "matplotlib", specifier = ">=3.10.8" },
@@ -3584,18 +3585,17 @@ requires-dist = [
     { name = "streamlit-tree-select", specifier = ">=0.0.5" },
     { name = "tqdm", specifier = ">=4.67.3" },
     { name = "xlrd", specifier = ">=2.0.2" },
+    { name = "xmltodict", specifier = ">=1.0.4" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "geopandas", specifier = ">=1.1.4" },
     { name = "griffe-pydantic", specifier = ">=1.3.1" },
     { name = "hypothesis", specifier = ">=6.152.9" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.4" },
     { name = "nbstripout", specifier = ">=0.9.1" },
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "pytest", specifier = ">=9.0.2" },
-    { name = "xmltodict", specifier = ">=1.0.4" },
     { name = "zensical", specifier = ">=0.0.33" },
 ]
 notebook = [

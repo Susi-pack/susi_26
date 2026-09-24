@@ -9,8 +9,11 @@ from shapely.geometry import Polygon
 from susi.io.load_output_data import StandID
 from susi.io.utils import SRC_DIR
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
-from tools.shared_allometry_tool_utils import input_validation, shared_utils
-from tools.shared_allometry_tool_utils.stand_data import (
+from tools.shared_allometry_tool_utils import input_validation
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    centroid_to_ykj,
+    point_to_ykj,
     dump_stand_data_document as shared_dump_stand_data_document,
     load_stand_data_document_from_json,
 )
@@ -141,7 +144,7 @@ def _stand_xml_block(
     *,
     include_tree_strata: bool,
     include_second_species: bool = False,
-    srs_name: str | None = shared_utils.SOURCE_CRS,
+    srs_name: str | None = SOURCE_CRS,
     exterior_coordinates: str | None = None,
     interior_coordinates: tuple[str, ...] = (),
 ) -> str:
@@ -399,21 +402,21 @@ def test_get_stand_data_from_xml_takes_ykj_from_the_polygon_centroid():
         _parsed_stand("1", include_tree_strata=True, exterior_coordinates=wide)
     )
 
-    assert (parsed_stand.x_ykj, parsed_stand.y_ykj) == shared_utils.centroid_to_ykj(
+    assert (parsed_stand.x_ykj, parsed_stand.y_ykj) == centroid_to_ykj(
         parsed_stand.polygon
     )
-    assert parsed_stand.x_ykj != shared_utils.point_to_ykj(380000, 6685000)[0]
+    assert parsed_stand.x_ykj != point_to_ykj(380000, 6685000)[0]
 
 
 def test_centroid_to_ykj_is_the_shared_function():
-    assert xml_to_allometry.centroid_to_ykj is shared_utils.centroid_to_ykj
+    assert xml_to_allometry.centroid_to_ykj is centroid_to_ykj
 
 
 def _coordinates_in(crs: str) -> str:
     """_polygon_coordinates' square, reprojected from EPSG:3067 into crs and
     written back out as gml:coordinates pairs (x first, as the tool reads
     them)."""
-    transformer = Transformer.from_crs(shared_utils.SOURCE_CRS, crs, always_xy=True)
+    transformer = Transformer.from_crs(SOURCE_CRS, crs, always_xy=True)
     pairs = xml_to_allometry.parse_polygon_to_coords(_polygon_coordinates())
     return " ".join("{},{}".format(*transformer.transform(x, y)) for x, y in pairs)
 
@@ -875,7 +878,7 @@ def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     json_path = project_dir / "inputs" / "stand_data.json"
     assert '"polygon":"POLYGON ((' in json_path.read_text()
     document = load_stand_data_document_from_json(json_path)
-    assert document.crs == shared_utils.SOURCE_CRS
+    assert document.crs == SOURCE_CRS
     polygon = document.stands[StandID("1")].polygon
     assert polygon is not None
     assert len(polygon.interiors) == 1
@@ -906,8 +909,10 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
     assert raw["stands"]["1"]["allometry_file_per_layer"]["dominant"]["file_path"] == (
         "allometry/1.csv"
     )
-    dominant = load_stand_data_document_from_json(json_path).stands[
-        StandID("1")
-    ].allometry_file_per_layer[CanopyLayerName.dominant]
+    dominant = (
+        load_stand_data_document_from_json(json_path)
+        .stands[StandID("1")]
+        .allometry_file_per_layer[CanopyLayerName.dominant]
+    )
     assert dominant.file_path == project_dir / "inputs" / "allometry" / "1.csv"
     assert dominant.file_path.exists()

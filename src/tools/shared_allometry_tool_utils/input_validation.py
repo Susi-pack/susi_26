@@ -16,7 +16,7 @@ import tomllib
 from pathlib import Path
 from typing import Callable, Iterable, Optional, TypeVar
 
-from tools.shared_allometry_tool_utils.shared_utils import (
+from susi.io.stand_data import (
     X_YKJ_MAX,
     X_YKJ_MIN,
     Y_YKJ_MAX,

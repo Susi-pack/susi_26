@@ -49,18 +49,16 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     finalize_cli_config,
     resolve_config_path,
 )
-from tools.shared_allometry_tool_utils.shared_utils import (
-    SOURCE_CRS,
-    centroid_to_ykj,
-)
 from tools.shared_allometry_tool_utils.tree_stratum import (
     PerSpecies,
     TreeStratum,
     ZERO_STRATUM,
 )
-from tools.shared_allometry_tool_utils.stand_data import (
+from susi.io.stand_data import (
+    SOURCE_CRS,
     StandData,
     StandDataDocument,
+    centroid_to_ykj,
     dump_stand_data_document,
 )
 
@@ -800,7 +798,7 @@ def write_allometry_csv(table: pd.DataFrame, output_path: Path) -> None:
 
 
 # dump_stand_data_document is now the shared
-# tools.shared_allometry_tool_utils.stand_data function, imported above --
+# susi.io.stand_data function, imported above --
 # it used to be a local copy.
 
 

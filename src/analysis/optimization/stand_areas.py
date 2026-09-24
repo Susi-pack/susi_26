@@ -25,16 +25,10 @@ from pathlib import Path
 import susi.io.load_output_data as load_output
 import susi.io.project_layout as project_layout
 from susi.io.load_output_data import StandID
-from tools.shared_allometry_tool_utils.stand_data import (
+from susi.io.stand_data import (
     StandDataDocument,
     load_stand_data_document_from_json,
 )
-
-# Importing `tools` from `analysis` is a deliberate new dependency edge: the
-# standing rule is that `susi/` must not import `tools/`, and
-# `StandDataDocument` is a tools-layer type by design (it drags YKJ coordinate
-# types along with it, which `susi/io` has no business owning). `pyproject.toml`
-# packages `tools*` for the same reason.
 
 
 def stand_areas_for_run(project_dir: Path, run_id: str) -> dict[StandID, float]:

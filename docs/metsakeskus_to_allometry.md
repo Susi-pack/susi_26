@@ -4,7 +4,7 @@ icon: lucide/table-2
 
 # Metsäkeskus data --> allometry files
 
-`src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py` converts a Metsäkeskus forest inventory
+`susi-metsakeskus-to-allometry` (`src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py`) converts a Metsäkeskus forest inventory
 GeoPackage (`.gpkg`) into the allometry CSVs SUSI reads.
 Every stand that survives the filters below is converted: there is no sampling
 and no grouping of stands.
@@ -19,7 +19,7 @@ instead, see [XML data --> allometry files](xml_to_allometry.md).
 ## Synopsis
 
 ```bash
-python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG \
+susi-metsakeskus-to-allometry INPUT_GPKG \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
     [--allow-out-of-range-values] [--dry-run]
 ```
