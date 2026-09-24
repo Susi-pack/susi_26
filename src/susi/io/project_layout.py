@@ -1,8 +1,9 @@
 """Where a project's files live.
 
-One folder per project under `AppSettings.projects_root`, each holding its
-own `inputs/` and `outputs/`, so a project's data and its results are
-co-located by construction:
+A project is identified by its folder, wherever that is (ADR 0006): user
+projects live under `AppSettings.projects_root`, tracked example and testing
+projects in the checkout. Each holds its own `inputs/` and `outputs/`, so a
+project's data and its results are co-located by construction:
 
     projects/
     └── paroninkorpi/
@@ -30,7 +31,15 @@ STAND_DATA_FILENAME = "stand_data.json"
 
 
 def project_dir(project_id: str) -> Path:
-    """The folder holding everything about one project.
+    """The folder of the *user* project named `project_id`, under the projects root.
+
+    How a user's run script names its project --
+    `SimulationMetaData(project_dir=project_dir("paroninkorpi"), ...)` -- and
+    where `init_project` creates a new one. Nothing derives a project's
+    folder from its name behind the caller's back: `SimulationMetaData` is
+    handed the folder, and example and testing projects, which live in the
+    checkout rather than under the projects root, are named from
+    `susi.io.utils.repo_root()` instead (ADR 0006).
 
     `AppSettings()` is constructed per call rather than held at module level
     so that importing this module never touches the filesystem, and so a
@@ -47,6 +56,17 @@ def inputs_dir_for_project(project_dir: Path) -> Path:
 def outputs_dir_for_project(project_dir: Path) -> Path:
     """Everything the project's runs produce."""
     return project_dir / "outputs"
+
+
+def data_dir_for_project(project_dir: Path) -> Path:
+    """
+    The preferred home for a project's raw data: weather, XML exports, rasters.
+
+    Preferred, not enforced: nothing requires it, and a script names its own
+    data paths and may put them anywhere. It is created with every new
+    project, and this is the one place its name is spelled.
+    """
+    return project_dir / "data"
 
 
 def allometry_dir_for_project(project_dir: Path) -> Path:
@@ -70,7 +90,7 @@ def require_outputs_dir(project_dir: Path) -> Path:
     """
     Return a project's `outputs/`, failing with a message that says what is missing.
 
-    Its callers -- `SimulationMetaData`'s `parent_output_folder` default and
+    Its callers -- `SimulationMetaData`'s check on its `project_dir` and
     both analysis frontends' run pickers -- all hit the same case: a project
     that exists but has never been run. One message for it, next to the path
     composition it is about.

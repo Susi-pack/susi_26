@@ -3,6 +3,7 @@ from multiprocessing import Pool
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.project_layout import project_dir
 
 from system_inputs.parameters.para_2021 import (
     SiteLabel,
@@ -49,7 +50,7 @@ def create_all_simulation_params(
         all_parameters.append(
             SimulationParams(
                 metadata=SimulationMetaData(
-                    project_id="susi_2021",
+                    project_dir=project_dir("susi_2021"),
                     run_id="run_01",
                     stand_id=stand_label,
                     scenario_id=scenario_label,

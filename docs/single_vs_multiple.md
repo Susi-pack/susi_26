@@ -31,7 +31,7 @@ The `MultipleSusis` class addresses these problems through built-in validation c
 When running a single simulation using `SimulationParams`, outputs are stored in a flat structure:
 
 ```
-projects/<project_id>/outputs/
+<project_dir>/outputs/
 └── <run_id>/
     ├── metadata.json
     ├── params.json
@@ -43,17 +43,19 @@ projects/<project_id>/outputs/
 ```python
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
-from inputs.parameters import golden_test
+from susi.io.project_layout import project_dir
+from system_inputs.parameters import golden_test
 
 simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(project_id="testing", run_id="testing2"),
+    metadata=SimulationMetaData(project_dir=project_dir("testing"), run_id="testing2"),
     susi_params=golden_test.PARAMETERS,
 )
 ```
 
-In this case, only `project_id` and `run_id` are required in `SimulationMetaData`.
-`parent_output_folder` is left out, so it is derived from `project_id` as that
-project's own `outputs/` folder, and the output folder will be:
+In this case, only `project_dir` and `run_id` are required in `SimulationMetaData`.
+`project_dir` is the project's folder -- here `project_dir("testing")`, the user
+project `testing` under the projects root. The run always writes into that
+folder's own `outputs/`, which must already exist, and the output folder will be:
 ```
 projects/testing/outputs/testing2/
 ├── metadata.json
@@ -68,7 +70,7 @@ projects/testing/outputs/testing2/
 When running multiple simulations using `MultipleSusis`, outputs are organized in a hierarchical structure:
 
 ```
-projects/<project_id>/outputs/
+<project_dir>/outputs/
 └── <run_id>/
     ├── stand_A/
     │   ├── scenario_1/
@@ -87,11 +89,12 @@ projects/<project_id>/outputs/
 ```python
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.project_layout import project_dir
 
 all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth",
+            project_dir=project_dir("ditch_depth"),
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
@@ -100,7 +103,7 @@ all_parameters = [
     ),
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth",
+            project_dir=project_dir("ditch_depth"),
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",
@@ -124,7 +127,7 @@ execution_config = MultipleSusis(
 |--------|-----------|---------------|
 | `stand_id` | Not required | Required |
 | `scenario_id` | Not required | Required |
-| `project_id` | Required | Required |
+| `project_dir` | Required | Required |
 | `run_id` | Required | Required, must be same for all runs |
 | Folder structure | `<run_id>/` | `<run_id>/stand_id/scenario_id/` |
 | Class used | `SimulationParams` | `MultipleSusis` |

@@ -6,6 +6,7 @@ from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
 from system_inputs.parameters import sample_parameters
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.project_layout import project_dir
 from susi.io.susi_parameter_model import SusiParams
 
 # %% Parse CLI arguments
@@ -53,7 +54,7 @@ deep = create_depth_scenarios(
 all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth",
+            project_dir=project_dir("ditch_depth"),
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
@@ -62,7 +63,7 @@ all_parameters = [
     ),
     SimulationParams(
         metadata=SimulationMetaData(
-            project_id="ditch_depth",
+            project_dir=project_dir("ditch_depth"),
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",

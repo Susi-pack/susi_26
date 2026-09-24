@@ -20,6 +20,7 @@ from susi.io import load_output_data
 from susi.core.susi_main import Susi
 from system_inputs.parameters import golden_test
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.project_layout import outputs_dir_for_project, run_dir
 import susi.io.utils as io_utils
 
 
@@ -81,27 +82,25 @@ def test_golden_susi():
     GOLDEN_NETCDF_FILE_PATH = repo_root_path / Path(
         "tests/golden_file_test/golden_susi.nc"
     )
-    GOLDEN_TEST_PARENT_OUTPUT_FOLDER = repo_root_path / Path(
-        "tests/golden_file_test"
-    )
+    # The golden test folder doubles as a throwaway project, so the new run
+    # lands at tests/golden_file_test/outputs/golden_file_new_run/, next to
+    # the golden netcdf it is compared with. outputs/ is gitignored and not
+    # in the checkout, so it is created here: a run never creates it itself.
+    GOLDEN_TEST_PROJECT_DIR = repo_root_path / Path("tests/golden_file_test")
+    outputs_dir_for_project(GOLDEN_TEST_PROJECT_DIR).mkdir(exist_ok=True)
 
-    new_golden_output_folder_name = "golden_file_new_run"
+    new_golden_run_id = "golden_file_new_run"
 
     # Remove previous golden test output folder if exists
-    new_golden_output_folderpath = (
-        GOLDEN_TEST_PARENT_OUTPUT_FOLDER / new_golden_output_folder_name
-    )
+    new_golden_output_folderpath = run_dir(GOLDEN_TEST_PROJECT_DIR, new_golden_run_id)
     if new_golden_output_folderpath.is_dir():
         shutil.rmtree(new_golden_output_folderpath)
 
     # Initiate susi parameters
     simulation_parameters = SimulationParams(
         metadata=SimulationMetaData(
-            # Explicit, so the golden run writes next to the golden netcdf
-            # rather than into a project's outputs/.
-            parent_output_folder=GOLDEN_TEST_PARENT_OUTPUT_FOLDER,
-            project_id="golden_file_test",
-            run_id=new_golden_output_folder_name,
+            project_dir=GOLDEN_TEST_PROJECT_DIR,
+            run_id=new_golden_run_id,
         ),
         susi_params=golden_test.PARAMETERS,
     )

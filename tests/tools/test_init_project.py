@@ -31,6 +31,10 @@ def test_create_project_creates_the_layout(new_project):
 
     assert (new_project / "inputs").is_dir()
     assert (new_project / "outputs").is_dir()
+    # Not required by anything -- a script names its own data paths -- but
+    # the preferred home for a project's raw data, so it is there from the
+    # start.
+    assert (new_project / "data").is_dir()
     assert (new_project / "susi_calls.py").is_file()
     assert (new_project / "README.md").is_file()
     assert (new_project / ".gitignore").is_file()
@@ -48,6 +52,7 @@ def test_create_project_leaves_the_folders_empty(new_project):
 
     assert list((new_project / "outputs").iterdir()) == []
     assert list((new_project / "inputs").iterdir()) == []
+    assert list((new_project / "data").iterdir()) == []
 
 
 def test_create_project_never_creates_the_allometry_folder(new_project):
@@ -176,9 +181,8 @@ def test_create_project_copies_the_seed_script_verbatim_under_a_header(new_proje
     seeded = (new_project / "susi_calls.py").read_text(encoding="utf-8")
     assert seeded.endswith(init_project.SEED_SCRIPT_PATH.read_text(encoding="utf-8"))
     # The header says what to edit first, and names the project it was made
-    # for -- the copy's project_id is still the seed's placeholder.
-    assert "paroninkorpi" in seeded
-    assert "project_id" in seeded
+    # for -- the copy's project_dir still names the seed's placeholder.
+    assert 'project_dir("paroninkorpi")' in seeded
 
 
 def test_seed_script_header_points_at_the_readme_when_there_is_one(new_project):

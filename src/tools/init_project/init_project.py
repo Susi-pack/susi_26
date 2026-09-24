@@ -1,8 +1,8 @@
 # Creates a new project folder, seeded so it can be run straight away.
 #
 # A project is `projects/<project_id>/`: everything one study is simulated
-# from in its `inputs/`, everything its runs produce in its `outputs/`, and
-# its own run script alongside them. `susi.io.project_layout` owns that
+# from in its `inputs/`, everything its runs produce in its `outputs/`, its
+# raw data in `data/`, and its own run script alongside them. `susi.io.project_layout` owns that
 # layout; this tool is the one place that *creates* it.
 
 # %% Imports
@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from susi.io.project_layout import (
+    data_dir_for_project,
     inputs_dir_for_project,
     outputs_dir_for_project,
     project_dir,
@@ -109,8 +110,8 @@ SEED_SCRIPT_HEADER = """# Your project's run script, copied when this project wa
 # It is yours now -- the SUSI repo never updates this copy.
 #
 # Edit first:
-#   - project_id -> "{project_id}", so the run writes into this project's
-#     own outputs/ folder rather than some other project's
+#   - project_dir -> project_dir("{project_id}"), so the run writes into this
+#     project's own outputs/ folder rather than some other project's
 #   - run_id     -> a name for this run. A later run under a different id
 #     lands beside this one instead of overwriting it.
 #   - susi_params -> your own parameters, in place of the sample ones
@@ -170,9 +171,9 @@ produce, and the script that runs it, in one folder. Created by
 │   ├── stand_data.json  <- written by that tool: one entry per stand
 │   └── allometry/       <- written by that tool. Do not create it by hand:
 │                           the tools refuse to run into a folder that exists
-├── data/                <- suggested home for your raw data: weather.csv, XML
-│                           export, rasters, ... Anywhere works; nothing in
-│                           SUSI derives these paths
+├── data/                <- created for you: the preferred home for your raw
+│                           data (weather.csv, XML export, rasters, ...), not
+│                           an enforced one. Your script names these paths
 ├── outputs/             <- outputs/<run_id>/<stand_id>/<scenario_id>/
 ├── susi_calls.py        <- your run script. Start here.
 {layout_tail}
@@ -192,8 +193,8 @@ produce, and the script that runs it, in one folder. Created by
    `--dry-run`, which reports what a run would produce without writing
    anything.
 
-2. Edit `susi_calls.py` -- above all its `project_id`, which must be
-   `"{project_id}"` for the run to write into this project.
+2. Edit `susi_calls.py` -- above all its `project_dir`, which must be
+   `project_dir("{project_id}")` for the run to write into this project.
 
 3. Run it: `python susi_calls.py`.
 
@@ -288,11 +289,13 @@ def create_project(
 
     inputs_dir = inputs_dir_for_project(project_dir)
     outputs_dir = outputs_dir_for_project(project_dir)
+    data_dir = data_dir_for_project(project_dir)
     inputs_dir.mkdir()
     outputs_dir.mkdir()
-    created = [project_dir, inputs_dir, outputs_dir]
+    data_dir.mkdir()
+    created = [project_dir, inputs_dir, outputs_dir, data_dir]
 
-    # No .gitkeep in either folder, deliberately. Git does not track empty
+    # No .gitkeep in any of them, deliberately. Git does not track empty
     # directories, so a project committed to a repository of its own before
     # its first run arrives at a clone with no inputs/ or outputs/ -- but
     # that is the user's repository to manage, not this tool's, and the
@@ -467,7 +470,7 @@ def prompt_yes_no(question: str) -> bool:
 def parse_CLI_arguments() -> CLIArguments:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a new SUSI project folder -- its inputs/ and outputs/ and "
+            "Create a new SUSI project folder -- its inputs/, outputs/ and data/ and "
             "a run script to edit -- under the projects root. A README and a "
             ".gitignore are optional extras, off unless asked for."
         )
@@ -479,7 +482,7 @@ def parse_CLI_arguments() -> CLIArguments:
         help=(
             "Name of the new project. It is the project's id -- the folder "
             "name under the projects root, and what the run script's "
-            "`project_id` must say. Prompted for if omitted."
+            "`project_dir(...)` must name. Prompted for if omitted."
         ),
     )
     parser.add_argument(
