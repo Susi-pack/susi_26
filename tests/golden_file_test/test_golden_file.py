@@ -1,11 +1,11 @@
-# Checks whether the results of executing susi_calls.py
-# change over time or not.
+# Checks whether the results of a simulation with the golden_test.py
+# parameters (src/system_inputs/parameters/) change over time or not.
 # Useful to know if my changes are changing the code in any way.
 
 # PROCEDURE
-# the True or Golden results of calling susi_calls.py are stored in golden_susi.nc
+# the True or Golden results of simulating those parameters are stored in golden_susi.nc
 # We compute the sha256 hash of that file.
-# Then we call the modified susi_calls.py, store it in susi.nc, and compute the sha256 hash.
+# Then we simulate them with the modified code, store the result in susi.nc, and compute the sha256 hash.
 # The hashes of the 2 files should be identical.
 
 

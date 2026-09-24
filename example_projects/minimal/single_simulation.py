@@ -2,17 +2,18 @@
 
 from susi.io.execution_config import SimulationParams
 from susi.core.susi_main import Susi
-from system_inputs.parameters import sample_parameters
+
+# parameters.py beside this script: the project's parameters and its folder.
+import parameters
 from susi.io.metadata_model import SimulationMetaData
-from susi.io.project_layout import project_dir
 
 # read weather input
 simulation_parameters = SimulationParams(
     metadata=SimulationMetaData(
-        project_dir=project_dir("testing"),  # your_project_name_here
+        project_dir=parameters.PROJECT_DIR,
         run_id="testing2",  # your_run_name_here
     ),
-    susi_params=sample_parameters.PARAMETERS,
+    susi_params=parameters.PARAMETERS,
 )
 
 # Instantiate susi class

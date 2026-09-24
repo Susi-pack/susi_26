@@ -23,8 +23,8 @@ from pathlib import Path
 # turned `AppSettings.input_folder` into `system_inputs.SYSTEM_INPUTS_DIR`.
 SUSI_REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# `src/`: the package itself, plus its siblings `tools/`, `scripts/`,
-# `analysis/` and `system_inputs/`. Only meaningful in a checkout -- an
+# `src/`: the package itself, plus its siblings `tools/`, `analysis/` and
+# `system_inputs/`. Only meaningful in a checkout -- an
 # installed copy of the package has no src/, and pyproject.toml installs
 # `susi*` and `analysis*` only -- which is fine for its callers, all of
 # which are scripts and tools run from the checkout.

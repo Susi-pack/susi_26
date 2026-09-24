@@ -98,6 +98,12 @@ test_projects/*/inputs/allometry/
 test_projects/*/outputs/*
 !test_projects/*/outputs/.gitkeep
 
+# Example projects track everything they are run from -- code, data and
+# inputs -- so they run straight after a clone. Only what a run writes is
+# ignored.
+example_projects/*/outputs/*
+!example_projects/*/outputs/.gitkeep
+
 # Jupyter stuff
 .jupyter_ystore.db
 .virtual_documents

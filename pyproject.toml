@@ -60,7 +60,7 @@ susi-analyze = "analysis.streamlit.__main__:main"
 susi-init-project = "tools.init_project.init_project:main"
 
 [tool.ty.src]
-include = ["src", "tests", "test_projects", "src/susi/core/main.py"]
+include = ["src", "tests", "test_projects", "example_projects", "src/susi/core/main.py"]
 exclude = [
     "src/susi/core/allometric_road_map.py",
     "src/susi/core/allometry.py",

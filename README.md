@@ -39,10 +39,10 @@ pip install -e .
 
 # Run
 ## SUSI model
-The script located in `src/scripts/susi_calls.py` runs a single SUSI simulation. It is the simplest entry point.
-`python src/scripts/susi_calls.py`
+The script `example_projects/minimal/single_simulation.py` runs a single SUSI simulation. It is the simplest entry point.
+`python example_projects/minimal/single_simulation.py`
 
-More complex scripts might be found in the same folder.
+More complete examples live in `example_projects/`: each is a whole project folder (inputs, data, run scripts and outputs), laid out like a project of your own.
 
 ## GUI for output analysis (under development)
 `susi-analyze`

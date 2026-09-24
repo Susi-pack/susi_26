@@ -15,6 +15,7 @@ from susi.io.susi_parameter_model import (
     SimulationConfig,
     SusiParams,
     CanopyLayerAllometry,
+    AllometryFileAndSpecies,
     CanopyLayerName,
     CanopyParams,
     OrganicLayerParams,
@@ -23,15 +24,23 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    AllometryFileAndSpecies,
+    ClearCut,
+    CuttingManagementParams,
 )
-from system_inputs import SYSTEM_INPUTS_DIR
+from susi.io.project_layout import (
+    allometry_dir_for_project,
+    data_dir_for_project,
+    new_growth_allometry_dir_for_project,
+)
+
+# The project's folder is defined once, in parameters.py beside this file.
+from parameters import PROJECT_DIR
 
 _N_SOIL_COLS = 20
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        FMI_weather_filepath=SYSTEM_INPUTS_DIR.joinpath("weather/CFw.csv"),
+        FMI_weather_filepath=data_dir_for_project(PROJECT_DIR) / "weather" / "CFw.csv",
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
@@ -42,7 +51,7 @@ PARAMETERS = SusiParams(
         canopy_layer_allometry=CanopyLayerAllometry(
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    file_path=SYSTEM_INPUTS_DIR.joinpath("allometry/CF_41.csv"),
+                    file_path=allometry_dir_for_project(PROJECT_DIR) / "CF_41.csv",
                     species_id=1,
                 )
             },
@@ -98,7 +107,6 @@ PARAMETERS = SusiParams(
         enable_peatbottom=True,
         rho_mor=90.0,
         h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
-        cutting_management=None,
         depoN=4.0,
         depoP=0.1,
         depoK=1.0,
@@ -114,5 +122,27 @@ PARAMETERS = SusiParams(
             pH_increment=0.5,
         ),
         peat_temperature=PeatTemperatureParams(),
+        cutting_management=CuttingManagementParams(
+            application_yr=2008,
+            management_type=ClearCut(
+                # Post-clearcut allometry has to start from age=1, so it needs
+                # its own file: CF_41.csv above starts from age 60.
+                new_growth_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=new_growth_allometry_dir_for_project(PROJECT_DIR)
+                            / "new_growth_pine.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1] * _N_SOIL_COLS,
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                strips_to_cut=[True] * _N_SOIL_COLS,
+            ),
+        ),
     ),
 )

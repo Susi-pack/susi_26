@@ -35,7 +35,6 @@ def test_create_project_creates_the_layout(new_project):
     # the preferred home for a project's raw data, so it is there from the
     # start.
     assert (new_project / "data").is_dir()
-    assert (new_project / "susi_calls.py").is_file()
     assert (new_project / "README.md").is_file()
     assert (new_project / ".gitignore").is_file()
 
@@ -110,9 +109,6 @@ def test_create_project_writes_neither_optional_file_by_default(new_project):
 
     assert not (new_project / "README.md").exists()
     assert not (new_project / ".gitignore").exists()
-    # The run script is not one of the optional extras: a project with
-    # nothing to run is not worth creating.
-    assert (new_project / "susi_calls.py").is_file()
 
 
 @pytest.mark.parametrize(
@@ -163,48 +159,20 @@ def test_create_project_writes_no_config_for_source_none(new_project):
     assert list((new_project / "inputs").iterdir()) == []
 
 
-# %% create_project -- the seeded script
+# %% create_project -- no run script
 
 
-def test_seed_script_path_exists():
-    # The one place the seed's location is written down. Ticket 17 repoints
-    # it at src/example_scripts/susi_calls.py; this test is what catches the
-    # repoint being forgotten.
-    assert init_project.SEED_SCRIPT_PATH.is_file()
+def test_create_project_seeds_no_run_script(new_project):
+    # The user writes the run script, modelled on example_projects/: a copy
+    # of an example's script would not run without that example's data.
+    init_project.create_project("paroninkorpi", DataSource.XML, new_project, True, True)
+
+    assert not list(new_project.glob("*.py"))
 
 
-def test_create_project_copies_the_seed_script_verbatim_under_a_header(new_project):
-    init_project.create_project(
-        "paroninkorpi", DataSource.XML, new_project, False, False
-    )
-
-    seeded = (new_project / "susi_calls.py").read_text(encoding="utf-8")
-    assert seeded.endswith(init_project.SEED_SCRIPT_PATH.read_text(encoding="utf-8"))
-    # The header says what to edit first, and names the project it was made
-    # for -- the copy's project_dir still names the seed's placeholder.
-    assert 'project_dir("paroninkorpi")' in seeded
-
-
-def test_seed_script_header_points_at_the_readme_when_there_is_one(new_project):
-    init_project.create_project(
-        "paroninkorpi", DataSource.XML, new_project, True, False
-    )
-
-    header = (new_project / "susi_calls.py").read_text(encoding="utf-8")
-    assert "See README.md next to this file." in header
-
-
-def test_seed_script_header_does_not_point_at_a_missing_readme(new_project):
-    # The header is the first thing the user reads in the file they are told
-    # to start from, so it must not send them to a file that is not there.
-    init_project.create_project(
-        "paroninkorpi", DataSource.XML, new_project, False, False
-    )
-
-    header = (new_project / "susi_calls.py").read_text(encoding="utf-8")
-    assert "README" not in header
-    # ...and the rest of the header is intact.
-    assert "python susi_calls.py" in header
+@pytest.mark.parametrize("source", list(DataSource))
+def test_next_step_points_at_the_example_projects(source):
+    assert "example_projects/" in init_project.SOURCE_SEEDS[source].next_step
 
 
 # %% create_project -- .gitignore
@@ -285,6 +253,17 @@ def test_readme_points_at_the_standard_analysis_notebooks(new_project):
     # index.ipynb is deliberately not copied into a project: its links are
     # relative to its siblings and would all be broken on arrival.
     assert not (new_project / "index.ipynb").exists()
+
+
+def test_readme_points_at_the_example_projects(new_project):
+    init_project.create_project(
+        "paroninkorpi", DataSource.XML, new_project, True, False
+    )
+
+    readme = (new_project / "README.md").read_text(encoding="utf-8")
+    assert "example_projects/" in readme
+    # No run script is seeded, so the README must not send the user to one.
+    assert "susi_calls.py" not in readme
 
 
 def test_readme_warns_about_git_clean(new_project):

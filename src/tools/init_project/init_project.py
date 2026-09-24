@@ -1,9 +1,13 @@
-# Creates a new project folder, seeded so it can be run straight away.
+# Creates a new, empty project folder.
 #
 # A project is `projects/<project_id>/`: everything one study is simulated
 # from in its `inputs/`, everything its runs produce in its `outputs/`, its
 # raw data in `data/`, and its own run script alongside them. `susi.io.project_layout` owns that
 # layout; this tool is the one place that *creates* it.
+#
+# It creates the folders, not the run script: the user writes that, taking the
+# projects in the checkout's example_projects/ as models. A copied example
+# script would not run on its own anyway -- each example needs its own data.
 
 # %% Imports
 import argparse
@@ -22,12 +26,6 @@ from susi.io.project_layout import (
 from susi.io.utils import SRC_DIR
 
 # %% Constants
-
-# Copy susi_calls.py, the easiest possible SUSI project there is. The path
-# is composed from `susi.io.utils.SRC_DIR`, the one place that knows where
-# the checkout is, and kept in a single named constant here so that moving
-# src/scripts/ to src/example_scripts/ (ticket 17) is a one-line change.
-SEED_SCRIPT_PATH = SRC_DIR / "scripts" / "susi_calls.py"
 
 # What xml_to_allometry.py and metsakeskus_to_allometry.py both look up when --config is not given.
 CONFIG_FILENAME = "config.toml"
@@ -70,7 +68,8 @@ SOURCE_SEEDS = {
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
             "xml_to_allometry.py against your XML export -- see "
-            "docs/how_to_generate_allometry_from_xml.md."
+            "docs/how_to_generate_allometry_from_xml.md. Then write a run script, "
+            "modelled on the projects in example_projects/."
         ),
     ),
     DataSource.METSAKESKUS: SourceSeed(
@@ -82,7 +81,8 @@ SOURCE_SEEDS = {
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
             "metsakeskus_to_allometry.py against your .gpkg -- see "
-            "docs/how_to_generate_allometry_from_metsakeskus.md."
+            "docs/how_to_generate_allometry_from_metsakeskus.md. Then write a run "
+            "script, modelled on the projects in example_projects/."
         ),
     ),
     DataSource.NONE: SourceSeed(
@@ -90,7 +90,8 @@ SOURCE_SEEDS = {
         config_template_path=None,
         next_step=(
             "No config.toml was written: set inputs/ up yourself, or re-run this "
-            "tool for another project with --source xml/metsakeskus."
+            "tool for another project with --source xml/metsakeskus. Then write a "
+            "run script, modelled on the projects in example_projects/."
         ),
     ),
 }
@@ -101,32 +102,6 @@ UNTRACKED_NOTE = (
     "This folder is not tracked by the SUSI repository -- it is yours, and may be "
     "used as a git repository of its own."
 )
-
-# Prepended to the seeded copy of the run script. The copy itself is left
-# byte-for-byte identical below this, so a diff against the example script
-# shows exactly what the user has changed since.
-SEED_SCRIPT_HEADER = """# Your project's run script, copied when this project was created from:
-#     {seed_script_path}
-# It is yours now -- the SUSI repo never updates this copy.
-#
-# Edit first:
-#   - project_dir -> project_dir("{project_id}"), so the run writes into this
-#     project's own outputs/ folder rather than some other project's
-#   - run_id     -> a name for this run. A later run under a different id
-#     lands beside this one instead of overwriting it.
-#   - susi_params -> your own parameters, in place of the sample ones
-#
-# Then, with the SUSI environment active:
-#     python susi_calls.py
-{readme_pointer}
-"""
-
-# The last lines of that header, when a README was written beside the
-# script. Empty otherwise: a header that says "see README.md" in a project
-# with no README is worse than a header that stops at the run command.
-# Carries its own newline, so the blank line before the copied script is the
-# same either way.
-SEED_SCRIPT_README_POINTER = "#\n# See README.md next to this file.\n"
 
 # Written only when asked for (--gitignore): harmless if the project never
 # becomes a git repository, correct if it does.
@@ -169,15 +144,15 @@ produce, and the script that runs it, in one folder. Created by
 ├── inputs/              <- everything the project is simulated from
 │   ├── config.toml      <- config for the tool that generates your allometry
 │   ├── stand_data.json  <- written by that tool: one entry per stand
-│   └── allometry/       <- written by that tool. Do not create it by hand:
-│       │                   the tools refuse to run into a folder that exists
+│   └── allometry/       <- written by that tool, or placed by hand when no
+│       │                   tool is used -- not both: the tools refuse to run
+│       │                   into a folder that exists
 │       └── new_growth/  <- post-clearcut allometry, one CSV per species,
 │                           written by new_growth_allometry.py afterwards
 ├── data/                <- created for you: the preferred home for your raw
 │                           data (weather.csv, XML export, rasters, ...), not
 │                           an enforced one. Your script names these paths
 ├── outputs/             <- outputs/<run_id>/<stand_id>/<scenario_id>/
-├── susi_calls.py        <- your run script. Start here.
 {layout_tail}
 ```
 
@@ -195,10 +170,13 @@ produce, and the script that runs it, in one folder. Created by
    `--dry-run`, which reports what a run would produce without writing
    anything.
 
-2. Edit `susi_calls.py` -- above all its `project_dir`, which must be
-   `project_dir("{project_id}")` for the run to write into this project.
+2. Write a run script in this folder. The projects in `example_projects/`
+   of the SUSI checkout are the models to start from: complete project
+   folders, laid out like this one. Pass
+   `project_dir=project_dir("{project_id}")` to its `SimulationMetaData`, so
+   the run writes into this project's `outputs/`.
 
-3. Run it: `python susi_calls.py`.
+3. Run it, with the SUSI environment active: `python <your script>.py`.
 
 ## Analysing the results
 
@@ -265,13 +243,13 @@ def create_project(
     with_readme: bool,
     with_gitignore: bool,
 ) -> list[Path]:
-    """Create one project folder, seeded, and return every path it created.
+    """Create one project folder and return every path it created.
 
     Takes the target path rather than deriving it from `project_id`, so the
     whole of the real work is testable against a tmp_path and main() keeps
     the single responsibility of deciding *where* a project goes.
     `project_id` is passed alongside it, redundantly, because it is the name
-    the README and the seeded script talk about -- not a path.
+    the README talks about -- not a path.
 
     `with_readme` and `with_gitignore` decide whether the two optional files
     are written at all. Both are asked for rather than assumed: the folder
@@ -309,7 +287,6 @@ def create_project(
         shutil.copyfile(config_template_path, config_path)
         created.append(config_path)
 
-    created.append(write_seed_script(project_id, project_dir, with_readme))
     # The README describes the layout, so it has to know whether a
     # .gitignore is part of it.
     if with_readme:
@@ -317,25 +294,6 @@ def create_project(
     if with_gitignore:
         created.append(write_gitignore(project_dir))
     return created
-
-
-def write_seed_script(project_id: str, project_dir: Path, with_readme: bool) -> Path:
-    """Copy SEED_SCRIPT_PATH in under a header saying what to edit first.
-
-    `with_readme` decides whether that header ends by pointing at the
-    README -- which exists only if this run wrote one."""
-    seed_script_path = project_dir / SEED_SCRIPT_PATH.name
-    header = SEED_SCRIPT_HEADER.format(
-        seed_script_path=SEED_SCRIPT_PATH,
-        project_id=project_id,
-        readme_pointer=SEED_SCRIPT_README_POINTER if with_readme else "",
-    )
-    # Explicit utf-8 on both ends: the seed script is not pure ASCII, and
-    # the default encoding is not utf-8 on Windows.
-    seed_script_path.write_text(
-        header + SEED_SCRIPT_PATH.read_text(encoding="utf-8"), encoding="utf-8"
-    )
-    return seed_script_path
 
 
 def write_readme(project_id: str, project_dir: Path, with_gitignore: bool) -> Path:
@@ -472,8 +430,8 @@ def prompt_yes_no(question: str) -> bool:
 def parse_CLI_arguments() -> CLIArguments:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a new SUSI project folder -- its inputs/, outputs/ and data/ and "
-            "a run script to edit -- under the projects root. A README and a "
+            "Create a new SUSI project folder -- its inputs/, outputs/ and data/ -- "
+            "under the projects root. A README and a "
             ".gitignore are optional extras, off unless asked for."
         )
     )
@@ -536,7 +494,7 @@ def parse_CLI_arguments() -> CLIArguments:
     #
     # The same refusal the allometry tools make about their output folder,
     # for the same reason: seeding into an existing project would drop a
-    # fresh run script -- and whatever else was asked for -- on top of
+    # fresh config.toml -- and whatever else was asked for -- on top of
     # someone's work. Not check_output_dir_available, whose message tells
     # the user to "pass a different --project-dir", a flag this tool does
     # not have.

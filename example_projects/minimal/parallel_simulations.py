@@ -4,9 +4,10 @@ from multiprocessing import Pool
 
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
-from system_inputs.parameters import sample_parameters
+
+# parameters.py beside this script: the project's parameters and its folder.
+import parameters
 from susi.io.metadata_model import SimulationMetaData
-from susi.io.project_layout import project_dir
 from susi.io.susi_parameter_model import SusiParams
 
 # %% Parse CLI arguments
@@ -43,18 +44,16 @@ def create_depth_scenarios(
 
 # Next, create the scenarios
 shallow = create_depth_scenarios(
-    base_params=sample_parameters.PARAMETERS, ditch_depth_west=-0.2
+    base_params=parameters.PARAMETERS, ditch_depth_west=-0.2
 )
-deep = create_depth_scenarios(
-    base_params=sample_parameters.PARAMETERS, ditch_depth_west=-0.7
-)
+deep = create_depth_scenarios(base_params=parameters.PARAMETERS, ditch_depth_west=-0.7)
 
 
 # Finally, create the list of parameters that will go into the susi simulation
 all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
-            project_dir=project_dir("ditch_depth"),
+            project_dir=parameters.PROJECT_DIR,
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
@@ -63,7 +62,7 @@ all_parameters = [
     ),
     SimulationParams(
         metadata=SimulationMetaData(
-            project_dir=project_dir("ditch_depth"),
+            project_dir=parameters.PROJECT_DIR,
             run_id="run_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",
