@@ -20,12 +20,11 @@ import seaborn as sns
 import matplotlib.dates as mdates
 import matplotlib.gridspec as gridspec
 
-from susi.io.project_layout import (
-    inputs_dir_for_project,
-    outputs_dir_for_project,
-    project_dir,
-)
-from system_inputs.parameters.para_2021 import (
+from susi.io.project_layout import run_dir
+from parameters_2021 import (
+    MEASUREMENTS_DIR,
+    PROJECT_DIR,
+    RUN_ID,
     SiteLabel,
     get_scenario_label_from_site_label,
     get_stand_label_from_site_label,
@@ -253,14 +252,12 @@ def plot_scatter_site(
 
 # %%
 
-_SUSI_2021_DIR = project_dir("susi_2021")
-_SUSI_2021_INPUTS = inputs_dir_for_project(_SUSI_2021_DIR)
+MEASUREMENTS_FOLDER = MEASUREMENTS_DIR / "Pohjavesiaineistot"
 
-MEASUREMENTS_FOLDER = _SUSI_2021_INPUTS / "Pohjavesiaineistot"
+# The run susi_2021.py writes: outputs/<run_id>/<stand>/<scenario>/susi.nc
+PROJECT_FOLDER = run_dir(PROJECT_DIR, RUN_ID)
 
-PROJECT_FOLDER = outputs_dir_for_project(_SUSI_2021_DIR)
-
-BIO_FILEPATH = _SUSI_2021_INPUTS / "gr_bio.xlsx"
+BIO_FILEPATH = MEASUREMENTS_DIR / "gr_bio.xlsx"
 
 WT_MEASUREMENT_INFO: dict[SiteLabel, WTMeasurementInfo] = {
     SiteLabel("ansa21"): WTMeasurementInfo(
@@ -509,11 +506,6 @@ out = {}
 for site_label in SITES:
     dfmeas = load_wt_measurements(site_label)
 
-    file_meas = (
-        r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
-        + site_label
-        + ".nc"
-    )
     dfsim, start_date, end_date = load_simulation_wt(site_label)
 
     print(site_label, start_date, end_date)

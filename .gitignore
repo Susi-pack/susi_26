@@ -83,11 +83,20 @@ tmp
 
 # Data
 DATA/
-paroninkorpi/
+/paroninkorpi/
 xmltomotti_no_thinning
 xmltomotti_yes_thinning
 xmltoallometry_with_areas
-susi_2021/
+/susi_2021/
+
+# Testing projects track their code and parameters, not their data (27 MB,
+# redistribution terms unchecked) or outputs. The .gitkeeps keep data/,
+# inputs/ and outputs/ on a fresh clone, so the README has somewhere to point.
+test_projects/*/data/*
+!test_projects/*/data/.gitkeep
+test_projects/*/inputs/allometry/
+test_projects/*/outputs/*
+!test_projects/*/outputs/.gitkeep
 
 # Jupyter stuff
 .jupyter_ystore.db

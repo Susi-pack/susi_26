@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import NewType
 import datetime
 
-from susi.io.project_layout import inputs_dir_for_project, project_dir
+from susi.io.project_layout import allometry_dir_for_project, data_dir_for_project
+from susi.io.utils import repo_root
 from susi.io.susi_parameter_model import (
     PeatTypes,
     SiteParams,
@@ -28,6 +29,19 @@ from susi.io.susi_parameter_model import (
     LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
+
+
+# A testing project lives in the checkout, so it names its folder from the
+# repo root rather than through `project_dir()` (ADR 0006). The one definition:
+# susi_2021.py runs into it and figures_2021.py reads back from it.
+PROJECT_DIR = repo_root() / "test_projects" / "susi_2021"
+RUN_ID = "run_01"
+
+# Motti growth tables are allometry, so they live in inputs/allometry/; the
+# weather files and field measurements are raw data under data/.
+ALLOMETRY_DIR = allometry_dir_for_project(PROJECT_DIR)
+WEATHER_DIR = data_dir_for_project(PROJECT_DIR) / "weather"
+MEASUREMENTS_DIR = data_dir_for_project(PROJECT_DIR) / "measurements"
 
 
 @dataclass(frozen=True)
@@ -470,7 +484,6 @@ def _rho_mor_from_sfc(sfc: int) -> float:
 
 
 def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
-    data_folder = inputs_dir_for_project(project_dir("susi_2021"))
     site_params = PARAMS_PER_SITE[site_label]
 
     L = site_params.Swidth
@@ -478,7 +491,7 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
 
     return SusiParams(
         weather_parameters=WeatherParams(
-            FMI_weather_filepath=data_folder / f"vesitase_wfiles/{site_params.wfile}",
+            FMI_weather_filepath=WEATHER_DIR / site_params.wfile,
         ),
         simulation_config=SimulationConfig(
             start_date=site_params.start_date,
@@ -489,7 +502,7 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             canopy_layer_allometry=CanopyLayerAllometry(
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        file_path=data_folder / "motti_files" / site_params.mottifile,
+                        file_path=ALLOMETRY_DIR / site_params.mottifile,
                         species_id=1,
                     )
                 },

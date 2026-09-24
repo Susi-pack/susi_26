@@ -3,23 +3,14 @@ from multiprocessing import Pool
 from susi.io.execution_config import SimulationParams, MultipleSusis
 from susi.core.susi_main import Susi
 from susi.io.metadata_model import SimulationMetaData
-from susi.io.project_layout import project_dir
 
-from system_inputs.parameters.para_2021 import (
+from parameters_2021 import (
+    PROJECT_DIR,
+    RUN_ID,
     SiteLabel,
     get_stand_label_from_site_label,
     get_scenario_label_from_site_label,
     assign_susi_params_to_site,
-)
-
-# ***************** local call for SUSI*****************************************************
-folderName = (
-    r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_out/"
-)
-
-wpath = r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/vesitase_wfiles/"
-mottipath = (
-    r"C:/Users/laurenan/OneDrive - University of Helsinki/SUSI/vesitase/motti_files/"
 )
 
 SITE_LABELS = [
@@ -50,8 +41,8 @@ def create_all_simulation_params(
         all_parameters.append(
             SimulationParams(
                 metadata=SimulationMetaData(
-                    project_dir=project_dir("susi_2021"),
-                    run_id="run_01",
+                    project_dir=PROJECT_DIR,
+                    run_id=RUN_ID,
                     stand_id=stand_label,
                     scenario_id=scenario_label,
                 ),
