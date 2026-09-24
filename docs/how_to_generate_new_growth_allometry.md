@@ -24,8 +24,8 @@ start:
 * **Sourced** — you already have a project's `stand_data.json`, written by
   [`xml_to_allometry.py`](how_to_generate_allometry_from_xml.md) or
   [`metsakeskus_to_allometry.py`](how_to_generate_allometry_from_metsakeskus.md)
-  into their own `<project-dir>/allometry/` folder. That document supplies
-  the five site values, so the config is shorter.
+  into the project's `inputs/` folder. That document supplies the five site
+  values, so the config is shorter.
 
 Sourced mode is the one to use when the clear cut is happening in a stand for which you already have a `stand_data.json`:
 it keeps the new growth's altitude, temperature sum, fertility class and location exactly consistent with the pre-cut stand, instead of re-typing them and hoping they match.
@@ -34,15 +34,15 @@ Pick (or create) a project folder. The CLI argument `--project-dir` points
 there; for example:
 
 ```
-inputs/my_project/
+projects/my_project/
 ```
 
 Next, copy the `.toml` template
 [`src/tools/new_growth_allometry/default_config.toml`](https://github.com/Susi-pack/susi_26/blob/main/src/tools/new_growth_allometry/default_config.toml)
-into that folder. Call it `new_growth_config.toml`:
+into that folder's `inputs/`. Call it `new_growth_config.toml`:
 
 ```
-inputs/my_project/new_growth_config.toml
+projects/my_project/inputs/new_growth_config.toml
 ```
 
 Named and placed this way, the tool finds it automatically from
@@ -98,24 +98,24 @@ projected and at what resolution; they are optional, and documented in the
 
 ```bash
 python src/tools/new_growth_allometry/new_growth_allometry.py \
-    --project-dir inputs/my_project # <-- your project's folder, from step 1
+    --project-dir projects/my_project # <-- your project's folder, from step 1
 ```
 
-Since `new_growth_config.toml` lives directly inside `--project-dir`, the
+Since `new_growth_config.toml` lives in `--project-dir`'s `inputs/`, the
 tool finds it there automatically.
 
 ### Sourced mode
 
 Add `--stand-data` and `--stand-id`. The `stand_data.json` is the one
-`xml_to_allometry.py`/`metsakeskus_to_allometry.py` wrote into *their*
-`--project-dir` — directly in it, beside the `allometry/` folder holding
-that project's per-stand CSVs, not inside it. `--stand-id` is the id of the stand being clear cut —
+`xml_to_allometry.py`/`metsakeskus_to_allometry.py` wrote into the project's
+`inputs/` — beside the `allometry/` folder holding the per-stand CSVs, not
+inside it. `--stand-id` is the id of the stand being clear cut —
 the same key those tools used, which you can read straight out of the JSON:
 
 ```bash
 python src/tools/new_growth_allometry/new_growth_allometry.py \
-    --project-dir inputs/my_project \
-    --stand-data inputs/my_earlier_project/stand_data.json \
+    --project-dir projects/my_project \
+    --stand-data projects/my_project/inputs/stand_data.json \
     --stand-id 12345
 ```
 
@@ -123,18 +123,23 @@ The two flags go together: passing one without the other is an error, not a
 half-sourced run. Pass a `--stand-id` the document does not contain and the
 tool says so, listing the ids it does hold.
 
-Note that `--project-dir` still points at *this* run's folder — the one
-holding the short config from step 1, and the one the new-growth CSV is
-written into. It is unrelated to wherever the `stand_data.json` came from,
-and the two are usually different folders.
+Normally `--project-dir` is the same project the `stand_data.json` belongs
+to: the new growth follows a clear cut of one of its own stands. Any
+project's document may be pointed at, though; `--project-dir` only decides
+where the config is looked up and where the CSV is written.
 
-The output file is saved to `<project-dir>/allometry/`. In the example
-above, that's `inputs/my_project/allometry/`. There is no way to send it
-anywhere else: `--project-dir` is what decides the folder. That `allometry/`
-folder must not already exist: the tool refuses to run into a previous
-run's output rather than overwrite it, so a repeat run needs a new
-`--project-dir` (or a fresh `allometry/` folder underneath the existing
-one).
+The output file is saved to `<project-dir>/inputs/allometry/new_growth/`. In
+the example above, that's `projects/my_project/inputs/allometry/new_growth/`.
+There is no way to send it anywhere else: `--project-dir` is what decides the
+folder. Existing folders are fine (the stand tools' `allometry/` is normally
+already there) but the output file itself must not already exist: the tool
+will not overwrite a previous `new_growth_<species>.csv`, so delete it to
+regenerate it. One species per run, so pine and then spruce go into the same
+`new_growth/` side by side.
+
+Run the stand tool first. `xml_to_allometry.py`/`metsakeskus_to_allometry.py`
+refuse an existing `inputs/allometry/`, so new growth generated *before* the
+stand allometry blocks them, and the workaround is to rename the `allometry/` folder, and re-generate it.
 
 !!! tip "Try it with `--dry-run` first"
 
@@ -143,7 +148,7 @@ one).
     anything at all.
 
     This is worth doing before any real run, for the same reason it's worth
-    doing for the other two allometry tools: a real run creates a folder you
+    doing for the other two allometry tools: a real run writes a file you
     may have wanted only as a test, and it's a fast way to check that
     `--project-dir` and the config are set up the way you expect.
 
@@ -157,9 +162,9 @@ your chosen species — and what it wrote. For the standalone config above:
 Reading
 -------
 Tool initialized with:
-    - project_dir     = /path/to/inputs/my_project
-    - config          = /path/to/inputs/my_project/new_growth_config.toml
-    - output_dir      = /path/to/inputs/my_project/allometry
+    - project_dir     = /path/to/projects/my_project
+    - config          = /path/to/projects/my_project/inputs/new_growth_config.toml
+    - output_dir      = /path/to/projects/my_project/inputs/allometry/new_growth
     - species         = pine
     - stems_count     = 2000 stems/ha
     - fertility_class = 3
@@ -171,10 +176,10 @@ Tool initialized with:
 
 Writing
 -------
-Destination folder: /path/to/inputs/my_project/allometry
+Destination folder: /path/to/projects/my_project/inputs/allometry/new_growth
 
 Assuming this site is a peatland site!
-New-growth allometry file written: /path/to/inputs/my_project/allometry/new_growth_pine.csv
+New-growth allometry file written: /path/to/projects/my_project/inputs/allometry/new_growth/new_growth_pine.csv
 ```
 
 A sourced run prints the same two sections, but names the origin of every
@@ -185,12 +190,12 @@ here rather than only in the numbers:
 Reading
 -------
 Tool initialized with:
-    - project_dir     = /path/to/inputs/my_project
-    - config          = /path/to/inputs/my_project/new_growth_config.toml
-    - output_dir      = /path/to/inputs/my_project/allometry
+    - project_dir     = /path/to/projects/my_project
+    - config          = /path/to/projects/my_project/inputs/new_growth_config.toml
+    - output_dir      = /path/to/projects/my_project/inputs/allometry/new_growth
     - species         = pine
     - stems_count     = 2000 stems/ha
-    - stand_data      = /path/to/inputs/my_earlier_project/stand_data.json
+    - stand_data      = /path/to/projects/my_project/inputs/stand_data.json
     - stand_id        = 12345
     - fertility_class = 3 (from stand)
     - altitude        = 100.0 (from document root)
@@ -209,8 +214,10 @@ There is no "Filtering" section in either mode, unlike the other two
 allometry tools: a single stand has nothing to filter.
 
 ```
-inputs/my_project/allometry/
-└── new_growth_pine.csv
+projects/my_project/inputs/allometry/
+├── <stand_id>.csv ...     (the stand tool's set, untouched)
+└── new_growth/
+    └── new_growth_pine.csv
 ```
 
 There is also no informational JSON alongside it — unlike

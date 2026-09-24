@@ -1,9 +1,10 @@
 """The argparse-flavoured half of the `--project-dir` convention shared by
 xml_to_allometry.py, metsakeskus_to_allometry.py and new_growth_allometry.py:
-the refuse-if-it-already-exists check on the output folder, the `--config`
+the refuse-if-it-already-exists checks on the output folder (the stand tools)
+and the output file (new_growth_allometry.py), the `--config`
 defaults-to-`<project-dir>/inputs/<name>` resolution, and finalize_cli_config,
-the validate-then-resolve-output-dir tail every tool's parse_CLI_arguments
-shares.
+the validate-then-resolve-output-dir tail the two stand tools'
+parse_CLI_arguments share.
 
 Named cli_paths, not project_layout: `--project-dir` is the project root --
 `projects/<project>/` -- so every path under it is actually composed by
@@ -24,15 +25,37 @@ def check_output_dir_available(
     output_dir: Path, parser: argparse.ArgumentParser
 ) -> None:
     """Refuse to reuse an existing folder rather than silently overwriting
-    (or, previously, deleting) whatever a prior run left there -- the user
-    must pick a different --project-dir instead. Meant to be called during
-    argument parsing, including in --dry-run mode: "would this run even
-    start?" is exactly what a dry run is for. Creating the folder itself is
-    each tool's main()'s job, and only on a real run."""
+    (or, previously, deleting) whatever a prior run left there. The stand
+    tools write a complete set -- one CSV per stand plus stand_data.json --
+    and mixing a new set into an old one would be wrong. Meant to be called
+    during argument parsing, including in --dry-run mode: "would this run
+    even start?" is exactly what a dry run is for. Creating the folder
+    itself is each tool's main()'s job, and only on a real run.
+
+    The advice is to move the old folder aside, not to pass a different
+    --project-dir: a project is one folder (ADR 0003), so a second
+    --project-dir would split it in two."""
     if output_dir.exists():
         parser.error(
             f"Output folder already exists: {output_dir}. Refusing to run into "
-            "an existing folder. Pass a different --project-dir instead."
+            "an existing folder. To regenerate it, rename or move the existing "
+            "folder first."
+        )
+
+
+def check_output_file_available(
+    output_path: Path, parser: argparse.ArgumentParser
+) -> None:
+    """The per-file counterpart of check_output_dir_available, for
+    new_growth_allometry.py: it writes one file per species into a shared
+    folder, so only its own target file is a reason to refuse -- the folder
+    existing is the normal case (a stand tool made allometry/, an earlier
+    species made new_growth/). Same timing as the folder check: during
+    argument parsing, dry run included."""
+    if output_path.exists():
+        parser.error(
+            f"Output file already exists: {output_path}. Refusing to overwrite "
+            "it. Delete it first to regenerate it."
         )
 
 
@@ -72,16 +95,19 @@ def finalize_cli_config(
     project_dir: Path,
     allow_out_of_range_values: bool,
 ) -> Path:
-    """The validate-then-resolve-output-dir tail every tool's
-    parse_CLI_arguments repeats once its own config is loaded:
+    """The validate-then-resolve-output-dir tail the two stand tools'
+    parse_CLI_arguments repeat once their own config is loaded:
     validate_altitude_ddy, then refuse an already-existing output folder.
     Returns the validated, available allometry output dir.
 
     Takes altitude/ddy as plain floats rather than a whole config object, so
-    it stays independent of the fact that ExtractionConfig/XmlConfig/
-    NewGrowthConfig are three unrelated types -- and so new_growth_
-    allometry.py can pass its *resolved* SiteInputs values (standalone or
-    sourced) instead of a raw config field."""
+    it stays independent of the fact that ExtractionConfig and XmlConfig are
+    unrelated types.
+
+    new_growth_allometry.py does not use this: it writes one file per species
+    into a folder that normally already exists, so it calls
+    validate_altitude_ddy itself and refuses only its own output file
+    (check_output_file_available)."""
     validate_altitude_ddy(parser, altitude, ddy, allow_out_of_range_values)
 
     output_dir = allometry_dir_for_project(project_dir)

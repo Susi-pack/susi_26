@@ -85,7 +85,8 @@ python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py \
 The output files land in `<project-dir>/allometry/`.
 In the example above, that's `inputs/uusimaa/allometry/`.
 There is no way to send them anywhere else: `--project-dir` is what decides the folder.
-That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it, so a repeat run needs a new `--project-dir` (or a fresh `allometry/` folder underneath the existing one).
+That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it.
+So rename or move the existing `allometry/` first (and move any `new_growth/` subfolder back into the fresh one afterwards).
 
 The tool prints the fully-resolved (absolute) path of everything it reads and writes, so it's never ambiguous what "the output folder" refers to.
 

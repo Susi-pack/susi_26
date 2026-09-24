@@ -356,7 +356,28 @@ def test_check_output_dir_available_refuses_an_existing_folder(tmp_path, capsys)
     output_dir.mkdir()
     with pytest.raises(SystemExit):
         cli_paths.check_output_dir_available(output_dir, _parser())
-    assert "already exists" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "already exists" in error
+    # A project is one folder (ADR 0003): the way out is moving the old
+    # allometry/ aside, not a second --project-dir.
+    assert "--project-dir" not in error
+    assert "rename or move" in error
+
+
+def test_check_output_file_available_allows_a_free_file_in_an_existing_folder(
+    tmp_path,
+):
+    cli_paths.check_output_file_available(tmp_path / "new_growth_pine.csv", _parser())
+
+
+def test_check_output_file_available_refuses_an_existing_file(tmp_path, capsys):
+    output_path = tmp_path / "new_growth_pine.csv"
+    output_path.write_text("")
+    with pytest.raises(SystemExit):
+        cli_paths.check_output_file_available(output_path, _parser())
+    error = capsys.readouterr().err
+    assert "already exists" in error
+    assert "delete" in error.lower()
 
 
 # %% cli_paths.resolve_config_path

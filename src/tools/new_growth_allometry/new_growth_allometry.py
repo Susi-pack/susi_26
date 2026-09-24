@@ -14,7 +14,7 @@ from pydantic import ValidationError, field_validator
 
 from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.load_output_data import StandID
-from susi.io.project_layout import allometry_dir_for_project
+from susi.io.project_layout import new_growth_allometry_dir_for_project
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
 )
@@ -25,11 +25,12 @@ from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
+    validate_altitude_ddy,
     validate_x_y_ykj,
 )
 from tools.shared_allometry_tool_utils.print_formatting import print_section
 from tools.shared_allometry_tool_utils.cli_paths import (
-    finalize_cli_config,
+    check_output_file_available,
     resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.shared_utils import point_to_ykj
@@ -352,7 +353,7 @@ def parse_CLI_arguments() -> CLIArguments:
         help=(
             "Path to the project's folder -- the project root, the folder "
             "holding its inputs/ and outputs/. Decides the output directory, "
-            "<project-dir>/inputs/allometry/, and -- unless --config is "
+            "<project-dir>/inputs/allometry/new_growth/, and -- unless --config is "
             "given -- where the config file is looked up: "
             f"<project-dir>/inputs/{DEFAULT_CONFIG_FILENAME}."
         ),
@@ -452,22 +453,25 @@ def parse_CLI_arguments() -> CLIArguments:
 
     # Applied to the resolved values, not to the config file's own fields, so
     # both modes are held to exactly the same ranges. validate_x_y_ykj has no
-    # equivalent in the other two tools (they never resolve a coordinate),
-    # so it stays here rather than moving into finalize_cli_config, which
-    # covers the altitude/ddy-then-output-dir tail every tool does share.
-    # Called after finalize_cli_config (not before) so that when both an
+    # equivalent in the other two tools (they never resolve a coordinate).
+    # Called after validate_altitude_ddy (not before) so that when both an
     # altitude/ddy value and a coordinate are out of range at once,
-    # altitude/ddy is still reported first, same as before this tail moved
-    # into the shared helper.
-    finalize_cli_config(
-        parser,
-        site_inputs.altitude,
-        site_inputs.ddy,
-        args.project_dir,
-        args.allow_out_of_range_values,
+    # altitude/ddy is still reported first.
+    #
+    # Not finalize_cli_config, which the two stand tools use: its
+    # refuse-an-existing-allometry/ check is right for them (they write a
+    # complete set) but would block this tool in every project whose stand
+    # allometry already exists -- which is every project sourced mode can
+    # run in. This tool refuses only its own output file instead.
+    validate_altitude_ddy(
+        parser, site_inputs.altitude, site_inputs.ddy, args.allow_out_of_range_values
     )
     validate_x_y_ykj(
         parser, site_inputs.x_ykj, site_inputs.y_ykj, args.allow_out_of_range_values
+    )
+    check_output_file_available(
+        plan_output(config, new_growth_allometry_dir_for_project(args.project_dir)),
+        parser,
     )
 
     return CLIArguments(
@@ -487,7 +491,7 @@ def parse_CLI_arguments() -> CLIArguments:
 def main():
     cli_args = parse_CLI_arguments()
     config = cli_args.config
-    output_dir = allometry_dir_for_project(cli_args.project_dir)
+    output_dir = new_growth_allometry_dir_for_project(cli_args.project_dir)
 
     # Resolved during argument parsing, printed here: with no informational
     # JSON dump for this tool (there is no extraction step to audit), the
@@ -545,8 +549,10 @@ def main():
     print_section("Writing")
     print(f"Destination folder: {output_dir.resolve()}")
     # Created here rather than at argument-parsing time, so a run that fails
-    # while reading leaves no empty folder behind to block the next attempt.
-    output_dir.mkdir(parents=True)
+    # while reading leaves no empty folder behind. exist_ok: allometry/ is
+    # normally already there (a stand tool made it), and so is new_growth/
+    # once any species has been generated.
+    output_dir.mkdir(parents=True, exist_ok=True)
     print()
 
     table = build_growth_and_yield_table(config, site_inputs)

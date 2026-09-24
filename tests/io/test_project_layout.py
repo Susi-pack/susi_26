@@ -41,6 +41,14 @@ def test_allometry_dir_sits_under_inputs():
     )
 
 
+def test_new_growth_allometry_dir_sits_inside_the_allometry_dir():
+    # A subfolder, so a listing of allometry/ shows the stand set and the
+    # new-growth files apart.
+    assert project_layout.new_growth_allometry_dir_for_project(
+        Path("/p/paroninkorpi")
+    ) == Path("/p/paroninkorpi/inputs/allometry/new_growth")
+
+
 def test_stand_data_path_sits_beside_the_other_inputs():
     assert project_layout.stand_data_path_for_project(Path("/p/paroninkorpi")) == Path(
         "/p/paroninkorpi/inputs/stand_data.json"

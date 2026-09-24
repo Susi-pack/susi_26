@@ -36,9 +36,10 @@ python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG
 
 The output folder is not selectable: `<project-dir>/allometry/` is the
 only place this tool writes. It must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it, so a repeat run
-needs a different `--project-dir`, or a fresh `allometry/` folder underneath
-the existing one. The folder is created just before the files are written, so
+to run into a previous run's output rather than overwrite it.
+So rename or move the existing `allometry/` first. (If it holds a
+`new_growth/` subfolder from `new_growth_allometry.py`, move that back into
+the fresh `allometry/` afterwards.) The folder is created just before the files are written, so
 a run that fails while reading or filtering leaves nothing behind.
 
 The tool also prints the fully-resolved (absolute) path it read the config

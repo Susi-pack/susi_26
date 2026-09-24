@@ -421,16 +421,42 @@ def test_parse_CLI_arguments_rejects_an_invalid_species(
         )
 
 
-def test_parse_CLI_arguments_refuses_existing_default_output_dir(
+def _existing_output_file(project_dir: Path, species: str) -> Path:
+    """Leave a previous run's new_growth_<species>.csv where this tool writes."""
+    output_dir = project_dir / "inputs" / "allometry" / "new_growth"
+    output_dir.mkdir(parents=True)
+    output_path = output_dir / f"new_growth_{species}.csv"
+    output_path.write_text("left by a previous run\n")
+    return output_path
+
+
+def test_parse_CLI_arguments_refuses_an_existing_output_file(
     monkeypatch, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "inputs" / "allometry").mkdir()
+    # dummy_config_file's species is pine.
+    output_path = _existing_output_file(project_dir, "pine")
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
             [f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
         )
-    assert "already exists" in capsys.readouterr().err
+    error = capsys.readouterr().err
+    assert "already exists" in error
+    # argparse may wrap a long message, so match on the filename alone.
+    assert output_path.name in error
+
+
+def test_parse_CLI_arguments_accepts_an_existing_allometry_folder(
+    monkeypatch, dummy_config_file, project_dir
+):
+    # The stand tools' allometry/ (and even a neighbouring species' file in
+    # new_growth/) is no reason to refuse: only this run's own file is.
+    _existing_output_file(project_dir, "spruce")
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [f"--config={dummy_config_file}", f"--project-dir={project_dir}"],
+    )
+    assert cli_args.config.species == nga.Species.PINE
 
 
 def test_parse_CLI_arguments_creates_no_output_folder(
@@ -451,10 +477,10 @@ def test_parse_CLI_arguments_dry_run_defaults_to_false(
     assert cli_args.dry_run is False
 
 
-def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
+def test_parse_CLI_arguments_dry_run_still_refuses_an_existing_output_file(
     monkeypatch, dummy_config_file, project_dir, capsys
 ):
-    (project_dir / "inputs" / "allometry").mkdir()
+    _existing_output_file(project_dir, "pine")
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -504,10 +530,28 @@ def test_main_real_run_writes_the_expected_csv(monkeypatch, project_dir):
     )
     nga.main()
 
-    output_path = project_dir / "inputs" / "allometry" / "new_growth_birch.csv"
+    output_path = (
+        project_dir / "inputs" / "allometry" / "new_growth" / "new_growth_birch.csv"
+    )
     assert output_path.exists()
     df = read_allometry_info_from_csv(output_path)
     assert df["Age"].min() == 1
+
+
+def test_main_two_species_in_a_row_both_succeed(monkeypatch, project_dir):
+    # One file per species into the same new_growth/ folder: the second run
+    # must not be refused because the first one created the folder.
+    new_growth_dir = project_dir / "inputs" / "allometry" / "new_growth"
+    for species in ["pine", "spruce"]:
+        _write_valid_config(project_dir, species=species)
+        monkeypatch.setattr(
+            "sys.argv", ["new_growth_allometry.py", f"--project-dir={project_dir}"]
+        )
+        nga.main()
+    assert sorted(p.name for p in new_growth_dir.iterdir()) == [
+        "new_growth_pine.csv",
+        "new_growth_spruce.csv",
+    ]
 
 
 # %% Sourced mode: NewGrowthSourcedConfig
@@ -907,7 +951,9 @@ def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     )
     nga.main()
 
-    output_path = project_dir / "inputs" / "allometry" / "new_growth_spruce.csv"
+    output_path = (
+        project_dir / "inputs" / "allometry" / "new_growth" / "new_growth_spruce.csv"
+    )
     assert output_path.exists()
     assert read_allometry_info_from_csv(output_path)["Age"].min() == 1
 
@@ -917,3 +963,42 @@ def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     assert str(stand_data_file.resolve()) in printed
     assert SOURCED_STAND_ID in printed
     assert "from document root" in printed
+
+
+def test_main_sourced_run_in_a_project_whose_stand_allometry_already_exists(
+    monkeypatch, project_dir
+):
+    # The bug ticket 26 fixed: sourced mode reads the stand_data.json that a
+    # stand tool wrote, and that same stand tool created inputs/allometry/
+    # with it. Refusing that folder meant sourced mode could never run in
+    # its own project.
+    allometry_dir = project_dir / "inputs" / "allometry"
+    allometry_dir.mkdir()
+    stand_csv = allometry_dir / "dominant.csv"
+    stand_csv.write_text("the stand tool's own CSV\n")
+    stand_data_path = project_dir / "inputs" / stand_data.STAND_DATA_FILENAME
+    stand_data.dump_stand_data_document(
+        output_path=stand_data_path,
+        document=_stand_data_document(allometry_dir=allometry_dir),
+    )
+    (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
+        'species = "pine"\nstems_count = 2000\n'
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "new_growth_allometry.py",
+            f"--project-dir={project_dir}",
+            f"--stand-data={stand_data_path}",
+            f"--stand-id={SOURCED_STAND_ID}",
+        ],
+    )
+    nga.main()
+
+    assert (allometry_dir / "new_growth" / "new_growth_pine.csv").exists()
+    # The stand set is left exactly as it was.
+    assert sorted(p.name for p in allometry_dir.iterdir()) == [
+        "dominant.csv",
+        "new_growth",
+    ]
+    assert stand_csv.read_text() == "the stand tool's own CSV\n"

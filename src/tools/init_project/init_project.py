@@ -170,7 +170,9 @@ produce, and the script that runs it, in one folder. Created by
 │   ├── config.toml      <- config for the tool that generates your allometry
 │   ├── stand_data.json  <- written by that tool: one entry per stand
 │   └── allometry/       <- written by that tool. Do not create it by hand:
-│                           the tools refuse to run into a folder that exists
+│       │                   the tools refuse to run into a folder that exists
+│       └── new_growth/  <- post-clearcut allometry, one CSV per species,
+│                           written by new_growth_allometry.py afterwards
 ├── data/                <- created for you: the preferred home for your raw
 │                           data (weather.csv, XML export, rasters, ...), not
 │                           an enforced one. Your script names these paths

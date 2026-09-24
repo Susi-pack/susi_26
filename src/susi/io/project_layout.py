@@ -9,6 +9,7 @@ project's data and its results are co-located by construction:
     └── paroninkorpi/
         ├── inputs/
         │   ├── allometry/
+        │   │   └── new_growth/
         │   ├── stand_data.json
         │   └── config.toml
         ├── data/
@@ -74,6 +75,18 @@ def allometry_dir_for_project(project_dir: Path) -> Path:
     Where the allometry tools write a project's allometry CSVs.
     """
     return inputs_dir_for_project(project_dir) / "allometry"
+
+
+def new_growth_allometry_dir_for_project(project_dir: Path) -> Path:
+    """
+    Where new_growth_allometry.py writes a project's new-growth allometry CSVs.
+
+    A subfolder of the allometry dir rather than a filename prefix beside the
+    stand set, so a listing of allometry/ shows the stand tools' complete set
+    and the per-species new-growth files apart. This is the one place the
+    subfolder is named.
+    """
+    return allometry_dir_for_project(project_dir) / "new_growth"
 
 
 def stand_data_path_for_project(project_dir: Path) -> Path:

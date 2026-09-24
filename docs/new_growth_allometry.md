@@ -38,7 +38,7 @@ python src/tools/new_growth_allometry/new_growth_allometry.py \
 
 | Argument | Required | Description |
 |---|---|---|
-| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — and where the config file is looked up by default. |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/inputs/allometry/new_growth/` — and where the config file is looked up by default. |
 | `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/new_growth_config.toml`. Must exist and end in `.toml`. |
 | `--stand-data` | no, but required with `--stand-id` | Path to a project's `stand_data.json`. Selects [sourced mode](#sourced-mode). Must exist and end in `.json`. |
 | `--stand-id` | no, but required with `--stand-data` | Which stand of `--stand-data` to read the site values from. |
@@ -52,11 +52,24 @@ standalone mode.
 
 There is no positional input file. In standalone mode the config **is** the
 input; in sourced mode the config plus `--stand-data` are. The output
-folder is not selectable either: `<project-dir>/allometry/` is the only
-place this tool writes, and it must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it, so a repeat
-run needs a different `--project-dir`, or a fresh `allometry/` folder
-underneath the existing one.
+folder is not selectable either: `<project-dir>/inputs/allometry/new_growth/`
+is the only place this tool writes, one `new_growth_<species>.csv` per run.
+It is a subfolder of the stand tools' `allometry/`, so a listing of
+`allometry/` shows the stand set and the new-growth files apart.
+
+Folders that already exist are fine — `allometry/` normally does, since a
+stand tool made it, and so does `new_growth/` once any species has been
+generated. What the tool refuses is its own **output file** already
+existing: it will not overwrite a previous `new_growth_<species>.csv`, so
+delete that file to regenerate it. Generating pine and then spruce into the
+same project works.
+
+Run the stand tool first. `xml_to_allometry.py`/`metsakeskus_to_allometry.py`
+refuse an existing `inputs/allometry/`, so new growth generated *before* the
+stand allometry blocks them, and the way out is moving `allometry/` aside,
+which moves `new_growth/` with it: move `new_growth/` back into the fresh
+`allometry/` afterwards, since the `ClearCut` paths in your parameters point
+there.
 
 The tool prints the fully-resolved (absolute) path it read the config from
 and the path it writes to, along with every value it actually used —
@@ -242,15 +255,15 @@ written, and exits.
 
 Nothing at all is created — no CSV, and not even the output folder — so a
 dry run does not claim a `--project-dir` that the real run then has to work
-around. The one thing it does still enforce is the refusal to run into an
-existing output folder: whether the real run could start is part of what a
+around. The one thing it does still enforce is the refusal to overwrite an
+existing output file: whether the real run could start is part of what a
 dry run is for.
 
 ## Output files
 
 | File | Written |
 |---|---|
-| `new_growth_<species>.csv` | Always. `<species>` is exactly the configured `species` value, e.g. `new_growth_pine.csv`. |
+| `new_growth_<species>.csv` | Always, into `<project-dir>/inputs/allometry/new_growth/`. `<species>` is exactly the configured `species` value, e.g. `new_growth_pine.csv`. The `new_growth_` prefix is redundant inside `new_growth/`, but it keeps a copied-out file self-describing. |
 
 There is no informational JSON dump for this tool, unlike
 `xml_to_allometry.py`'s or `metsakeskus_to_allometry.py`'s `stand_data.json`:
