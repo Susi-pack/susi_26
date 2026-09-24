@@ -21,6 +21,7 @@ from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
+    CONFIG_FILENAME,
     allometry_dir_for_project,
     stand_data_path_for_project,
 )
@@ -887,8 +888,8 @@ def process_stand(
         }
         if plan.subdominant_csv is not None:
             allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
-                file_path=plan.subdominant_csv, species_id=stand.subdominant_species
-            )
+                    file_path=plan.subdominant_csv, species_id=stand.subdominant_species
+                )
 
         stand_data = StandData(
             site_fertility_class=stand.fertilityclass,
@@ -956,8 +957,8 @@ def parse_CLI_arguments() -> CLIArguments:
         type=make_existing_file_validator(".toml"),
         default=None,
         help=(
-            "Path to the TOML config file. Defaults to config.toml inside "
-            "the project's inputs/ folder."
+            "Path to the TOML config file. Defaults to "
+            f"{CONFIG_FILENAME} inside the project's inputs/ folder."
         ),
     )
     parser.add_argument(
@@ -969,7 +970,7 @@ def parse_CLI_arguments() -> CLIArguments:
             "holding its inputs/ and outputs/. Decides the output directory, "
             "<project-dir>/inputs/allometry/, and -- unless --config is "
             "given -- where the config file is looked up: "
-            "<project-dir>/inputs/config.toml."
+            f"<project-dir>/inputs/{CONFIG_FILENAME}."
         ),
     )
     parser.add_argument(
@@ -994,10 +995,10 @@ def parse_CLI_arguments() -> CLIArguments:
 
     args = parser.parse_args()
 
-    # --config defaults to config.toml inside the project's inputs/ folder
-    # -- the layout the docs have the user set up beforehand.
+    # --config defaults to CONFIG_FILENAME inside the project's inputs/
+    # folder -- the layout the docs have the user set up beforehand.
     config_path = resolve_config_path(
-        args.config, args.project_dir, parser, "config.toml"
+        args.config, args.project_dir, parser, CONFIG_FILENAME
     )
     config = load_extraction_config(config_path)
 

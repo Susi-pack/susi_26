@@ -11,7 +11,7 @@ from susi.io.metadata_model import SimulationMetaData
 simulation_parameters = SimulationParams(
     metadata=SimulationMetaData(
         project_dir=parameters.PROJECT_DIR,
-        run_id="testing2",  # your_run_name_here
+        run_id="run_single",  # your_run_name_here
     ),
     susi_params=parameters.PARAMETERS,
 )

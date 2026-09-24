@@ -199,7 +199,7 @@ check still runs and reports its skips — since that is precisely what a dry
 run exists to show. The tool then prints the files it would have written, and
 exits.
 
-Nothing at all is created — no CSVs, no `extra_xml_info.json`, and not even
+Nothing at all is created — no CSVs, no `stand_data.json`, and not even
 the output folder, so a dry run does not claim a `--project-dir` that the
 real run then has to work around. The one thing it does still enforce is the
 refusal to run into an existing output folder: whether the real run could
@@ -214,8 +214,8 @@ The TreeStrata skip is reported in full, because that stage did run.
 
 | File | Written |
 |---|---|
-| `susi_input_{stand_id}.csv` | Always, one per stand that survives filtering. |
-| `extra_xml_info.json` | Always. Every converted stand's parsed data — id, fertility class, polygon coordinates, all three tree strata, main species, and the optional metadata fields. Informational: nothing in SUSI reads it. |
+| `allometry/{stand_id}.csv` | Always, one per stand that survives filtering. |
+| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry file, YKJ coordinates, polygon, stand-level and per-species metadata. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
 Each CSV is the allometric road map follows the canonical allometry schema, i.e., the columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS`.
 

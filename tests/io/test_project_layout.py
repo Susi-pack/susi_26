@@ -70,11 +70,12 @@ def test_require_project_dir_accepts_a_project_with_inputs(tmp_path):
     project_layout.require_project_dir(tmp_path)
 
 
-def test_missing_project_folder_names_the_env_var(tmp_path):
-    # The usual cause is a typo or a SUSI_PROJECTS_ROOT pointing at the
-    # wrong filesystem, so the error has to name the knob.
-    with pytest.raises(FileNotFoundError, match=PROJECTS_ROOT_ENV_VAR):
-        project_layout.require_project_dir(tmp_path / "no_such_project")
+def test_missing_project_folder_names_the_folder(tmp_path):
+    # A project is identified by its folder (ADR 0006), not looked up by
+    # name, so the error names the path the caller passed.
+    missing = tmp_path / "no_such_project"
+    with pytest.raises(FileNotFoundError, match="no_such_project"):
+        project_layout.require_project_dir(missing)
 
 
 def test_project_folder_without_inputs_is_rejected(tmp_path):

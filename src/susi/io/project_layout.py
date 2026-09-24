@@ -25,10 +25,14 @@ argparse-flavoured helpers that wrap these paths live in
 
 from pathlib import Path
 
-from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR, AppSettings
+from susi.io.app_settings import AppSettings
 
 # The per-project document describing every stand the project simulates.
 STAND_DATA_FILENAME = "stand_data.json"
+
+# The config file that xml_to_allometry.py and metsakeskus_to_allometry.py
+# both look up in a project's inputs
+CONFIG_FILENAME = "config.toml"
 
 
 def project_dir(project_id: str) -> Path:
@@ -125,10 +129,9 @@ def require_project_dir(project_dir: Path) -> None:
     """
     if not project_dir.is_dir():
         raise FileNotFoundError(
-            f"Project folder not found: {project_dir}. Projects are looked up "
-            f"under the projects root, which {PROJECTS_ROOT_ENV_VAR} overrides "
-            "when set. Check the project name, or create the folder with its "
-            "inputs/ and outputs/."
+            f"Project folder not found: {project_dir}. A project is identified "
+            "by its folder: check the path you passed, or create the folder "
+            "with its inputs/ and outputs/ (init_project does both)."
         )
 
     inputs_dir = inputs_dir_for_project(project_dir)

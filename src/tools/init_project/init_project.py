@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from susi.io.project_layout import (
+    CONFIG_FILENAME,
     data_dir_for_project,
     inputs_dir_for_project,
     outputs_dir_for_project,
@@ -26,9 +27,6 @@ from susi.io.project_layout import (
 from susi.io.utils import SRC_DIR
 
 # %% Constants
-
-# What xml_to_allometry.py and metsakeskus_to_allometry.py both look up when --config is not given.
-CONFIG_FILENAME = "config.toml"
 
 
 class DataSource(Enum):
@@ -89,7 +87,7 @@ SOURCE_SEEDS = {
         prompt_label="nothing yet -- I will set the inputs up myself",
         config_template_path=None,
         next_step=(
-            "No config.toml was written: set inputs/ up yourself, or re-run this "
+            f"No {CONFIG_FILENAME} was written: set inputs/ up yourself, or re-run this "
             "tool for another project with --source xml/metsakeskus. Then write a "
             "run script, modelled on the projects in example_projects/."
         ),
@@ -451,7 +449,7 @@ def parse_CLI_arguments() -> CLIArguments:
         choices=[source.value for source in DataSource],
         help=(
             "Where this project's stand data will come from. Decides which "
-            "tool's template is seeded in as inputs/config.toml; 'none' "
+            f"tool's template is seeded in as inputs/{CONFIG_FILENAME}; 'none' "
             "writes no config at all. Prompted for if omitted."
         ),
     )

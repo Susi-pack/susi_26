@@ -54,7 +54,7 @@ all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
             project_dir=parameters.PROJECT_DIR,
-            run_id="run_01",
+            run_id="run_parallel_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
         ),
@@ -63,7 +63,7 @@ all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
             project_dir=parameters.PROJECT_DIR,
-            run_id="run_01",
+            run_id="run_parallel_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",
         ),

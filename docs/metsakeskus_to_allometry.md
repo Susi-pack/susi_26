@@ -190,7 +190,7 @@ it still happens: the GeoPackage is read, every filter runs, the year table and
 every skipped stand are reported exactly as in a real run. The tool then prints
 the files it would have written, and exits.
 
-Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, and not
+Nothing at all is created — no CSVs, no `stand_data.json`, and not
 even the output folder, so a dry run does not claim a `--project-dir` that the
 real run then has to work around. The one thing it does still enforce is the
 refusal to run into an existing output folder: whether the real run could start
@@ -209,7 +209,7 @@ ran.
 |---|---|
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
-| `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
+| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
 Each CSV follows the canonical allometry schema.
 The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.

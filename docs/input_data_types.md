@@ -20,10 +20,10 @@ SUSI needs two very different kinds of input data:
   exports, parameter models, and so on. This is personal to your machine and
   must never end up in a commit.
 
-The repo keeps these apart with two folders and one settings object:
-`src/inputs/` (only `src/inputs/system/` is tracked) and the root `inputs/`
-folder (the folder is tracked, its contents are not), both resolved through
-`AppSettings.input_folder` / `AppSettings.user_input_folder`.
+The repo keeps these apart with two folders: `src/system_inputs/` (tracked,
+resolved through `system_inputs.SYSTEM_INPUTS_DIR`) and each project's own
+`inputs/` and `data/` folders under the projects root (never tracked by this
+repo, found through the project folder a run script names).
 
 ## Weather
 
