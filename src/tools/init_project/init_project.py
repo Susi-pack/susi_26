@@ -168,9 +168,11 @@ produce, and the script that runs it, in one folder. Created by
 ├── inputs/              <- everything the project is simulated from
 │   ├── config.toml      <- config for the tool that generates your allometry
 │   ├── stand_data.json  <- written by that tool: one entry per stand
-│   ├── allometry/       <- written by that tool. Do not create it by hand:
-│   │                       the tools refuse to run into a folder that exists
-│   └── ...              <- your weather.csv, XML export, rasters, ...
+│   └── allometry/       <- written by that tool. Do not create it by hand:
+│                           the tools refuse to run into a folder that exists
+├── data/                <- suggested home for your raw data: weather.csv, XML
+│                           export, rasters, ... Anywhere works; nothing in
+│                           SUSI derives these paths
 ├── outputs/             <- outputs/<run_id>/<stand_id>/<scenario_id>/
 ├── susi_calls.py        <- your run script. Start here.
 {layout_tail}

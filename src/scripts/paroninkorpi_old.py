@@ -1,4 +1,4 @@
-# Adaptation by Iñaki Urzainki to theoriginal script created by Mikko Niemi
+# Adaptation by Iñaki Urzainki to the original script created by Mikko Niemi
 # Allometry files are read from a directory
 # One SUSI simulation is run per allometry file
 

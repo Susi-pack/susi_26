@@ -9,7 +9,8 @@ co-located by construction:
         ├── inputs/
         │   ├── allometry/
         │   ├── stand_data.json
-        │   ├── config.toml
+        │   └── config.toml
+        ├── data/
         │   └── other: weather.csv, export.xml, ditch_depth.tif, ...
         └── outputs/
             └── <run_id>/<stand_id>/<scenario_id>/

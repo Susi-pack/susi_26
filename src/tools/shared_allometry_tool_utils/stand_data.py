@@ -459,9 +459,7 @@ def dump_stand_data_document(output_path: Path, document: StandDataDocument) -> 
     Allometry file paths are written relative to output_path's folder;
     raises if any of them is outside it (see docs/adr/0005)."""
     output_path.write_text(
-        document.model_dump_json(
-            context={DOCUMENT_DIR_CONTEXT_KEY: output_path.parent}
-        )
+        document.model_dump_json(context={DOCUMENT_DIR_CONTEXT_KEY: output_path.parent})
     )
 
 
@@ -474,8 +472,6 @@ def build_stand_params(
     Builds a simulation-ready StandParams for one stand out of a whole project's StandDataDocument.
     `n`, the number of soil columns, must be supplied by the caller:
     It is a property of the run being built, never of the stand data itself.
-    The stand's allometry file paths are used as they are: a loaded
-    document already holds them absolute.
     """
     stand_data = stand_data_document.stands[stand_id]
 
