@@ -37,9 +37,12 @@ from susi.io.susi_parameter_model import (
 PROJECT_DIR = repo_root() / "test_projects" / "susi_2021"
 RUN_ID = "run_01"
 
-# Motti growth tables are allometry, so they live in inputs/allometry/; the
-# weather files and field measurements are raw data under data/.
+# The Motti files (.xls) are raw data under data/motti/; convert_motti.py turns
+# the ones PARAMS_PER_SITE references into the CSV allometry files in
+# inputs/allometry/, which is what the runs read. The weather files and field
+# measurements are raw data under data/ too.
 ALLOMETRY_DIR = allometry_dir_for_project(PROJECT_DIR)
+MOTTI_DIR = data_dir_for_project(PROJECT_DIR) / "motti"
 WEATHER_DIR = data_dir_for_project(PROJECT_DIR) / "weather"
 MEASUREMENTS_DIR = data_dir_for_project(PROJECT_DIR) / "measurements"
 
@@ -49,7 +52,12 @@ class VaryingSusiParams:
     ntubes: int
     file: str
     wfile: str
-    mottifile: str
+    # CSV converted from the Motti file of the same stem in MOTTI_DIR (the
+    # original called this field `mottifile`; see "Motti file" in CONTEXT.md).
+    allometry_file: str
+    # Species of the allometry zone (1 = pine). The Motti file records it on
+    # its second sheet; convert_motti.py checks the two agree (#206).
+    species_id: int
     ddepth: float
     Swidth: float
     vonP: list[int]
@@ -86,7 +94,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTansa21Interp.csv",
         wfile="muhos_weather.csv",  # drained 1967 -1982 -> 1968
-        mottifile="ansa21_A.xls",
+        allometry_file="ansa21_A.csv",
+        species_id=1,
         ddepth=-0.45,
         Swidth=40.0,
         vonP=[2, 3, 4, 4, 6, 6],
@@ -110,7 +119,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTansa26Interp.csv",
         wfile="muhos_weather.csv",
-        mottifile="ansa26_A.xls",
+        allometry_file="ansa26_A.csv",
+        species_id=1,
         ddepth=-0.45,
         Swidth=40.0,
         vonP=[2, 3, 4, 4, 6, 6],
@@ -134,7 +144,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTjaakkoin61Interp.csv",
         wfile="jaakkoinsuo_weather.csv",  # drained 1908
-        mottifile="jaakkoin61_A.xls",
+        allometry_file="jaakkoin61_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=40.0,
         vonP=[4, 8, 7, 7, 7, 7],
@@ -158,7 +169,8 @@ PARAMS_PER_SITE = {
         ntubes=8,
         file="DWTjaakkoin62Interp.csv",
         wfile="jaakkoinsuo_weather.csv",
-        mottifile="jaakkoin62_A.xls",
+        allometry_file="jaakkoin62_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=40.0,
         vonP=[4, 8, 7, 7, 7, 7],
@@ -182,7 +194,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira11Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira11_A.xls",
+        allometry_file="koira11_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 7, 7],
@@ -206,7 +219,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira12Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira12_A.xls",
+        allometry_file="koira12_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -230,7 +244,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira21Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira21_harvennus_A.xls",
+        allometry_file="koira21_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -254,7 +269,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira22Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira22_harvennus_A.xls",
+        allometry_file="koira22_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -278,7 +294,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva11Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva11_A.xls",
+        allometry_file="neva11_A.csv",
+        species_id=1,
         ddepth=-1.03,
         Swidth=30.0,
         vonP=[5, 5, 5, 4, 4, 4],
@@ -302,7 +319,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva14Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva14_A.xls",
+        allometry_file="neva14_A.csv",
+        species_id=1,
         ddepth=-1.03,
         Swidth=30.0,
         vonP=[5, 5, 5, 4, 4, 4],
@@ -326,7 +344,8 @@ PARAMS_PER_SITE = {
         ntubes=7,
         file="DWTneva21Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva21_harvennus_A.xls",
+        allometry_file="neva21_harvennus_A.csv",
+        species_id=1,
         ddepth=-1.07,
         Swidth=30.0,
         vonP=[4, 4, 4, 4, 4, 4],
@@ -350,7 +369,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva24Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva24_harvennus_A.xls",
+        allometry_file="neva24_harvennus_A.csv",
+        species_id=1,
         ddepth=-1.07,
         Swidth=30.0,
         vonP=[4, 4, 4, 4, 4, 4],
@@ -374,7 +394,8 @@ PARAMS_PER_SITE = {
         ntubes=10,
         file="DWTneva31Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva31_A.xls",
+        allometry_file="neva31_A.csv",
+        species_id=1,
         ddepth=-1.08,
         Swidth=30.0,
         vonP=[5, 5, 4, 5, 5, 5],
@@ -398,7 +419,8 @@ PARAMS_PER_SITE = {
         ntubes=10,
         file="DWTneva34Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva34_A.xls",
+        allometry_file="neva34_A.csv",
+        species_id=1,
         ddepth=-1.08,
         Swidth=30.0,
         vonP=[5, 5, 4, 5, 5, 5],
@@ -422,7 +444,8 @@ PARAMS_PER_SITE = {
         ntubes=12,
         file="DWTparkano11Interp.csv",
         wfile="parkano_weather.csv",
-        mottifile="parkano11_A.xls",
+        allometry_file="parkano11_A.csv",
+        species_id=1,
         ddepth=-0.86,
         Swidth=65.0,
         vonP=[3, 3, 6, 6, 6, 6],
@@ -446,7 +469,8 @@ PARAMS_PER_SITE = {
         ntubes=14,
         file="DWTparkano12Interp.csv",
         wfile="parkano_weather.csv",
-        mottifile="parkano12_harvennus_A.xls",
+        allometry_file="parkano12_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.89,
         Swidth=65.0,
         vonP=[3, 5, 6, 6, 6, 6],
@@ -502,8 +526,8 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             canopy_layer_allometry=CanopyLayerAllometry(
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        file_path=ALLOMETRY_DIR / site_params.mottifile,
-                        species_id=1,
+                        file_path=ALLOMETRY_DIR / site_params.allometry_file,
+                        species_id=site_params.species_id,
                     )
                 },
                 pointers={
