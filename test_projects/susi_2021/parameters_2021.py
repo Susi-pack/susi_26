@@ -33,7 +33,7 @@ from susi.io.susi_parameter_model import (
 
 # A testing project lives in the checkout, so it names its folder from the
 # repo root rather than through `project_dir()` (ADR 0006). The one definition:
-# susi_2021.py runs into it and figures_2021.py reads back from it.
+# susi_2021.py runs into it and figures_2021.ipynb reads back from it.
 PROJECT_DIR = repo_root() / "test_projects" / "susi_2021"
 RUN_ID = "run_01"
 
@@ -76,7 +76,7 @@ class VaryingSusiParams:
     status: str
     bulk_dens: float
     # Not used. Whether the site was thinned during the measurement period.
-    # The 11 sites susi_2021.py lists are those where it is False (#291).
+    # The 11 sites in SITE_LABELS are those where it is False (#291).
     thinning: bool
     drain_age: int
     # Measured stand volume [start, end], m3/ha. Not passed to the model
@@ -629,6 +629,25 @@ MEASUREMENTS_PER_SITE = {
         dist=None,
     ),
 }
+
+
+# The sites susi_2021.py runs and figures_2021.ipynb plots: the 11 whose
+# `thinning` is False, as in the original (the thinning sites are #291). The
+# order is the original figures' order, which sets each site's panel letter
+# and colour; the run doesn't depend on it.
+SITE_LABELS = [
+    SiteLabel("koira11"),
+    SiteLabel("koira12"),
+    SiteLabel("ansa21"),
+    SiteLabel("ansa26"),
+    SiteLabel("neva11"),
+    SiteLabel("neva14"),
+    SiteLabel("neva31"),
+    SiteLabel("neva34"),
+    SiteLabel("jaakkoin61"),
+    SiteLabel("jaakkoin62"),
+    SiteLabel("parkano11"),
+]
 
 
 def _rho_mor_from_sfc(sfc: int) -> float:
