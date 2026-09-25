@@ -8,7 +8,6 @@ Created on Thu Aug 13 18:04:05 2020
 from datetime import datetime
 
 from pathlib import Path
-from dataclasses import dataclass
 from contextlib import contextmanager
 import numpy as np
 import pandas as pd
@@ -23,6 +22,8 @@ import matplotlib.gridspec as gridspec
 from susi.io.project_layout import run_dir
 from parameters_2021 import (
     MEASUREMENTS_DIR,
+    MEASUREMENTS_PER_SITE,
+    PARAMS_PER_SITE,
     PROJECT_DIR,
     RUN_ID,
     SiteLabel,
@@ -45,21 +46,6 @@ REGRESSION_LINESTYLE = "k--"
 REGRESSION_LINEWIDTH = 2
 ERRORBAR_CAPSIZE = 4
 SCATTER_MARKERSIZE = 10
-SITE_FERTILITY_CLASSES = (2, 2, 3, 3, 3, 3, 3, 3, 5, 5, 5)
-
-# %%
-
-
-@dataclass(frozen=True)
-class WTMeasurementInfo:
-    name: str
-    file: str  # WT measurements file
-    tubes: list[int]  # Number of groundwater tubes in the dataset
-    volume_ini: float
-    volume_end: float
-    hdom_ini: float
-    hdom_end: float
-
 
 # %%
 
@@ -188,8 +174,8 @@ def ojanen_2010(sfc, stand_v, t_peat, gs_wt):
 
 
 def load_wt_measurements(site_label: SiteLabel) -> pd.DataFrame:
-    file_meas = WT_MEASUREMENT_INFO[site_label].file
-    tubes = WT_MEASUREMENT_INFO[site_label].tubes
+    file_meas = MEASUREMENTS_PER_SITE[site_label].file
+    tubes = MEASUREMENTS_PER_SITE[site_label].tubes
     dfmeas = pd.read_excel(MEASUREMENTS_FOLDER / file_meas, sheet_name="CSV")
     dfmeas["date"] = pd.to_datetime(
         dict(year=dfmeas.vuosi, month=dfmeas.kk, day=dfmeas.pv)
@@ -259,153 +245,6 @@ PROJECT_FOLDER = run_dir(PROJECT_DIR, RUN_ID)
 
 BIO_FILEPATH = MEASUREMENTS_DIR / "gr_bio.xlsx"
 
-WT_MEASUREMENT_INFO: dict[SiteLabel, WTMeasurementInfo] = {
-    SiteLabel("ansa21"): WTMeasurementInfo(
-        name="Ansasaari21",
-        file="muhos_2_pohjavesi_koottu.xlsx",
-        tubes=[1, 2, 3, 4, 5, 6],
-        volume_ini=140.0,
-        volume_end=187.07,
-        hdom_ini=12.8,
-        hdom_end=14.6,
-    ),
-    SiteLabel("ansa26"): WTMeasurementInfo(
-        name="Ansasaari26",
-        file="muhos_2_pohjavesi_koottu.xlsx",
-        tubes=[28, 29, 30],
-        volume_ini=109.0,
-        volume_end=140.86,
-        hdom_ini=12.6,
-        hdom_end=15.4,
-    ),
-    SiteLabel("koira11"): WTMeasurementInfo(
-        name="Koirasuo11",
-        file="koiraoja_pohjavesi_koottu.xlsx",
-        tubes=[13, 14, 15],
-        volume_ini=90.9,
-        volume_end=122.0,
-        hdom_ini=12.9,
-        hdom_end=13.9,
-    ),
-    SiteLabel("koira12"): WTMeasurementInfo(
-        name="Koirasuo12",
-        file="koiraoja_pohjavesi_koottu.xlsx",
-        tubes=[1, 2, 3],
-        volume_ini=122.9,
-        volume_end=164.0,
-        hdom_ini=13.2,
-        hdom_end=16.4,
-    ),
-    SiteLabel("koira21"): WTMeasurementInfo(
-        name="Koirasuo21",
-        file="koiraoja_pohjavesi_koottu.xlsx",
-        tubes=[19, 20, 21],
-        volume_ini=97.4,
-        volume_end=91.9 + 30.6,
-        hdom_ini=12.7,
-        hdom_end=14.5,
-    ),
-    SiteLabel("koira22"): WTMeasurementInfo(
-        name="Koirasuo22",
-        file="koiraoja_pohjavesi_koottu.xlsx",
-        tubes=[31, 32, 33],
-        volume_ini=92.2,
-        volume_end=87.13 + 33.92,
-        hdom_ini=11.1,
-        hdom_end=14.3,
-    ),
-    SiteLabel("neva11"): WTMeasurementInfo(
-        name="Nevajärvi11",
-        file="nevajarvi_1_pohjavesi_koottu.xlsx",
-        tubes=[5, 6, 7, 8, 9, 10],
-        volume_ini=163.4,
-        volume_end=227.5,
-        hdom_ini=16.1,
-        hdom_end=17.8,
-    ),
-    SiteLabel("neva14"): WTMeasurementInfo(
-        name="Nevajärvi14",
-        file="nevajarvi_1_pohjavesi_koottu.xlsx",
-        tubes=[36, 41, 42, 43, 44, 45],
-        volume_ini=142.9,
-        volume_end=191.4,
-        hdom_ini=16.5,
-        hdom_end=18.4,
-    ),
-    SiteLabel("neva21"): WTMeasurementInfo(
-        name="Nevajärvi21",
-        file="nevajarvi_2_pohjavesi_koottu.xlsx",
-        tubes=[5, 6, 7, 8, 9, 10, 11],
-        volume_ini=100.32,
-        volume_end=109.89 + 32.5,
-        hdom_ini=15.7,
-        hdom_end=16.7,
-    ),
-    SiteLabel("neva24"): WTMeasurementInfo(
-        name="Nevajärvi24",
-        file="nevajarvi_2_pohjavesi_koottu.xlsx",
-        tubes=[36, 41, 42, 43, 44, 45],
-        volume_ini=143.6,
-        volume_end=124.7 + 53.66,
-        hdom_ini=14.6,
-        hdom_end=17.1,
-    ),
-    SiteLabel("neva31"): WTMeasurementInfo(
-        name="Nevajärvi31",
-        file="nevajarvi_3_pohjavesi_koottu.xlsx",
-        tubes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        volume_ini=127.2,
-        volume_end=161.5,
-        hdom_ini=16.5,
-        hdom_end=17.0,
-    ),
-    SiteLabel("neva34"): WTMeasurementInfo(
-        name="Nevajärvi34",
-        file="nevajarvi_3_pohjavesi_koottu.xlsx",
-        tubes=[41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
-        volume_ini=100.4,
-        volume_end=147.3,
-        hdom_ini=15.3,
-        hdom_end=17.1,
-    ),
-    SiteLabel("jaakkoin61"): WTMeasurementInfo(
-        name="Jaakkoinsuo61",
-        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
-        tubes=[2, 3, 12, 13, 14, 15],
-        volume_ini=144.3,
-        volume_end=172.6,
-        hdom_ini=17.6,
-        hdom_end=18.5,
-    ),
-    SiteLabel("jaakkoin62"): WTMeasurementInfo(
-        name="Jaakkoinsuo62",
-        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
-        tubes=[28, 30, 36, 39, 42, 43, 44, 45],
-        volume_ini=149.3,
-        volume_end=186.6,
-        hdom_ini=18.1,
-        hdom_end=19.5,
-    ),
-    SiteLabel("parkano11"): WTMeasurementInfo(
-        name="Parkano11",
-        file="parkano_1_pohjavesi_koottu.xlsx",
-        tubes=[22, 23, 24, 27, 28, 29, 32, 33, 34, 37, 38, 39],
-        volume_ini=167.7,
-        volume_end=192.4,
-        hdom_ini=17.3,
-        hdom_end=18.7,
-    ),
-    SiteLabel("parkano12"): WTMeasurementInfo(
-        name="Parkano12",
-        file="parkano_3_pohjavesi_koottu.xlsx",
-        tubes=[1, 2, 9, 10, 11, 12, 19, 20, 21, 22, 29, 30, 31, 32],
-        volume_ini=263.0,
-        volume_end=173.0 + 112.9,
-        hdom_ini=20.0,
-        hdom_end=20.7,
-    ),
-}
-
 
 # %% WT time series figure
 # Measured and modelled WT as time series
@@ -467,7 +306,7 @@ for i, (crd, site_label, tx) in enumerate(zip(coordinates, SITES, abc)):
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
-    site_name = WT_MEASUREMENT_INFO[site_label].name
+    site_name = MEASUREMENTS_PER_SITE[site_label].name
 
     ax.text(
         0.02,
@@ -570,16 +409,15 @@ dfvols["bioobs"] = dfvols["grsim"] * 0.0
 
 for site in SITES:
     site_params = assign_susi_params_to_site(site)
+    # Measured start and end volume, from the simulation-side record, where
+    # the original read them too.
+    volume_ini, volume_end = PARAMS_PER_SITE[site].vol
     print(
         site,
-        np.round(
-            WT_MEASUREMENT_INFO[site].volume_end - WT_MEASUREMENT_INFO[site].volume_ini
-        ),
+        np.round(volume_end - volume_ini),
         dfvols.loc[site]["grsim"],
     )
-    dfvols.at[site, "grobs"] = (
-        WT_MEASUREMENT_INFO[site].volume_end - WT_MEASUREMENT_INFO[site].volume_ini
-    )
+    dfvols.at[site, "grobs"] = volume_end - volume_ini
     dfvols.at[site, "yrs"] = (
         site_params.simulation_config.end_date.year
         - site_params.simulation_config.start_date.year
@@ -604,7 +442,7 @@ add_quadrant_shading(-1.0, 0.0)
 si = []
 ob = []
 for c, site_label in enumerate(SITES):
-    site_name = WT_MEASUREMENT_INFO[site_label].name
+    site_name = MEASUREMENTS_PER_SITE[site_label].name
     data = out[site_label]
     obs = np.array(data["meanmeas"])
     ob.extend(obs)
@@ -646,7 +484,7 @@ mval = 10000.0
 add_quadrant_shading(0.0, mval)
 
 for c, site_label in enumerate(SITES):
-    site_name = WT_MEASUREMENT_INFO[site_label].name
+    site_name = MEASUREMENTS_PER_SITE[site_label].name
     obs = dfvols.loc[site_label]["bioobs"]
     pre = dfvols.loc[site_label]["bmgr"]
     preerr = dfvols.loc[site_label]["bmgrsd"]
@@ -683,7 +521,7 @@ obsvols = []
 prevols = []
 
 for c, site_label in enumerate(SITES):
-    site_name = WT_MEASUREMENT_INFO[site_label].name
+    site_name = MEASUREMENTS_PER_SITE[site_label].name
 
     site_params = assign_susi_params_to_site(site_label)
 
@@ -739,7 +577,7 @@ add_quadrant_shading(0.0, mval)
 esarr = np.empty(0)
 emps = np.empty(0)
 for c, site_label in enumerate(SITES):
-    site_name = WT_MEASUREMENT_INFO[site_label].name
+    site_name = MEASUREMENTS_PER_SITE[site_label].name
 
     vol, yrs, dfvol, dfwt, dft, esom_co2, empirical = load_co2_data(site_label)
 
@@ -792,8 +630,10 @@ dfesom = pd.DataFrame(data=esom_co2)
 dfempirical = pd.DataFrame(data=empirical)
 # %%
 
-site_names = [WT_MEASUREMENT_INFO[site_label].name for site_label in SITES]
-sfcs = list(SITE_FERTILITY_CLASSES)
+site_names = [MEASUREMENTS_PER_SITE[site_label].name for site_label in SITES]
+# The site fertility class that was simulated. The original's hand-written
+# list said 5 for parkano11; the simulation uses 3.
+sfcs = [PARAMS_PER_SITE[site_label].sfc for site_label in SITES]
 print("***********************")
 dfresid = pd.DataFrame(
     list(zip(site_names, sfcs, obsvols, prevols)),

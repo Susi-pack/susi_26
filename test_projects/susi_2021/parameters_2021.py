@@ -49,7 +49,15 @@ MEASUREMENTS_DIR = data_dir_for_project(PROJECT_DIR) / "measurements"
 
 @dataclass(frozen=True)
 class VaryingSusiParams:
+    """The simulation-side record of one site, as the original `dwts_para.py`
+    held it. Field measurements the figures compare against live apart, in
+    MEASUREMENTS_PER_SITE. Fields marked "not used" are kept so nothing the
+    original recorded is lost (#294)."""
+
+    # Not used. Number of groundwater tubes; always equals the number of
+    # tubes listed in MEASUREMENTS_PER_SITE.
     ntubes: int
+    # Not used. Interpolated WT file name; no such file is in the data.
     file: str
     wfile: str
     # CSV converted from the Motti file of the same stem in MOTTI_DIR (the
@@ -64,13 +72,22 @@ class VaryingSusiParams:
     ptype: list[str]
     start_date: datetime.datetime
     end_date: datetime.datetime
+    # Not used. "wet" or "dry" plot of the pair.
     status: str
     bulk_dens: float
+    # Not used. Whether the site was thinned during the measurement period.
+    # The 11 sites susi_2021.py lists are those where it is False (#291).
     thinning: bool
     drain_age: int
+    # Measured stand volume [start, end], m3/ha. Not passed to the model
+    # (the original didn't either); the figures read the observed volume
+    # growth from it.
     vol: list[float]
     sfc: int
+    # Not used. Measured dominant height [start, end], m. Not passed to the
+    # model, as in the original.
     hdom: list[float]
+    # Not used. The original's matplotlib marker for the site.
     mark: str
     Aini: int
     depoN: float
@@ -493,6 +510,127 @@ PARAMS_PER_SITE = {
 }
 
 
+@dataclass(frozen=True)
+class SiteMeasurements:
+    """Field measurements of one site, as the original `wt_figures.py` held
+    them (its `wt_meas` table and its `names` list). Only the figures read
+    them; nothing here feeds the simulation."""
+
+    # Display name in the figures and the residual table.
+    name: str
+    # Measured WT workbook, in MEASUREMENTS_DIR / "Pohjavesiaineistot".
+    file: str
+    # Groundwater tube numbers: the columns of `file` that belong to the site.
+    tubes: list[int]
+    # Not used. Distance of each tube from the ditch, m, in the order of
+    # `tubes`. The original wrote them from the ditch spacing (mid-strip
+    # tubes at s/2, Nevajärvi's at s/4 and s/2, with s = 40 m at Ansasaari,
+    # 37 m at Koirasuo, 30 m at Nevajärvi); these are the evaluated values.
+    # None where the original recorded none (the Parkano sites).
+    dist: list[float] | None
+
+
+MEASUREMENTS_PER_SITE = {
+    SiteLabel("ansa21"): SiteMeasurements(
+        name="Ansasaari21",
+        file="muhos_2_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3, 4, 5, 6],
+        dist=[5.0, 20.0, 5.0, 5.0, 20.0, 5.0],
+    ),
+    SiteLabel("ansa26"): SiteMeasurements(
+        name="Ansasaari26",
+        file="muhos_2_pohjavesi_koottu.xlsx",
+        tubes=[28, 29, 30],
+        dist=[5.0, 20.0, 5.0],
+    ),
+    SiteLabel("jaakkoin61"): SiteMeasurements(
+        name="Jaakkoinsuo61",
+        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
+        tubes=[2, 3, 12, 13, 14, 15],
+        dist=[5.0, 5.0, 16.0, 16.0, 17.5, 27.0],
+    ),
+    SiteLabel("jaakkoin62"): SiteMeasurements(
+        name="Jaakkoinsuo62",
+        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
+        tubes=[28, 30, 36, 39, 42, 43, 44, 45],
+        dist=[32.0, 26.0, 21.0, 13.0, 15.0, 23.0, 37.5, 46.0],
+    ),
+    SiteLabel("koira11"): SiteMeasurements(
+        name="Koirasuo11",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[13, 14, 15],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira12"): SiteMeasurements(
+        name="Koirasuo12",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira21"): SiteMeasurements(
+        name="Koirasuo21",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[19, 20, 21],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira22"): SiteMeasurements(
+        name="Koirasuo22",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[31, 32, 33],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("neva11"): SiteMeasurements(
+        name="Nevajärvi11",
+        file="nevajarvi_1_pohjavesi_koottu.xlsx",
+        tubes=[5, 6, 7, 8, 9, 10],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva14"): SiteMeasurements(
+        name="Nevajärvi14",
+        file="nevajarvi_1_pohjavesi_koottu.xlsx",
+        tubes=[36, 41, 42, 43, 44, 45],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva21"): SiteMeasurements(
+        name="Nevajärvi21",
+        file="nevajarvi_2_pohjavesi_koottu.xlsx",
+        tubes=[5, 6, 7, 8, 9, 10, 11],
+        # Six distances for seven tubes, as in the original.
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva24"): SiteMeasurements(
+        name="Nevajärvi24",
+        file="nevajarvi_2_pohjavesi_koottu.xlsx",
+        tubes=[36, 41, 42, 43, 44, 45],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva31"): SiteMeasurements(
+        name="Nevajärvi31",
+        file="nevajarvi_3_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        dist=[5.0, 7.5, 15.0, 7.5, 5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva34"): SiteMeasurements(
+        name="Nevajärvi34",
+        file="nevajarvi_3_pohjavesi_koottu.xlsx",
+        tubes=[41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+        dist=[5.0, 7.5, 15.0, 7.5, 5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("parkano11"): SiteMeasurements(
+        name="Parkano11",
+        file="parkano_1_pohjavesi_koottu.xlsx",
+        tubes=[22, 23, 24, 27, 28, 29, 32, 33, 34, 37, 38, 39],
+        dist=None,
+    ),
+    SiteLabel("parkano12"): SiteMeasurements(
+        name="Parkano12",
+        file="parkano_3_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 9, 10, 11, 12, 19, 20, 21, 22, 29, 30, 31, 32],
+        dist=None,
+    ),
+}
+
+
 def _rho_mor_from_sfc(sfc: int) -> float:
     if sfc < 3:
         rho_mor = 110.0
@@ -553,8 +691,10 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             },
             sitename="susirun",
             sfc_specification=1,
+            # Measured values, not model inputs: None, as in the original's
+            # `wbal_scens` defaults.
             hdom=None,
-            vol=site_params.vol,
+            vol=None,
             smc="Peatland",
             nLyrs=50,
             dzLyr=0.05,
