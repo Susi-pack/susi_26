@@ -703,7 +703,10 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             ditch_depth_20y_west=[site_params.ddepth],
             ditch_depth_20y_east=[site_params.ddepth],
             scenario_name=[site_label],  # kasvunlisaykset
-            drain_age=50.0,
+            # The site's own drainage age, as the original computed h_mor per
+            # site (vesitase_call.py). The previous port hardcoded 50 (#152).
+            # h_mor is drain_age's only consumer.
+            drain_age=site_params.drain_age,
             initial_h=-0.2,
             slope=0.0,
             peat_type=[
