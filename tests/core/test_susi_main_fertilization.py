@@ -141,16 +141,6 @@ class TestSusiMainFertilizationIntegration:
             ),
         )
 
-    def test_fertilization_initialization_none(self, base_susi_params, test_data_path):
-        """Test that fertilization is initialized as NoFertilization when None."""
-        from susi.core.fertilization import initialize_fertilization, NoFertilization
-
-        result = initialize_fertilization(
-            fertilization_params=None, n_cols=4, simulation_end_year=2005
-        )
-        assert isinstance(result, NoFertilization)
-        assert result.ncols == 4
-
     def test_fertilization_initialization_standard_npk(
         self, base_susi_params, test_data_path
     ):

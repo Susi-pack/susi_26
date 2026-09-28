@@ -6,8 +6,8 @@ Created on Sat Mar  5 19:31:27 2022
 """
 
 import numpy as np
-from abc import ABC
-from typing import assert_never, Literal, get_args
+from abc import ABC, abstractmethod
+from typing import assert_never, Literal, get_args, Self
 from dataclasses import dataclass
 
 from susi.io.susi_parameter_model import (
@@ -28,6 +28,16 @@ class FertilizationEffect:
     is_active: bool
     pH_increment: float
     nutrient_release: dict[Nutrient, np.ndarray]
+
+    @classmethod
+    def inactive(cls, n_cols: int) -> Self:
+        return FertilizationEffect(
+            is_active=False,
+            pH_increment=0.0,
+            nutrient_release={
+                nutrient: np.zeros(n_cols) for nutrient in get_args(Nutrient)
+            },
+        )
 
 
 class AbstractFertilization(ABC):
@@ -63,6 +73,7 @@ class AbstractFertilization(ABC):
         )
 
     # ---- Subclasses must implement this ----
+    @abstractmethod
     def _compute_active_effect(
         self, years_since_fertilization: int
     ) -> FertilizationEffect: ...
@@ -90,7 +101,7 @@ class StandardNPKFertilization(AbstractFertilization):
     def __init__(self, n_cols: int, fpara: StandardNPKFertilizationParameters):
         super().__init__(n_cols=n_cols, fpara=fpara)
 
-    def compute_ph_effect(self, years_since_fertilization: int) -> float:
+    def compute_pH_effect(self, years_since_fertilization: int) -> float:
         return self.fpara.pH_increment * np.exp(-0.1 * years_since_fertilization)
 
     def compute_nutrient_release(
@@ -122,7 +133,7 @@ class StandardNPKFertilization(AbstractFertilization):
 
         return FertilizationEffect(
             is_active=True,
-            pH_increment=self.compute_ph_effect(years_since_fertilization),
+            pH_increment=self.compute_pH_effect(years_since_fertilization),
             nutrient_release=self.compute_nutrient_release(years_since_fertilization),
         )
 
@@ -226,7 +237,7 @@ class AshFertilization(AbstractFertilization):
     ) -> FertilizationEffect:
         return FertilizationEffect(
             is_active=True,
-            pH_increment=self.ph_history[years_since_fertilization],
+            pH_increment=self.pH_history[years_since_fertilization],
             nutrient_release={
                 "N": np.zeros(self.ncols),
                 "P": self.P_release_history[years_since_fertilization]
@@ -237,44 +248,24 @@ class AshFertilization(AbstractFertilization):
         )
 
 
-class NoFertilization(AbstractFertilization):
-    """
-    Class returned when there is no fertilization.
-    Its purpose is to be able to return something in case
-    no fertilization happens.
-    Otherwise, it is useless.
-    """
-
-    def __init__(self, n_cols: int):
-        super().__init__(n_cols=n_cols, fpara=None)
-
-    def is_active(self, years_since: int) -> bool:
-        return False
-
-    def _compute_active_effect(
-        self, years_since_fertilization: int
-    ) -> FertilizationEffect:
-        # No need to implement this for this class.
-        raise NotImplementedError
-
-
 def initialize_fertilization(
     fertilization_params: FertilizationParameters | None,
     n_cols: int,
     simulation_end_year: int,
-) -> AbstractFertilization:
+) -> AbstractFertilization | None:
     """
     Factory function to create the appropriate fertilization instance.
     """
     match fertilization_params:
         case None:
-            return NoFertilization(n_cols=n_cols)
+            return None
         case AshFertilizationParameters():
             return AshFertilization(
                 n_cols=n_cols,
                 fpara=fertilization_params,
                 n_years_to_simulate_since_fertilization=simulation_end_year
-                - fertilization_params.application_year,
+                - fertilization_params.application_year
+                + 1,  # in susi_main.py, the last year is included in the simulation
             )
         case StandardNPKFertilizationParameters():
             return StandardNPKFertilization(n_cols=n_cols, fpara=fertilization_params)

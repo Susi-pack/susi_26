@@ -24,7 +24,7 @@ from susi.core.gvegetation import Gvegetation
 from susi.core.esom import Esom
 from susi.core.stand import Stand
 from susi.core.methane import Methane
-from susi.core.fertilization import initialize_fertilization
+from susi.core.fertilization import initialize_fertilization, FertilizationEffect
 from susi.core.susi_utils import rew_drylimit
 from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, ojanen_2019
 import susi.io.susi_io as susi_io
@@ -491,7 +491,13 @@ class Susi:
 
                 # ---------------- Fertilization --------------------------------
 
-                fertilization_effect = ferti.compute_effect(year=yr)
+                # The factory returns None when there's no fertilization
+                if ferti is None:
+                    fertilization_effect = FertilizationEffect.inactive(
+                        n_cols=self.parameters.site_parameters.n
+                    )
+                else:
+                    fertilization_effect = ferti.compute_effect(year=yr)
                 if fertilization_effect.is_active:
                     for es in (esmass, esN, esP, esK):
                         es.update_soil_pH(fertilization_effect.pH_increment)
