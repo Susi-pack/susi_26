@@ -407,7 +407,7 @@ def get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:
 def read_netcdf_files_for_selected_variables(
     selected_variables: Sequence[NetcdfVariablePath],
     scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
-    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
+    netcdf_filepaths_by_stand: dict[StandID, Sequence[Path]],
 ) -> OutputDataStore:
     stands: list[StandID] = []
     data: dict[

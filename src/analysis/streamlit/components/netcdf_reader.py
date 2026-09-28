@@ -22,7 +22,7 @@ from analysis.shared_reporting_utils.project_summary import AggregatedNetcdfVar
 def cached_read_netcdf_files(
     selected_variables: tuple[AggregatedNetcdfVar, ...],
     scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
-    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
+    netcdf_filepaths_by_stand: dict[StandID, Sequence[Path]],
 ) -> OutputDataStore:
     return read_netcdf_files_for_selected_variables(
         selected_variables=[var.netcdf_path for var in selected_variables],

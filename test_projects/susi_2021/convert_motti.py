@@ -39,7 +39,9 @@ def _read_sheet(motti_path: Path, sheet_index: int) -> pd.DataFrame:
     # These old .xls files make xlrd print harmless OLE2 size warnings to
     # stdout; send them to devnull so the report stays readable.
     with open(os.devnull, "w") as devnull:
-        return pd.read_excel(
+        # pandas' read_excel overloads leave out engine_kwargs, which the
+        # implementation accepts.
+        return pd.read_excel(  # ty: ignore[no-matching-overload]
             motti_path,
             sheet_name=sheet_index,
             engine="xlrd",
@@ -69,7 +71,7 @@ def rename_to_canonical_columns(
             f"allometry columns' Finnish names.\n  expected: {expected}\n"
             f"  found:    {found}"
         )
-    if table.isna().any().any():
+    if table.isna().to_numpy().any():
         raise ValueError(f"{motti_path.name}: first sheet has empty cells.")
 
     return table.rename(

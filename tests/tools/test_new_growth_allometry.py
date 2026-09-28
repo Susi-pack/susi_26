@@ -96,7 +96,7 @@ def test_new_growth_config_overrides_defaults():
 def test_new_growth_config_is_frozen():
     config = nga.NewGrowthConfig.model_validate(_valid_raw())
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
-        config.altitude = 200.0  # noqa: B010
+        config.altitude = 200.0  # ty: ignore[invalid-assignment]
 
 
 def test_load_new_growth_config_reads_toml(tmp_path):
