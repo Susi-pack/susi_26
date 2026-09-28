@@ -1,9 +1,7 @@
-import numpy as np
 import pytest
 from susi.core.fertilization import (
-    StandardNPKFertilization,
-    AshFertilization,
-    initialize_fertilization,
+    NO_EFFECT,
+    fertilization_effect_in_year,
 )
 from susi.io.susi_parameter_model import (
     StandardNPKFertilizationParameters,
@@ -11,147 +9,6 @@ from susi.io.susi_parameter_model import (
     AshFertilizationParameters,
     FertilizationParameters,
 )
-
-
-class TestStandardNPKFertilization:
-    """Test StandardNPKFertilization mathematical correctness."""
-
-    def test_compute_effect_active(self):
-        """Test compute_effect returns correct values when active."""
-        # Arrange
-        params = StandardNPKFertilizationParameters(
-            application_year=2005,
-            N=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            P=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            pH_increment=1.5,
-        )
-        fert = StandardNPKFertilization(n_cols=2, fpara=params)
-
-        # Application year
-        effect = fert.compute_effect(year=2005)
-
-        # Assert
-        assert effect.is_active
-        assert effect.pH_increment == 1.5  # pH_increment * exp(-0.1 * 0) = 1.5
-        assert isinstance(effect.nutrient_release, dict)
-        assert "N" in effect.nutrient_release
-        assert "P" in effect.nutrient_release
-        assert "K" in effect.nutrient_release
-        assert effect.nutrient_release["N"].shape == (2,)
-        assert effect.nutrient_release["P"].shape == (2,)
-        assert effect.nutrient_release["K"].shape == (2,)
-
-    def test_compute_effect_inactive(self):
-        """Test compute_effect returns inactive effect when not active."""
-        # Arrange
-        params = StandardNPKFertilizationParameters(
-            application_year=2005,
-            N=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            P=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
-            pH_increment=1.5,
-        )
-        fert = StandardNPKFertilization(n_cols=2, fpara=params)
-
-        # Act
-        effect = fert.compute_effect(year=2004)  # Before application year
-
-        # Assert
-        assert not effect.is_active
-        assert effect.pH_increment == 0.0
-        assert isinstance(effect.nutrient_release, dict)
-        assert effect.nutrient_release["N"].shape == (2,)
-        assert effect.nutrient_release["P"].shape == (2,)
-        assert effect.nutrient_release["K"].shape == (2,)
-        assert np.all(effect.nutrient_release["N"] == 0.0)
-        assert np.all(effect.nutrient_release["P"] == 0.0)
-        assert np.all(effect.nutrient_release["K"] == 0.0)
-
-
-class TestInitializeFertilization:
-    """Test initialize_fertilization factory function."""
-
-    def test_returns_standard_npk_fertilization(self):
-        """Test that StandardNPK parameters returns StandardNPKFertilization."""
-        # Arrange
-        fert_params = StandardNPKFertilizationParameters(
-            application_year=2005,
-            N=NutrientFertilizationParameters(dose=10.0, decay_k=0.5, eff=1.0),
-            P=NutrientFertilizationParameters(dose=10.0, decay_k=0.5, eff=1.0),
-            K=NutrientFertilizationParameters(dose=10.0, decay_k=0.5, eff=1.0),
-            pH_increment=1.0,
-        )
-        n_cols = 4
-
-        # Act
-        fert = initialize_fertilization(fert_params, n_cols, simulation_end_year=0)
-
-        # Assert
-        assert isinstance(fert, StandardNPKFertilization)
-        assert fert.ncols == n_cols
-        assert fert.fpara == fert_params
-
-    def test_returns_ash_fertilization(self):
-        """Test that Ash parameters returns AshFertilization."""
-        # Arrange
-        from susi.io.susi_parameter_model import AshFertilizationParameters
-
-        fert_params = AshFertilizationParameters(
-            application_year=2005,
-            grain_radius=0.005,
-            particle_cracking_rate=2.0,
-            dissolution_rate=0.005,
-            K_dissolution_rate=0.00012,
-            P_dissolution_rate=0.000045,
-            fertilizer_dose=100.0,
-            K_in_ash=50.0,
-            P_in_ash=20.0,
-            time_exp=1.0,
-        )
-        n_cols = 3
-
-        # Act
-        fert = initialize_fertilization(fert_params, n_cols, simulation_end_year=2006)
-
-        # Assert
-        assert isinstance(
-            fert, AshFertilization
-        )  # Will raise NotImplementedError when used
-        assert fert.ncols == n_cols
-        assert fert.fpara == fert_params
-
-
-class TestAshFertilization:
-    """Test AshFertilization over the simulated years."""
-
-    def test_compute_effect_in_last_simulation_year(self):
-        """
-        The simulation loop runs up to and including the end year
-        (see susi_main), so the effect must be computable in that year.
-        """
-        # Arrange
-        from susi.io.susi_parameter_model import AshFertilizationParameters
-
-        fert_params = AshFertilizationParameters(
-            application_year=2005,
-            grain_radius=0.005,
-            particle_cracking_rate=2.0,
-            dissolution_rate=0.005,
-            K_dissolution_rate=0.00012,
-            P_dissolution_rate=0.000045,
-            fertilizer_dose=100.0,
-            K_in_ash=50.0,
-            P_in_ash=20.0,
-            time_exp=1.0,
-        )
-        fert = initialize_fertilization(fert_params, n_cols=3, simulation_end_year=2006)
-
-        # Act
-        effect = fert.compute_effect(year=2006)
-
-        # Assert
-        assert effect.is_active
 
 
 # ---------------------------------------------------------------------------
@@ -172,16 +29,12 @@ def effect_as_floats(
     params: FertilizationParameters, year: int
 ) -> tuple[float, float, float, float]:
     """(pH_increment, N, P, K) for one year, as plain floats."""
-    fertilization = initialize_fertilization(
-        params, n_cols=1, simulation_end_year=2030
-    )
-    assert fertilization is not None  # only None params give None
-    effect = fertilization.compute_effect(year)
+    effect = fertilization_effect_in_year(params, year)
     return (
         float(effect.pH_increment),
-        float(effect.nutrient_release["N"][0]),
-        float(effect.nutrient_release["P"][0]),
-        float(effect.nutrient_release["K"][0]),
+        float(effect.N_release),
+        float(effect.P_release),
+        float(effect.K_release),
     )
 
 
@@ -268,3 +121,62 @@ def test_pinned_ash_K_runs_out(year: int, expected: tuple[float, ...]):
 @pytest.mark.parametrize("year, expected", ASH_FULLY_DISSOLVED_PINNED.items())
 def test_pinned_ash_fully_dissolved(year: int, expected: tuple[float, ...]):
     assert effect_as_floats(ASH_FULLY_DISSOLVED, year) == expected
+
+
+# ---------------------------------------------------------------------------
+# Behavior
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("year", [1900, 2004, 2005, 2006, 2100])
+def test_no_fertilization_has_no_effect_in_any_year(year: int):
+    assert fertilization_effect_in_year(None, year) == NO_EFFECT
+
+
+@pytest.mark.parametrize(
+    "params", [FIRST_ORDER_DECAY, ASH_K_RUNS_OUT], ids=["first_order_decay", "ash"]
+)
+def test_no_effect_before_the_application_year(params: FertilizationParameters):
+    year_before = params.application_year - 1
+    assert fertilization_effect_in_year(params, year_before) == NO_EFFECT
+
+
+@pytest.mark.parametrize("years_since_application", [0, 1, 2])
+def test_first_order_decay_has_an_effect_from_the_application_year_on(
+    years_since_application: int,
+):
+    effect = fertilization_effect_in_year(
+        FIRST_ORDER_DECAY, FIRST_ORDER_DECAY.application_year + years_since_application
+    )
+    assert effect.pH_increment > 0.0
+    assert effect.N_release > 0.0
+    assert effect.P_release > 0.0
+    assert effect.K_release > 0.0
+
+
+@pytest.mark.parametrize("years_since_application", [0, 1, 2])
+def test_ash_releases_P_and_K_from_the_application_year_on(
+    years_since_application: int,
+):
+    effect = fertilization_effect_in_year(
+        ASH_K_RUNS_OUT, ASH_K_RUNS_OUT.application_year + years_since_application
+    )
+    assert effect.P_release > 0.0
+    assert effect.K_release > 0.0
+
+
+def test_ash_releases_no_N():
+    effect = fertilization_effect_in_year(
+        ASH_K_RUNS_OUT, ASH_K_RUNS_OUT.application_year + 1
+    )
+    assert effect.N_release == 0.0
+
+
+def test_ash_pH_increment_starts_the_year_after_application():
+    """
+    Start-of-year convention: the pH increment uses the ash dissolved by the
+    start of the year, so it's 0 in the application year by design.
+    """
+    year = ASH_K_RUNS_OUT.application_year
+    assert fertilization_effect_in_year(ASH_K_RUNS_OUT, year).pH_increment == 0.0
+    assert fertilization_effect_in_year(ASH_K_RUNS_OUT, year + 1).pH_increment > 0.0

@@ -24,7 +24,7 @@ from susi.core.gvegetation import Gvegetation
 from susi.core.esom import Esom
 from susi.core.stand import Stand
 from susi.core.methane import Methane
-from susi.core.fertilization import initialize_fertilization, FertilizationEffect
+from susi.core.fertilization import fertilization_effect_in_year
 from susi.core.susi_utils import rew_drylimit
 from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, ojanen_2019
 import susi.io.susi_io as susi_io
@@ -159,12 +159,6 @@ class Susi:
             days=366 * n_simulation_years,
             substance="K",
         )  # initializing organic matter decomposition instace for K
-
-        ferti = initialize_fertilization(
-            fertilization_params=self.parameters.site_parameters.fertilization,
-            n_cols=self.parameters.site_parameters.n,
-            simulation_end_year=self.parameters.simulation_config.end_date.year,
-        )
 
         out.initialize_esom("Mass")  # creating output variables for organic matter
         out.initialize_esom("N")
@@ -491,16 +485,12 @@ class Susi:
 
                 # ---------------- Fertilization --------------------------------
 
-                # The factory returns None when there's no fertilization
-                if ferti is None:
-                    fertilization_effect = FertilizationEffect.inactive(
-                        n_cols=self.parameters.site_parameters.n
-                    )
-                else:
-                    fertilization_effect = ferti.compute_effect(year=yr)
-                if fertilization_effect.is_active:
-                    for es in (esmass, esN, esP, esK):
-                        es.update_soil_pH(fertilization_effect.pH_increment)
+                fertilization_effect = fertilization_effect_in_year(
+                    params=self.parameters.site_parameters.fertilization, year=yr
+                )
+                # This works for no fertilization too: the pH_increment is just 0.0 in that case.
+                for es in (esmass, esN, esP, esK):
+                    es.update_soil_pH(fertilization_effect.pH_increment)
 
                 out.write_fertilization(r, year + 1, fertilization_effect)
 
@@ -599,13 +589,13 @@ class Susi:
                     groundvegetation,
                     esN.out_root_lyr
                     + self.parameters.site_parameters.depoN
-                    + fertilization_effect.nutrient_release["N"],
+                    + fertilization_effect.N_release,
                     esP.out_root_lyr
                     + self.parameters.site_parameters.depoP
-                    + fertilization_effect.nutrient_release["P"],
+                    + fertilization_effect.P_release,
                     esK.out_root_lyr
                     + self.parameters.site_parameters.depoK
-                    + fertilization_effect.nutrient_release["K"],
+                    + fertilization_effect.K_release,
                 )
 
                 # move stand.assimilate here, if first year, take foliage litter from 'table growth (interpolation functions)'
@@ -630,7 +620,7 @@ class Susi:
                     "N",
                     esN,
                     self.parameters.site_parameters.depoN,
-                    fertilization_effect.nutrient_release["N"],
+                    fertilization_effect.N_release,
                     stand.n_demand + stand.n_leaf_demand,
                     groundvegetation.nup,
                 )
@@ -640,7 +630,7 @@ class Susi:
                     "P",
                     esP,
                     self.parameters.site_parameters.depoP,
-                    fertilization_effect.nutrient_release["P"],
+                    fertilization_effect.P_release,
                     stand.p_demand + stand.p_leaf_demand,
                     groundvegetation.pup,
                 )
@@ -650,7 +640,7 @@ class Susi:
                     "K",
                     esK,
                     self.parameters.site_parameters.depoK,
-                    fertilization_effect.nutrient_release["K"],
+                    fertilization_effect.K_release,
                     stand.k_demand + stand.k_leaf_demand,
                     groundvegetation.kup,
                 )
