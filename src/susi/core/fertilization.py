@@ -46,7 +46,7 @@ def fertilization_effect_in_year(
             assert_never(params)
 
 
-def _first_order_nutrient_release(
+def _first_order_release(
     nutrient_params: NutrientFertilizationParameters, years_since_application: int
 ) -> float:
     return (
@@ -61,16 +61,17 @@ def first_order_decay_effect(
     params: StandardNPKFertilizationParameters, years_since_application: int
 ) -> FertilizationEffect:
     return FertilizationEffect(
-        pH_increment=params.pH_increment * np.exp(-0.1 * years_since_application),
-        N_release=_first_order_nutrient_release(
+        pH_increment=params.pH_increment
+        * np.exp(-params.pH_decay_k * years_since_application),
+        N_release=_first_order_release(
             nutrient_params=params.N,
             years_since_application=years_since_application,
         ),
-        P_release=_first_order_nutrient_release(
+        P_release=_first_order_release(
             nutrient_params=params.P,
             years_since_application=years_since_application,
         ),
-        K_release=_first_order_nutrient_release(
+        K_release=_first_order_release(
             nutrient_params=params.K,
             years_since_application=years_since_application,
         ),
@@ -81,10 +82,10 @@ def ash_effect(
     params: AshFertilizationParameters, years_since_application: int
 ) -> FertilizationEffect:
     """
-    Calculates the disintegration of ash grains and the release of P and K from ash and the ewffect on soil pH
+    Calculates the disintegration of ash grains and the release of P and K from ash and the effect on soil pH
 
     Note: recomputes until current year at every call.
-    It could be precomputed too, but the runtime cost are miliseconds, and
+    It could be precomputed too, but the runtime cost is milliseconds, and
     we chose the simplicity of the common interface.
     """
 
@@ -147,9 +148,8 @@ def ash_effect(
 
         # 6.lasketaan pHn nousu
         dissolved_ash = params.fertilizer_dose - current_fertilizer_mass
-        # this is cumulative increment from the begiining of the simulation
-        # TODO: set the value 2.5/15000 as a constant in params
-        pH_increment = dissolved_ash * (2.5 / 15000)
+        # this is cumulative increment from the begining of the simulation
+        pH_increment = dissolved_ash * params.pH_increment_per_dissolved_ash
 
         pH_history[i] = pH_increment
 

@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 from susi.core.fertilization import (
     NO_EFFECT,
     fertilization_effect_in_year,
@@ -74,13 +75,48 @@ ASH_FULLY_DISSOLVED = AshFertilizationParameters(
 FIRST_ORDER_DECAY_PINNED = {
     2004: (0.0, 0.0, 0.0, 0.0),
     2005: (1.5, 20.73454234546257, 7.2507698768807245, 21.247344375517798),
-    2006: (1.3572561270539394, 15.360526767015319, 5.936428281693701, 12.887165801224318),
-    2007: (1.2280961296169728, 11.379358108274182, 4.860336397664518, 7.816461175242675),
-    2013: (0.6739934461758323, 1.8809952439730182, 1.4639051909227536, 0.38915868692656114),
-    2014: (0.6098544896108986, 1.3934755497508668, 1.1985441993989534, 0.23603667511446935),
-    2015: (0.5518191617571635, 1.0323120773299146, 0.9812849949711531, 0.14316348027355563),
-    2016: (0.49930662554711935, 0.7647555963157956, 0.8034082029168563, 0.08683304013707623),
-    2030: (0.1231274979358482, 0.011467951293443746, 0.04885530313298783, 7.918148331527132e-05),
+    2006: (
+        1.3572561270539394,
+        15.360526767015319,
+        5.936428281693701,
+        12.887165801224318,
+    ),
+    2007: (
+        1.2280961296169728,
+        11.379358108274182,
+        4.860336397664518,
+        7.816461175242675,
+    ),
+    2013: (
+        0.6739934461758323,
+        1.8809952439730182,
+        1.4639051909227536,
+        0.38915868692656114,
+    ),
+    2014: (
+        0.6098544896108986,
+        1.3934755497508668,
+        1.1985441993989534,
+        0.23603667511446935,
+    ),
+    2015: (
+        0.5518191617571635,
+        1.0323120773299146,
+        0.9812849949711531,
+        0.14316348027355563,
+    ),
+    2016: (
+        0.49930662554711935,
+        0.7647555963157956,
+        0.8034082029168563,
+        0.08683304013707623,
+    ),
+    2030: (
+        0.1231274979358482,
+        0.011467951293443746,
+        0.04885530313298783,
+        7.918148331527132e-05,
+    ),
 }
 
 ASH_K_RUNS_OUT_PINNED = {
@@ -180,3 +216,92 @@ def test_ash_pH_increment_starts_the_year_after_application():
     year = ASH_K_RUNS_OUT.application_year
     assert fertilization_effect_in_year(ASH_K_RUNS_OUT, year).pH_increment == 0.0
     assert fertilization_effect_in_year(ASH_K_RUNS_OUT, year + 1).pH_increment > 0.0
+
+
+# ---------------------------------------------------------------------------
+# Parameters
+#
+# Zero values that would break the calculation are rejected, and each pH
+# constant that used to be hardcoded changes the output when varied. The
+# defaults leave the pinned values above unchanged.
+# ---------------------------------------------------------------------------
+
+# Every year from the application year on, far enough to cover the K storage
+# running out (2013) in ASH_K_RUNS_OUT.
+YEARS_SINCE_APPLICATION = range(0, 31)
+
+
+def with_changes(
+    params: FertilizationParameters, **changes: float
+) -> FertilizationParameters:
+    """
+    A copy of `params` with `changes` applied, validated again.
+    `model_copy(update=...)` skips validation, so it can't be used here.
+    """
+    return type(params).model_validate({**params.model_dump(), **changes})
+
+
+@pytest.mark.parametrize("field", ["fertilizer_dose", "grain_radius", "density"])
+def test_ash_rejects_zero(field: str):
+    # A zero dose gives NaN in every year; a zero radius or density divides by zero.
+    with pytest.raises(ValidationError):
+        with_changes(ASH_K_RUNS_OUT, **{field: 0.0})
+
+
+@pytest.mark.parametrize(
+    "field, release", [("K_in_ash", "K_release"), ("P_in_ash", "P_release")]
+)
+def test_ash_without_a_nutrient_releases_none_of_it(field: str, release: str):
+    # Ash with no K or no P is physically meaningful, so zero is allowed.
+    params = with_changes(ASH_K_RUNS_OUT, **{field: 0.0})
+    for years_since_application in YEARS_SINCE_APPLICATION:
+        year = params.application_year + years_since_application
+        effect = fertilization_effect_in_year(params, year)
+        assert getattr(effect, release) == 0.0
+
+
+def test_zero_pH_decay_k_keeps_the_pH_increment_constant():
+    params = with_changes(FIRST_ORDER_DECAY, pH_decay_k=0.0)
+    for years_since_application in YEARS_SINCE_APPLICATION:
+        year = params.application_year + years_since_application
+        effect = fertilization_effect_in_year(params, year)
+        assert effect.pH_increment == FIRST_ORDER_DECAY.pH_increment
+
+
+def test_faster_pH_decay_k_gives_a_lower_pH_increment_after_the_application_year():
+    faster = with_changes(
+        FIRST_ORDER_DECAY, pH_decay_k=2 * FIRST_ORDER_DECAY.pH_decay_k
+    )
+    # In the application year exp(0) = 1, so the decay rate makes no difference.
+    for years_since_application in YEARS_SINCE_APPLICATION[1:]:
+        year = FIRST_ORDER_DECAY.application_year + years_since_application
+        assert (
+            fertilization_effect_in_year(faster, year).pH_increment
+            < fertilization_effect_in_year(FIRST_ORDER_DECAY, year).pH_increment
+        )
+
+
+def test_zero_pH_increment_per_dissolved_ash_switches_off_only_the_pH_effect():
+    params = with_changes(ASH_K_RUNS_OUT, pH_increment_per_dissolved_ash=0.0)
+    for years_since_application in YEARS_SINCE_APPLICATION:
+        year = params.application_year + years_since_application
+        effect = fertilization_effect_in_year(params, year)
+        default_effect = fertilization_effect_in_year(ASH_K_RUNS_OUT, year)
+        assert effect.pH_increment == 0.0
+        assert effect.P_release == default_effect.P_release
+        assert effect.K_release == default_effect.K_release
+
+
+def test_ash_pH_increment_is_proportional_to_pH_increment_per_dissolved_ash():
+    doubled = with_changes(
+        ASH_K_RUNS_OUT,
+        pH_increment_per_dissolved_ash=2
+        * ASH_K_RUNS_OUT.pH_increment_per_dissolved_ash,
+    )
+    for years_since_application in YEARS_SINCE_APPLICATION:
+        year = ASH_K_RUNS_OUT.application_year + years_since_application
+        assert fertilization_effect_in_year(
+            doubled, year
+        ).pH_increment == pytest.approx(
+            2 * fertilization_effect_in_year(ASH_K_RUNS_OUT, year).pH_increment
+        )
