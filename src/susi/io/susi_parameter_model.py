@@ -486,7 +486,14 @@ class StandardNPKFertilizationParameters(StrictFrozenModel):
     N: NutrientFertilizationParameters
     P: NutrientFertilizationParameters
     K: NutrientFertilizationParameters
-    pH_increment: NonNegativeFloat = 0.0
+    pH_increment: NonNegativeFloat = Field(
+        default=0.0,
+        description="pH increment in the application year; decays exponentially afterwards (see pH_decay_k)",
+    )
+
+    pH_decay_k: NonNegativeFloat = Field(
+        default=0.1, description="Decay rate of the pH increment, yr-1"
+    )
 
 
 class AshFertilizationParameters(StrictFrozenModel):
@@ -495,7 +502,7 @@ class AshFertilizationParameters(StrictFrozenModel):
     """
 
     application_year: int
-    grain_radius: NonNegativeFloat = Field(
+    grain_radius: PositiveFloat = Field(
         default=0.005, description="Radius of ash grains (m)."
     )
     particle_cracking_rate: NonNegativeFloat = Field(
@@ -510,11 +517,11 @@ class AshFertilizationParameters(StrictFrozenModel):
     P_dissolution_rate: NonNegativeFloat = Field(
         default=0.000045, description="Phosphorus release rate. (kg/m^2/year)"
     )
-    density: NonNegativeFloat = Field(
+    density: PositiveFloat = Field(
         default=1000, description="Density of ash grains (kg/m^3)"
     )
-    fertilizer_dose: NonNegativeFloat = Field(
-        description="Mass of the ash fertilizer (kg/ha)"
+    fertilizer_dose: PositiveFloat = Field(
+        description="Mass of the ash fertilizer (kg/ha). It must be strictly > 0: an ash fertilization with no ash is no fertilization at all, and it should be modelled as a fertilization=None instead."
     )
     K_in_ash: NonNegativeFloat = Field(
         description="Amount of potassium in the fertilizer (kg/ha)"
@@ -524,6 +531,10 @@ class AshFertilizationParameters(StrictFrozenModel):
     )
     time_exp: NonNegativeFloat = Field(
         description="Exponent in the grain cracking function."
+    )
+    pH_increment_per_dissolved_ash: NonNegativeFloat = Field(
+        default=2.5 / 15000,
+        description="pH increment per kg ha-1 of dissolved ash.",
     )
 
 
