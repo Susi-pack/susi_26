@@ -30,7 +30,7 @@ class SimulationMetaData(BaseModel):
     )
 
     project_dir: DirectoryPath = Field(
-        description='The folder of the project this run belongs to: the one holding the study\'s `inputs/` and `outputs/`. The run writes into that folder\'s `outputs/`, which must already exist. The script names it explicitly -- `project_dir("<name>")` for a user project under the projects root, `repo_root() / "example_projects" / "<name>"` for one tracked in the checkout (ADR 0006). Stored as an absolute path, so `metadata.json` says where the run came from wherever it is read.',
+        description="The folder of the project this run belongs to: the one holding the study's `inputs/` and `outputs/`. The run writes into that folder's `outputs/`, which must already exist. ",
     )
 
     run_id: str = Field(
