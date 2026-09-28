@@ -145,9 +145,60 @@ def test_stand_data_rejects_a_coordinate_the_cli_check_would_also_reject(
         stand_data.StandData(
             site_fertility_class=3,
             allometry_file_per_layer={},
+            initial_age_per_layer={},
             x_ykj=x_ykj,
             y_ykj=y_ykj,
         )
+
+
+# %% StandData.initial_age_per_layer must cover exactly the layers with a file
+#
+# An age for a layer with no allometry file, or a file with no age, is a bug
+# in whichever tool wrote the document, so StandData refuses both.
+
+
+def _stand_with_files_and_ages(allometry_layers, age_layers) -> stand_data.StandData:
+    return stand_data.StandData(
+        site_fertility_class=3,
+        allometry_file_per_layer={
+            layer: AllometryFileAndSpecies(
+                file_path=Path(f"/project/inputs/allometry/{layer.value}.csv"),
+                species_id=1,
+            )
+            for layer in allometry_layers
+        },
+        initial_age_per_layer={layer: 30.0 for layer in age_layers},
+        x_ykj=339,
+        y_ykj=6675,
+    )
+
+
+def test_stand_data_rejects_an_age_for_a_layer_with_no_allometry_file():
+    with pytest.raises(pydantic.ValidationError, match="subdominant"):
+        _stand_with_files_and_ages(
+            allometry_layers=[CanopyLayerName.dominant],
+            age_layers=[CanopyLayerName.dominant, CanopyLayerName.subdominant],
+        )
+
+
+def test_stand_data_rejects_an_allometry_file_with_no_age():
+    with pytest.raises(pydantic.ValidationError, match="subdominant"):
+        _stand_with_files_and_ages(
+            allometry_layers=[CanopyLayerName.dominant, CanopyLayerName.subdominant],
+            age_layers=[CanopyLayerName.dominant],
+        )
+
+
+def test_stand_data_accepts_ages_for_exactly_the_allometry_layers():
+    stand = _stand_with_files_and_ages(
+        allometry_layers=[CanopyLayerName.dominant, CanopyLayerName.subdominant],
+        age_layers=[CanopyLayerName.subdominant, CanopyLayerName.dominant],
+    )
+
+    assert stand.initial_age_per_layer == {
+        CanopyLayerName.dominant: 30.0,
+        CanopyLayerName.subdominant: 30.0,
+    }
 
 
 # %% stand_data.StandData / StandDataDocument round-trip
@@ -205,29 +256,53 @@ _optional_nonneg_float = st.one_of(
     st.floats(min_value=0, max_value=2000, allow_nan=False, allow_infinity=False),
 )
 
-stand_data_strategy = st.builds(
-    stand_data.StandData,
-    site_fertility_class=st.integers(min_value=1, max_value=10),
-    allometry_file_per_layer=allometry_file_per_layer_strategy,
-    x_ykj=st.integers(min_value=stand_data.X_YKJ_MIN, max_value=stand_data.X_YKJ_MAX),
-    y_ykj=st.integers(min_value=stand_data.Y_YKJ_MIN, max_value=stand_data.Y_YKJ_MAX),
-    polygon=st.one_of(st.none(), stand_polygon_strategy()),
-    main_group=_optional_positive_int,
-    sub_group=_optional_positive_int,
-    stand_area=st.one_of(
-        st.none(),
-        st.floats(
-            min_value=0.01, max_value=10_000, allow_nan=False, allow_infinity=False
-        ),
-    ),
-    basal_area=_optional_nonneg_float,
-    mean_height=_optional_nonneg_float,
-    mean_diameter=_optional_nonneg_float,
-    total_volume=_optional_nonneg_float,
-    stem_count=_optional_nonneg_float,
-    developmentclass=_optional_positive_int,
-    drainagestate=_optional_positive_int,
+_initial_age = st.floats(
+    min_value=0, max_value=300, allow_nan=False, allow_infinity=False
 )
+
+
+@st.composite
+def stand_data_strategy(draw):
+    # initial_age_per_layer must have the same keys as allometry_file_per_layer,
+    # so the ages are drawn per file layer rather than as an independent dict.
+    allometry_file_per_layer = draw(allometry_file_per_layer_strategy)
+    initial_age_per_layer = {
+        layer: draw(_initial_age) for layer in allometry_file_per_layer
+    }
+    return draw(
+        st.builds(
+            stand_data.StandData,
+            site_fertility_class=st.integers(min_value=1, max_value=10),
+            allometry_file_per_layer=st.just(allometry_file_per_layer),
+            initial_age_per_layer=st.just(initial_age_per_layer),
+            x_ykj=st.integers(
+                min_value=stand_data.X_YKJ_MIN, max_value=stand_data.X_YKJ_MAX
+            ),
+            y_ykj=st.integers(
+                min_value=stand_data.Y_YKJ_MIN, max_value=stand_data.Y_YKJ_MAX
+            ),
+            polygon=st.one_of(st.none(), stand_polygon_strategy()),
+            main_group=_optional_positive_int,
+            sub_group=_optional_positive_int,
+            stand_area=st.one_of(
+                st.none(),
+                st.floats(
+                    min_value=0.01,
+                    max_value=10_000,
+                    allow_nan=False,
+                    allow_infinity=False,
+                ),
+            ),
+            basal_area=_optional_nonneg_float,
+            mean_height=_optional_nonneg_float,
+            mean_diameter=_optional_nonneg_float,
+            total_volume=_optional_nonneg_float,
+            stem_count=_optional_nonneg_float,
+            developmentclass=_optional_positive_int,
+            drainagestate=_optional_positive_int,
+        )
+    )
+
 
 stand_data_document_strategy = st.builds(
     stand_data.StandDataDocument,
@@ -238,7 +313,7 @@ stand_data_document_strategy = st.builds(
     ddy=st.floats(min_value=0, max_value=3000, allow_nan=False, allow_infinity=False),
     stands=st.dictionaries(
         keys=st.text(min_size=1, max_size=10).map(StandID),
-        values=stand_data_strategy,
+        values=stand_data_strategy(),
         max_size=5,
     ),
 )
@@ -278,6 +353,7 @@ def _document_with_allometry(files_per_stand: dict[str, Path]):
                         file_path=file_path, species_id=1
                     )
                 },
+                initial_age_per_layer={CanopyLayerName.dominant: 40.0},
                 x_ykj=339,
                 y_ykj=6675,
             )
@@ -467,6 +543,7 @@ def _stand_with_polygon(polygon) -> stand_data.StandData:
     return stand_data.StandData(
         site_fertility_class=3,
         allometry_file_per_layer={},
+        initial_age_per_layer={},
         x_ykj=338,
         y_ykj=6770,
         polygon=polygon,
@@ -565,7 +642,11 @@ def test_stand_data_document_accepts_the_source_crs():
 # %% stand_data.build_stand_params
 
 
-def _single_stand_document(allometry_file_per_layer, site_fertility_class=3):
+def _single_stand_document(
+    allometry_file_per_layer, site_fertility_class=3, initial_age_per_layer=None
+):
+    if initial_age_per_layer is None:
+        initial_age_per_layer = {layer: 25.0 for layer in allometry_file_per_layer}
     return stand_data.StandDataDocument(
         crs=stand_data.SOURCE_CRS,
         altitude=100.0,
@@ -574,6 +655,7 @@ def _single_stand_document(allometry_file_per_layer, site_fertility_class=3):
             StandID("known"): stand_data.StandData(
                 site_fertility_class=site_fertility_class,
                 allometry_file_per_layer=allometry_file_per_layer,
+                initial_age_per_layer=initial_age_per_layer,
                 x_ykj=339,
                 y_ykj=6675,
             )
@@ -598,7 +680,12 @@ def test_build_stand_params_matches_with_single_allometry_per_layer():
         ),
     }
     document = _single_stand_document(
-        allometry_file_per_layer=allometry_file_per_layer, site_fertility_class=4
+        allometry_file_per_layer=allometry_file_per_layer,
+        site_fertility_class=4,
+        initial_age_per_layer={
+            CanopyLayerName.dominant: 45.0,
+            CanopyLayerName.under: 12.0,
+        },
     )
 
     params = stand_data.build_stand_params(document, StandID("known"), n=5)
@@ -609,6 +696,13 @@ def test_build_stand_params_matches_with_single_allometry_per_layer():
             layers=allometry_file_per_layer, n=5
         )
     )
+    # Layers the stand has carry their recorded age; the one it doesn't
+    # (subdominant) starts at 0.0, since the engine needs every layer.
+    assert params.initial_canopylayer_age_years == {
+        CanopyLayerName.dominant: 45.0,
+        CanopyLayerName.subdominant: 0.0,
+        CanopyLayerName.under: 12.0,
+    }
 
 
 @given(

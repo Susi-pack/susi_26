@@ -58,6 +58,11 @@ def valid_susi_params(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -68,11 +73,6 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -153,6 +153,11 @@ def another_valid_susi_params(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -163,11 +168,6 @@ def another_valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test2",
             sfc_specification=1,
             hdom=None,

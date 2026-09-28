@@ -654,6 +654,7 @@ def _stand_data_document(
                         file_path=allometry_dir / "dominant.csv", species_id=1
                     )
                 },
+                initial_age_per_layer={CanopyLayerName.dominant: 40.0},
                 x_ykj=x_ykj,
                 y_ykj=y_ykj,
             )

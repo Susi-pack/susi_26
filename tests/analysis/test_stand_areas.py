@@ -43,6 +43,7 @@ def _stand_data(
                 file_path=allometry_dir / "pines.csv", species_id=1
             )
         },
+        initial_age_per_layer={CanopyLayerName.dominant: 40.0},
         x_ykj=339,
         y_ykj=6675,
         stand_area=stand_area,

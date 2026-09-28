@@ -102,7 +102,7 @@ class Susi:
             n_yrs=n_simulation_years,
             n_cols=self.parameters.site_parameters.n,
             sfc=self.parameters.sfc,
-            agearr=self.parameters.site_parameters.age,
+            agearr=self.parameters.age,
             allometry_params=self.parameters.stand_params.canopy_layer_allometry,
             photopara=self.parameters.photo_parameters,
         )  # create stand class
@@ -117,7 +117,7 @@ class Susi:
 
         # describe site parameters for user
         susi_io.print_site_description(
-            self.parameters.site_parameters, self.parameters.sfc
+            self.parameters.site_parameters, self.parameters.sfc, self.parameters.age
         )
 
         groundvegetation = Gvegetation(
@@ -276,7 +276,7 @@ class Susi:
                 scen[r],
             )
 
-            stand.reset_domain(self.parameters.site_parameters.age)
+            stand.reset_domain(self.parameters.age)
 
             out.write_scen(r, hdr_west, hdr_east)
 

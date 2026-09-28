@@ -12,7 +12,6 @@ import pytest
 from pydantic import ValidationError
 
 from susi.io.susi_parameter_model import (
-    CanopyLayerName,
     PeatTemperatureParams,
     PeatTypes,
     SiteParams,
@@ -26,11 +25,6 @@ def _make_site_params(**overrides):
     kwargs = dict(
         L=10.0,
         n=5,
-        initial_canopylayer_age_years={
-            CanopyLayerName.dominant: 70.0,
-            CanopyLayerName.subdominant: 70.0,
-            CanopyLayerName.under: 70.0,
-        },
         sitename="test",
         sfc_specification=1,
         hdom=None,

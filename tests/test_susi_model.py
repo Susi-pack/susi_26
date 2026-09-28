@@ -55,6 +55,11 @@ def valid_susi_params(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -65,11 +70,6 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -150,6 +150,11 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -160,11 +165,6 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -250,6 +250,11 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                         CanopyLayerName.under: None,
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -260,11 +265,6 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 70.0,
-                    CanopyLayerName.subdominant: 70.0,
-                    CanopyLayerName.under: 70.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,
@@ -324,10 +324,33 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
 def test_valid_stand_age_all_layers(valid_susi_params):
     """Test that valid stand ages within allometry range pass validation."""
     params = valid_susi_params
-    ages = params.site_parameters.initial_canopylayer_age_years
+    ages = params.stand_params.initial_canopylayer_age_years
     assert ages[CanopyLayerName.dominant] == 70.0
     assert ages[CanopyLayerName.subdominant] == 70.0
     assert ages[CanopyLayerName.under] == 70.0
+
+
+def test_age_is_the_initial_age_on_every_column(valid_susi_params):
+    age = valid_susi_params.age
+
+    assert set(age) == set(CanopyLayerName)
+    for layer_ages in age.values():
+        assert layer_ages.tolist() == [70.0] * valid_susi_params.site_parameters.n
+
+
+def test_stand_params_requires_an_initial_age_for_every_layer(valid_susi_params):
+    # The engine builds a Canopylayer for every layer, with or without
+    # allometry, so a missing age must fail here rather than as a KeyError
+    # deep in the run.
+    with pytest.raises(ValueError, match="under"):
+        StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=valid_susi_params.stand_params.canopy_layer_allometry,
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 0.0,
+            },
+        )
 
 
 def test_initial_dominant_age_below_minimum(test_data_path):
@@ -356,6 +379,11 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                         CanopyLayerName.under: None,
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 1.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -366,11 +394,6 @@ def test_initial_dominant_age_below_minimum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 1.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 10.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,
@@ -453,6 +476,11 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                         CanopyLayerName.under: None,
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 80.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -463,11 +491,6 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 80.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 10.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,
@@ -550,6 +573,11 @@ def test_subdominant_layer_validation(test_data_path):
                         CanopyLayerName.under: None,
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 1.0,
+                    CanopyLayerName.under: 10.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -560,11 +588,6 @@ def test_subdominant_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 40.0,
-                    CanopyLayerName.subdominant: 1.0,
-                    CanopyLayerName.under: 10.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,
@@ -647,6 +670,11 @@ def test_under_layer_validation(test_data_path):
                         CanopyLayerName.under: [1, 1, 1, 1, 1],
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 1.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -657,11 +685,6 @@ def test_under_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 40.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 1.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,
@@ -748,6 +771,11 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
                     CanopyLayerName.under: [3, 3, 3, 3, 3],
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -758,11 +786,6 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -848,6 +871,11 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                         CanopyLayerName.under: None,
                     },
                 ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
+                },
             ),
             canopy_parameters=CanopyParams(),
             organic_layer_parameters=OrganicLayerParams(),
@@ -858,11 +886,6 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 70.0,
-                    CanopyLayerName.subdominant: 70.0,
-                    CanopyLayerName.under: 70.0,
-                },
                 sitename="test",
                 sfc_specification=1,
                 hdom=None,

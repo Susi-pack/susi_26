@@ -110,12 +110,12 @@ class ParsedStand:
     y_ykj: int
     stem_count: int  # units: trees/ha
     mean_diameter: float  # cm
+    mean_age: int  # years
 
     # Optional parameters, only used for information in the stand_data.json dump
     main_group: Optional[int] = None
     sub_group: Optional[int] = None
     soil_type: Optional[int] = None
-    mean_age: Optional[int] = None  # years
     basal_area: Optional[float] = None  # m2/ha
     mean_height: Optional[float] = None  # m
     total_volume: Optional[float] = None  # m3/ha
@@ -404,6 +404,9 @@ def process_stand(
                 file_path=output_path, species_id=parsed_stand.main_species
             ),
         },
+        # Every species is pooled into the one dominant-layer curve (#276), so
+        # the dominant layer's age is the stand's tss:MeanAge.
+        initial_age_per_layer={CanopyLayerName.dominant: float(parsed_stand.mean_age)},
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
         polygon=parsed_stand.polygon,
@@ -411,7 +414,6 @@ def process_stand(
         main_group=parsed_stand.main_group,
         sub_group=parsed_stand.sub_group,
         soil_type=parsed_stand.soil_type,
-        mean_age=parsed_stand.mean_age,
         basal_area=parsed_stand.basal_area,
         mean_height=parsed_stand.mean_height,
         mean_diameter=parsed_stand.mean_diameter,

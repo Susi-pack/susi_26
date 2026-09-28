@@ -398,7 +398,7 @@ def outfig(
     plt.show()
 
 
-def print_site_description(spara, sfc):
+def print_site_description(spara, sfc, age):
     print("  + Site:")
     print("   + Number of columns:", spara.n)
     print("    - Site fertility class:")
@@ -406,9 +406,9 @@ def print_site_description(spara, sfc):
     print("  + Stand:")
     # print ('    - vol:', np.round(spara['vol'],0),'m3/ha' )
     print("    - age:")
-    print("        dominant:", spara.age["dominant"], "yrs")
-    print("        subdominat:", spara.age["subdominant"], "yrs")
-    print("        under:", spara.age["under"], "yrs")
+    print("        dominant:", age["dominant"], "yrs")
+    print("        subdominat:", age["subdominant"], "yrs")
+    print("        under:", age["under"], "yrs")
 
     print("  + Soil: ")
     if spara.vonP:

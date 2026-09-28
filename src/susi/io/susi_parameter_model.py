@@ -673,10 +673,26 @@ class StandParams(StrictFrozenModel):
     )
 
     canopy_layer_allometry: CanopyLayerAllometry
-    # TODO:
-    # age: dict[int, float] and soil_type: int are explicitly NOT in this ticket's scope --
-    # soil_type's mapping to peat_type/peat_type_bottom is open work tracked by #280, and
-    # age has no consumer until that lands either. Both stay future work, not invented here.
+    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
+        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
+    )
+
+    @field_validator("initial_canopylayer_age_years")
+    @classmethod
+    def every_layer_has_an_initial_age(
+        cls, ages: dict[CanopyLayerName, float]
+    ) -> dict[CanopyLayerName, float]:
+        # The engine builds a Canopylayer for every layer, including ones with
+        # no allometry (Stand.__init__, Stand.reset_domain), so each needs an
+        # age. Without this check a missing one is a KeyError deep in the run.
+        missing = [layer.value for layer in CanopyLayerName if layer not in ages]
+        if missing:
+            raise ValueError(
+                f"initial_canopylayer_age_years is missing canopy layers {missing}; "
+                f"every layer {[layer.value for layer in CanopyLayerName]} needs an "
+                "initial age (use 0.0 for a layer the stand doesn't have)"
+            )
+        return ages
 
 
 class SiteParams(StrictFrozenModel):
@@ -685,10 +701,6 @@ class SiteParams(StrictFrozenModel):
     """
 
     # Forest
-    # Age of different forest layers at the beginning of the simulation
-    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
-        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
-    )
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -767,14 +779,6 @@ class SiteParams(StrictFrozenModel):
         description="Use None for no fertilization.", default=None
     )
     peat_temperature: PeatTemperatureParams
-
-    @property
-    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
-        """Age of stand for all nodes along the strip"""
-        return {
-            layer_name: self.initial_canopylayer_age_years[layer_name] * np.ones(self.n)
-            for layer_name in CanopyLayerName
-        }
 
     @field_validator("h_mor", mode="before")
     @classmethod
@@ -869,6 +873,15 @@ class SusiParams(StrictFrozenModel):
             * self.stand_params.site_fertility_class
         )
 
+    @property
+    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
+        """Age of stand for all nodes along the strip"""
+        return {
+            layer_name: self.stand_params.initial_canopylayer_age_years[layer_name]
+            * np.ones(self.site_parameters.n)
+            for layer_name in CanopyLayerName
+        }
+
     @model_validator(mode="after")
     def allometry_files_exist(self) -> Self:
         """
@@ -958,7 +971,7 @@ class SusiParams(StrictFrozenModel):
             }
             self._validate_layer_age(
                 layer_name=canopy_layer.value,
-                initial_age=self.site_parameters.initial_canopylayer_age_years[
+                initial_age=self.stand_params.initial_canopylayer_age_years[
                     canopy_layer
                 ],
                 allometry_data=layer_zones,

@@ -576,7 +576,10 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.polygon.equals(parsed_stand.polygon)
     assert stand_data.stand_area == parsed_stand.area
     assert stand_data.soil_type == parsed_stand.soil_type
-    assert stand_data.mean_age == parsed_stand.mean_age
+    # The one pooled curve sits on the dominant layer, so that's the only age.
+    assert stand_data.initial_age_per_layer == {
+        CanopyLayerName.dominant: float(parsed_stand.mean_age)
+    }
 
 
 def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_path):

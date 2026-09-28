@@ -638,9 +638,8 @@ def determine_dominant_and_subdominant_species(
     deliberately does not duplicate the dominant species for a monoculture
     stand."""
     basal_areas = {
-        1: strata.pine.basal_area,
-        2: strata.spruce.basal_area,
-        3: strata.deciduous.basal_area,
+        species_code: species_stratum(strata, species_code).basal_area
+        for species_code in _SPECIES_SLOT
     }
     ranked = sorted(
         basal_areas, key=lambda species_code: basal_areas[species_code], reverse=True
@@ -728,9 +727,16 @@ def build_stands(
 # docstring there.
 
 
+# The PerSpecies slot each species code names. The one species-code -> slot
+# mapping in this tool: species_stratum and isolate_species_layer both read it.
+# Moving it into shared_allometry_tool_utils/ is create-input-structure
+# ticket 12's job.
+_SPECIES_SLOT = {1: "pine", 2: "spruce", 3: "deciduous"}
+
+
 def species_stratum(strata: PerSpecies[TreeStratum], species_code: int) -> TreeStratum:
     """The one TreeStratum a species code (1=pine, 2=spruce, 3=deciduous) refers to."""
-    return {1: strata.pine, 2: strata.spruce, 3: strata.deciduous}[species_code]
+    return getattr(strata, _SPECIES_SLOT[species_code])
 
 
 def isolate_species_layer(
@@ -739,14 +745,12 @@ def isolate_species_layer(
     """Zeroes every species slot except active_species -- this is how a
     single canopy layer (dominant or subdominant) is modeled as that one
     species growing alone (see docs/adr/0002)."""
-    if active_species == 1:
-        return PerSpecies(pine=strata.pine, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM)
-    if active_species == 2:
-        return PerSpecies(
-            pine=ZERO_STRATUM, spruce=strata.spruce, deciduous=ZERO_STRATUM
-        )
-    return PerSpecies(
-        pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=strata.deciduous
+    all_zero = PerSpecies(
+        pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM
+    )
+    return dataclasses.replace(
+        all_zero,
+        **{_SPECIES_SLOT[active_species]: species_stratum(strata, active_species)},
     )
 
 
@@ -879,19 +883,30 @@ def process_stand(
                 config.step_years,
             )
 
+        # Each layer is one species grown alone (docs/adr/0002), so it starts
+        # at that species' own stratum age, not the stand's mean age.
         allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=plan.dominant_csv, species_id=stand.dominant_species
+            ),
+        }
+        initial_age_per_layer: dict[CanopyLayerName, float] = {
+            CanopyLayerName.dominant: float(
+                species_stratum(stand.strata, stand.dominant_species).age
             ),
         }
         if plan.subdominant_csv is not None:
             allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
                     file_path=plan.subdominant_csv, species_id=stand.subdominant_species
                 )
+            initial_age_per_layer[CanopyLayerName.subdominant] = float(
+                species_stratum(stand.strata, stand.subdominant_species).age
+            )
 
         stand_data = StandData(
             site_fertility_class=stand.fertilityclass,
             allometry_file_per_layer=allometry_file_per_layer,
+            initial_age_per_layer=initial_age_per_layer,
             x_ykj=stand.x_ykj,
             y_ykj=stand.y_ykj,
             polygon=stand.geometry,
@@ -904,12 +919,6 @@ def process_stand(
             developmentclass=stand.developmentclass,
             drainagestate=stand.drainagestate,
             soil_type=stand.soiltype,
-            mean_age=stand.stand_meanage,
-            # StandData's per-species basal_area_*/stem_count_* fields are
-            # deliberately left unset here, the same way drainagestate and
-            # developmentclass are only ever populated by one source tool:
-            # xml_to_allometry.py is the tool whose consumer (paroninkorpi.py)
-            # needs them.
         )
 
         # Both tables computed successfully (or there is no subdominant

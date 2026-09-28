@@ -74,6 +74,11 @@ def _make_susi_params(*, cutting_management, n: int = 5):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -84,11 +89,6 @@ def _make_susi_params(*, cutting_management, n: int = 5):
         site_parameters=SiteParams(
             L=10.0,
             n=n,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -326,11 +326,6 @@ def _site_params_kwargs(n: int = 5, **overrides):
     kwargs = dict(
         L=10.0,
         n=n,
-        initial_canopylayer_age_years={
-            CanopyLayerName.dominant: 70.0,
-            CanopyLayerName.subdominant: 70.0,
-            CanopyLayerName.under: 70.0,
-        },
         sitename="test",
         sfc_specification=1,
         hdom=None,

@@ -51,6 +51,7 @@ def _stand_params_reading(*file_paths: Path) -> StandParams:
         canopy_layer_allometry=CanopyLayerAllometry(
             allometry_file_registry=registry, pointers=pointers
         ),
+        initial_canopylayer_age_years={layer: 70.0 for layer in CanopyLayerName},
     )
 
 

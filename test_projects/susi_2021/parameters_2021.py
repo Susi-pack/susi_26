@@ -693,6 +693,11 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: site_params.Aini,
+                CanopyLayerName.subdominant: 0.0,
+                CanopyLayerName.under: 0.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -703,11 +708,6 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
         site_parameters=SiteParams(
             L=L,
             n=n,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: site_params.Aini,
-                CanopyLayerName.subdominant: 0.0,
-                CanopyLayerName.under: 0.0,
-            },
             sitename="susirun",
             sfc_specification=1,
             # Measured values, not model inputs: None, as in the original's

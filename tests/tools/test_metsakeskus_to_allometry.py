@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -518,6 +519,19 @@ def test_determine_dominant_and_subdominant_species_monoculture_keeps_zero_ba_su
 # %% isolate_species_layer
 
 
+@pytest.mark.parametrize(
+    "species_code, slot", [(1, "pine"), (2, "spruce"), (3, "deciduous")]
+)
+def test_species_stratum_maps_each_code_to_its_slot(species_code, slot):
+    strata = _strata(10, 20, 5)
+    assert m.species_stratum(strata, species_code) is getattr(strata, slot)
+
+
+def test_species_stratum_rejects_an_unknown_species_code():
+    with pytest.raises(KeyError):
+        m.species_stratum(_strata(10, 20, 5), 4)
+
+
 def test_isolate_species_layer_zeroes_other_species():
     strata = _strata(10, 20, 5)
     layer = m.isolate_species_layer(strata, active_species=2)
@@ -1017,7 +1031,6 @@ def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
     # field failing its constraint) must raise before either CSV is written,
     # the same invariant test_process_stand_leaves_no_stray_file_when_
     # subdominant_fails already guards for the two growth tables.
-    import dataclasses
 
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = dataclasses.replace(m.build_stand(candidate), area=0.0)
@@ -1069,7 +1082,6 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.developmentclass == stand.developmentclass
     assert stand_data.drainagestate == stand.drainagestate
     assert stand_data.soil_type == stand.soiltype
-    assert stand_data.mean_age == pytest.approx(stand.stand_meanage)
     assert stand_data.basal_area == pytest.approx(stand.stand_basalarea)
     assert stand_data.mean_height == pytest.approx(stand.stand_meanheight)
     assert stand_data.mean_diameter == pytest.approx(stand.stand_meandiameter)
@@ -1128,6 +1140,53 @@ def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_pa
     subdominant = allometry_file_per_layer[CanopyLayerName.subdominant]
     assert subdominant.file_path == outcome.subdominant_csv
     assert subdominant.species_id == stand.subdominant_species
+
+
+def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
+    # Pine (age 50) dominates spruce (age 20). The stand's basal-area-weighted
+    # mean age is (50*10 + 20*5) / 15 = 40, which neither layer should get:
+    # each layer is one species grown alone (docs/adr/0002), so it starts at
+    # that species' own stratum age.
+    candidate = dataclasses.replace(
+        _candidate("1", pine_ba=10, spruce_ba=5),
+        strata=m.PerSpecies(
+            pine=m.TreeStratum(
+                age=50, basal_area=10, stem_count=100, mean_diameter=15, mean_height=12
+            ),
+            spruce=m.TreeStratum(
+                age=20, basal_area=5, stem_count=100, mean_diameter=15, mean_height=12
+            ),
+            deciduous=m.ZERO_STRATUM,
+        ),
+    )
+    stand = m.build_stand(candidate)
+    assert stand.stand_meanage == pytest.approx(40)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.stand_data.initial_age_per_layer == {
+        CanopyLayerName.dominant: 50.0,
+        CanopyLayerName.subdominant: 20.0,
+    }
+
+
+def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
+    candidate = _candidate("1", pine_ba=10)
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.stand_data.initial_age_per_layer == {
+        CanopyLayerName.dominant: 30.0
+    }
 
 
 def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tmp_path):

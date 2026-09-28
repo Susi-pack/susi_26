@@ -61,6 +61,11 @@ PARAMETERS = SusiParams(
                 CanopyLayerName.under: None,
             },
         ),
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 60.0,
+            CanopyLayerName.subdominant: 0.0,
+            CanopyLayerName.under: 0.0,
+        },
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -71,11 +76,6 @@ PARAMETERS = SusiParams(
     site_parameters=SiteParams(
         L=40.0,
         n=_N_SOIL_COLS,
-        initial_canopylayer_age_years={
-            CanopyLayerName.dominant: 60.0,
-            CanopyLayerName.subdominant: 0.0,
-            CanopyLayerName.under: 0.0,
-        },
         sitename="susirun",
         sfc_specification=1,
         hdom=None,
