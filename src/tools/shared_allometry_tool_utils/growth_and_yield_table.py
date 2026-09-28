@@ -57,3 +57,17 @@ def build_growth_and_yield_table(
     return growth_and_yield_table.get_table(
         start_year=start_year, end_year=end_year, step_years=step_years
     )
+
+
+def initial_age(table: pd.DataFrame) -> float:
+    """The age a growth-and-yield table's curve starts at: its Year-0 row's Age,
+    which Growth_and_Yield_Table sets to its basal-area-weighted pooled age of
+    the strata it was given.
+
+    This is read off the table rather than recomputed from the strata: the
+    growth model also estimates a missing basal area from stem count and
+    diameter, and rounds the pooled age, so a copy of the formula here would
+    drift from it. `.item()` raises unless there's exactly one Year-0 row, so a
+    change in the table's shape fails loudly instead of recording a wrong age.
+    """
+    return float(table.loc[table["Year"] == 0, "Age"].item())

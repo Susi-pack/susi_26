@@ -322,7 +322,6 @@ def test_get_stand_data_from_xml_parses_a_full_stand():
     assert parsed_stand.main_species == 1
     assert parsed_stand.tree_strata.pine.basal_area == pytest.approx(20.0)
     assert parsed_stand.soil_type is None
-    assert parsed_stand.mean_age == 40
 
 
 def test_get_stand_data_from_xml_parses_soil_type_when_present():
@@ -577,9 +576,25 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.stand_area == parsed_stand.area
     assert stand_data.soil_type == parsed_stand.soil_type
     # The one pooled curve sits on the dominant layer, so that's the only age.
-    assert stand_data.initial_age_per_layer == {
-        CanopyLayerName.dominant: float(parsed_stand.mean_age)
-    }
+    # This fixture has a single stratum (pine, age 40), so the pooled age is
+    # just that stratum's age.
+    assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 40.0}
+
+
+def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_path):
+    # The two-species fixture stand: pine age 40 (G 20.0) and spruce age 35
+    # (G 8.0), with tss:MeanAge 40. The growth model pools the strata's ages
+    # weighted by basal area -- (40*20 + 35*8) / 28 = 38.57 -- and rounds, so
+    # the curve starts at 39. The recorded initial age must be the curve's
+    # start age, not the inventory's tss:MeanAge.
+    parsed_stand = _parsed_stand_data("1", include_second_species=True)
+    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+
+    stand_data = xml_to_allometry.process_stand(
+        config, parsed_stand, PEAT=1, output_dir=tmp_path
+    )
+
+    assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 39.0}
 
 
 def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_path):

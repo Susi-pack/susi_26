@@ -122,7 +122,6 @@ The XML file must follow this hierarchical structure:
         <TreeStandDataDate>
           <TreeStandSummary>
             <MeanDiameter>...</MeanDiameter>
-            <MeanAge>...</MeanAge>
             <BasalArea>...</BasalArea>
             <MeanHeight>...</MeanHeight>
             <Volume>...</Volume>
@@ -154,7 +153,6 @@ The XML file must follow this hierarchical structure:
 | `StandBasicData/MainGroup`, `SubGroup`, `Area` | Parsed unconditionally; a stand missing any of these aborts the whole run rather than being skipped. |
 | `StandBasicData/PolygonGeometry` | Stand boundary as GML polygon |
 | `TreeStandSummary/MeanDiameter` | Mean diameter at breast height (cm) |
-| `TreeStandSummary/MeanAge` | Mean stand age (years) |
 | `TreeStandSummary/BasalArea` | Basal area (m²/ha) |
 | `TreeStandSummary/MeanHeight` | Mean height (m) |
 | `TreeStandSummary/Volume` | Total volume (m³/ha) |

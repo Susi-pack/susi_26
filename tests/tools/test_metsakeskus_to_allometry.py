@@ -866,7 +866,6 @@ def test_build_stand_ignores_preserved_zero_basal_area_species_in_stand_level_av
     assert not skipped
     stand = m.build_stand(viable[0])
 
-    assert stand.stand_meanage == pytest.approx(45.0)
     assert stand.stand_meandiameter == pytest.approx(20.0)
     assert stand.stand_meanheight == pytest.approx(18.0)
 
@@ -1143,10 +1142,10 @@ def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_pa
 
 
 def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
-    # Pine (age 50) dominates spruce (age 20). The stand's basal-area-weighted
-    # mean age is (50*10 + 20*5) / 15 = 40, which neither layer should get:
-    # each layer is one species grown alone (docs/adr/0002), so it starts at
-    # that species' own stratum age.
+    # Pine (age 50) dominates spruce (age 20). Pooling both species by basal
+    # area would give (50*10 + 20*5) / 15 = 40, which neither layer should
+    # get: each layer is one species grown alone (docs/adr/0002), so its
+    # curve starts at that species' own stratum age.
     candidate = dataclasses.replace(
         _candidate("1", pine_ba=10, spruce_ba=5),
         strata=m.PerSpecies(
@@ -1160,7 +1159,6 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
         ),
     )
     stand = m.build_stand(candidate)
-    assert stand.stand_meanage == pytest.approx(40)
     config = m.ExtractionConfig(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )

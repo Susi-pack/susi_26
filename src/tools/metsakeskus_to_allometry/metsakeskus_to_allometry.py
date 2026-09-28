@@ -34,6 +34,7 @@ from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
 )
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_isolated_growth_and_yield_table,
+    initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
@@ -134,7 +135,6 @@ class ParsedStand:
     drainagestate: int
     soiltype: int | None
     strata: PerSpecies[TreeStratum]
-    stand_meanage: float
     stand_basalarea: float
     stand_meanheight: float
     stand_meandiameter: float
@@ -659,13 +659,8 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
     strata = candidate.strata
     stand_total_ba = total_basal_area(strata)
 
-    # Stand-level age/height/diameter: basal-area-weighted across the three
+    # Stand-level height/diameter: basal-area-weighted across the three
     # species slots (mirrors aggregate_species_group's weighting, one level up).
-    stand_age = (
-        strata.pine.age * strata.pine.basal_area
-        + strata.spruce.age * strata.spruce.basal_area
-        + strata.deciduous.age * strata.deciduous.basal_area
-    ) / stand_total_ba
     stand_height = (
         strata.pine.mean_height * strata.pine.basal_area
         + strata.spruce.mean_height * strata.spruce.basal_area
@@ -690,7 +685,6 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         drainagestate=candidate.drainagestate,
         soiltype=candidate.soiltype,
         strata=strata,
-        stand_meanage=float(stand_age),
         stand_basalarea=float(stand_total_ba),
         stand_meanheight=float(stand_height),
         stand_meandiameter=float(stand_diameter),
@@ -883,24 +877,28 @@ def process_stand(
                 config.step_years,
             )
 
-        # Each layer is one species grown alone (docs/adr/0002), so it starts
-        # at that species' own stratum age, not the stand's mean age.
+        # Each layer starts at the age its own curve starts at: the growth
+        # model's basal-area-weighted pooled age of the strata it was grown
+        # from. Each layer is one species grown alone (docs/adr/0002), so
+        # that's the species' own stratum age -- never a pooled stand-level
+        # age -- as long as the stratum age is already a whole number
+        # (aggregate_species_group rounds it; the growth model rounds again).
+        # It's read off the table either way, the same way
+        # xml_to_allometry.py does, so it's always the curve's real start.
         allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=plan.dominant_csv, species_id=stand.dominant_species
             ),
         }
         initial_age_per_layer: dict[CanopyLayerName, float] = {
-            CanopyLayerName.dominant: float(
-                species_stratum(stand.strata, stand.dominant_species).age
-            ),
+            CanopyLayerName.dominant: initial_age(dominant_table),
         }
-        if plan.subdominant_csv is not None:
+        if plan.subdominant_csv is not None and subdominant_table is not None:
             allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
                     file_path=plan.subdominant_csv, species_id=stand.subdominant_species
                 )
-            initial_age_per_layer[CanopyLayerName.subdominant] = float(
-                species_stratum(stand.strata, stand.subdominant_species).age
+            initial_age_per_layer[CanopyLayerName.subdominant] = initial_age(
+                subdominant_table
             )
 
         stand_data = StandData(
