@@ -38,6 +38,8 @@ dev = [
     "nbstripout>=0.9.1",
     "pre-commit>=4.0.1",
     "pytest>=9.0.2",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
     "zensical>=0.0.33",
 ]
 notebook = ["jupyterlab>=4.6,<5", "ipykernel>=6.30"]
@@ -61,6 +63,12 @@ susi-init-project = "tools.init_project.init_project:main"
 susi-xml-to-allometry = "tools.xml_to_allometry.xml_to_allometry:main"
 susi-metsakeskus-to-allometry = "tools.metsakeskus_to_allometry.metsakeskus_to_allometry:main"
 susi-new-growth-allometry = "tools.new_growth_allometry.new_growth_allometry:main"
+
+[tool.ty.environment]
+# Notebooks import their project's sibling modules (e.g. figures_2021.ipynb's
+# `from parameters_2021 import ...`). ty resolves those for a .py script next
+# to them, but not for a notebook, so their folders are listed here.
+extra-paths = ["test_projects/susi_2021"]
 
 [tool.ty.src]
 include = [
