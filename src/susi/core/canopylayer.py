@@ -50,6 +50,7 @@ class Canopylayer:
         agearr,
         photopara,
         nut_stat,
+        growth_mode, #dynamic and fixed growth model options
     ):
         self.name = (
             name  # name of the canopy layer e.g. 'dominant', 'subdominant', etc.
@@ -59,6 +60,7 @@ class Canopylayer:
         self.agearr = agearr.copy()  # age of the canopy layer, yrs
         self.nscens = nscens  # number of scenarion in the simulation
         self.yrs = yrs  # number od years in the simulation
+        self.growth_mode = growth_mode,
         self.remaining_share = np.ones(
             self.ncols
         )  # share of remaining stems after thinning 0...1
@@ -610,6 +612,18 @@ class Canopylayer:
         bm_increment = self.NPP
         bm = self.biomass
 
+        #fixed stand structure should not let the canopy structure drift.
+        #leaf_dynamics() sizes its target foliage mass from bm + bm_increment,
+        # so feeding it the real NPP-derived increment would keep growing LAI
+        # year over year even while stem biomass/age are held fixed, which
+        # would leak stand-growth effects back into a water-management-only
+        # comparison. In "fixed" mode we zero the increment fed to leaf
+        # dynamics so it re-targets the same (fixed) biomass every year;
+        # self.NPP itself is left untouched for diagnostics/outputs.
+        leaf_bm_increment = (
+            bm_increment if self.growth_mode == "dynamic" else np.zeros_like(bm_increment)
+                             )
+
         current_leafmass = self.leafmass
 
         for zone in self.zones:
@@ -671,21 +685,25 @@ class Canopylayer:
             print (np.round(np.mean(self.allodic[1].functions.bm_to_vol(bm)*self.stems),2))
             #print (np.round(np.mean(self.allodic[1].functions.age_to_vol(self.agearr)*self.stems), 2))
         """
-        self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
 
-        # Increment year by one
-        self.agearr += 1
+        if self.growth_mode == "dynamic":
+            self.update(self.biomass + np.maximum(delta_bm_noleaves, 0.0))
+            # Increment year by one
+            self.agearr += 1
 
-        # if self.name=='dominant': print (np.round(np.mean(delta_bm_noleaves),2), 'delta no leaves' )
+            # if self.name=='dominant': print (np.round(np.mean(delta_bm_noleaves),2), 'delta no leaves' )
 
-        self.volumegrowth = self.volume - vol_ini
-        """
-        if self.name=='dominant':
-            print (np.round(np.mean(self.volumegrowth*self.stems),2), 'volumegrowth')
-            print (np.round(np.mean(self.biomass),2), 'biomass after' )
-            print (np.round(np.mean(self.volume*self.stems),2), 'volume after' )
-            print (np.round(np.mean(self.stems),2), 'stems after' )
-        """
+            self.volumegrowth = self.volume - vol_ini
+        else:
+            self.update(self.biomass) #recomputes biomass at fixed biomass without growing
+            self.volumegrowth = self.volume - vol_ini
+            """
+            if self.name=='dominant':
+                print (np.round(np.mean(self.volumegrowth*self.stems),2), 'volumegrowth')
+                print (np.round(np.mean(self.biomass),2), 'biomass after' )
+                print (np.round(np.mean(self.volume*self.stems),2), 'volume after' )
+                print (np.round(np.mean(self.stems),2), 'stems after' )
+            """
 
     def leaf_dynamics(
         self,

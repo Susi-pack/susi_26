@@ -105,6 +105,7 @@ class Susi:
             agearr=self.parameters.site_parameters.age,
             allometry_params=self.parameters.stand_params.canopy_layer_allometry,
             photopara=self.parameters.photo_parameters,
+            growth_mode=self.parameters.simulation_config.growth_mode,
         )  # create stand class
         stand.update()
 

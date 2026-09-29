@@ -57,6 +57,7 @@ class Stand:
         agearr,
         allometry_params,
         photopara,
+        growth_mode,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -75,6 +76,8 @@ class Stand:
                 layer, either None (layer absent everywhere) or a list of zone ids,
                 one per soil column
             photopara - photosynthesis parameters used in the assimilation model
+             growth_mode - "dynamic" (default annual growth from NPP) or "fixed"
+                (hold biomass/age, leaf growth constant, only recompute derived variables)
         """
         self.n_cols = n_cols  # number of columns along the strip
         self.n_scenarios = (
@@ -112,6 +115,7 @@ class Stand:
                 agearr[layer.value],
                 photopara,
                 self.nut_stat,
+                growth_mode,
             )
         self.dominant = canopylayers[CanopyLayerName.dominant]
         self.subdominant = canopylayers[CanopyLayerName.subdominant]

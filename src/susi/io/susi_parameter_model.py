@@ -2,7 +2,7 @@ from functools import lru_cache, cached_property
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Self, Union, TypeAlias
+from typing import Callable, Literal, Self, Union, TypeAlias
 import numpy as np
 import pandas as pd
 
@@ -72,6 +72,10 @@ class SimulationConfig(StrictFrozenModel):
     # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
+    growth_mode: Literal["dynamic", "fixed"] = Field(
+        default="dynamic"
+        description="whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed"
+    )
 
 
 class WeatherParams(StrictFrozenModel):
