@@ -74,7 +74,7 @@ class SimulationConfig(StrictFrozenModel):
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
     growth_mode: Literal["dynamic", "fixed"] = Field(
-        default="dynamic"
+        default="dynamic",
         description="whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed"
     )
 
