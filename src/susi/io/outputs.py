@@ -2632,14 +2632,15 @@ class Outputs:
         self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4 * 27.0
 
     def write_fertilization(self, scen, year, fertilization_effect):
+        # The releases are single floats; netCDF4 spreads each one across all columns
         self.ncf["fertilization"]["n_release"][scen, year, :] = (
-            fertilization_effect.nutrient_release["N"]
+            fertilization_effect.N_release
         )
         self.ncf["fertilization"]["p_release"][scen, year, :] = (
-            fertilization_effect.nutrient_release["P"]
+            fertilization_effect.P_release
         )
         self.ncf["fertilization"]["k_release"][scen, year, :] = (
-            fertilization_effect.nutrient_release["K"]
+            fertilization_effect.K_release
         )
 
     def write_export(self, scen, year, esmass):

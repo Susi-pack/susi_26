@@ -84,7 +84,6 @@ exclude = [
     "src/susi/core/canopygrid.py",
     "src/susi/core/canopylayer.py",
     "src/susi/core/esom.py",
-    "src/susi/core/fertilization.py",
     "src/susi/core/gvegetation.py",
     "src/susi/core/methane.py",
     "src/susi/core/mosslayer.py",
