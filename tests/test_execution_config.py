@@ -1,31 +1,32 @@
 import datetime
-import pytest
 from pathlib import Path
+
+import pytest
 from pydantic import ValidationError
 
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
-    SusiParams,
-    WeatherParams,
-    SimulationConfig,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
+    LocationsForPhotoParams,
+    NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
-    SiteParams,
-    StandParams,
-    PeatTypes,
-    get_photo_parameters_by_location,
-    LocationsForPhotoParams,
-    h_mor_from_drainage_and_mass_mor_Pitkanen,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
     PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandardNPKFertilizationParameters,
+    StandParams,
+    SusiParams,
     Thinning,
-    CuttingManagementParams,
+    WeatherParams,
+    get_photo_parameters_by_location,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 
 

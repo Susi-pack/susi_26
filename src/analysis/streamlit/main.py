@@ -10,7 +10,6 @@ def load_default_settings_into_session_state() -> None:
             "projects_root": AppSettings().projects_root,
         }
 
-    return None
 
 
 load_default_settings_into_session_state()

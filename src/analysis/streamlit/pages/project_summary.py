@@ -1,11 +1,11 @@
 import streamlit as st
 
-from analysis.streamlit.components import folder_selection, netcdf_reader
+import susi.io.load_output_data as load_output
 from analysis.shared_reporting_utils.project_summary import (
     SUMMARY_VARIABLES,
     build_summary_dataframe,
 )
-import susi.io.load_output_data as load_output
+from analysis.streamlit.components import folder_selection, netcdf_reader
 
 st.header("Project summary")
 

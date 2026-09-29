@@ -5,29 +5,29 @@
 
 import datetime
 
-from susi.io.susi_parameter_model import (
-    PeatTypes,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
-    CanopyLayerAllometry,
-    CanopyLayerName,
-    CanopyParams,
-    OrganicLayerParams,
-    OutputParams,
-    PeatTemperatureParams,
-    get_photo_parameters_by_location,
-    LocationsForPhotoParams,
-    h_mor_from_drainage_and_mass_mor_Pitkanen,
-    AllometryFileAndSpecies,
-)
 from susi.io.project_layout import (
     allometry_dir_for_project,
     data_dir_for_project,
+)
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+    CanopyParams,
+    LocationsForPhotoParams,
+    NutrientFertilizationParameters,
+    OrganicLayerParams,
+    OutputParams,
+    PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandardNPKFertilizationParameters,
+    StandParams,
+    SusiParams,
+    WeatherParams,
+    get_photo_parameters_by_location,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 from susi.io.utils import repo_root
 

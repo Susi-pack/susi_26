@@ -13,13 +13,14 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from shapely.geometry import MultiPolygon, Point, Polygon
 
+from susi.io import stand_data, susi_parameter_model
 from susi.io.load_output_data import StandID
+from susi.io.project_layout import STAND_DATA_FILENAME
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
 )
-from susi.io import stand_data, susi_parameter_model
 
 # %% stand_data.point_to_ykj
 
@@ -372,7 +373,7 @@ def _project_inputs_with_allometry(root: Path, stand_ids: list[str]):
     files = {stand_id: allometry_dir / f"{stand_id}.csv" for stand_id in stand_ids}
     for file_path in files.values():
         file_path.write_text("Age\n1\n")
-    return _document_with_allometry(files), inputs_dir / stand_data.STAND_DATA_FILENAME
+    return _document_with_allometry(files), inputs_dir / STAND_DATA_FILENAME
 
 
 def _raw_file_paths(json_path: Path) -> dict[str, str]:
@@ -427,7 +428,7 @@ def test_a_moved_document_points_into_its_new_location(tmp_path):
     new_inputs_dir.parent.mkdir(parents=True)
     shutil.move(json_path.parent, new_inputs_dir)
     loaded = stand_data.load_stand_data_document_from_json(
-        new_inputs_dir / stand_data.STAND_DATA_FILENAME
+        new_inputs_dir / STAND_DATA_FILENAME
     )
 
     dominant = loaded.stands[StandID("1")].allometry_file_per_layer[
@@ -438,7 +439,7 @@ def test_a_moved_document_points_into_its_new_location(tmp_path):
 
 
 def test_load_does_not_need_the_allometry_files_to_exist(tmp_path):
-    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    json_path = tmp_path / "inputs" / STAND_DATA_FILENAME
     _write_raw_document_with_file_path(json_path, "allometry/never-written.csv")
 
     loaded = stand_data.load_stand_data_document_from_json(json_path)
@@ -461,7 +462,7 @@ def test_load_does_not_need_the_allometry_files_to_exist(tmp_path):
     ],
 )
 def test_dump_rejects_an_allometry_file_outside_the_document_folder(tmp_path, outside):
-    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    json_path = tmp_path / "inputs" / STAND_DATA_FILENAME
     json_path.parent.mkdir()
     file_path = outside(tmp_path)
     document = _document_with_allometry({"stand-7": file_path})
@@ -483,7 +484,7 @@ def test_dump_rejects_an_allometry_file_outside_the_document_folder(tmp_path, ou
     ],
 )
 def test_load_rejects_absolute_and_dotdot_paths(tmp_path, bad_file_path):
-    json_path = tmp_path / "inputs" / stand_data.STAND_DATA_FILENAME
+    json_path = tmp_path / "inputs" / STAND_DATA_FILENAME
     _write_raw_document_with_file_path(json_path, bad_file_path)
 
     with pytest.raises(pydantic.ValidationError) as error:
@@ -557,7 +558,7 @@ def test_stand_polygon_roundtrips_through_dump_and_load_with_its_holes(tmp_path)
         ddy=1250.0,
         stands={StandID("1"): _stand_with_polygon(_SQUARE_WITH_HOLE)},
     )
-    output_path = tmp_path / stand_data.STAND_DATA_FILENAME
+    output_path = tmp_path / STAND_DATA_FILENAME
 
     stand_data.dump_stand_data_document(output_path=output_path, document=document)
     loaded = stand_data.load_stand_data_document_from_json(output_path)

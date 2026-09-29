@@ -25,6 +25,13 @@ from susi.io.project_layout import (
     allometry_dir_for_project,
     stand_data_path_for_project,
 )
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    StandData,
+    StandDataDocument,
+    centroid_to_ykj,
+    dump_stand_data_document,
+)
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
@@ -32,8 +39,14 @@ from susi.io.susi_parameter_model import (
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
 )
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
+    resolve_config_path,
+)
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_isolated_growth_and_yield_table,
+)
+from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
@@ -46,21 +59,10 @@ from tools.shared_allometry_tool_utils.print_formatting import (
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.cli_paths import (
-    finalize_cli_config,
-    resolve_config_path,
-)
 from tools.shared_allometry_tool_utils.tree_stratum import (
+    ZERO_STRATUM,
     PerSpecies,
     TreeStratum,
-    ZERO_STRATUM,
-)
-from susi.io.stand_data import (
-    SOURCE_CRS,
-    StandData,
-    StandDataDocument,
-    centroid_to_ykj,
-    dump_stand_data_document,
 )
 
 # %% Constants -- hard-coded, non-negotiable
@@ -490,7 +492,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
         weighted_age = rows["age"].mean()
         weighted_diameter = rows["meandiameter"].mean()
         weighted_height = rows["meanheight"].mean()
-        age = int(round(weighted_age)) if pd.notna(weighted_age) else 0
+        age = round(weighted_age) if pd.notna(weighted_age) else 0
         diameter = float(weighted_diameter) if pd.notna(weighted_diameter) else 0.0
         height = float(weighted_height) if pd.notna(weighted_height) else 0.0
 

@@ -1,18 +1,18 @@
 from multiprocessing import Pool
 
-from susi.io.execution_config import SimulationParams, MultipleSusis
-from susi.core.susi_main import Susi
-from susi.io.metadata_model import SimulationMetaData
-
 from parameters_2021 import (
     PROJECT_DIR,
     RUN_ID,
     SITE_LABELS,
     SiteLabel,
-    get_stand_label_from_site_label,
-    get_scenario_label_from_site_label,
     assign_susi_params_to_site,
+    get_scenario_label_from_site_label,
+    get_stand_label_from_site_label,
 )
+
+from susi.core.susi_main import Susi
+from susi.io.execution_config import MultipleSusis, SimulationParams
+from susi.io.metadata_model import SimulationMetaData
 
 
 def create_all_simulation_params(

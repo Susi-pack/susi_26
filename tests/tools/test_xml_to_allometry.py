@@ -1,4 +1,5 @@
 import json
+
 import pytest
 import xmltodict
 from hypothesis import given
@@ -7,18 +8,19 @@ from pyproj import Transformer
 from shapely.geometry import Polygon
 
 from susi.io.load_output_data import StandID
-from susi.io.utils import SRC_DIR
-from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
-from tools.shared_allometry_tool_utils import input_validation
 from susi.io.stand_data import (
     SOURCE_CRS,
     centroid_to_ykj,
-    point_to_ykj,
-    dump_stand_data_document as shared_dump_stand_data_document,
     load_stand_data_document_from_json,
+    point_to_ykj,
 )
+from susi.io.stand_data import (
+    dump_stand_data_document as shared_dump_stand_data_document,
+)
+from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
+from susi.io.utils import SRC_DIR
+from tools.shared_allometry_tool_utils import input_validation
 from tools.xml_to_allometry import xml_to_allometry
-
 
 # %% out_of_range_message reuse (from the shared package)
 

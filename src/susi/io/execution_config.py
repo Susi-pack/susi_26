@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, model_validator
 import json
 
+from pydantic import BaseModel, Field, model_validator
 
 from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.metadata_model import SimulationMetaData
@@ -42,7 +42,6 @@ class MultipleSusis(BaseModel):
             raise ValueError(
                 "'n_parallel_processes' cannot be greater than 'n_runs'. There must be at most one process per run."
             )
-        return None
 
     def _check_for_duplicated_susi_params(self) -> None:
         """
@@ -60,7 +59,6 @@ class MultipleSusis(BaseModel):
             if serialized in seen:
                 raise ValueError("Duplicate Susi Parameter models detected.")
             seen.add(serialized)
-        return None
 
     def _check_for_duplicated_simulation_folder_paths(self) -> None:
         """
@@ -80,7 +78,6 @@ class MultipleSusis(BaseModel):
             else:
                 seen.add(simulation_folder_path)
 
-        return None
 
     def _check_stand_and_scenario_ids_are_set(self) -> None:
         """

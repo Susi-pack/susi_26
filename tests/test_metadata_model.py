@@ -183,6 +183,7 @@ def test_bad_projects_root_does_not_break_the_import(tmp_path):
         env=env,
         capture_output=True,
         text=True,
+        check=False,
     )
 
     assert result.returncode == 0, result.stderr

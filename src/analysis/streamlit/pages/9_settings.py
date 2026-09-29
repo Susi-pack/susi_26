@@ -1,7 +1,8 @@
-import streamlit as st
 import tkinter as tk
-from tkinter import filedialog
 from pathlib import Path
+from tkinter import filedialog
+
+import streamlit as st
 
 
 def pick_folder() -> Path:

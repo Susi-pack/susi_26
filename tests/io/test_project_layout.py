@@ -2,9 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR
 from susi.io import project_layout
-
+from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR
 
 # %% project_dir
 

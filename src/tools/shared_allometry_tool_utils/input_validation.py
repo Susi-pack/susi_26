@@ -13,8 +13,9 @@ something this shared module does on the tools' behalf any more.
 import argparse
 import math
 import tomllib
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, Optional, TypeVar
+from typing import TypeVar
 
 from susi.io.stand_data import (
     X_YKJ_MAX,
@@ -76,7 +77,7 @@ def valid_existing_directory(value: str) -> Path:
 
 def out_of_range_message(
     name: str, value: float, min_value: float, max_value: float
-) -> Optional[str]:
+) -> str | None:
     """Return a human-readable message if value falls outside [min_value, max_value],
     or None if it is within range (bounds are inclusive)."""
     if value < min_value or value > max_value:

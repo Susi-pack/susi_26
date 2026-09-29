@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import Annotated, Any, Self
 
 import shapely
-from pyproj import Transformer
 from pydantic import (
     AfterValidator,
+    BeforeValidator,
     Field,
+    InstanceOf,
     PlainSerializer,
-    PlainValidator,
     SerializationInfo,
     SerializerFunctionWrapHandler,
     ValidationInfo,
@@ -17,25 +17,23 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pyproj import Transformer
 from shapely.errors import ShapelyError
 from shapely.geometry import Polygon
 
-from susi.io.load_output_data import StandID
-from susi.io.susi_parameter_model import (
-    CanopyLayerAllometry,
-    CanopyLayerName,
-    AllometryFileAndSpecies,
-    StandParams,
-)
-
-from susi.io.project_layout import STAND_DATA_FILENAME as STAND_DATA_FILENAME
 from susi.io.extra_pydantic_types import (
-    StrictFrozenModel,
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    StrictFrozenModel,
 )
-
+from susi.io.load_output_data import StandID
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+    StandParams,
+)
 
 # %% Coordinates: SOURCE_CRS and the YKJ grid
 #
@@ -101,39 +99,45 @@ def require_source_crs(declared_crs: str | None, where: str) -> None:
         )
 
 
-def _validate_stand_polygon(value: Any) -> Polygon:
+def _parse_wkt(value: Any) -> Any:
     """
-    StandPolygon's validator: a shapely Polygon passes through as-is, a str is
-    parsed as WKT (what stand_data.json holds), and anything that doesn't end
-    up as a non-empty Polygon is rejected -- a MultiPolygon included, since no
-    source produces one (see ticket 22) and consumers call Polygon-only API.
+    StandPolygon's before-validator: a str is parsed as WKT (what
+    stand_data.json holds); anything else passes through untouched, for
+    InstanceOf[Polygon] to accept or reject.
     """
-    if isinstance(value, str):
-        try:
-            value = shapely.from_wkt(value)
-        except ShapelyError as error:
-            # Also catches the pre-ticket-22 on-disk format (raw
-            # gml:coordinates pairs), which isn't WKT.
-            raise ValueError(f"polygon is not valid WKT: {error}") from error
-    if not isinstance(value, Polygon):
-        raise ValueError(
-            f"polygon must be a shapely Polygon or its WKT, got {type(value).__name__}"
-        )
-    if value.is_empty:
+    if not isinstance(value, str):
+        return value
+    try:
+        return shapely.from_wkt(value)
+    except ShapelyError as error:
+        # Also catches the pre-ticket-22 on-disk format (raw
+        # gml:coordinates pairs), which isn't WKT.
+        raise ValueError(f"polygon is not valid WKT: {error}") from error
+
+
+def _require_non_empty(polygon: Polygon) -> Polygon:
+    """StandPolygon's after-validator: an empty Polygon is still a Polygon,
+    so InstanceOf lets it through; it has no area or centroid to use."""
+    if polygon.is_empty:
         raise ValueError("polygon must not be empty")
-    return value
+    return polygon
 
 
 # The stand boundary: a shapely Polygon in memory, a WKT string on disk. See
 # docs/adr/0004 for why WKT, and why the CRS lives on the document rather
 # than inside the string (shapely can't read EWKT's "SRID=...;" prefix).
-# PlainValidator replaces pydantic's own validation for the type, and
+# Validation runs in order: _parse_wkt turns a WKT string into a geometry,
+# InstanceOf[Polygon] rejects anything that isn't a Polygon -- a MultiPolygon
+# included, since no source produces one (see ticket 22) and consumers call
+# Polygon-only API -- and _require_non_empty rejects an empty one.
+# InstanceOf checks the type without asking pydantic for a Polygon schema, and
 # WithJsonSchema describes it as the string it serializes to -- together they
 # let the model build without arbitrary_types_allowed, which on its own would
 # still leave the model unable to write or read a Polygon as JSON.
 StandPolygon = Annotated[
-    Polygon,
-    PlainValidator(_validate_stand_polygon),
+    InstanceOf[Polygon],
+    BeforeValidator(_parse_wkt),
+    AfterValidator(_require_non_empty),
     PlainSerializer(lambda polygon: polygon.wkt, return_type=str),
     WithJsonSchema({"type": "string", "description": "WKT POLYGON"}),
 ]

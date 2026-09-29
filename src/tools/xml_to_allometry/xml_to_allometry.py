@@ -2,25 +2,36 @@
 # Adapted by Iñaki Urzainki from Mikko Niemi's original code.
 
 # %% Imports
-from susi.io.load_output_data import StandID
-from susi.io.susi_parameter_model import (
-    AllometryFileAndSpecies,
-    CanopyLayerName,
-)
-from typing import Optional
-import xmltodict
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+
+import xmltodict
 from shapely.geometry import Polygon
 
+from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
     CONFIG_FILENAME,
     allometry_dir_for_project,
     stand_data_path_for_project,
 )
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    StandData,
+    StandDataDocument,
+    centroid_to_ykj,
+    dump_stand_data_document,
+)
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerName,
+)
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
+)
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
+    resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table,
@@ -36,24 +47,12 @@ from tools.shared_allometry_tool_utils.print_formatting import (
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.cli_paths import (
-    finalize_cli_config,
-    resolve_config_path,
-)
 from tools.shared_allometry_tool_utils.shared_utils import to_source_crs
 from tools.shared_allometry_tool_utils.tree_stratum import (
+    ZERO_STRATUM,
     PerSpecies,
     TreeStratum,
-    ZERO_STRATUM,
 )
-from susi.io.stand_data import (
-    SOURCE_CRS,
-    StandData,
-    StandDataDocument,
-    centroid_to_ykj,
-    dump_stand_data_document,
-)
-
 
 # %% Config
 
@@ -113,13 +112,13 @@ class ParsedStand:
     mean_diameter: float  # cm
 
     # Optional parameters, only used for information in the stand_data.json dump
-    main_group: Optional[int] = None
-    sub_group: Optional[int] = None
-    soil_type: Optional[int] = None
-    basal_area: Optional[float] = None  # m2/ha
-    mean_height: Optional[float] = None  # m
-    total_volume: Optional[float] = None  # m3/ha
-    area: Optional[float] = None  # ha
+    main_group: int | None = None
+    sub_group: int | None = None
+    soil_type: int | None = None
+    basal_area: float | None = None  # m2/ha
+    mean_height: float | None = None  # m
+    total_volume: float | None = None  # m3/ha
+    area: float | None = None  # ha
 
 
 # %% Functions

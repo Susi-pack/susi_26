@@ -23,7 +23,7 @@ outputs. Accepted, and documented, rather than defended against here.
 from pathlib import Path
 
 import susi.io.load_output_data as load_output
-import susi.io.project_layout as project_layout
+from susi.io import project_layout
 from susi.io.load_output_data import StandID
 from susi.io.stand_data import (
     StandDataDocument,

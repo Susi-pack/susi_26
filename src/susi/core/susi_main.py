@@ -1,36 +1,40 @@
-# -*- coding: utf-8 -*-
 """
 Created on Mon May 21 18:38:10 2018
 
 @author: lauren
 """
 
-import numpy as np
-import pandas as pd
 import datetime
 
+import numpy as np
+import pandas as pd
+
+import susi.io.utils as io_utils
+from susi.core.canopygrid import CanopyGrid
+from susi.core.esom import Esom
+from susi.core.fertilization import initialize_fertilization
+from susi.core.gvegetation import Gvegetation
+from susi.core.methane import Methane
+from susi.core.mosslayer import MossLayer
+from susi.core.stand import Stand
+from susi.core.strip import StripHydrology, drain_depth_development
+from susi.core.susi_utils import (
+    get_temp_sum,
+    heterotrophic_respiration_yr,
+    ojanen_2019,
+    read_FMI_weather,
+    rew_drylimit,
+)
+from susi.core.temperature import PeatTemperature
+from susi.io import susi_io
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.outputs import Outputs
 from susi.io.susi_parameter_model import (
     CanopyStateParamsArray,
     OrganicLayerParamsArray,
     SusiParams,
 )
-from susi.core.canopygrid import CanopyGrid
-from susi.core.mosslayer import MossLayer
-from susi.core.strip import StripHydrology, drain_depth_development
-from susi.core.temperature import PeatTemperature
-from susi.core.gvegetation import Gvegetation
-from susi.core.esom import Esom
-from susi.core.stand import Stand
-from susi.core.methane import Methane
-from susi.core.fertilization import initialize_fertilization
-from susi.core.susi_utils import rew_drylimit
-from susi.core.susi_utils import get_temp_sum, heterotrophic_respiration_yr, ojanen_2019
-import susi.io.susi_io as susi_io
-from susi.io.outputs import Outputs
-import susi.io.utils as io_utils
-from susi.core.susi_utils import read_FMI_weather
 
 
 class Susi:
@@ -339,7 +343,7 @@ class Susi:
                     ]  # photosynthetically active radiation
                     prec = self.weather_forcing.iloc[d, 7] / 86400.0  # precipitation
 
-                    potinf, trfall, interc, evap, ET, transpi, efloor, MBE, SWE = (
+                    potinf, _trfall, interc, evap, ET, transpi, efloor, _MBE, SWE = (
                         cpy.run_timestep(
                             self.parameters.canopy_parameters,
                             doy,
@@ -360,7 +364,7 @@ class Susi:
                         r, d, interc, evap, ET, transpi, efloor, SWE
                     )
 
-                    potinf, efloor, MBE2 = moss.interception(
+                    potinf, efloor, _MBE2 = moss.interception(
                         potinf, efloor
                     )  # ground vegetation and moss hydrology
                     stpout["deltas"][r, d, :] = (
@@ -387,7 +391,7 @@ class Susi:
                     dwt = stp.dwt.copy()
                     stpout = stp.update_outarrays(r, d, stpout)
 
-                    z, peat_temperature = pt.run_timestep(
+                    _z, peat_temperature = pt.run_timestep(
                         ta, np.mean(SWE), np.mean(efloor)
                     )  # peat temperature in different depths
                     peat_temperatures[r, d, :] = peat_temperature
@@ -444,7 +448,7 @@ class Susi:
                 # **************  Biogeochemistry ***********************************
                 if switches["Ojanen2010_2019"]:
                     v = stand.volume
-                    _, co2, Rhet = heterotrophic_respiration_yr(
+                    _, _co2, Rhet = heterotrophic_respiration_yr(
                         df_peat_temperatures,
                         yr,
                         dfwt,
@@ -609,7 +613,7 @@ class Susi:
                 # stand.assimilate(self.weather_forcing.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)])
                 # stand.update()
 
-                CH4, CH4mean, CH4asCO2eq = ch4s.run_ch4_yr(
+                CH4, _CH4mean, _CH4asCO2eq = ch4s.run_ch4_yr(
                     yr, dfwt
                 )  # annual ch4 nodewise (kg ha-1 yr-1), mean ch4, and mean ch4 as co2 equivalent
                 out.write_methane(r, year + 1, CH4)
@@ -657,7 +661,6 @@ class Susi:
                 )
 
                 stand.reset_logging()  # reset logging in general
-                #
                 start = start + days  # starting point of the next year daily loop
                 year += 1  # update the next year for the biogeochemistry loop
 
@@ -672,7 +675,6 @@ class Susi:
         assert not self.metadata.simulation_folder_path.is_dir()
         assert not self.metadata.simulation_folder_path.exists()
         io_utils.create_folder(path=self.metadata.simulation_folder_path)
-        return None
 
     def write_params_and_metadata(self) -> None:
         self.metadata.record_end_timestamp()
@@ -680,4 +682,3 @@ class Susi:
         self.parameters.dump_json_to_file(
             filepath=self.metadata.parameter_output_filepath
         )
-        return None

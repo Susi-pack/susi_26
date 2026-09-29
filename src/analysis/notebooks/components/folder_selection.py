@@ -36,8 +36,8 @@ Typical chained usage, one call per cell:
 from pathlib import Path
 
 import ipywidgets as widgets
-from IPython.display import display
 from ipyfilechooser import FileChooser
+from IPython.display import display
 
 import susi.io.load_output_data as load_output
 from susi.io.project_layout import require_outputs_dir

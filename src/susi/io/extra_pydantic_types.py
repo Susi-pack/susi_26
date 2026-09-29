@@ -1,6 +1,7 @@
 from typing import Annotated
-from pydantic import Field, BaseModel, ConfigDict
+
 import numpy as np
+from pydantic import BaseModel, ConfigDict, Field
 
 PositiveFloat = Annotated[float, Field(gt=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0)]

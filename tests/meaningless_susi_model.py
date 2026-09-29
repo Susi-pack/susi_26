@@ -4,24 +4,24 @@
 import datetime
 
 from susi.io.susi_parameter_model import (
-    PeatTypes,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
+    LocationsForPhotoParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
-    get_photo_parameters_by_location,
-    LocationsForPhotoParams,
-    h_mor_from_drainage_and_mass_mor_Pitkanen,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandParams,
+    SusiParams,
     Thinning,
-    CuttingManagementParams,
-    AllometryFileAndSpecies,
+    WeatherParams,
+    get_photo_parameters_by_location,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 from system_inputs import SYSTEM_INPUTS_DIR
 

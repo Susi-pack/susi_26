@@ -1,19 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sat Mar  5 19:31:27 2022
 
 @author: alauren
 """
 
-import numpy as np
 from abc import ABC
-from typing import assert_never, Literal, get_args
 from dataclasses import dataclass
+from typing import Literal, assert_never, get_args
+
+import numpy as np
 
 from susi.io.susi_parameter_model import (
     AshFertilizationParameters,
-    StandardNPKFertilizationParameters,
     FertilizationParameters,
+    StandardNPKFertilizationParameters,
 )
 
 Nutrient = Literal["N", "P", "K"]

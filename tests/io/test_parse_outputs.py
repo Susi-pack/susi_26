@@ -1,15 +1,17 @@
 import json
-import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from susi.io.load_output_data import StandID, ScenarioID, SimulationParamsFromJSON
+
+import pytest
+
 from analysis.core.parse_outputs import (
-    retrieve_scenarios_for_stand,
-    retrieve_parameters_for_stand,
+    ParamName,
     find_differing_params,
     find_unique_params,
-    ParamName,
+    retrieve_parameters_for_stand,
+    retrieve_scenarios_for_stand,
 )
+from susi.io.load_output_data import ScenarioID, SimulationParamsFromJSON, StandID
 
 
 @pytest.fixture

@@ -1,6 +1,7 @@
 import datetime
-import pytest
 from pathlib import Path
+
+import pytest
 
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
@@ -8,7 +9,7 @@ from susi.io.susi_parameter_model import (
     CanopyLayerName,
     CanopyParams,
     CuttingManagementParams,
-    StandardNPKFertilizationParameters,
+    LocationsForPhotoParams,
     NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
@@ -16,13 +17,13 @@ from susi.io.susi_parameter_model import (
     PeatTypes,
     SimulationConfig,
     SiteParams,
+    StandardNPKFertilizationParameters,
     StandParams,
     SusiParams,
+    Thinning,
     WeatherParams,
     get_photo_parameters_by_location,
-    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    Thinning,
 )
 
 

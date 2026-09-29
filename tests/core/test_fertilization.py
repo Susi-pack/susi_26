@@ -1,13 +1,14 @@
 import numpy as np
+
 from susi.core.fertilization import (
-    StandardNPKFertilization,
-    NoFertilization,
     AshFertilization,
+    NoFertilization,
+    StandardNPKFertilization,
     initialize_fertilization,
 )
 from susi.io.susi_parameter_model import (
-    StandardNPKFertilizationParameters,
     NutrientFertilizationParameters,
+    StandardNPKFertilizationParameters,
 )
 
 

@@ -1,35 +1,33 @@
-# -*- coding: utf-8 -*-
 """
 Created on Fri Jun 28 16:03:26 2019
 
 @author: alauren
 """
 
+import datetime
 from dataclasses import dataclass
 from typing import NewType
-import datetime
 
 from susi.io.project_layout import allometry_dir_for_project, data_dir_for_project
-from susi.io.utils import repo_root
 from susi.io.susi_parameter_model import (
-    PeatTypes,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
     AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    LocationsForPhotoParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandParams,
+    SusiParams,
+    WeatherParams,
     get_photo_parameters_by_location,
-    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
-
+from susi.io.utils import repo_root
 
 # A testing project lives in the checkout, so it names its folder from the
 # repo root rather than through `project_dir()` (ADR 0006). The one definition:

@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
-
-from susi.io.execution_config import SimulationParams
-from susi.core.susi_main import Susi
 
 # parameters.py beside this script: the project's parameters and its folder.
 import parameters
+
+from susi.core.susi_main import Susi
+from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 
 # read weather input

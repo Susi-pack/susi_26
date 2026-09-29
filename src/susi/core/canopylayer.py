@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sat Apr  2 17:37:43 2022
 
@@ -9,6 +8,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.interpolate import interp1d
+
 from susi.core.allometry import Allometry
 from susi.core.susi_utils import assimilation_yr
 

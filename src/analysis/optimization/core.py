@@ -1,20 +1,21 @@
 # %%
-from typing import Any, Sequence
-from numpy.typing import NDArray
+from collections.abc import Sequence
 from dataclasses import dataclass
-import numpy as np
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import pareto_dp
+from numpy.typing import NDArray
 
+import susi.io.load_output_data as load_output
 from analysis.optimization.dynamic_programming import from_numpy_arrays_to_nested_lists
 from analysis.optimization.prepruning import preprune_pareto_dominated_scenarios
-import susi.io.load_output_data as load_output
 from susi.io.load_output_data import (
     NetcdfVariablePath,
-    StandID,
-    ScenarioID,
     OutputDataStore,
+    ScenarioID,
+    StandID,
 )
 
 

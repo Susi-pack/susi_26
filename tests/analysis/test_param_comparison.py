@@ -1,6 +1,6 @@
-from susi.io.load_output_data import ScenarioID
 from analysis.core.parse_outputs import ParamName
 from analysis.shared_reporting_utils.param_comparison import shape_differing_params
+from susi.io.load_output_data import ScenarioID
 
 
 class TestShapeDifferingParams:

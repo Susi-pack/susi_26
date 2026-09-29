@@ -6,12 +6,12 @@ import netCDF4
 import numpy as np
 import pytest
 
-from susi.io.load_output_data import NetcdfVariablePath
 from analysis.shared_reporting_utils import plots
 from analysis.shared_reporting_utils.single_scenario_dashboard import (
     SECTIONS,
     load_report_data,
 )
+from susi.io.load_output_data import NetcdfVariablePath
 
 
 def create_mock_netcdf_file(filepath: Path) -> None:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sat Nov  4 15:15:55 2023
 
@@ -63,8 +62,7 @@ class StemCurve:
         diff = h / float(2)
         hsol = -1
         while hsol != htest:
-            if htest > h:
-                htest = h
+            htest = min(htest, h)
             dtest = self.stemCurve(htest, h, sp) * d20
             if dtest < dcut + 0.001 and dtest > dcut - 0.001:
                 hsol = htest

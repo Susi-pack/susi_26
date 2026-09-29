@@ -1,11 +1,12 @@
-import streamlit as st
+import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-import tkinter as tk
 from tkinter import filedialog
 
+import streamlit as st
+
 import susi.io.load_output_data as load_output
-import susi.io.project_layout as project_layout
+from susi.io import project_layout
 from susi.io.project_layout import require_outputs_dir
 
 

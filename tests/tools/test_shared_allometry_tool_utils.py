@@ -13,8 +13,8 @@ from hypothesis import strategies as st
 from pyproj import Transformer
 from shapely.geometry import Polygon
 
-from susi.io.load_output_data import StandID
 from susi.io import stand_data
+from susi.io.load_output_data import StandID
 from tools.shared_allometry_tool_utils import (
     allometry_generation_defaults,
     cli_paths,
@@ -624,7 +624,7 @@ def test_tree_stratum_is_frozen():
         age=30, basal_area=15.0, stem_count=400, mean_diameter=20.0, mean_height=18.0
     )
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-dataclass error
-        stratum.age = 31  # noqa: B010  # ty: ignore[invalid-assignment]
+        stratum.age = 31  # ty: ignore[invalid-assignment]
 
 
 def test_tree_stratum_is_hashable():

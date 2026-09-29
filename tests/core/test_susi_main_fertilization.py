@@ -1,28 +1,30 @@
-import pytest
-import numpy as np
 import datetime
 from pathlib import Path
+
+import numpy as np
+import pytest
+
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
-    SusiParams,
-    WeatherParams,
-    SimulationConfig,
+    AshFertilizationParameters,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
+    LocationsForPhotoParams,
+    NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
-    SiteParams,
-    StandParams,
-    NutrientFertilizationParameters,
     PeatTemperatureParams,
-    LocationsForPhotoParams,
-    get_photo_parameters_by_location,
     PeatTypes,
+    SimulationConfig,
+    SiteParams,
     StandardNPKFertilizationParameters,
-    AshFertilizationParameters,
+    StandParams,
+    SusiParams,
     Thinning,
-    CuttingManagementParams,
+    WeatherParams,
+    get_photo_parameters_by_location,
 )
 
 
@@ -152,7 +154,7 @@ class TestSusiMainFertilizationIntegration:
 
     def test_fertilization_initialization_none(self, base_susi_params, test_data_path):
         """Test that fertilization is initialized as NoFertilization when None."""
-        from susi.core.fertilization import initialize_fertilization, NoFertilization
+        from susi.core.fertilization import NoFertilization, initialize_fertilization
 
         result = initialize_fertilization(
             fertilization_params=None, n_cols=4, simulation_end_year=2005
@@ -165,8 +167,8 @@ class TestSusiMainFertilizationIntegration:
     ):
         """Test that fertilization is initialized as StandardNPKFertilization when provided."""
         from susi.core.fertilization import (
-            initialize_fertilization,
             StandardNPKFertilization,
+            initialize_fertilization,
         )
 
         fert_params = StandardNPKFertilizationParameters(
@@ -187,8 +189,8 @@ class TestSusiMainFertilizationIntegration:
     def test_fertilization_initialization_ash(self, base_susi_params, test_data_path):
         """Test that fertilization is initialized as AshFertilization when provided."""
         from susi.core.fertilization import (
-            initialize_fertilization,
             AshFertilization,
+            initialize_fertilization,
         )
 
         fert_params = AshFertilizationParameters(

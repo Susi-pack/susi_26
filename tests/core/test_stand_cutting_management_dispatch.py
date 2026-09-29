@@ -117,7 +117,9 @@ class TestApplyCuttingManagement:
             monkeypatch.setattr(
                 layer,
                 "do_thinning",
-                lambda *a, **k: pytest.fail(f"{layer.name} should not be cut"),
+                lambda *a, layer=layer, **k: pytest.fail(
+                    f"{layer.name} should not be cut"
+                ),
             )
         monkeypatch.setattr(stand.dominant, "do_thinning", lambda *a, **k: None)
 

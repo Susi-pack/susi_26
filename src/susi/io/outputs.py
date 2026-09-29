@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """
 Created on Tue Feb 15 10:13:04 2022
 
 @author: alauren
 """
 
-from netCDF4 import Dataset
 from datetime import datetime
+
 import numpy as np
+from netCDF4 import Dataset
 
 
 class Outputs:

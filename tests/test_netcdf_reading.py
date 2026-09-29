@@ -1,29 +1,29 @@
-import pytest
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import netCDF4
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import netCDF4
-from tempfile import TemporaryDirectory
-import json
+import pytest
 
 from susi.io.load_output_data import (
-    list_all_netcdf_variables,
-    _get_variable_by_path,
-    read_value_several_variables_from_single_file,
-    coerce_datetime_format,
-    modify_after_load,
-    list_subdirectories,
-    _load_single_simulation_metadatas,
-    _load_all_metadatas_from_single_stand,
-    load_all_metadatas_from_stands,
+    NetcdfVariableArray,
     NetcdfVariablePath,
+    OutputDataStore,
     ScenarioID,
     StandID,
-    OutputDataStore,
+    _get_variable_by_path,
+    _load_all_metadatas_from_single_stand,
+    _load_single_simulation_metadatas,
+    coerce_datetime_format,
+    list_all_netcdf_variables,
+    list_subdirectories,
+    load_all_metadatas_from_stands,
+    modify_after_load,
     read_netcdf_files_for_selected_variables_from_metadatas,
+    read_value_several_variables_from_single_file,
 )
-
-from susi.io.load_output_data import NetcdfVariableArray
 
 
 def create_mock_netcdf_file(filepath: Path):

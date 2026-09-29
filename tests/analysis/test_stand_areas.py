@@ -15,16 +15,15 @@ from analysis.optimization.stand_areas import (
     areas_from_stand_data_document,
     stand_areas_for_run,
 )
-import susi.io.project_layout as project_layout
+from susi.io import project_layout
 from susi.io.load_output_data import StandID
-from susi.io.susi_parameter_model import AllometryFileAndSpecies, CanopyLayerName
 from susi.io.stand_data import (
     SOURCE_CRS,
     StandData,
     StandDataDocument,
     dump_stand_data_document,
 )
-
+from susi.io.susi_parameter_model import AllometryFileAndSpecies, CanopyLayerName
 
 # Where the stands' allometry CSVs notionally live. Never written: reading
 # stand areas doesn't touch them. Absolute, as a StandDataDocument's paths

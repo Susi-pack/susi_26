@@ -23,10 +23,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
+from parameters_2021 import ALLOMETRY_DIR, MOTTI_DIR, PARAMS_PER_SITE
 
 from susi.core.allometry_columns import ALLOMETRY_COLUMNS
-
-from parameters_2021 import ALLOMETRY_DIR, MOTTI_DIR, PARAMS_PER_SITE
 
 # Sheets are read by position: in these files the first sheet's name has a
 # leading space (" Puustotunnukset"), so reading by name would be brittle.

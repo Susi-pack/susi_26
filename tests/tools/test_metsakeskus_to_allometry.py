@@ -11,17 +11,19 @@ from hypothesis import strategies as st
 from shapely.geometry import MultiPolygon, Point, Polygon
 
 from susi.io.load_output_data import StandID
-from susi.io.utils import SRC_DIR
-from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
-from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
-from tools.shared_allometry_tool_utils import input_validation
 from susi.io.stand_data import (
     SOURCE_CRS,
-    centroid_to_ykj,
     StandDataDocument,
-    dump_stand_data_document as shared_dump_stand_data_document,
+    centroid_to_ykj,
     load_stand_data_document_from_json,
 )
+from susi.io.stand_data import (
+    dump_stand_data_document as shared_dump_stand_data_document,
+)
+from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
+from susi.io.utils import SRC_DIR
+from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
+from tools.shared_allometry_tool_utils import input_validation
 
 # %% ExtractionConfig
 #
@@ -1392,7 +1394,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     )
     assert json_path.exists()
     reloaded = load_stand_data_document_from_json(json_path)
-    assert set(str(sid) for sid in reloaded.stands) == {"1", "2"}
+    assert {str(sid) for sid in reloaded.stands} == {"1", "2"}
     # Allometry paths come back absolute, pointing at the files written above.
     assert (
         reloaded.stands[StandID("2")]

@@ -9,19 +9,18 @@
 # The hashes of the 2 files should be identical.
 
 
+import shutil
 from pathlib import Path
 
 import numpy as np
-import shutil
 
-
-from susi.io.execution_config import SimulationParams
-from susi.io import load_output_data
+import susi.io.utils as io_utils
 from susi.core.susi_main import Susi
-from system_inputs.parameters import golden_test
+from susi.io import load_output_data
+from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.project_layout import outputs_dir_for_project, run_dir
-import susi.io.utils as io_utils
+from system_inputs.parameters import golden_test
 
 
 def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
@@ -64,7 +63,7 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
         variable_paths=list(golden_variables.keys()),
     )
 
-    for key in new_vars_values.keys():
+    for key in new_vars_values:
         golden_var_value = golden_vars_values[key]._raw
         new_var_value = new_vars_values[key]._raw
         if not masked_arrays_equal(a=golden_var_value, b=new_var_value):

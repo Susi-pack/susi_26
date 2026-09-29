@@ -1,9 +1,8 @@
-import streamlit as st
 import matplotlib.pyplot as plt
-
-from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
+import streamlit as st
 
 from analysis.shared_reporting_utils.quick_look_plots import quick_look_sections
+from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 
 def build(variables_values: dict[NetcdfVariablePath, NetcdfVariableArray]) -> None:

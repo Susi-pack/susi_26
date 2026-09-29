@@ -1,11 +1,12 @@
-from functools import lru_cache, cached_property
 import datetime
+from collections.abc import Callable
 from enum import Enum
+from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import Callable, Self, Union, TypeAlias
+from typing import Self, TypeAlias
+
 import numpy as np
 import pandas as pd
-
 from pydantic import (
     Field,
     FilePath,
@@ -14,14 +15,14 @@ from pydantic import (
     model_validator,
 )
 
+from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 from susi.io.extra_pydantic_types import (
-    StrictFrozenModel,
-    PositiveFloat,
     NonNegativeFloat,
     NonPositiveFloat,
+    PositiveFloat,
     PositiveInt,
+    StrictFrozenModel,
 )
-from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 
 
 def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
@@ -41,7 +42,7 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
-@lru_cache()
+@lru_cache
 def read_allometry_info_from_csv(filepath: Path) -> pd.DataFrame:
     """
     Read allometry file and return the allometry dataframe.
@@ -545,13 +546,13 @@ class AshFertilizationParameters(StrictFrozenModel):
         description="Amount of phosphorus in the fertilizer (kg/ha)"
     )
     time_exp: NonNegativeFloat = Field(
-        description="Exponent in the grain cracking function."
+        description="Exponent in the grain cracking function.", default=2.0
     )
 
 
-FertilizationParameters = Union[
+FertilizationParameters = (
     StandardNPKFertilizationParameters | AshFertilizationParameters
-]
+)
 
 
 class ClearCut(StrictFrozenModel):
@@ -642,7 +643,7 @@ class CuttingManagementParams(StrictFrozenModel):
     application_yr: int = Field(
         description="Year for cutting management application. Must be inside the simulation period."
     )
-    management_type: Union[ClearCut | ContinuousCover | Thinning] = Field(
+    management_type: ClearCut | ContinuousCover | Thinning = Field(
         description="Type of cutting management selected."
     )
 
@@ -793,7 +794,7 @@ class SiteParams(StrictFrozenModel):
             try:
                 return hmor(drain_age, rho_mor)
             except Exception as e:
-                raise ValueError(f"Failed to compute h_mor: {e}")
+                raise ValueError(f"Failed to compute h_mor: {e}") from e
         return hmor
 
     @model_validator(mode="before")
@@ -840,13 +841,15 @@ class SiteParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
-        if self.cutting_management is not None:
-            if isinstance(self.cutting_management.management_type, ClearCut):
-                if len(self.cutting_management.management_type.strips_to_cut) != self.n:
-                    raise ValueError(
-                        f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
-                        f"but must have {self.n} elements (equal to the number of soil columns)"
-                    )
+        if (
+            self.cutting_management is not None
+            and isinstance(self.cutting_management.management_type, ClearCut)
+            and len(self.cutting_management.management_type.strips_to_cut) != self.n
+        ):
+            raise ValueError(
+                f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
+                f"but must have {self.n} elements (equal to the number of soil columns)"
+            )
         return self
 
 

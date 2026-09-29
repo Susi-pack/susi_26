@@ -1,17 +1,17 @@
 import numpy as np
 import pandas as pd
 
+from analysis.shared_reporting_utils.project_summary import (
+    SUMMARY_VARIABLES,
+    aggregate_var,
+    build_summary_dataframe,
+)
 from susi.io.load_output_data import (
     NetcdfVariableArray,
     NetcdfVariablePath,
     OutputDataStore,
     ScenarioID,
     StandID,
-)
-from analysis.shared_reporting_utils.project_summary import (
-    SUMMARY_VARIABLES,
-    aggregate_var,
-    build_summary_dataframe,
 )
 
 

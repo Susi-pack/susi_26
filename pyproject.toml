@@ -104,6 +104,9 @@ exclude = [
 [tool.ruff]
 exclude = ["src/analysis/figures.py", "src/analysis/scrapbook.py"]
 
+[tool.ruff.lint]
+ignore = ["DTZ001", "DTZ005", "SIM113"]
+
 [tool.pytest]
 # Name of the folders in which to look for tests.
 testpaths = ["tests"]

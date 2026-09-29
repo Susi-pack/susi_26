@@ -97,4 +97,4 @@ def test_zones_data_not_read_until_accessed():
 
     # zones_data does, and only raises once actually accessed.
     with pytest.raises(FileNotFoundError):
-        allometry.zones_data
+        _ = allometry.zones_data
