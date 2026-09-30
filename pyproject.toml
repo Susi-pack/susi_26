@@ -28,6 +28,12 @@ dependencies = [
     "tqdm>=4.67.3",
     "xlrd>=2.0.2",
 ]
+
+[project.urls]
+Documentation = "https://susi-pack.github.io/susi_26/"
+Repository = "https://github.com/Susi-pack/susi_26"
+Issues = "https://github.com/Susi-pack/susi_26/issues"
+
 [dependency-groups]
 dev = [
     "geopandas>=1.1.4",
@@ -38,7 +44,7 @@ dev = [
     "pre-commit>=4.0.1",
     "pytest>=9.0.2",
     "xmltodict>=1.0.4",
-    "zensical>=0.0.33",
+    "zensical>=0.0.66",
 ]
 notebook = ["jupyterlab>=4.6,<5", "ipykernel>=6.30"]
 
