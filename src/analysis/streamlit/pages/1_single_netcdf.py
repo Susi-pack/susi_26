@@ -12,7 +12,7 @@ from analysis.streamlit.components import (
 )
 
 # %% Choose folder
-st.header("Choose project folder")
+st.header("Choose scenario folder")
 
 col1, col2, col3 = st.columns([2, 3, 1])
 

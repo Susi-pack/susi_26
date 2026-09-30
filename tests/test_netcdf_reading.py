@@ -237,6 +237,28 @@ def test_load_all_metadatas_from_stands(mock_simulation_folders):
     assert len(result[StandID("stand_B")]) == 1
 
 
+def test_stand_folder_with_no_scenario_folders_raises_naming_it(
+    mock_simulation_folders,
+):
+    # A stray folder in a run (`figures/`, `.ipynb_checkpoints/`), or a stand
+    # whose simulations never got written, has no scenario folders to read.
+    # It must be reported by name, not skipped and not left to pandas'
+    # "No objects to concatenate".
+    stand_folder = mock_simulation_folders / "stand_A"
+    stray_folder = mock_simulation_folders / "figures"
+    stand_folder.mkdir()
+    stray_folder.mkdir()
+    create_mock_simulation_folder(stand_folder, "exp3")
+
+    with pytest.raises(ValueError) as error:
+        load_all_metadatas_from_stands([stand_folder, stray_folder])
+
+    message = str(error.value)
+    assert str(stray_folder) in message
+    assert "holds no scenario folders" in message
+    assert "A run folder must contain only stand folders" in message
+
+
 class TestNetcdfVariableArray:
     """Tests for NetcdfVariableArray class."""
 

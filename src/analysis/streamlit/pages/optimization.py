@@ -96,7 +96,7 @@ if submitted:
     with st.spinner("Running optimization..."):
         results = opti_core.run_optimization(
             variable_info=chosen_var_properties,
-            project_dirpath=run_dirpath,
+            run_dirpath=run_dirpath,
             stand_areas=stand_areas_ha,
             epsilon=epsilon,
             n_random_points=10000,

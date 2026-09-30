@@ -11,7 +11,7 @@ from analysis.shared_reporting_utils.single_scenario_dashboard import (
 )
 from analysis.streamlit.components import folder_selection
 
-st.header("Choose project folder")
+st.header("Choose scenario folder")
 
 col1, col2, col3 = st.columns([2, 3, 1])
 

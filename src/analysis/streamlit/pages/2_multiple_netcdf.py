@@ -6,7 +6,7 @@ import susi.io.load_output_data as load_output
 from analysis.streamlit.components import folder_selection
 from susi.io.load_output_data import NetcdfVariablePath
 
-chosen_scenario_folder = folder_selection.build_folder_selection_widget(
+chosen_stand_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_project_and_run_selection_widget(
         projects_root=st.session_state.settings["projects_root"]
     ).run_dir,
@@ -16,7 +16,7 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 chosen_susi_folders = st.multiselect(
     label="Choose 2 SUSI netcdf files to compare",
-    options=load_output.list_subdirectories(chosen_scenario_folder),
+    options=load_output.list_subdirectories(chosen_stand_folder),
     max_selections=2,
 )
 

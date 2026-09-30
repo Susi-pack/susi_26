@@ -38,12 +38,12 @@ class SimulationMetaData(BaseModel):
     )
 
     stand_id: str | None = Field(
-        description="Required when running multiple SUSI simulations with `MultipleSusi`, it gives the name to the first hierarchy of SUSI output folders (`scenario_id` is the second one). Not needed for single simulations.",
+        description="Required when running multiple SUSI simulations with `MultipleSusi`, it names the stand's folder inside the run's folder: `outputs/<run_id>/<stand_id>/` (`scenario_id` names the level below it). Not needed for single simulations.",
         default=None,
     )
 
     scenario_id: str | None = Field(
-        description="Required when running multiple SUSI simulations with `MultipleSusi`, it gives the name to the second hierarchy of SUSI output folders (`stand_id` is the first one). Not needed for single simulations.",
+        description="Required when running multiple SUSI simulations with `MultipleSusi`, it names the scenario's folder inside the stand's folder: `outputs/<run_id>/<stand_id>/<scenario_id>/`. Not needed for single simulations.",
         default=None,
     )
 

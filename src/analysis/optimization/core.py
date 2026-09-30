@@ -123,12 +123,23 @@ class _TargetVariableArrays:
 
 
 def read_data(
-    project_dirpath: Path,
+    run_dirpath: Path,
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
 ) -> OutputDataStore:
+    """
+    Read the target variables of every stand and scenario of one run.
 
+    run_dirpath is one run's folder (`<project>/outputs/<run_id>/`), not the
+    project's.
+
+    The stands come from `load_output.list_stand_folders`, the same listing
+    `stand_areas.stand_areas_for_run` uses. That is what lets
+    `build_optimization_array` look each stand of the returned store up in the
+    areas dict, and it fixes the stand order (natural sort of the stand IDs)
+    so that it does not depend on the filesystem.
+    """
     metadata_by_stand = load_output.load_all_metadatas_from_stands(
-        folders=load_output.list_subdirectories(project_dirpath)
+        folders=load_output.list_stand_folders(run_dirpath=run_dirpath)
     )
     return load_output.read_netcdf_files_for_selected_variables_from_metadatas(
         selected_variables=list(variable_info.keys()),
@@ -272,13 +283,13 @@ def _print_cardinality_info(
 
 def find_pareto_front(
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
 ) -> list[pareto_dp.ParetoFrontSolution]:
 
     print("optimization - Reading data...")
 
-    data_store = read_data(variable_info=variable_info, project_dirpath=project_dirpath)
+    data_store = read_data(variable_info=variable_info, run_dirpath=run_dirpath)
 
     print("optimization - Transforming data...")
     target_var_arrays = build_optimization_array(
@@ -349,11 +360,11 @@ def _flip_inverted_variables_sign(
 
 def prepare_optimization_data(
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
 ) -> PreparedOptimizationData:
     """
-    Read the project's netcdfs and reduce them to the Pareto search's input.
+    Read a run's netcdfs and reduce them to the Pareto search's input.
 
     This is the slow, I/O-bound half of run_optimization: it reads every
     stand/scenario netcdf, aggregates each target variable to one
@@ -363,7 +374,7 @@ def prepare_optimization_data(
     """
     print("optimization - Reading data...")
 
-    data_store = read_data(variable_info=variable_info, project_dirpath=project_dirpath)
+    data_store = read_data(variable_info=variable_info, run_dirpath=run_dirpath)
 
     print("optimization - Transforming data...")
     target_var_arrays = build_optimization_array(
@@ -419,13 +430,13 @@ def solve_optimization(
 
 def run_optimization(
     variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
     epsilon: float,
     n_random_points: int = 10000,
 ) -> OptimizationResults:
     """
-    Read a project's data and find its Pareto front, in one call.
+    Read a run's data and find its Pareto front, in one call.
 
     Callers that want to inspect the problem's size before paying for the
     search (as the notebook does, one step per cell) can call
@@ -434,7 +445,7 @@ def run_optimization(
     return solve_optimization(
         prepared=prepare_optimization_data(
             variable_info=variable_info,
-            project_dirpath=project_dirpath,
+            run_dirpath=run_dirpath,
             stand_areas=stand_areas,
         ),
         epsilon=epsilon,

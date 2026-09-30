@@ -6,27 +6,30 @@ icon: lucide/database
 
 ## Output data layout
 
-Each simulation run produces a **folder** containing:
+Each simulation (one scenario of one stand) produces a **folder** containing:
 
-* `metadata.json` — run-level metadata (start/end timestamps, scenario name, …)
+* `metadata.json` — the simulation's metadata (start/end timestamps, project, run, stand and scenario IDs, …)
 * `params.json` — all SUSI input parameters (flattened into a single JSON)
 * A `.nc` NetCDF4 file with the output variables (path stored in `metadata.json` under `netcdf_output_filepath`)
 
-Folders are organised by **project → stand → scenario**.  A typical layout:
+Folders are organised by **project → run → stand → scenario**: a project keeps
+everything its runs produce in its `outputs/` folder, one folder per run.
+A typical layout:
 
 ```
-data/paroninkorpi/
-├── stand_1/
-│   ├── baseline/
-│   │   ├── metadata.json
-│   │   ├── params.json
-│   │   └── output.nc
-│   ├── fertilized/
-│   │   └── ...
-│   └── dnm/
-│       └── ...
-├── stand_2/
-└── …
+projects/paroninkorpi/outputs/
+└── my_run/
+    ├── stand_1/
+    │   ├── baseline/
+    │   │   ├── metadata.json
+    │   │   ├── params.json
+    │   │   └── susi.nc
+    │   ├── fertilized/
+    │   │   └── ...
+    │   └── dnm/
+    │       └── ...
+    ├── stand_2/
+    └── …
 ```
 
 Reading `params.json` / `metadata.json` is faster than the `.nc` (a few KB vs a few MB). 
@@ -87,7 +90,7 @@ from susi.io.load_output_data import NetcdfVariablePath
 
 # 1. Read params from JSON (fast!)
 params = load_output.read_params_from_jsons(
-    simulation_folderpath=Path("data/paroninkorpi/stand_1/baseline")
+    simulation_folderpath=Path("projects/paroninkorpi/outputs/my_run/stand_1/baseline")
 )
 
 # 2. Locate the NetCDF file and list all available variables
@@ -156,9 +159,9 @@ from susi.io.load_output_data import (
     StandID, ScenarioID, NetcdfVariablePath,
 )
 
-# 1. Discover stand folders under the project
-stand_folders = load_output.list_subdirectories(
-    Path("data/paroninkorpi")
+# 1. Discover the stand folders of a run (every folder of a run is a stand)
+stand_folders = load_output.list_stand_folders(
+    run_dirpath=Path("projects/paroninkorpi/outputs/my_run")
 )
 
 # 2. Load all metadata (fast — only JSONs)
@@ -222,7 +225,7 @@ The auto-generated reference below lists everything; here is a quick map:
 | **NetCDF introspection** | `list_all_netcdf_variables` |
 | **Single-file value reading** | `read_value_several_variables_from_single_file` |
 | **Multi-file batch reading** | `read_netcdf_files_for_selected_variables`, `read_netcdf_files_for_selected_variables_from_metadatas` |
-| **Filesystem helpers** | `list_subdirectories`, `get_scenarios_for_stand`, `get_netcdf_filepaths_for_stand` |
+| **Filesystem helpers** | `list_stand_folders`, `list_subdirectories`, `get_scenarios_for_stand`, `get_netcdf_filepaths_for_stand` |
 
 The aggregation methods on `NetcdfVariableArray` include `.last_timestep()`,
 `.initial_timestep()`, `.spatial_mean_at_last_timestep()`, `.mean_over_space()`,

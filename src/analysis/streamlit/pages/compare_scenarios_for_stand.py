@@ -25,29 +25,29 @@ with col3:
             st.session_state.settings["projects_root"] = result
             st.rerun()
 
-dir_path = folder_selection.build_folder_selection_widget(
+chosen_stand_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_project_and_run_selection_widget(
         projects_root=st.session_state.settings["projects_root"]
     ).run_dir,
     label="stand",
 )
 
-# Extract stand_id and output_dir from selection
+# Extract stand_id and run_dirpath from selection
 stand_id = None
-output_dir = None
-if dir_path:
-    stand_path = Path(dir_path)
+run_dirpath = None
+if chosen_stand_folder:
+    stand_path = Path(chosen_stand_folder)
     if stand_path.exists() and stand_path.is_dir():
         stand_id = StandID(stand_path.name)
-        output_dir = stand_path.parent
+        run_dirpath = stand_path.parent
 
 # %% Show variables per scenario
-if stand_id and output_dir:
+if stand_id and run_dirpath:
     st.header("Parameter Comparison Across Scenarios")
 
     # Get differing and unique parameters
-    differing = find_differing_params(stand_id, output_dir)
-    unique = find_unique_params(stand_id, output_dir)
+    differing = find_differing_params(stand_id, run_dirpath)
+    unique = find_unique_params(stand_id, run_dirpath)
     shaped_differing = shape_differing_params(differing)
 
     # Display differing parameters (table-like, no expanders)
@@ -75,7 +75,7 @@ if stand_id and output_dir:
         else:
             st.write("No unique parameters found (all parameters differ).")
 else:
-    if dir_path:
+    if chosen_stand_folder:
         st.warning("Invalid stand folder selected.")
     else:
         st.info("Please select a stand folder to compare scenarios.")

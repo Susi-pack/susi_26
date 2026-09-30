@@ -12,7 +12,7 @@ reuse them without recomputing.
 
 Typical usage:
 
-    differing, unique = param_comparison.display_param_comparison(stand_id, output_dir)
+    differing, unique = param_comparison.display_param_comparison(stand_id, run_dirpath)
 """
 
 from pathlib import Path
@@ -31,7 +31,7 @@ from susi.io.load_output_data import StandID
 
 
 def display_param_comparison(
-    stand_id: StandID, output_dir: Path
+    stand_id: StandID, run_dirpath: Path
 ) -> tuple[dict[ParamName, dict[Any, list]], dict[ParamName, Any]]:
     """
     Compute and display differing/unique parameters across a stand's scenarios.
@@ -46,8 +46,8 @@ def display_param_comparison(
     `find_differing_params`/`find_unique_params`, so callers can reuse them
     without recomputing.
     """
-    differing = find_differing_params(stand_id, output_dir)
-    unique = find_unique_params(stand_id, output_dir)
+    differing = find_differing_params(stand_id, run_dirpath)
+    unique = find_unique_params(stand_id, run_dirpath)
     shaped_differing = shape_differing_params(differing)
 
     display(Markdown("## Differing Parameters"))

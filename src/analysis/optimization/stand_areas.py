@@ -35,12 +35,18 @@ def stand_areas_for_run(project_dir: Path, run_id: str) -> dict[StandID, float]:
     """
     Return the area in hectares of every stand in one run of a project.
 
-    The stands are the subfolders of `<project_dir>/outputs/<run_id>/`, so the
-    result covers exactly the stands the optimization will iterate over, and
-    their areas come from `<project_dir>/inputs/stand_data.json`.
+    The stands are the stand folders of `<project_dir>/outputs/<run_id>/`, as
+    listed by `load_output.list_stand_folders`: the same listing
+    `core.read_data` uses, so the result covers exactly the stands the
+    optimization will iterate over, in the same order. Their areas come from
+    `<project_dir>/inputs/stand_data.json`, where each stand is looked up by
+    its folder's name as it is. A stand folder is named by its stand ID, so
+    nothing is mapped, stripped or translated here.
 
     Raises ValueError if any of those stands has no area there; see
-    `areas_from_stand_data_document`.
+    `areas_from_stand_data_document`. Both frontends call this before the
+    user picks target variables, so a run whose folder names do not match the
+    document fails here, before the slow netcdf read.
     """
     stand_data_document = load_stand_data_document_from_json(
         path=project_layout.stand_data_path_for_project(project_dir=project_dir)
@@ -49,7 +55,7 @@ def stand_areas_for_run(project_dir: Path, run_id: str) -> dict[StandID, float]:
     run_dirpath = project_layout.run_dir(project_dir=project_dir, run_id=run_id)
     stand_ids = [
         StandID(stand_dirpath.name)
-        for stand_dirpath in load_output.list_subdirectories_sorted(path=run_dirpath)
+        for stand_dirpath in load_output.list_stand_folders(run_dirpath=run_dirpath)
     ]
 
     return areas_from_stand_data_document(
@@ -96,6 +102,7 @@ def areas_from_stand_data_document(
             _no_area_message(
                 missing_stands=missing_stands,
                 stands_without_area=stands_without_area,
+                document_stand_ids=list(stand_data_document.stands.keys()),
             )
         )
 
@@ -103,32 +110,75 @@ def areas_from_stand_data_document(
 
 
 def _no_area_message(
-    missing_stands: list[StandID], stands_without_area: list[StandID]
+    missing_stands: list[StandID],
+    stands_without_area: list[StandID],
+    document_stand_ids: list[StandID],
 ) -> str:
     """
     Spell out which stands have no area, and what the user can do about it.
 
-    The two cases are reported separately because they have different causes:
-    a stand missing from the document means the run and the document disagree
-    about which stands exist, while a stand with no `stand_area` means the
-    source data carried no area for it.
+    The two cases get a paragraph each, printed only when its list is
+    non-empty, because they have different causes and different fixes:
+
+    - A stand folder with no entry in the document means the run and the
+      document disagree about what the stands are called. The usual cause is
+      a run script that decorates the stand ID (`stand_1` for a stand keyed
+      `1`), so the fix is in the run script. document_stand_ids, the
+      document's own keys, are printed beside the folder names so that such a
+      mismatch is visible at a glance. They are passed in rather than
+      re-derived here so that this stays a pure function of what it is told.
+    - A stand that is in the document but has no `stand_area` means the
+      source data carried no area for it, so the fix is on the
+      data-generation side.
 
     Each list keeps the order it was collected in, which is the run folder's
-    own natural sort (stand_2 before stand_10), rather than being re-sorted
+    own natural sort (stand 2 before stand 10), rather than being re-sorted
     lexicographically here.
     """
-    problems = []
-    if missing_stands:
-        problems.append(f"not present in the project's stand data: {missing_stands}")
-    if stands_without_area:
-        problems.append(f"have no stand_area recorded: {stands_without_area}")
+    paragraphs = ["Cannot determine stand areas for this run."]
 
-    return (
-        "Cannot determine stand areas for this run. The following stands are "
-        + "; ".join(problems)
-        + ". The optimization weights every stand by its area, so it will not "
-        "run on a partial set -- there is no equal-area fallback, because a "
-        "fabricated area produces a plausible-looking but wrong Pareto front. "
-        "Rerun the tool that generated stand_data.json against a source that "
-        "carries stand areas (stand_area is optional in StandData by design)."
+    if missing_stands:
+        paragraphs.append(
+            "These stand folders of the run have no entry in the project's "
+            f"stand_data.json: {missing_stands}. A stand's folder must be named "
+            "by its stand ID, the key it has in stand_data.json (which has: "
+            f"{_capped_listing(stand_ids=document_stand_ids)}). Check the "
+            "`stand_id` the run script passes to SimulationMetaData."
+        )
+
+    if stands_without_area:
+        paragraphs.append(
+            f"These stands have no stand_area recorded: {stands_without_area}. "
+            "Rerun the tool that generated stand_data.json against a source "
+            "that carries stand areas (stand_area is optional in StandData by "
+            "design)."
+        )
+
+    paragraphs.append(
+        "The optimization weights every stand by its area, so it will not run "
+        "on a partial set -- there is no equal-area fallback, because a "
+        "fabricated area produces a plausible-looking but wrong Pareto front."
     )
+
+    return "\n\n".join(paragraphs)
+
+
+# How many of the document's stand IDs the missing-stand message prints. Ten
+# is enough to show how the document names its stands, which is all the
+# message needs them for.
+_MAX_DOCUMENT_STAND_IDS_SHOWN = 10
+
+
+def _capped_listing(stand_ids: list[StandID]) -> str:
+    """
+    Format stand_ids for an error message: the first few, then a count of the
+    rest, so a project with hundreds of stands does not flood the message.
+
+    Only used for the document's keys, which are shown as an example of how
+    the document names its stands. The offending stands are never capped.
+    """
+    shown = stand_ids[:_MAX_DOCUMENT_STAND_IDS_SHOWN]
+    number_not_shown = len(stand_ids) - len(shown)
+    if number_not_shown == 0:
+        return f"{shown}"
+    return f"{shown} and {number_not_shown} more"

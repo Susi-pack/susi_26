@@ -314,7 +314,7 @@ def prepare_susi_params(
         metadata=SimulationMetaData(
             project_dir=PROJECT_DIR,
             run_id="first_test",
-            stand_id=f"stand_{stand_id}",
+            stand_id=stand_id,
             scenario_id=scenario,
         ),
         susi_params=SusiParams(

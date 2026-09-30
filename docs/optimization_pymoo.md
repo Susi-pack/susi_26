@@ -89,12 +89,13 @@ The main function to read netcdf files into the SoA structure:
 ```python
 from susi.io.load_output_data import (
     read_netcdf_files_for_selected_variables,
+    list_stand_folders,
     load_all_metadatas_from_stands,
 )
 
-# 1. Load metadata from stand folders
-stands_folder = Path("projects/my_project/outputs/my_run")
-stand_folders = list_subdirectories(stands_folder)
+# 1. Load metadata from the stand folders of one run
+run_dirpath = Path("projects/my_project/outputs/my_run")
+stand_folders = list_stand_folders(run_dirpath=run_dirpath)
 metadata_by_stand = load_all_metadatas_from_stands(stand_folders)
 
 # 2. Read selected variables
