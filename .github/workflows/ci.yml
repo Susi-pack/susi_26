@@ -9,6 +9,9 @@
 #
 # The job names (lint, test, golden) are what the main-branch ruleset lists
 # as required status checks. Renaming a job means updating the ruleset too.
+#
+# astral-sh/setup-uv publishes only full version tags (v10.2.0), no moving
+# major tag like actions/checkout's v7, so it is pinned to the exact release.
 name: CI
 
 on:
@@ -31,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       # ty resolves imports from the project's .venv, so install it first.
@@ -48,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: uv sync --locked
@@ -61,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: uv sync --locked
