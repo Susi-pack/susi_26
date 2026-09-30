@@ -17,6 +17,18 @@ site_author = "Annamari Laurén"
 # Read more: https://zensical.org/docs/setup/basics/#site_url
 site_url = "https://Susi-pack.github.io/susi_26"
 
+# The repo_url adds a link to the GitHub repository in the header of every
+# page. The repo_name is the label shown next to it (defaults to "GitHub").
+#
+# Read more: https://zensical.org/docs/setup/repository/
+repo_url = "https://github.com/Susi-pack/susi_26"
+repo_name = "Susi-pack/susi_26"
+
+# Path used by the "edit this page" / "view source" buttons (the
+# content.action.* features below). Zensical defaults to the "master" branch,
+# but ours is "main", so without this those buttons would lead to a 404.
+edit_uri = "edit/main/docs/"
+
 # The copyright notice appears in the page footer and can contain an HTML
 # fragment.
 #
@@ -48,7 +60,6 @@ nav = [
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
-    { "Get started with zensical" = "zensical_index.md" },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize

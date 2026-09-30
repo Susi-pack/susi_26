@@ -69,3 +69,14 @@ jobs:
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked pytest tests/golden_file_test/test_golden_file.py
+
+  # Checks that docs compile correctly
+  docs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v7
+       - uses: astral-sh/setup-uv@v10.2.0
+         with:
+           enable-cache: true
+       - run: uv sync --locked
+       - run: uv run --locked zensical build --clean --strict
