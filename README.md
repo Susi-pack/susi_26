@@ -1,5 +1,7 @@
 Peatland simulator SUSI version used in Saari et al. (nimi) 2025 and Niemi et al. (2025) (nimi)
 
+📖 **Documentation:** <https://susi-pack.github.io/susi_26/>
+
 # Installation
 Clone this repo.
 Then, navigate to the project directory and install it using some Python package manager.
@@ -60,9 +62,6 @@ Each takes `--help`.
 ## GUI for output analysis (under development)
 `susi-analyze`
 
-# Docs
-The repo is not public yet, so the docs only exist if you compile them locally.
-We use `zensical`.
 
 # Project structure
 = To be done =
