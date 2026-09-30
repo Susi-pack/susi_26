@@ -1,0 +1,71 @@
+# CI for susi_26.
+#
+# Runs on two events:
+#   - pull_request: gives feedback on the PR branch itself while you work.
+#   - merge_group:  runs on the temporary merge commit the merge queue builds
+#                   (main + the queued PR(s)). This is the run that decides
+#                   whether main advances -- the "not rocket science rule".
+#                   Without this trigger the queue waits forever for checks.
+#
+# The job names (lint, test, golden) are what the main-branch ruleset lists
+# as required status checks. Renaming a job means updating the ruleset too.
+#
+# astral-sh/setup-uv publishes only full version tags (v10.2.0), no moving
+# major tag like actions/checkout's v7, so it is pinned to the exact release.
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+
+# A new push to a PR makes its older, still-running run useless, so cancel it.
+# Merge-queue runs are never cancelled: each one guards a specific merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The same hooks as .pre-commit-config.yaml (nbstripout, ruff, ty), so CI
+  # checks exactly what the local hook checks and versions live in one place.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      # ty resolves imports from the project's .venv, so install it first.
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      - run: uv sync --locked
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - run: uv run --locked pre-commit run --all-files --show-diff-on-failure
+
+  # The default test suite (pyproject's [tool.pytest] skips the golden file).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked pytest
+
+  # The golden-file test runs the full model (~1 min) and compares against
+  # tests/golden_file_test/golden_susi.nc. Its own job so it runs in parallel
+  # with the rest instead of adding to their time.
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked pytest tests/golden_file_test/test_golden_file.py
