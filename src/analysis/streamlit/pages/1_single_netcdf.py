@@ -1,14 +1,14 @@
-import streamlit as st
 from pathlib import Path
+
+import streamlit as st
 
 import susi.io.load_output_data as load_output
 import susi.io.utils as io_utils
-
 from analysis.streamlit.components import (
+    folder_selection,
     metadata_expander,
     netcdf_variable_explorer,
     netcdf_variable_plots_ui,
-    folder_selection,
 )
 
 # %% Choose folder

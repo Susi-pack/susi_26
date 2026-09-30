@@ -1,16 +1,17 @@
+import datetime
 import platform
 from pathlib import Path
-from typing_extensions import Self
-import datetime
+from typing import Self
+
 from pydantic import (
     BaseModel,
     ConfigDict,
+    DirectoryPath,
     Field,
+    NewPath,
     computed_field,
     field_validator,
     model_validator,
-    NewPath,
-    DirectoryPath,
 )
 
 import susi.io.utils as io_utils
@@ -20,7 +21,6 @@ from susi.io.project_layout import require_outputs_dir, run_dir
 def does_filename_have_extension(filename: str, extension: str) -> None:
     if not filename.endswith(extension):
         raise ValueError(f"File {filename} needs to have extension {extension}.")
-    return None
 
 
 class SimulationMetaData(BaseModel):
@@ -30,7 +30,7 @@ class SimulationMetaData(BaseModel):
     )
 
     project_dir: DirectoryPath = Field(
-        description='The folder of the project this run belongs to: the one holding the study\'s `inputs/` and `outputs/`. The run writes into that folder\'s `outputs/`, which must already exist. The script names it explicitly -- `project_dir("<name>")` for a user project under the projects root, `repo_root() / "example_projects" / "<name>"` for one tracked in the checkout (ADR 0006). Stored as an absolute path, so `metadata.json` says where the run came from wherever it is read.',
+        description="The folder of the project this run belongs to: the one holding the study's `inputs/` and `outputs/`. The run writes into that folder's `outputs/`, which must already exist. ",
     )
 
     run_id: str = Field(
@@ -201,7 +201,6 @@ class SimulationMetaData(BaseModel):
 
     def record_end_timestamp(self) -> None:
         self.timestamp_end = datetime.datetime.now()
-        return None
 
     def dump_json_to_file(self) -> None:
         with open(self.metadata_output_filepath, "w") as f:

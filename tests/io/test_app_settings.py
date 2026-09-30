@@ -1,7 +1,7 @@
 import pytest
 
-from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR, AppSettings
 import susi.io.utils as io_utils
+from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR, AppSettings
 
 
 class TestProjectsRoot:

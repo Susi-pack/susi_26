@@ -1,15 +1,14 @@
-from typing import NewType, Any
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
+from typing import Any, NewType
 
 from susi.io.load_output_data import (
-    StandID,
     ScenarioID,
     SimulationParamsFromJSON,
-    read_params_from_jsons,
+    StandID,
     list_subdirectories,
+    read_params_from_jsons,
 )
-
 
 ParamName = NewType("ParamName", str)
 

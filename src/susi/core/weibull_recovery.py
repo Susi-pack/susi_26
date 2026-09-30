@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Python-script for parameter recovery for the unweighted 2-parameter Weibull function assumed for diameter distribution.
 
@@ -10,10 +9,10 @@ Python conversion done by Mikko Niemi, with the help of Microsoft Copilot
 """
 
 import math
+
 import numpy as np
-from scipy.special import gamma
 from scipy.optimize import root_scalar
-from typing import List, Tuple
+from scipy.special import gamma
 
 
 def scale_dg_mean(D, shape):
@@ -22,7 +21,7 @@ def scale_dg_mean(D, shape):
         return np.nan
     try:
         return D * gamma(2 / shape + 1) / gamma(3 / shape + 1)
-    except Exception:
+    except ArithmeticError:
         return np.nan
 
 
@@ -66,7 +65,7 @@ def recweib_b(G, N, D, trace=False):
                     f"Recovered shape: {shape:.4f}, scale: {scale:.4f}, residual: {val:.4e}"
                 )
             return {"shape": shape, "scale": scale, "val": val}
-    except Exception:
+    except ValueError:  # brentq's "f(a) and f(b) must have different signs"
         if trace:
             print("Brentq failed, trying grid search…")
 
@@ -98,7 +97,7 @@ def recweib_b(G, N, D, trace=False):
 
 def generate_weibull_tree_list(
     n_classes: int, G: float, Dg: float, stems_ha: float
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """
     Generate synthetic tree list using 2-parameter Weibull distribution.
     Ensures minimum diameter is 1 cm.

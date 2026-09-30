@@ -19,15 +19,15 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from IPython.display import display, Markdown
+from IPython.display import Markdown, display
 
-from susi.io.load_output_data import StandID
 from analysis.core.parse_outputs import (
     ParamName,
     find_differing_params,
     find_unique_params,
 )
 from analysis.shared_reporting_utils.param_comparison import shape_differing_params
+from susi.io.load_output_data import StandID
 
 
 def display_param_comparison(

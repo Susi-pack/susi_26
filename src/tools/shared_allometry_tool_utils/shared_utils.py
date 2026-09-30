@@ -10,7 +10,7 @@ live in susi.io.stand_data, next to the StandData fields that hold the
 result.
 """
 
-from functools import lru_cache
+from functools import cache
 
 import shapely.ops
 from pyproj import Transformer
@@ -20,7 +20,7 @@ from shapely.geometry import Polygon
 from susi.io.stand_data import SOURCE_CRS
 
 
-@lru_cache(maxsize=None)
+@cache
 def _to_source_crs_transformer(declared_crs: str) -> Transformer:
     """One Transformer per source CRS, reused: an XML export repeats the
     same srsName on every stand."""

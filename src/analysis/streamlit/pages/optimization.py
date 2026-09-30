@@ -1,15 +1,14 @@
 import streamlit as st
 
+import analysis.optimization.core as opti_core
+import susi.io.load_output_data as load_output
+import susi.io.utils as io_utils
+from analysis.optimization.pareto_corner_plot import pareto_corner_plot
+from analysis.optimization.stand_areas import stand_areas_for_run
 from analysis.streamlit.components import (
     folder_selection,
     netcdf_variable_explorer,
 )
-from analysis.optimization.pareto_corner_plot import pareto_corner_plot
-import susi.io.utils as io_utils
-import susi.io.load_output_data as load_output
-
-import analysis.optimization.core as opti_core
-from analysis.optimization.stand_areas import stand_areas_for_run
 
 st.header("Optimization")
 
@@ -108,19 +107,20 @@ if submitted:
 
 # %% Visualize solutions
 
-if "optimization_results" in st.session_state:
-    if st.button("Plot Results", type="secondary"):
-        results: opti_core.OptimizationResults = st.session_state[
-            "optimization_results"
-        ]
-        var_paths = st.session_state.get("optimization_var_paths", [])
+if "optimization_results" in st.session_state and st.button(
+    "Plot Results", type="secondary"
+):
+    results: opti_core.OptimizationResults = st.session_state[
+        "optimization_results"
+    ]
+    var_paths = st.session_state.get("optimization_var_paths", [])
 
-        fig = pareto_corner_plot(
-            data=results.pareto_front.target_vectors,
-            random_points=results.random_points.target_vectors,
-            labels=var_paths,
-            show_diagonal=False,
-            label_fontsize=8,
-        )
+    fig = pareto_corner_plot(
+        data=results.pareto_front.target_vectors,
+        random_points=results.random_points.target_vectors,
+        labels=var_paths,
+        show_diagonal=False,
+        label_fontsize=8,
+    )
 
-        st.pyplot(fig, width="content")
+    st.pyplot(fig, width="content")

@@ -6,22 +6,22 @@
 import datetime
 
 from susi.io.susi_parameter_model import (
-    PeatTypes,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
+    CanopyLayerName,
     CanopyParams,
+    LocationsForPhotoParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandParams,
+    SusiParams,
+    WeatherParams,
     get_photo_parameters_by_location,
-    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    CanopyLayerName,
-    AllometryFileAndSpecies,
 )
 from system_inputs import SYSTEM_INPUTS_DIR
 
@@ -50,6 +50,11 @@ PARAMETERS = SusiParams(
                 CanopyLayerName.under: None,
             },
         ),
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 60.0,
+            CanopyLayerName.subdominant: 0.0,
+            CanopyLayerName.under: 0.0,
+        },
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -60,11 +65,6 @@ PARAMETERS = SusiParams(
     site_parameters=SiteParams(
         L=40.0,
         n=_N_SOIL_COLS,
-        initial_canopylayer_age_years={
-            CanopyLayerName.dominant: 60.0,
-            CanopyLayerName.subdominant: 0.0,
-            CanopyLayerName.under: 0.0,
-        },
         sitename="susirun",
         sfc_specification=1,
         hdom=None,

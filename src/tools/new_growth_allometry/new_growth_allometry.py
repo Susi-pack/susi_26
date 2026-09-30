@@ -6,17 +6,26 @@
 # %% Imports
 import argparse
 from dataclasses import dataclass
-from pathlib import Path
-import pandas as pd
 from enum import Enum
+from pathlib import Path
 
+import pandas as pd
 from pydantic import ValidationError, field_validator
 
 from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import new_growth_allometry_dir_for_project
+from susi.io.stand_data import (
+    StandDataDocument,
+    load_stand_data_document_from_json,
+    point_to_ykj,
+)
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
+)
+from tools.shared_allometry_tool_utils.cli_paths import (
+    check_output_file_available,
+    resolve_config_path,
 )
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_shared_growth_and_yield_table,
@@ -29,19 +38,10 @@ from tools.shared_allometry_tool_utils.input_validation import (
     validate_x_y_ykj,
 )
 from tools.shared_allometry_tool_utils.print_formatting import print_section
-from tools.shared_allometry_tool_utils.cli_paths import (
-    check_output_file_available,
-    resolve_config_path,
-)
-from susi.io.stand_data import (
-    StandDataDocument,
-    load_stand_data_document_from_json,
-    point_to_ykj,
-)
 from tools.shared_allometry_tool_utils.tree_stratum import (
+    ZERO_STRATUM,
     PerSpecies,
     TreeStratum,
-    ZERO_STRATUM,
 )
 
 # %% Constants -- hard-coded, non-negotiable
@@ -113,23 +113,15 @@ class NewGrowthSourcedConfig(AllometryGenerationDefaults):
 
     @field_validator("species", mode="before")
     @classmethod
-    def _normalize_species(cls, raw_species: object) -> Species:
+    def _normalize_species(cls, raw_species: object) -> object:
         """
-        Lets the config file spell "PINE" or " pine "
+        Lets the config file spell "PINE" or " pine ". Only normalizes a str;
+        pydantic's own enum validation then accepts or rejects the result
+        (and anything that isn't a str), listing the valid values itself.
         """
-        if isinstance(raw_species, Species):
-            return raw_species
-        valid_values = [s.value for s in Species]
-        if not isinstance(raw_species, str):
-            raise ValueError(
-                f"species must be a string, one of {valid_values}; got {raw_species!r}"
-            )
-        try:
-            return Species(raw_species.strip().lower())
-        except ValueError:
-            raise ValueError(
-                f"species must be one of {valid_values}; got {raw_species!r}"
-            )
+        if isinstance(raw_species, str):
+            return raw_species.strip().lower()
+        return raw_species
 
 
 class NewGrowthConfig(NewGrowthSourcedConfig):

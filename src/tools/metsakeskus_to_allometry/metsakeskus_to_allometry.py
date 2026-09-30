@@ -25,6 +25,13 @@ from susi.io.project_layout import (
     allometry_dir_for_project,
     stand_data_path_for_project,
 )
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    StandData,
+    StandDataDocument,
+    centroid_to_ykj,
+    dump_stand_data_document,
+)
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
@@ -36,8 +43,15 @@ from tools.shared_allometry_tool_utils.metsakeskus_peat_type import (
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
 )
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
+    resolve_config_path,
+)
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_isolated_growth_and_yield_table,
+)
+from tools.shared_allometry_tool_utils.growth_and_yield_table import (
+    initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
@@ -49,21 +63,10 @@ from tools.shared_allometry_tool_utils.print_formatting import (
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.cli_paths import (
-    finalize_cli_config,
-    resolve_config_path,
-)
 from tools.shared_allometry_tool_utils.tree_stratum import (
+    ZERO_STRATUM,
     PerSpecies,
     TreeStratum,
-    ZERO_STRATUM,
-)
-from susi.io.stand_data import (
-    SOURCE_CRS,
-    StandData,
-    StandDataDocument,
-    centroid_to_ykj,
-    dump_stand_data_document,
 )
 
 # %% Constants -- hard-coded, non-negotiable
@@ -140,7 +143,6 @@ class ParsedStand:
     soiltype: int | None
     peat_type: PeatTypes | None
     strata: PerSpecies[TreeStratum]
-    stand_meanage: float
     stand_basalarea: float
     stand_meanheight: float
     stand_meandiameter: float
@@ -496,7 +498,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
         weighted_age = rows["age"].mean()
         weighted_diameter = rows["meandiameter"].mean()
         weighted_height = rows["meanheight"].mean()
-        age = int(round(weighted_age)) if pd.notna(weighted_age) else 0
+        age = round(weighted_age) if pd.notna(weighted_age) else 0
         diameter = float(weighted_diameter) if pd.notna(weighted_diameter) else 0.0
         height = float(weighted_height) if pd.notna(weighted_height) else 0.0
 
@@ -665,9 +667,8 @@ def determine_dominant_and_subdominant_species(
     deliberately does not duplicate the dominant species for a monoculture
     stand."""
     basal_areas = {
-        1: strata.pine.basal_area,
-        2: strata.spruce.basal_area,
-        3: strata.deciduous.basal_area,
+        species_code: species_stratum(strata, species_code).basal_area
+        for species_code in _SPECIES_SLOT
     }
     ranked = sorted(
         basal_areas, key=lambda species_code: basal_areas[species_code], reverse=True
@@ -687,13 +688,8 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
     strata = candidate.strata
     stand_total_ba = total_basal_area(strata)
 
-    # Stand-level age/height/diameter: basal-area-weighted across the three
+    # Stand-level height/diameter: basal-area-weighted across the three
     # species slots (mirrors aggregate_species_group's weighting, one level up).
-    stand_age = (
-        strata.pine.age * strata.pine.basal_area
-        + strata.spruce.age * strata.spruce.basal_area
-        + strata.deciduous.age * strata.deciduous.basal_area
-    ) / stand_total_ba
     stand_height = (
         strata.pine.mean_height * strata.pine.basal_area
         + strata.spruce.mean_height * strata.spruce.basal_area
@@ -719,7 +715,6 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         soiltype=candidate.soiltype,
         peat_type=candidate.peat_type,
         strata=strata,
-        stand_meanage=float(stand_age),
         stand_basalarea=float(stand_total_ba),
         stand_meanheight=float(stand_height),
         stand_meandiameter=float(stand_diameter),
@@ -756,9 +751,16 @@ def build_stands(
 # docstring there.
 
 
+# The PerSpecies slot each species code names. The one species-code -> slot
+# mapping in this tool: species_stratum and isolate_species_layer both read it.
+# Moving it into shared_allometry_tool_utils/ is create-input-structure
+# ticket 12's job.
+_SPECIES_SLOT = {1: "pine", 2: "spruce", 3: "deciduous"}
+
+
 def species_stratum(strata: PerSpecies[TreeStratum], species_code: int) -> TreeStratum:
     """The one TreeStratum a species code (1=pine, 2=spruce, 3=deciduous) refers to."""
-    return {1: strata.pine, 2: strata.spruce, 3: strata.deciduous}[species_code]
+    return getattr(strata, _SPECIES_SLOT[species_code])
 
 
 def isolate_species_layer(
@@ -767,14 +769,12 @@ def isolate_species_layer(
     """Zeroes every species slot except active_species -- this is how a
     single canopy layer (dominant or subdominant) is modeled as that one
     species growing alone (see docs/adr/0002)."""
-    if active_species == 1:
-        return PerSpecies(pine=strata.pine, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM)
-    if active_species == 2:
-        return PerSpecies(
-            pine=ZERO_STRATUM, spruce=strata.spruce, deciduous=ZERO_STRATUM
-        )
-    return PerSpecies(
-        pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=strata.deciduous
+    all_zero = PerSpecies(
+        pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM
+    )
+    return dataclasses.replace(
+        all_zero,
+        **{_SPECIES_SLOT[active_species]: species_stratum(strata, active_species)},
     )
 
 
@@ -907,19 +907,34 @@ def process_stand(
                 config.step_years,
             )
 
+        # Each layer starts at the age its own curve starts at: the growth
+        # model's basal-area-weighted pooled age of the strata it was grown
+        # from. Each layer is one species grown alone (docs/adr/0002), so
+        # that's the species' own stratum age -- never a pooled stand-level
+        # age -- as long as the stratum age is already a whole number
+        # (aggregate_species_group rounds it; the growth model rounds again).
+        # It's read off the table either way, the same way
+        # xml_to_allometry.py does, so it's always the curve's real start.
         allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=plan.dominant_csv, species_id=stand.dominant_species
             ),
         }
-        if plan.subdominant_csv is not None:
+        initial_age_per_layer: dict[CanopyLayerName, float] = {
+            CanopyLayerName.dominant: initial_age(dominant_table),
+        }
+        if plan.subdominant_csv is not None and subdominant_table is not None:
             allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
                     file_path=plan.subdominant_csv, species_id=stand.subdominant_species
                 )
+            initial_age_per_layer[CanopyLayerName.subdominant] = initial_age(
+                subdominant_table
+            )
 
         stand_data = StandData(
             site_fertility_class=stand.fertilityclass,
             allometry_file_per_layer=allometry_file_per_layer,
+            initial_age_per_layer=initial_age_per_layer,
             x_ykj=stand.x_ykj,
             y_ykj=stand.y_ykj,
             polygon=stand.geometry,

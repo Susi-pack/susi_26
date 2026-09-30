@@ -12,7 +12,7 @@ title/figure generation that used to be hand-repeated independently in each
 frontend, keeping the guard condition and message strings defined once.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from matplotlib.figure import Figure
 

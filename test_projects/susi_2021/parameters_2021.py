@@ -1,68 +1,91 @@
-# -*- coding: utf-8 -*-
 """
 Created on Fri Jun 28 16:03:26 2019
 
 @author: alauren
 """
 
+import datetime
 from dataclasses import dataclass
 from typing import NewType
-import datetime
 
 from susi.io.project_layout import allometry_dir_for_project, data_dir_for_project
-from susi.io.utils import repo_root
 from susi.io.susi_parameter_model import (
-    PeatTypes,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
     AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    LocationsForPhotoParams,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandParams,
+    SusiParams,
+    WeatherParams,
     get_photo_parameters_by_location,
-    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
-
+from susi.io.utils import repo_root
 
 # A testing project lives in the checkout, so it names its folder from the
 # repo root rather than through `project_dir()` (ADR 0006). The one definition:
-# susi_2021.py runs into it and figures_2021.py reads back from it.
+# susi_2021.py runs into it and figures_2021.ipynb reads back from it.
 PROJECT_DIR = repo_root() / "test_projects" / "susi_2021"
 RUN_ID = "run_01"
 
-# Motti growth tables are allometry, so they live in inputs/allometry/; the
-# weather files and field measurements are raw data under data/.
+# The Motti files (.xls) are raw data under data/motti/; convert_motti.py turns
+# the ones PARAMS_PER_SITE references into the CSV allometry files in
+# inputs/allometry/, which is what the runs read. The weather files and field
+# measurements are raw data under data/ too.
 ALLOMETRY_DIR = allometry_dir_for_project(PROJECT_DIR)
+MOTTI_DIR = data_dir_for_project(PROJECT_DIR) / "motti"
 WEATHER_DIR = data_dir_for_project(PROJECT_DIR) / "weather"
 MEASUREMENTS_DIR = data_dir_for_project(PROJECT_DIR) / "measurements"
 
 
 @dataclass(frozen=True)
 class VaryingSusiParams:
+    """The simulation-side record of one site, as the original `dwts_para.py`
+    held it. Field measurements the figures compare against live apart, in
+    MEASUREMENTS_PER_SITE. Fields marked "not used" are kept so nothing the
+    original recorded is lost (#294)."""
+
+    # Not used. Number of groundwater tubes; always equals the number of
+    # tubes listed in MEASUREMENTS_PER_SITE.
     ntubes: int
+    # Not used. Interpolated WT file name; no such file is in the data.
     file: str
     wfile: str
-    mottifile: str
+    # CSV converted from the Motti file of the same stem in MOTTI_DIR (the
+    # original called this field `mottifile`; see "Motti file" in CONTEXT.md).
+    allometry_file: str
+    # Species of the allometry zone (1 = pine). The Motti file records it on
+    # its second sheet; convert_motti.py checks the two agree (#206).
+    species_id: int
     ddepth: float
     Swidth: float
     vonP: list[int]
     ptype: list[str]
     start_date: datetime.datetime
     end_date: datetime.datetime
+    # Not used. "wet" or "dry" plot of the pair.
     status: str
     bulk_dens: float
+    # Not used. Whether the site was thinned during the measurement period.
+    # The 11 sites in SITE_LABELS are those where it is False (#291).
     thinning: bool
     drain_age: int
+    # Measured stand volume [start, end], m3/ha. Not passed to the model
+    # (the original didn't either); the figures read the observed volume
+    # growth from it.
     vol: list[float]
     sfc: int
+    # Not used. Measured dominant height [start, end], m. Not passed to the
+    # model, as in the original.
     hdom: list[float]
+    # Not used. The original's matplotlib marker for the site.
     mark: str
     Aini: int
     depoN: float
@@ -86,7 +109,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTansa21Interp.csv",
         wfile="muhos_weather.csv",  # drained 1967 -1982 -> 1968
-        mottifile="ansa21_A.xls",
+        allometry_file="ansa21_A.csv",
+        species_id=1,
         ddepth=-0.45,
         Swidth=40.0,
         vonP=[2, 3, 4, 4, 6, 6],
@@ -110,7 +134,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTansa26Interp.csv",
         wfile="muhos_weather.csv",
-        mottifile="ansa26_A.xls",
+        allometry_file="ansa26_A.csv",
+        species_id=1,
         ddepth=-0.45,
         Swidth=40.0,
         vonP=[2, 3, 4, 4, 6, 6],
@@ -134,7 +159,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTjaakkoin61Interp.csv",
         wfile="jaakkoinsuo_weather.csv",  # drained 1908
-        mottifile="jaakkoin61_A.xls",
+        allometry_file="jaakkoin61_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=40.0,
         vonP=[4, 8, 7, 7, 7, 7],
@@ -158,7 +184,8 @@ PARAMS_PER_SITE = {
         ntubes=8,
         file="DWTjaakkoin62Interp.csv",
         wfile="jaakkoinsuo_weather.csv",
-        mottifile="jaakkoin62_A.xls",
+        allometry_file="jaakkoin62_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=40.0,
         vonP=[4, 8, 7, 7, 7, 7],
@@ -182,7 +209,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira11Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira11_A.xls",
+        allometry_file="koira11_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 7, 7],
@@ -206,7 +234,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira12Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira12_A.xls",
+        allometry_file="koira12_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -230,7 +259,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira21Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira21_harvennus_A.xls",
+        allometry_file="koira21_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -254,7 +284,8 @@ PARAMS_PER_SITE = {
         ntubes=3,
         file="DWTkoira22Interp.csv",
         wfile="koirasuo_weather.csv",
-        mottifile="koira22_harvennus_A.xls",
+        allometry_file="koira22_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.85,
         Swidth=37.0,
         vonP=[4, 4, 5, 6, 6, 6],
@@ -278,7 +309,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva11Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva11_A.xls",
+        allometry_file="neva11_A.csv",
+        species_id=1,
         ddepth=-1.03,
         Swidth=30.0,
         vonP=[5, 5, 5, 4, 4, 4],
@@ -302,7 +334,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva14Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva14_A.xls",
+        allometry_file="neva14_A.csv",
+        species_id=1,
         ddepth=-1.03,
         Swidth=30.0,
         vonP=[5, 5, 5, 4, 4, 4],
@@ -326,7 +359,8 @@ PARAMS_PER_SITE = {
         ntubes=7,
         file="DWTneva21Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva21_harvennus_A.xls",
+        allometry_file="neva21_harvennus_A.csv",
+        species_id=1,
         ddepth=-1.07,
         Swidth=30.0,
         vonP=[4, 4, 4, 4, 4, 4],
@@ -350,7 +384,8 @@ PARAMS_PER_SITE = {
         ntubes=6,
         file="DWTneva24Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva24_harvennus_A.xls",
+        allometry_file="neva24_harvennus_A.csv",
+        species_id=1,
         ddepth=-1.07,
         Swidth=30.0,
         vonP=[4, 4, 4, 4, 4, 4],
@@ -374,7 +409,8 @@ PARAMS_PER_SITE = {
         ntubes=10,
         file="DWTneva31Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva31_A.xls",
+        allometry_file="neva31_A.csv",
+        species_id=1,
         ddepth=-1.08,
         Swidth=30.0,
         vonP=[5, 5, 4, 5, 5, 5],
@@ -398,7 +434,8 @@ PARAMS_PER_SITE = {
         ntubes=10,
         file="DWTneva34Interp.csv",
         wfile="nevajarvi_weather.csv",
-        mottifile="neva34_A.xls",
+        allometry_file="neva34_A.csv",
+        species_id=1,
         ddepth=-1.08,
         Swidth=30.0,
         vonP=[5, 5, 4, 5, 5, 5],
@@ -422,7 +459,8 @@ PARAMS_PER_SITE = {
         ntubes=12,
         file="DWTparkano11Interp.csv",
         wfile="parkano_weather.csv",
-        mottifile="parkano11_A.xls",
+        allometry_file="parkano11_A.csv",
+        species_id=1,
         ddepth=-0.86,
         Swidth=65.0,
         vonP=[3, 3, 6, 6, 6, 6],
@@ -446,7 +484,8 @@ PARAMS_PER_SITE = {
         ntubes=14,
         file="DWTparkano12Interp.csv",
         wfile="parkano_weather.csv",
-        mottifile="parkano12_harvennus_A.xls",
+        allometry_file="parkano12_harvennus_A.csv",
+        species_id=1,
         ddepth=-0.89,
         Swidth=65.0,
         vonP=[3, 5, 6, 6, 6, 6],
@@ -467,6 +506,146 @@ PARAMS_PER_SITE = {
         depoK=0.95,
     ),
 }
+
+
+@dataclass(frozen=True)
+class SiteMeasurements:
+    """Field measurements of one site, as the original `wt_figures.py` held
+    them (its `wt_meas` table and its `names` list). Only the figures read
+    them; nothing here feeds the simulation."""
+
+    # Display name in the figures and the residual table.
+    name: str
+    # Measured WT workbook, in MEASUREMENTS_DIR / "Pohjavesiaineistot".
+    file: str
+    # Groundwater tube numbers: the columns of `file` that belong to the site.
+    tubes: list[int]
+    # Not used. Distance of each tube from the ditch, m, in the order of
+    # `tubes`. The original wrote them from the ditch spacing (mid-strip
+    # tubes at s/2, Nevajärvi's at s/4 and s/2, with s = 40 m at Ansasaari,
+    # 37 m at Koirasuo, 30 m at Nevajärvi); these are the evaluated values.
+    # None where the original recorded none (the Parkano sites).
+    dist: list[float] | None
+
+
+MEASUREMENTS_PER_SITE = {
+    SiteLabel("ansa21"): SiteMeasurements(
+        name="Ansasaari21",
+        file="muhos_2_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3, 4, 5, 6],
+        dist=[5.0, 20.0, 5.0, 5.0, 20.0, 5.0],
+    ),
+    SiteLabel("ansa26"): SiteMeasurements(
+        name="Ansasaari26",
+        file="muhos_2_pohjavesi_koottu.xlsx",
+        tubes=[28, 29, 30],
+        dist=[5.0, 20.0, 5.0],
+    ),
+    SiteLabel("jaakkoin61"): SiteMeasurements(
+        name="Jaakkoinsuo61",
+        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
+        tubes=[2, 3, 12, 13, 14, 15],
+        dist=[5.0, 5.0, 16.0, 16.0, 17.5, 27.0],
+    ),
+    SiteLabel("jaakkoin62"): SiteMeasurements(
+        name="Jaakkoinsuo62",
+        file="jaakkoinsuo_pohjavesi_koottu.xlsx",
+        tubes=[28, 30, 36, 39, 42, 43, 44, 45],
+        dist=[32.0, 26.0, 21.0, 13.0, 15.0, 23.0, 37.5, 46.0],
+    ),
+    SiteLabel("koira11"): SiteMeasurements(
+        name="Koirasuo11",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[13, 14, 15],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira12"): SiteMeasurements(
+        name="Koirasuo12",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira21"): SiteMeasurements(
+        name="Koirasuo21",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[19, 20, 21],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("koira22"): SiteMeasurements(
+        name="Koirasuo22",
+        file="koiraoja_pohjavesi_koottu.xlsx",
+        tubes=[31, 32, 33],
+        dist=[5.0, 18.5, 5.0],
+    ),
+    SiteLabel("neva11"): SiteMeasurements(
+        name="Nevajärvi11",
+        file="nevajarvi_1_pohjavesi_koottu.xlsx",
+        tubes=[5, 6, 7, 8, 9, 10],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva14"): SiteMeasurements(
+        name="Nevajärvi14",
+        file="nevajarvi_1_pohjavesi_koottu.xlsx",
+        tubes=[36, 41, 42, 43, 44, 45],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva21"): SiteMeasurements(
+        name="Nevajärvi21",
+        file="nevajarvi_2_pohjavesi_koottu.xlsx",
+        tubes=[5, 6, 7, 8, 9, 10, 11],
+        # Six distances for seven tubes, as in the original.
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva24"): SiteMeasurements(
+        name="Nevajärvi24",
+        file="nevajarvi_2_pohjavesi_koottu.xlsx",
+        tubes=[36, 41, 42, 43, 44, 45],
+        dist=[5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva31"): SiteMeasurements(
+        name="Nevajärvi31",
+        file="nevajarvi_3_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        dist=[5.0, 7.5, 15.0, 7.5, 5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("neva34"): SiteMeasurements(
+        name="Nevajärvi34",
+        file="nevajarvi_3_pohjavesi_koottu.xlsx",
+        tubes=[41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+        dist=[5.0, 7.5, 15.0, 7.5, 5.0, 5.0, 7.5, 15.0, 7.5, 5.0],
+    ),
+    SiteLabel("parkano11"): SiteMeasurements(
+        name="Parkano11",
+        file="parkano_1_pohjavesi_koottu.xlsx",
+        tubes=[22, 23, 24, 27, 28, 29, 32, 33, 34, 37, 38, 39],
+        dist=None,
+    ),
+    SiteLabel("parkano12"): SiteMeasurements(
+        name="Parkano12",
+        file="parkano_3_pohjavesi_koottu.xlsx",
+        tubes=[1, 2, 9, 10, 11, 12, 19, 20, 21, 22, 29, 30, 31, 32],
+        dist=None,
+    ),
+}
+
+
+# The sites susi_2021.py runs and figures_2021.ipynb plots: the 11 whose
+# `thinning` is False, as in the original (the thinning sites are #291). The
+# order is the original figures' order, which sets each site's panel letter
+# and colour; the run doesn't depend on it.
+SITE_LABELS = [
+    SiteLabel("koira11"),
+    SiteLabel("koira12"),
+    SiteLabel("ansa21"),
+    SiteLabel("ansa26"),
+    SiteLabel("neva11"),
+    SiteLabel("neva14"),
+    SiteLabel("neva31"),
+    SiteLabel("neva34"),
+    SiteLabel("jaakkoin61"),
+    SiteLabel("jaakkoin62"),
+    SiteLabel("parkano11"),
+]
 
 
 def _rho_mor_from_sfc(sfc: int) -> float:
@@ -502,8 +681,8 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             canopy_layer_allometry=CanopyLayerAllometry(
                 allometry_file_registry={
                     1: AllometryFileAndSpecies(
-                        file_path=ALLOMETRY_DIR / site_params.mottifile,
-                        species_id=1,
+                        file_path=ALLOMETRY_DIR / site_params.allometry_file,
+                        species_id=site_params.species_id,
                     )
                 },
                 pointers={
@@ -512,6 +691,11 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: site_params.Aini,
+                CanopyLayerName.subdominant: 0.0,
+                CanopyLayerName.under: 0.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -522,15 +706,12 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
         site_parameters=SiteParams(
             L=L,
             n=n,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: site_params.Aini,
-                CanopyLayerName.subdominant: 0.0,
-                CanopyLayerName.under: 0.0,
-            },
             sitename="susirun",
             sfc_specification=1,
+            # Measured values, not model inputs: None, as in the original's
+            # `wbal_scens` defaults.
             hdom=None,
-            vol=site_params.vol,
+            vol=None,
             smc="Peatland",
             nLyrs=50,
             dzLyr=0.05,
@@ -539,7 +720,10 @@ def assign_susi_params_to_site(site_label: SiteLabel) -> SusiParams:
             ditch_depth_20y_west=[site_params.ddepth],
             ditch_depth_20y_east=[site_params.ddepth],
             scenario_name=[site_label],  # kasvunlisaykset
-            drain_age=50.0,
+            # The site's own drainage age, as the original computed h_mor per
+            # site (vesitase_call.py). The previous port hardcoded 50 (#152).
+            # h_mor is drain_age's only consumer.
+            drain_age=site_params.drain_age,
             initial_h=-0.2,
             slope=0.0,
             peat_type=[

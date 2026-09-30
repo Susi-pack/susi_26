@@ -5,15 +5,16 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from susi.io import stand_data
 from susi.io.load_output_data import StandID
-from susi.io.utils import SRC_DIR
+from susi.io.project_layout import STAND_DATA_FILENAME
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
     read_allometry_info_from_csv,
 )
+from susi.io.utils import SRC_DIR
 from tools.new_growth_allometry import new_growth_allometry as nga
-from susi.io import stand_data
 from tools.shared_allometry_tool_utils import (
     input_validation,
     tree_stratum,
@@ -96,7 +97,7 @@ def test_new_growth_config_overrides_defaults():
 def test_new_growth_config_is_frozen():
     config = nga.NewGrowthConfig.model_validate(_valid_raw())
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
-        config.altitude = 200.0  # noqa: B010
+        config.altitude = 200.0  # ty: ignore[invalid-assignment]
 
 
 def test_load_new_growth_config_reads_toml(tmp_path):
@@ -654,6 +655,7 @@ def _stand_data_document(
                         file_path=allometry_dir / "dominant.csv", species_id=1
                     )
                 },
+                initial_age_per_layer={CanopyLayerName.dominant: 40.0},
                 x_ykj=x_ykj,
                 y_ykj=y_ykj,
             )
@@ -727,7 +729,7 @@ def test_sourced_mode_produces_the_same_table_as_standalone_mode():
 
 @pytest.fixture
 def stand_data_file(tmp_path):
-    path = tmp_path / stand_data.STAND_DATA_FILENAME
+    path = tmp_path / STAND_DATA_FILENAME
     stand_data.dump_stand_data_document(
         output_path=path,
         document=_stand_data_document(allometry_dir=tmp_path / "allometry"),
@@ -891,7 +893,7 @@ def test_a_sourced_out_of_range_ykj_coordinate_is_a_clean_cli_error(
     # the CLI check afterwards. Same range, earlier catch. What matters
     # here is that it still exits the way every other bad input to these
     # tools does -- parser.error naming the file, not a raw traceback.
-    stand_data_path = tmp_path / stand_data.STAND_DATA_FILENAME
+    stand_data_path = tmp_path / STAND_DATA_FILENAME
     stand_data.dump_stand_data_document(
         output_path=stand_data_path,
         document=_stand_data_document(allometry_dir=tmp_path / "allometry"),
@@ -916,7 +918,7 @@ def test_a_sourced_out_of_range_ykj_coordinate_is_a_clean_cli_error(
 def test_a_malformed_stand_data_document_is_a_clean_cli_error(
     monkeypatch, project_dir, sourced_config_file, tmp_path, capsys
 ):
-    stand_data_path = tmp_path / stand_data.STAND_DATA_FILENAME
+    stand_data_path = tmp_path / STAND_DATA_FILENAME
     stand_data_path.write_text('{"not": "a stand data document"}')
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
@@ -975,7 +977,7 @@ def test_main_sourced_run_in_a_project_whose_stand_allometry_already_exists(
     allometry_dir.mkdir()
     stand_csv = allometry_dir / "dominant.csv"
     stand_csv.write_text("the stand tool's own CSV\n")
-    stand_data_path = project_dir / "inputs" / stand_data.STAND_DATA_FILENAME
+    stand_data_path = project_dir / "inputs" / STAND_DATA_FILENAME
     stand_data.dump_stand_data_document(
         output_path=stand_data_path,
         document=_stand_data_document(allometry_dir=allometry_dir),

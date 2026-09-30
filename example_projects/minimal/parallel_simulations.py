@@ -2,11 +2,11 @@
 import argparse
 from multiprocessing import Pool
 
-from susi.io.execution_config import SimulationParams, MultipleSusis
-from susi.core.susi_main import Susi
-
 # parameters.py beside this script: the project's parameters and its folder.
 import parameters
+
+from susi.core.susi_main import Susi
+from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import SusiParams
 

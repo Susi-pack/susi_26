@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sat Jan 19 19:59:31 2019
 
@@ -6,7 +5,8 @@ Created on Sat Jan 19 19:59:31 2019
 """
 
 import numpy as np
-from susi.core.susi_utils import peat_hydrol_properties, CWTr
+
+from susi.core.susi_utils import CWTr, peat_hydrol_properties
 
 
 class StripHydrology:
@@ -167,7 +167,6 @@ class StripHydrology:
         self.roffwest, self.roffeast = self.runoff(
             self.H, Trminus1, Trplus1, self.dt, self.dy, self.L
         )
-        self.surface_runoff
         self.roff = self.roffwest + self.roffeast + np.mean(self.surface_runoff)
 
         self.dwt = self.H - self.ele

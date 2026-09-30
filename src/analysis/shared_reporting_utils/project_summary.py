@@ -7,8 +7,8 @@ Extracted per #230 to eliminate the duplicated fixed-variable-list tuple and
 row-building loop that used to live independently in each frontend.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import pandas as pd
 

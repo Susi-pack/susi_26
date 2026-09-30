@@ -19,6 +19,7 @@
 # NPP/leaf-litter/demand/etc. for columns that were never cut. do_clearcut
 # is now correctly scoped to cut_cols, and this test passes.
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 
@@ -486,7 +487,7 @@ class TestDoClearcutAllometrySwitchover:
             SFC,
         )
         assert len(new_zones) == 2
-        assert set(z.id for z in new_zones) == {1, 2}
+        assert {z.id for z in new_zones} == {1, 2}
         assert list(new_zones[0].cols) == [CUT_COLS[0]]
         assert list(new_zones[1].cols) == [CUT_COLS[1]]
 
@@ -527,11 +528,11 @@ class TestMultiZoneCanopylayer:
     """
 
     N = 5
-    ZONE1_COLS = [0, 1]
-    ZONE2_COLS = [2, 3, 4]
+    ZONE1_COLS: ClassVar[list[int]] = [0, 1]
+    ZONE2_COLS: ClassVar[list[int]] = [2, 3, 4]
     # dominant layer has 2 real zone ids (1 and 2) instead of the single
     # zone every other test/config in this repo uses.
-    POINTERS = [1, 1, 2, 2, 2]
+    POINTERS: ClassVar[list[int]] = [1, 1, 2, 2, 2]
     # zone 1's columns all have sfc=1, zone 2's all have sfc=4 -- distinct
     # medians per zone, so the two zones must fit distinct allometries.
     SFC = np.array([1, 1, 4, 4, 4])

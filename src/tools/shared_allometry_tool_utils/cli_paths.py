@@ -15,7 +15,6 @@ composition in argparse-flavoured validation.
 
 import argparse
 from pathlib import Path
-from typing import Optional
 
 from susi.io.project_layout import allometry_dir_for_project, inputs_dir_for_project
 from tools.shared_allometry_tool_utils.input_validation import validate_altitude_ddy
@@ -60,7 +59,7 @@ def check_output_file_available(
 
 
 def resolve_config_path(
-    explicit_config: Optional[Path],
+    explicit_config: Path | None,
     project_dir: Path,
     parser: argparse.ArgumentParser,
     config_filename: str,

@@ -1,15 +1,15 @@
 # Declares data structures for the JSON document storing external stand data information
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Self
 
 import shapely
-from pyproj import Transformer
 from pydantic import (
     AfterValidator,
+    BeforeValidator,
     Field,
+    InstanceOf,
     PlainSerializer,
-    PlainValidator,
     SerializationInfo,
     SerializerFunctionWrapHandler,
     ValidationInfo,
@@ -17,6 +17,7 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pyproj import Transformer
 from shapely.errors import ShapelyError
 from shapely.geometry import Polygon
 
@@ -37,12 +38,18 @@ from susi.io.susi_parameter_model import (
 # names, which is where the tool tests look for it.
 from susi.io.project_layout import STAND_DATA_FILENAME as STAND_DATA_FILENAME
 from susi.io.extra_pydantic_types import (
-    StrictFrozenModel,
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    StrictFrozenModel,
 )
-
+from susi.io.load_output_data import StandID
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+    StandParams,
+)
 
 # %% Coordinates: SOURCE_CRS and the YKJ grid
 #
@@ -53,27 +60,11 @@ from susi.io.extra_pydantic_types import (
 # rounded/scaled to the grid units it wants (10 km easting units, 1 km
 # northing units).
 #
-# Both generating tools take a stand's YKJ grid location at its polygon
-# centroid, through the one centroid_to_ykj below (xml_to_allometry.py used
-# the first polygon vertex until ticket 22). That location feeds only the
-# sawlog-reduction equation (StemCurve.sawlogReduction), so it's a
-# growth-model input, not a second set of coordinates for the stand.
-#
-# Lives here, beside StandData's x_ykj/y_ykj, so that `susi/` owns the whole
-# per-stand record without importing `tools/`.
-
 SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS all stand geometry is brought into
 YKJ_CRS = "EPSG:2393"  # Finnish YKJ grid, what Growth_and_Yield_Table's x/y expect
 
 # The plausible range of a YKJ grid coordinate, in exactly the units
-# point_to_ykj returns below -- which is why they live here, next to the
-# function that produces them, rather than in whichever module happens to
-# check them. This is the ONE definition: StandData's x_ykj/y_ykj fields
-# (below) and tools' input_validation.validate_x_y_ykj both use it, so a
-# coordinate is held to the same bounds however it reaches the tools -- read
-# out of a stand-data document, or converted from a config's ETRS-TM35FIN
-# x/y.
-#
+# point_to_ykj returns below
 # Deliberately wider than Finland itself (real mainland stands land around
 # x 305-376, y 6600-7780), for the same reason ALTITUDE_MIN/MAX and
 # DDY_MIN/MAX are: this is a typo-catcher, not a border. It should catch a
@@ -124,39 +115,45 @@ def require_source_crs(declared_crs: str | None, where: str) -> None:
         )
 
 
-def _validate_stand_polygon(value: Any) -> Polygon:
+def _parse_wkt(value: Any) -> Any:
     """
-    StandPolygon's validator: a shapely Polygon passes through as-is, a str is
-    parsed as WKT (what stand_data.json holds), and anything that doesn't end
-    up as a non-empty Polygon is rejected -- a MultiPolygon included, since no
-    source produces one (see ticket 22) and consumers call Polygon-only API.
+    StandPolygon's before-validator: a str is parsed as WKT (what
+    stand_data.json holds); anything else passes through untouched, for
+    InstanceOf[Polygon] to accept or reject.
     """
-    if isinstance(value, str):
-        try:
-            value = shapely.from_wkt(value)
-        except ShapelyError as error:
-            # Also catches the pre-ticket-22 on-disk format (raw
-            # gml:coordinates pairs), which isn't WKT.
-            raise ValueError(f"polygon is not valid WKT: {error}") from error
-    if not isinstance(value, Polygon):
-        raise ValueError(
-            f"polygon must be a shapely Polygon or its WKT, got {type(value).__name__}"
-        )
-    if value.is_empty:
+    if not isinstance(value, str):
+        return value
+    try:
+        return shapely.from_wkt(value)
+    except ShapelyError as error:
+        # Also catches the pre-ticket-22 on-disk format (raw
+        # gml:coordinates pairs), which isn't WKT.
+        raise ValueError(f"polygon is not valid WKT: {error}") from error
+
+
+def _require_non_empty(polygon: Polygon) -> Polygon:
+    """StandPolygon's after-validator: an empty Polygon is still a Polygon,
+    so InstanceOf lets it through; it has no area or centroid to use."""
+    if polygon.is_empty:
         raise ValueError("polygon must not be empty")
-    return value
+    return polygon
 
 
 # The stand boundary: a shapely Polygon in memory, a WKT string on disk. See
 # docs/adr/0004 for why WKT, and why the CRS lives on the document rather
 # than inside the string (shapely can't read EWKT's "SRID=...;" prefix).
-# PlainValidator replaces pydantic's own validation for the type, and
+# Validation runs in order: _parse_wkt turns a WKT string into a geometry,
+# InstanceOf[Polygon] rejects anything that isn't a Polygon -- a MultiPolygon
+# included, since no source produces one (see ticket 22) and consumers call
+# Polygon-only API -- and _require_non_empty rejects an empty one.
+# InstanceOf checks the type without asking pydantic for a Polygon schema, and
 # WithJsonSchema describes it as the string it serializes to -- together they
 # let the model build without arbitrary_types_allowed, which on its own would
 # still leave the model unable to write or read a Polygon as JSON.
 StandPolygon = Annotated[
-    Polygon,
-    PlainValidator(_validate_stand_polygon),
+    InstanceOf[Polygon],
+    BeforeValidator(_parse_wkt),
+    AfterValidator(_require_non_empty),
     PlainSerializer(lambda polygon: polygon.wkt, return_type=str),
     WithJsonSchema({"type": "string", "description": "WKT POLYGON"}),
 ]
@@ -179,13 +176,13 @@ class StandData(StrictFrozenModel):
 
     site_fertility_class: PositiveInt = Field(description="Site fertility class")
     allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = Field(
+        description="Allometry file and species per canopy layer (dominant/subdominant/under). Same element type StandParams uses."
+    )
+    initial_age_per_layer: dict[CanopyLayerName, NonNegativeFloat] = Field(
         description=(
-            "Allometry file and species per canopy layer (dominant/subdominant/"
-            "under). Same element type StandParams uses; build_stand_params "
-            "expands it into a CanopyLayerAllometry. Inside a "
-            "StandDataDocument, each file_path is absolute in memory and "
-            "relative to the folder holding stand_data.json on disk -- see "
-            "docs/adr/0005."
+            "Age of each canopy layer's trees at the start of the simulation, in years. "
+            "Same keys as allometry_file_per_layer. build_stand_params turns it into "
+            "StandParams.initial_canopylayer_age_years."
         )
     )
     x_ykj: YkjEasting = Field(
@@ -193,8 +190,7 @@ class StandData(StrictFrozenModel):
             "The stand's YKJ grid location, easting (10 km units): an input to "
             "the sawlog-reduction equation (StemCurve.sawlogReduction), taken at "
             "the polygon centroid via centroid_to_ykj, and read back "
-            "by new_growth_allometry.py in its sourced mode. Not a second set of "
-            "coordinates for the stand. Bounded by X_YKJ_MIN/MAX."
+            "by new_growth_allometry.py in its sourced mode."
         ),
     )
     y_ykj: YkjNorthing = Field(
@@ -207,9 +203,7 @@ class StandData(StrictFrozenModel):
         default=None,
         description=(
             "Stand boundary (exterior ring plus holes), in the document's crs. "
-            "A shapely Polygon in memory, WKT in stand_data.json. Not "
-            "audit-trail-only: paroninkorpi.py reads it for the ditch-depth "
-            "raster lookup."
+            "A shapely Polygon in memory, WKT in stand_data.json."
         ),
     )
 
@@ -330,6 +324,22 @@ class StandData(StrictFrozenModel):
             "species-code >= 3 bucketing as basal_area_deciduous."
         ),
     )
+
+    @model_validator(mode="after")
+    def initial_ages_match_allometry_layers(self) -> Self:
+        # An age for a layer with no allometry file, or a file with no age, is
+        # a bug in the tool that wrote the document: catch it here, not as a
+        # silent 0.0 from build_stand_params.
+        allometry_layers = set(self.allometry_file_per_layer)
+        age_layers = set(self.initial_age_per_layer)
+        if allometry_layers != age_layers:
+            raise ValueError(
+                "initial_age_per_layer must have the same canopy layers as "
+                "allometry_file_per_layer, but got "
+                f"allometry_file_per_layer={sorted(layer.value for layer in allometry_layers)} "
+                f"and initial_age_per_layer={sorted(layer.value for layer in age_layers)}"
+            )
+        return self
 
 
 # Pydantic context key through which load_stand_data_document_from_json and
@@ -572,4 +582,10 @@ def build_stand_params(
     return StandParams(
         site_fertility_class=stand_data.site_fertility_class,
         canopy_layer_allometry=canopy_layer_allometry,
+        # The engine needs an age for every layer, including ones the stand
+        # has no allometry for: those start at 0.0.
+        initial_canopylayer_age_years={
+            layer: stand_data.initial_age_per_layer.get(layer, 0.0)
+            for layer in CanopyLayerName
+        },
     )

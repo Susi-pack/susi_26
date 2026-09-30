@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Tue Feb  1 18:59:52 2022
 
@@ -7,15 +6,16 @@ Created on Tue Feb  1 18:59:52 2022
 
 import numpy as np
 import pandas as pd
+
 from susi.core.allometry import Allometry
 from susi.core.canopylayer import Canopylayer, Zone
 from susi.io.susi_parameter_model import (
     AllometryRegistryNumber,
     CanopyLayerName,
-    CuttingManagementParams,
-    Thinning,
     ClearCut,
     ContinuousCover,
+    CuttingManagementParams,
+    Thinning,
 )
 
 

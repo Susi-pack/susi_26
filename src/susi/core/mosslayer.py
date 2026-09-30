@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Jan 17 08:59:36 2019
 
@@ -12,7 +11,7 @@ from susi.io.susi_parameter_model import OrganicLayerParamsArray
 eps = np.finfo(float).eps
 
 
-class MossLayer(object):
+class MossLayer:
     """
     Moss/organic layer on top of soil.
     """

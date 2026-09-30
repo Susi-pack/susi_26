@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_tree_select import tree_select
 
-from susi.io.load_output_data import NetcdfVariablePath, NetcdfVariableInfo
+from susi.io.load_output_data import NetcdfVariableInfo, NetcdfVariablePath
 
 
 def build_tree_nodes(variables: dict[NetcdfVariablePath, NetcdfVariableInfo]):

@@ -1,11 +1,12 @@
-from functools import lru_cache, cached_property
 import datetime
+from collections.abc import Callable
 from enum import Enum
+from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import Callable, Literal, Self, Union, TypeAlias
+from typing import Literal, Self, TypeAlias
+
 import numpy as np
 import pandas as pd
-
 from pydantic import (
     Field,
     FilePath,
@@ -14,14 +15,14 @@ from pydantic import (
     model_validator,
 )
 
+from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 from susi.io.extra_pydantic_types import (
-    StrictFrozenModel,
-    PositiveFloat,
     NonNegativeFloat,
     NonPositiveFloat,
+    PositiveFloat,
     PositiveInt,
+    StrictFrozenModel,
 )
-from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 
 
 def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
@@ -41,7 +42,7 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
-@lru_cache()
+@lru_cache
 def read_allometry_info_from_csv(filepath: Path) -> pd.DataFrame:
     """
     Read allometry file and return the allometry dataframe.
@@ -512,7 +513,14 @@ class StandardNPKFertilizationParameters(StrictFrozenModel):
     N: NutrientFertilizationParameters
     P: NutrientFertilizationParameters
     K: NutrientFertilizationParameters
-    pH_increment: NonNegativeFloat = 0.0
+    pH_increment: NonNegativeFloat = Field(
+        default=0.0,
+        description="pH increment in the application year; decays exponentially afterwards (see pH_decay_k)",
+    )
+
+    pH_decay_k: NonNegativeFloat = Field(
+        default=0.1, description="Decay rate of the pH increment, yr-1"
+    )
 
 
 class AshFertilizationParameters(StrictFrozenModel):
@@ -521,7 +529,7 @@ class AshFertilizationParameters(StrictFrozenModel):
     """
 
     application_year: int
-    grain_radius: NonNegativeFloat = Field(
+    grain_radius: PositiveFloat = Field(
         default=0.005, description="Radius of ash grains (m)."
     )
     particle_cracking_rate: NonNegativeFloat = Field(
@@ -536,11 +544,11 @@ class AshFertilizationParameters(StrictFrozenModel):
     P_dissolution_rate: NonNegativeFloat = Field(
         default=0.000045, description="Phosphorus release rate. (kg/m^2/year)"
     )
-    density: NonNegativeFloat = Field(
+    density: PositiveFloat = Field(
         default=1000, description="Density of ash grains (kg/m^3)"
     )
-    fertilizer_dose: NonNegativeFloat = Field(
-        description="Mass of the ash fertilizer (kg/ha)"
+    fertilizer_dose: PositiveFloat = Field(
+        description="Mass of the ash fertilizer (kg/ha). It must be strictly > 0: an ash fertilization with no ash is no fertilization at all, and it should be modelled as a fertilization=None instead."
     )
     K_in_ash: NonNegativeFloat = Field(
         description="Amount of potassium in the fertilizer (kg/ha)"
@@ -549,13 +557,17 @@ class AshFertilizationParameters(StrictFrozenModel):
         description="Amount of phosphorus in the fertilizer (kg/ha)"
     )
     time_exp: NonNegativeFloat = Field(
-        description="Exponent in the grain cracking function."
+        description="Exponent in the grain cracking function.", default=2.0
+    )
+    pH_increment_per_dissolved_ash: NonNegativeFloat = Field(
+        default=2.5 / 15000,
+        description="pH increment per kg ha-1 of dissolved ash.",
     )
 
 
-FertilizationParameters = Union[
+FertilizationParameters = (
     StandardNPKFertilizationParameters | AshFertilizationParameters
-]
+)
 
 
 class ClearCut(StrictFrozenModel):
@@ -646,7 +658,7 @@ class CuttingManagementParams(StrictFrozenModel):
     application_yr: int = Field(
         description="Year for cutting management application. Must be inside the simulation period."
     )
-    management_type: Union[ClearCut | ContinuousCover | Thinning] = Field(
+    management_type: ClearCut | ContinuousCover | Thinning = Field(
         description="Type of cutting management selected."
     )
 
@@ -677,10 +689,26 @@ class StandParams(StrictFrozenModel):
     )
 
     canopy_layer_allometry: CanopyLayerAllometry
-    # TODO:
-    # age: dict[int, float] and soil_type: int are explicitly NOT in this ticket's scope --
-    # soil_type's mapping to peat_type/peat_type_bottom is open work tracked by #280, and
-    # age has no consumer until that lands either. Both stay future work, not invented here.
+    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
+        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
+    )
+
+    @field_validator("initial_canopylayer_age_years")
+    @classmethod
+    def every_layer_has_an_initial_age(
+        cls, ages: dict[CanopyLayerName, float]
+    ) -> dict[CanopyLayerName, float]:
+        # The engine builds a Canopylayer for every layer, including ones with
+        # no allometry (Stand.__init__, Stand.reset_domain), so each needs an
+        # age. Without this check a missing one is a KeyError deep in the run.
+        missing = [layer.value for layer in CanopyLayerName if layer not in ages]
+        if missing:
+            raise ValueError(
+                f"initial_canopylayer_age_years is missing canopy layers {missing}; "
+                f"every layer {[layer.value for layer in CanopyLayerName]} needs an "
+                "initial age (use 0.0 for a layer the stand doesn't have)"
+            )
+        return ages
 
 
 class SiteParams(StrictFrozenModel):
@@ -689,10 +717,6 @@ class SiteParams(StrictFrozenModel):
     """
 
     # Forest
-    # Age of different forest layers at the beginning of the simulation
-    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
-        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
-    )
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -772,14 +796,6 @@ class SiteParams(StrictFrozenModel):
     )
     peat_temperature: PeatTemperatureParams
 
-    @property
-    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
-        """Age of stand for all nodes along the strip"""
-        return {
-            layer_name: self.initial_canopylayer_age_years[layer_name] * np.ones(self.n)
-            for layer_name in CanopyLayerName
-        }
-
     @field_validator("h_mor", mode="before")
     @classmethod
     def compute_if_callable(cls, hmor, info):
@@ -793,7 +809,7 @@ class SiteParams(StrictFrozenModel):
             try:
                 return hmor(drain_age, rho_mor)
             except Exception as e:
-                raise ValueError(f"Failed to compute h_mor: {e}")
+                raise ValueError(f"Failed to compute h_mor: {e}") from e
         return hmor
 
     @model_validator(mode="before")
@@ -840,13 +856,15 @@ class SiteParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
-        if self.cutting_management is not None:
-            if isinstance(self.cutting_management.management_type, ClearCut):
-                if len(self.cutting_management.management_type.strips_to_cut) != self.n:
-                    raise ValueError(
-                        f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
-                        f"but must have {self.n} elements (equal to the number of soil columns)"
-                    )
+        if (
+            self.cutting_management is not None
+            and isinstance(self.cutting_management.management_type, ClearCut)
+            and len(self.cutting_management.management_type.strips_to_cut) != self.n
+        ):
+            raise ValueError(
+                f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
+                f"but must have {self.n} elements (equal to the number of soil columns)"
+            )
         return self
 
 
@@ -872,6 +890,15 @@ class SusiParams(StrictFrozenModel):
             np.ones(self.site_parameters.n, dtype=int)
             * self.stand_params.site_fertility_class
         )
+
+    @property
+    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
+        """Age of stand for all nodes along the strip"""
+        return {
+            layer_name: self.stand_params.initial_canopylayer_age_years[layer_name]
+            * np.ones(self.site_parameters.n)
+            for layer_name in CanopyLayerName
+        }
 
     @model_validator(mode="after")
     def allometry_files_exist(self) -> Self:
@@ -962,7 +989,7 @@ class SusiParams(StrictFrozenModel):
             }
             self._validate_layer_age(
                 layer_name=canopy_layer.value,
-                initial_age=self.site_parameters.initial_canopylayer_age_years[
+                initial_age=self.stand_params.initial_canopylayer_age_years[
                     canopy_layer
                 ],
                 allometry_data=layer_zones,

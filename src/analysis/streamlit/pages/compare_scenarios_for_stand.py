@@ -1,11 +1,11 @@
+from pathlib import Path
+
 import streamlit as st
 
-from analysis.streamlit.components import folder_selection
-from pathlib import Path
-from susi.io.load_output_data import StandID
 from analysis.core.parse_outputs import find_differing_params, find_unique_params
 from analysis.shared_reporting_utils.param_comparison import shape_differing_params
-
+from analysis.streamlit.components import folder_selection
+from susi.io.load_output_data import StandID
 
 # %% Choose stand folder
 st.header("Choose stand folder")

@@ -1,16 +1,16 @@
 # Read netcdf files and load variables into and OutputDataStore
-from functools import cached_property
-
 import re
-from typing import NewType, Sequence, Callable
-from pathlib import Path
-import pandas as pd
-import numpy as np
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
+from typing import NewType
+
 import netCDF4
+import numpy as np
+import pandas as pd
 
 import susi.io.utils as io_utils
-
 
 # %% dataclasses
 # Strings by other names
@@ -329,7 +329,7 @@ def list_all_netcdf_variables(
                 name=var_name,
                 dimension_names=var.dimensions,
                 shape=var.shape,
-                units=getattr(var, "units"),
+                units=var.units,
             )
             variables[path] = variable
 
@@ -407,7 +407,7 @@ def get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:
 def read_netcdf_files_for_selected_variables(
     selected_variables: Sequence[NetcdfVariablePath],
     scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
-    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
+    netcdf_filepaths_by_stand: dict[StandID, Sequence[Path]],
 ) -> OutputDataStore:
     stands: list[StandID] = []
     data: dict[

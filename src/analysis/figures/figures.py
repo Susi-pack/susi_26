@@ -5,10 +5,10 @@ Created on Tue Feb 15 17:37:58 2022
 """
 
 import matplotlib.pylab as plt
-import matplotlib.gridspec as gridspec
-from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
+from matplotlib import gridspec
+from netCDF4 import Dataset
 
 
 def _create_profile_line(
@@ -71,12 +71,22 @@ def _create_profile_boxplot(
     df = pd.DataFrame(data=datain, columns=range(cols))
     df.boxplot(
         ax=ax,
-        color=dict(boxes=colorin, whiskers=colorin, medians=colorin, caps=colorin),
-        boxprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
+        color={
+            "boxes": colorin,
+            "whiskers": colorin,
+            "medians": colorin,
+            "caps": colorin,
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": colorin, "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": colorin,
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": colorin, "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -397,12 +407,17 @@ def stand(ff, scen):
     axgrowth = fig.add_subplot(gs[8:10, :4])
     dfgrowth.boxplot(
         ax=axgrowth,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -490,19 +505,29 @@ def stand(ff, scen):
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
     )
 
     ax.set_title("Leaf mass")
-    ax.set_ylabel("$kg \ ha^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -586,12 +611,17 @@ def stand(ff, scen):
     df = pd.DataFrame(data=dom_phys_r, columns=range(cols))
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -623,19 +653,24 @@ def stand(ff, scen):
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
     )
 
     ax.set_title("N demand")
-    ax.set_ylabel("$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -646,12 +681,22 @@ def stand(ff, scen):
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -668,12 +713,22 @@ def stand(ff, scen):
     ax = fig.add_subplot(gs[2:4, 8:])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -770,12 +825,17 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[8:10, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -849,12 +909,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -874,12 +944,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[4:6, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -899,12 +979,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -923,12 +1013,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[:2, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -951,12 +1051,17 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[:2, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -976,12 +1081,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1001,12 +1116,22 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[4:6, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="brown", whiskers="brown", medians="brown", caps="brown"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
+        color={
+            "boxes": "brown",
+            "whiskers": "brown",
+            "medians": "brown",
+            "caps": "brown",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "brown", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "brown",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "brown", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1030,12 +1155,12 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[6:8, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="red", whiskers="red", medians="red", caps="red"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
+        color={"boxes": "red", "whiskers": "red", "medians": "red", "caps": "red"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1055,12 +1180,17 @@ def mass(ff, scen):
     ax = fig.add_subplot(gs[8:10, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="grey", whiskers="grey", medians="grey", caps="grey"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
+        color={"boxes": "grey", "whiskers": "grey", "medians": "grey", "caps": "grey"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "grey", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "grey",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "grey", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -2059,7 +2189,7 @@ def compare_scens(ff):
     wt = np.mean(
         ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2)
     )  # mean annual wr dim: nscens
-    sd = np.std(ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2))  #
+    sd = np.std(ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2))
     ax = fig.add_subplot(gs[0, 1])
     ax = draw_comparison(
         ax,
@@ -2087,7 +2217,7 @@ def compare_scens(ff):
         standco2bal,
         standco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Stand $CO_2$ balance",
         "grey",
         facecolor,
@@ -2107,7 +2237,7 @@ def compare_scens(ff):
         soilco2bal,
         soilco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Soil $CO_2$ balance",
         "grey",
         facecolor,
@@ -2125,7 +2255,7 @@ def compare_scens(ff):
         ntowater,
         ntowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "N to water",
         "red",
         facecolor,
@@ -2143,7 +2273,7 @@ def compare_scens(ff):
         ptowater,
         ptowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "P to water",
         "orange",
         facecolor,

@@ -5,36 +5,36 @@
 
 import datetime
 
-from susi.io.susi_parameter_model import (
-    PeatTypes,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
-    SiteParams,
-    StandParams,
-    WeatherParams,
-    SimulationConfig,
-    SusiParams,
-    CanopyLayerAllometry,
-    AllometryFileAndSpecies,
-    CanopyLayerName,
-    CanopyParams,
-    OrganicLayerParams,
-    OutputParams,
-    PeatTemperatureParams,
-    get_photo_parameters_by_location,
-    LocationsForPhotoParams,
-    h_mor_from_drainage_and_mass_mor_Pitkanen,
-    ClearCut,
-    CuttingManagementParams,
-)
+# The project's folder is defined once, in parameters.py beside this file.
+from parameters import PROJECT_DIR
+
 from susi.io.project_layout import (
     allometry_dir_for_project,
     data_dir_for_project,
     new_growth_allometry_dir_for_project,
 )
-
-# The project's folder is defined once, in parameters.py beside this file.
-from parameters import PROJECT_DIR
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+    CanopyParams,
+    ClearCut,
+    CuttingManagementParams,
+    LocationsForPhotoParams,
+    NutrientFertilizationParameters,
+    OrganicLayerParams,
+    OutputParams,
+    PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandardNPKFertilizationParameters,
+    StandParams,
+    SusiParams,
+    WeatherParams,
+    get_photo_parameters_by_location,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
+)
 
 _N_SOIL_COLS = 20
 
@@ -61,6 +61,11 @@ PARAMETERS = SusiParams(
                 CanopyLayerName.under: None,
             },
         ),
+        initial_canopylayer_age_years={
+            CanopyLayerName.dominant: 60.0,
+            CanopyLayerName.subdominant: 0.0,
+            CanopyLayerName.under: 0.0,
+        },
     ),
     canopy_parameters=CanopyParams(),
     organic_layer_parameters=OrganicLayerParams(),
@@ -71,11 +76,6 @@ PARAMETERS = SusiParams(
     site_parameters=SiteParams(
         L=40.0,
         n=_N_SOIL_COLS,
-        initial_canopylayer_age_years={
-            CanopyLayerName.dominant: 60.0,
-            CanopyLayerName.subdominant: 0.0,
-            CanopyLayerName.under: 0.0,
-        },
         sitename="susirun",
         sfc_specification=1,
         hdom=None,

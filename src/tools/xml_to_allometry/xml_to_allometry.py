@@ -2,28 +2,40 @@
 # Adapted by Iñaki Urzainki from Mikko Niemi's original code.
 
 # %% Imports
-from susi.io.load_output_data import StandID
-from susi.io.susi_parameter_model import (
-    AllometryFileAndSpecies,
-    CanopyLayerName,
-)
-from typing import Optional
-import xmltodict
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+
+import xmltodict
 from shapely.geometry import Polygon
 
+from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
     CONFIG_FILENAME,
     allometry_dir_for_project,
     stand_data_path_for_project,
 )
+from susi.io.stand_data import (
+    SOURCE_CRS,
+    StandData,
+    StandDataDocument,
+    centroid_to_ykj,
+    dump_stand_data_document,
+)
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerName,
+)
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
 )
+from tools.shared_allometry_tool_utils.cli_paths import (
+    finalize_cli_config,
+    resolve_config_path,
+)
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table,
+    initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
     load_toml_config,
@@ -35,24 +47,12 @@ from tools.shared_allometry_tool_utils.print_formatting import (
     print_section,
     print_skips,
 )
-from tools.shared_allometry_tool_utils.cli_paths import (
-    finalize_cli_config,
-    resolve_config_path,
-)
 from tools.shared_allometry_tool_utils.shared_utils import to_source_crs
 from tools.shared_allometry_tool_utils.tree_stratum import (
+    ZERO_STRATUM,
     PerSpecies,
     TreeStratum,
-    ZERO_STRATUM,
 )
-from susi.io.stand_data import (
-    SOURCE_CRS,
-    StandData,
-    StandDataDocument,
-    centroid_to_ykj,
-    dump_stand_data_document,
-)
-
 
 # %% Config
 
@@ -112,14 +112,13 @@ class ParsedStand:
     mean_diameter: float  # cm
 
     # Optional parameters, only used for information in the stand_data.json dump
-    main_group: Optional[int] = None
-    sub_group: Optional[int] = None
-    soil_type: Optional[int] = None
-    mean_age: Optional[int] = None  # years
-    basal_area: Optional[float] = None  # m2/ha
-    mean_height: Optional[float] = None  # m
-    total_volume: Optional[float] = None  # m3/ha
-    area: Optional[float] = None  # ha
+    main_group: int | None = None
+    sub_group: int | None = None
+    soil_type: int | None = None
+    basal_area: float | None = None  # m2/ha
+    mean_height: float | None = None  # m
+    total_volume: float | None = None  # m3/ha
+    area: float | None = None  # ha
 
 
 # %% Functions
@@ -326,7 +325,6 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
             if (soil_type_xml := stand_basic_data.get("st:SoilType")) is not None
             else None
         ),
-        mean_age=int(tree_stand_summary["tss:MeanAge"]),
         basal_area=float(tree_stand_summary["tss:BasalArea"]),
         mean_height=float(tree_stand_summary["tss:MeanHeight"]),
         total_volume=float(tree_stand_summary["tss:Volume"]),
@@ -393,17 +391,24 @@ def process_stand(
     )
 
     output_path = plan_stand_output(parsed_stand, output_dir)
-    page_1.to_csv(output_path, index=False)
 
-    print(f"Allometric road map successfully generated for stand {parsed_stand.id}")
-
-    return StandData(
+    # The StandData record is built (and pydantic-validated), and the initial
+    # age read off page_1, BEFORE the CSV is written: if either fails, no
+    # stray CSV that nothing references is left behind (same ordering as
+    # metsakeskus_to_allometry.py's process_stand).
+    stand_data = StandData(
         site_fertility_class=parsed_stand.fertility_class,
         allometry_file_per_layer={
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=output_path, species_id=parsed_stand.main_species
             ),
         },
+        # Every species is pooled into the one dominant-layer curve (#276), so
+        # the dominant layer starts at the growth model's basal-area-weighted
+        # pooled age of every species -- the curve's own Year-0 Age -- not at
+        # the inventory's tss:MeanAge, which is computed differently and can
+        # disagree with it.
+        initial_age_per_layer={CanopyLayerName.dominant: initial_age(page_1)},
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
         polygon=parsed_stand.polygon,
@@ -411,7 +416,6 @@ def process_stand(
         main_group=parsed_stand.main_group,
         sub_group=parsed_stand.sub_group,
         soil_type=parsed_stand.soil_type,
-        mean_age=parsed_stand.mean_age,
         basal_area=parsed_stand.basal_area,
         mean_height=parsed_stand.mean_height,
         mean_diameter=parsed_stand.mean_diameter,
@@ -432,6 +436,12 @@ def process_stand(
         stem_count_spruce=strata.spruce.stem_count,
         stem_count_deciduous=strata.deciduous.stem_count,
     )
+
+    page_1.to_csv(output_path, index=False)
+
+    print(f"Allometric road map successfully generated for stand {parsed_stand.id}")
+
+    return stand_data
 
 
 # %% CLI

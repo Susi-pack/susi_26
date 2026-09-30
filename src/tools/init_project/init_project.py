@@ -15,7 +15,6 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from susi.io.project_layout import (
     CONFIG_FILENAME,
@@ -51,7 +50,7 @@ class SourceSeed:
     # The generating tool's own template config, copied in as the project's
     # config.toml rather than restated here
     # None for DataSource.NONE: no config at all is written.
-    config_template_path: Optional[Path]
+    config_template_path: Path | None
     # What to tell the user to do next, printed on completion.
     next_step: str
 

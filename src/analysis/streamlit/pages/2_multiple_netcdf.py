@@ -1,10 +1,10 @@
-import streamlit as st
 from pathlib import Path
 
-import susi.io.load_output_data as load_output
-from susi.io.load_output_data import NetcdfVariablePath
+import streamlit as st
 
+import susi.io.load_output_data as load_output
 from analysis.streamlit.components import folder_selection
+from susi.io.load_output_data import NetcdfVariablePath
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_project_and_run_selection_widget(

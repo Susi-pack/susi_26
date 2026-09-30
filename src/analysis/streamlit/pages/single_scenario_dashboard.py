@@ -1,9 +1,9 @@
-import streamlit as st
 from pathlib import Path
+
 import matplotlib.pyplot as plt
+import streamlit as st
 
 import susi.io.load_output_data as load_output
-
 from analysis.shared_reporting_utils.single_scenario_dashboard import (
     SECTIONS,
     VARIABLE_PATHS,

@@ -1,31 +1,32 @@
 import datetime
-import pytest
 from pathlib import Path
+
+import pytest
 from pydantic import ValidationError
 
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
-    SusiParams,
-    WeatherParams,
-    SimulationConfig,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
+    CuttingManagementParams,
+    LocationsForPhotoParams,
+    NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
-    SiteParams,
-    StandParams,
-    PeatTypes,
-    get_photo_parameters_by_location,
-    LocationsForPhotoParams,
-    h_mor_from_drainage_and_mass_mor_Pitkanen,
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
     PeatTemperatureParams,
+    PeatTypes,
+    SimulationConfig,
+    SiteParams,
+    StandardNPKFertilizationParameters,
+    StandParams,
+    SusiParams,
     Thinning,
-    CuttingManagementParams,
+    WeatherParams,
+    get_photo_parameters_by_location,
+    h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
 
 
@@ -58,6 +59,11 @@ def valid_susi_params(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -68,11 +74,6 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test",
             sfc_specification=1,
             hdom=None,
@@ -153,6 +154,11 @@ def another_valid_susi_params(test_data_path):
                     CanopyLayerName.under: None,
                 },
             ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
+            },
         ),
         canopy_parameters=CanopyParams(),
         organic_layer_parameters=OrganicLayerParams(),
@@ -163,11 +169,6 @@ def another_valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
             sitename="test2",
             sfc_specification=1,
             hdom=None,

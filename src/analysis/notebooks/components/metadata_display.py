@@ -13,7 +13,7 @@ Typical usage:
     metadata_display.display_metadata(params.metadata, params.susi_params)
 """
 
-from IPython.display import display, JSON, Markdown
+from IPython.display import JSON, Markdown, display
 
 
 def display_metadata(metadata: dict, susi_params: dict) -> None:
