@@ -108,3 +108,16 @@ example_projects/*/outputs/*
 .jupyter_ystore.db
 .virtual_documents
 .jupyter
+# OS cruft
+.DS_Store
+__pycache__/
+*.pyc
+
+# Generated project data -- regenerable from gpkg + config.toml, don't track
+projects/*/raw_data/
+projects/*/inputs/allometry/
+projects/*/inputs/stand_data.json
+projects/*/outputs/
+example_projects/*/inputs/allometry/
+example_projects/*/inputs/stand_data.json
+example_projects/*/outputs/

@@ -28,6 +28,10 @@ from susi.io.project_layout import (
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerName,
+    PeatTypes,
+)
+from tools.shared_allometry_tool_utils.metsakeskus_peat_type import (
+    peat_type_from_soiltype,
 )
 from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
@@ -114,6 +118,7 @@ class StandCandidate:
     developmentclass: int
     drainagestate: int
     soiltype: int | None
+    peat_type: PeatTypes | None
     strata: PerSpecies[TreeStratum]
     geometry: Polygon
     area: float | None  # ha, the stand layer's own area column; None if not recorded
@@ -133,6 +138,7 @@ class ParsedStand:
     developmentclass: int
     drainagestate: int
     soiltype: int | None
+    peat_type: PeatTypes | None
     strata: PerSpecies[TreeStratum]
     stand_meanage: float
     stand_basalarea: float
@@ -294,7 +300,7 @@ def filter_stands_by_site_attributes(
     return numeric[mask].copy()
 
 
-def _with_parsed_measurement_columns(
+def with_parsed_measurement_columns( #removed leading _
     treestand: pd.DataFrame, stand_ids: set[int]
 ) -> pd.DataFrame:
     """
@@ -314,7 +320,7 @@ def compute_year_distribution(
     """
     Per-year count of distinct stands with a measured (type=1 in Metsakeskus types) snapshot
     """
-    candidates = _with_parsed_measurement_columns(treestand, stand_ids)
+    candidates = with_parsed_measurement_columns(treestand, stand_ids)
     measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
     return (
         measured.groupby("year")["standid"]
@@ -334,7 +340,7 @@ def select_target_year_snapshot(
     One treestand row per stand: the measured record whose date
     falls exactly in target_year.
     """
-    candidates = _with_parsed_measurement_columns(treestand, stand_ids)
+    candidates = with_parsed_measurement_columns(treestand, stand_ids)
     measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
     exact_year = measured[measured["year"] == target_year]
 
@@ -582,6 +588,7 @@ def build_stand_candidates(
             skipped.append(StandSkipped(stand_id=stand_id, reason=str(error)))
             continue
 
+        soiltype = int(row["soiltype"]) if pd.notna(row.get("soiltype")) else None
         candidates.append(
             StandCandidate(
                 id=stand_id,
@@ -593,15 +600,35 @@ def build_stand_candidates(
                     if pd.notna(row.get("drainagestate"))
                     else DRAINAGESTATE_DRAINED[0]
                 ),
-                soiltype=(
-                    int(row["soiltype"]) if pd.notna(row.get("soiltype")) else None
-                ),
+                soiltype=soiltype,
+                peat_type=peat_type_from_soiltype(soiltype, int(row["fertilityclass"])),
                 strata=strata,
                 geometry=geometry,
-                # None when the cell is empty: "not recorded", like soiltype.
                 area=(float(row["area"]) if pd.notna(row.get("area")) else None),
             )
         )
+
+
+        # candidates.append(
+        #     StandCandidate(
+        #         id=stand_id,
+        #         subgroup=int(row["subgroup"]),
+        #         fertilityclass=int(row["fertilityclass"]),
+        #         developmentclass=int(row["developmentclass"]),
+        #         drainagestate=(
+        #             int(row["drainagestate"])
+        #             if pd.notna(row.get("drainagestate"))
+        #             else DRAINAGESTATE_DRAINED[0]
+        #         ),
+        #         soiltype=(
+        #             int(row["soiltype"]) if pd.notna(row.get("soiltype")) else None
+        #         ),
+        #         strata=strata,
+        #         geometry=geometry,
+        #         # None when the cell is empty: "not recorded", like soiltype.
+        #         area=(float(row["area"]) if pd.notna(row.get("area")) else None),
+        #     )
+        # )
 
     return candidates, skipped
 
@@ -690,6 +717,7 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         developmentclass=candidate.developmentclass,
         drainagestate=candidate.drainagestate,
         soiltype=candidate.soiltype,
+        peat_type=candidate.peat_type,
         strata=strata,
         stand_meanage=float(stand_age),
         stand_basalarea=float(stand_total_ba),
@@ -904,6 +932,7 @@ def process_stand(
             developmentclass=stand.developmentclass,
             drainagestate=stand.drainagestate,
             soil_type=stand.soiltype,
+            peat_type=stand.peat_type,
             mean_age=stand.stand_meanage,
             # StandData's per-species basal_area_*/stem_count_* fields are
             # deliberately left unset here, the same way drainagestate and

@@ -26,6 +26,7 @@ from susi.io.susi_parameter_model import (
     CanopyLayerName,
     AllometryFileAndSpecies,
     StandParams,
+    PeatTypes,
 )
 
 # STAND_DATA_FILENAME is owned by susi.io.project_layout, so that `susi/` can
@@ -270,6 +271,18 @@ class StandData(StrictFrozenModel):
             "peat_type_bottom (susi_parameter_model.py) -- that mapping is "
             "still open work (#280)."
         ),
+    )
+    peat_type: PeatTypes | None = Field(
+        default=None,
+        description=(
+            "SUSI peat type ('A' generic/carex/woody vs 'S' sphagnum), "
+            "derived from soil_type by the generating tool (see "
+            "tools.shared_allometry_tool_utils.metsakeskus_peat_type). "
+            "Feeds SiteParams.peat_type/peat_type_bottom once a run script "
+            "sets up SiteParams for this stand -- resolves the mapping "
+            "noted as open work (#280) above, at least for Metsakeskus-"
+            "sourced stands."
+        )
     )
     mean_age: NonNegativeFloat | None = Field(
         default=None,
