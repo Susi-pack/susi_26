@@ -756,7 +756,7 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
 # %% partition_viable_candidates
 
 
-def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8):
+def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8, peat_type="A"):
     return m.StandCandidate(
         area=area,
         id=StandID(stand_id),
@@ -765,6 +765,7 @@ def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8
         developmentclass=2,
         drainagestate=7,
         soiltype=soiltype,
+        peat_type=peat_type,
         strata=_strata(pine_ba, spruce_ba, decid_ba),
         # A real Helsinki-area point (EPSG:3067) rather than (0, 0): keeps
         # centroid_to_ykj's output inside Growth_and_Yield_Table's expected

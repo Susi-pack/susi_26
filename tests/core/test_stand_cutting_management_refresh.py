@@ -61,6 +61,7 @@ def _make_stand(age: float = 70.0) -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode="dynamic",
     )
     stand.update()
     return stand

@@ -122,6 +122,7 @@ def _make_stand() -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode="dynamic",
     )
     stand.update()
     return stand
@@ -571,6 +572,7 @@ class TestMultiZoneCanopylayer:
             photopara=get_photo_parameters_by_location(
                 location=LocationsForPhotoParams("All_data")
             ),
+            growth_mode="dynamic",
         )
 
     def test_construction_does_not_crash_with_multiple_zones(self):

@@ -146,6 +146,7 @@ class ParsedStand:
     stand_basalarea: float
     stand_meanheight: float
     stand_meandiameter: float
+    stand_meanage: float
     x_ykj: int
     y_ykj: int
     area: float | None  # ha -- the stand layer's own area column, see build_stand
@@ -700,6 +701,11 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         + strata.spruce.mean_diameter * strata.spruce.basal_area
         + strata.deciduous.mean_diameter * strata.deciduous.basal_area
     ) / stand_total_ba
+    stand_age = (
+        strata.pine.age * strata.pine.basal_area
+        + strata.spruce.age * strata.spruce.basal_area
+        + strata.deciduous.age * strata.deciduous.basal_area
+    ) / stand_total_ba
 
     dominant_species, subdominant_species = determine_dominant_and_subdominant_species(
         strata
@@ -718,6 +724,7 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         stand_basalarea=float(stand_total_ba),
         stand_meanheight=float(stand_height),
         stand_meandiameter=float(stand_diameter),
+        stand_meanage=float(stand_age),
         x_ykj=x_ykj,
         y_ykj=y_ykj,
         area=candidate.area,
