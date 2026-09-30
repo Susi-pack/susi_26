@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 from susi.io.load_output_data import StandID
 from tools.shared_allometry_tool_utils.dense_young_stand_scaling import (
-    DOCS_URL,
+    DENSE_YOUNG_STAND_SCALING_DOCS_URL,
+    strata_to_grow_from,
     total_stem_count,
 )
 from tools.shared_allometry_tool_utils.tree_stratum import PerSpecies, TreeStratum
@@ -62,10 +63,13 @@ def print_scaled_stands(
         "before the growth model runs:"
     )
     for stand_id, scaling_factor in scaled.items():
-        recorded_stem_count = total_stem_count(strata_per_stand[stand_id])
+        recorded_strata = strata_per_stand[stand_id]
+        # The "after" figure is read off the very strata the growth model
+        # gets, not recomputed here as recorded * factor.
+        scaled_strata = strata_to_grow_from(recorded_strata, scaling_factor)
         print(
-            f"  {stand_id}: {recorded_stem_count:.0f} -> "
-            f"{recorded_stem_count * scaling_factor:.0f} stems/ha "
+            f"  {stand_id}: {total_stem_count(recorded_strata):.0f} -> "
+            f"{total_stem_count(scaled_strata):.0f} stems/ha "
             f"(scaling factor {scaling_factor:.3f})"
         )
 
@@ -84,5 +88,5 @@ def print_dense_young_stand_warning(stand_ids: list[StandID]) -> None:
         "  These are young stands with more stems than the default limits of "
         "dense young stand scaling, and they will be grown that way. "
         "[dense_young_stand_scaling] in the config file scales such stands "
-        f"down: {DOCS_URL}"
+        f"down: {DENSE_YOUNG_STAND_SCALING_DOCS_URL}"
     )

@@ -709,7 +709,7 @@ def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_p
         config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
     )
 
-    # Raw XML figures, not adjusted by any thinning heuristic.
+    # Raw XML figures, exactly as the inventory recorded them.
     assert stand_data.basal_area_pine == 20.0
     assert stand_data.basal_area_spruce == 8.0
     assert stand_data.stem_count_pine == 500
@@ -1163,7 +1163,7 @@ def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     printed = capsys.readouterr().out
     (warning,) = _warning_lines(printed)
     assert warning.endswith(": 20")
-    assert dense_young_stand_scaling.DOCS_URL in printed
+    assert dense_young_stand_scaling.DENSE_YOUNG_STAND_SCALING_DOCS_URL in printed
     assert _SCALING_LINE not in printed
 
     # The stand is grown as recorded, and its record says so.

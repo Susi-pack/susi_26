@@ -14,6 +14,7 @@ This is not a cutting-management event: nothing is harvested in any run, and
 it has nothing to do with a Thinning.
 """
 
+import math
 from dataclasses import replace
 from typing import Self
 
@@ -44,7 +45,9 @@ DEFAULT_TARGET_STEM_COUNT_OTHER = 2000.0
 
 # The docs page that explains the option: linked from each tool's
 # default_config.toml and from the warning.
-DOCS_URL = "https://susi-pack.github.io/susi_26/dense_young_stand_scaling/"
+DENSE_YOUNG_STAND_SCALING_DOCS_URL = (
+    "https://susi-pack.github.io/susi_26/dense_young_stand_scaling/"
+)
 
 # Species codes, as in the inventory sources: 1 pine, 2 spruce, 3 deciduous.
 SPRUCE = 2
@@ -96,6 +99,13 @@ def total_stem_count(strata: PerSpecies[TreeStratum]) -> float:
     )
 
 
+def total_basal_area(strata: PerSpecies[TreeStratum]) -> float:
+    """The stand's basal area, m2/ha: the sum over the three species."""
+    return (
+        strata.pine.basal_area + strata.spruce.basal_area + strata.deciduous.basal_area
+    )
+
+
 def basal_area_weighted_mean_diameter(strata: PerSpecies[TreeStratum]) -> float:
     """The stand's mean diameter, cm: each species' mean diameter weighted by
     its basal area.
@@ -103,10 +113,8 @@ def basal_area_weighted_mean_diameter(strata: PerSpecies[TreeStratum]) -> float:
     Raises ValueError for a stand with no basal area at all: there is nothing
     to weigh by, and a quiet 0 (or nan) would read as a real diameter.
     """
-    total_basal_area = (
-        strata.pine.basal_area + strata.spruce.basal_area + strata.deciduous.basal_area
-    )
-    if total_basal_area == 0:
+    basal_area = total_basal_area(strata)
+    if basal_area == 0:
         raise ValueError(
             "A stand with no basal area has no basal-area-weighted mean diameter"
         )
@@ -114,7 +122,7 @@ def basal_area_weighted_mean_diameter(strata: PerSpecies[TreeStratum]) -> float:
         strata.pine.mean_diameter * strata.pine.basal_area
         + strata.spruce.mean_diameter * strata.spruce.basal_area
         + strata.deciduous.mean_diameter * strata.deciduous.basal_area
-    ) / total_basal_area
+    ) / basal_area
 
 
 def main_species(strata: PerSpecies[TreeStratum]) -> int:
@@ -135,6 +143,19 @@ def main_species(strata: PerSpecies[TreeStratum]) -> int:
 # %% The rule
 
 
+def _is_strictly_above(value: float, limit: float) -> bool:
+    """
+    value > limit, except that a value within floating-point rounding of the
+    limit counts as AT the limit, so not above it.
+
+    The quantities compared here are sums and weighted means of floats. A
+    stand scaled to 2200 stems/ha can have scaled stem counts that add up to
+    2200.0000000000005; that is rounding, not half a billionth of a stem, and
+    it must not tip a stand sitting exactly on a limit over it.
+    """
+    return value > limit and not math.isclose(value, limit, rel_tol=1e-9)
+
+
 def dense_young_stand_scaling_factor(
     strata: PerSpecies[TreeStratum], config: DenseYoungStandScalingConfig
 ) -> float | None:
@@ -143,7 +164,8 @@ def dense_young_stand_scaling_factor(
 
     A stand is scaled when its mean diameter is below config.max_mean_diameter
     AND its stem count is above the threshold for its main species. Both
-    comparisons are strict: a stand exactly at either number is left alone.
+    comparisons are strict: a stand exactly at either number is left alone
+    (and "exactly" allows for floating-point rounding, see _is_strictly_above).
     The factor is the target stem count for its main species over its stem
     count, so it is always below 1.
 
@@ -155,10 +177,7 @@ def dense_young_stand_scaling_factor(
     option is off for.
     """
     stem_count = total_stem_count(strata)
-    basal_area = (
-        strata.pine.basal_area + strata.spruce.basal_area + strata.deciduous.basal_area
-    )
-    if stem_count == 0 or basal_area == 0:
+    if stem_count == 0 or total_basal_area(strata) == 0:
         return None
 
     if main_species(strata) == SPRUCE:
@@ -168,8 +187,10 @@ def dense_young_stand_scaling_factor(
         stem_count_threshold = config.stem_count_threshold_other
         target_stem_count = config.target_stem_count_other
 
-    is_young = basal_area_weighted_mean_diameter(strata) < config.max_mean_diameter
-    is_dense = stem_count > stem_count_threshold
+    is_young = _is_strictly_above(
+        config.max_mean_diameter, basal_area_weighted_mean_diameter(strata)
+    )
+    is_dense = _is_strictly_above(stem_count, stem_count_threshold)
     if is_young and is_dense:
         return target_stem_count / stem_count
     return None

@@ -849,6 +849,12 @@ def test_total_stem_count_sums_the_three_species():
     assert dense_young_stand_scaling.total_stem_count(_STAND_20_STRATA) == 2809
 
 
+def test_total_basal_area_sums_the_three_species():
+    assert dense_young_stand_scaling.total_basal_area(
+        _STAND_20_STRATA
+    ) == pytest.approx(1.45)
+
+
 def test_basal_area_weighted_mean_diameter_weighs_each_species_by_basal_area():
     assert dense_young_stand_scaling.basal_area_weighted_mean_diameter(
         _STAND_20_STRATA
@@ -941,18 +947,49 @@ def test_a_dense_stand_above_the_diameter_limit_is_not_scaled():
     )
 
 
-def test_a_stand_exactly_at_its_stem_count_threshold_is_not_scaled():
+@pytest.mark.parametrize(
+    "species, threshold", [("spruce", 2200), ("pine", 2500), ("deciduous", 2500)]
+)
+def test_a_stand_exactly_at_its_stem_count_threshold_is_not_scaled(species, threshold):
     assert (
         dense_young_stand_scaling.dense_young_stand_scaling_factor(
-            _one_species_stand("spruce", 2200), _DEFAULT_SCALING_CONFIG
+            _one_species_stand(species, threshold), _DEFAULT_SCALING_CONFIG
         )
         is None
     )
     assert (
         dense_young_stand_scaling.dense_young_stand_scaling_factor(
-            _one_species_stand("spruce", 2201), _DEFAULT_SCALING_CONFIG
+            _one_species_stand(species, threshold + 1), _DEFAULT_SCALING_CONFIG
         )
         is not None
+    )
+
+
+# A spruce-dominated stand of 3100 stems/ha. Scaled to 2200 stems/ha, its
+# three scaled stem counts add up to 2200.0000000000005, not 2200: floating-
+# point rounding, not stems.
+_STAND_SUMMING_JUST_OVER_2200_WHEN_SCALED = tree_stratum.PerSpecies(
+    pine=_stratum(200, 0.2, 4.0),
+    spruce=_stratum(2200, 0.9, 5.0),
+    deciduous=_stratum(700, 0.3, 3.0),
+)
+
+
+def test_a_stand_within_rounding_error_of_its_threshold_counts_as_at_it():
+    scaled_to_2200 = dense_young_stand_scaling.scale_strata(
+        _STAND_SUMMING_JUST_OVER_2200_WHEN_SCALED, 2200 / 3100
+    )
+    # The premise: the float sum really is a hair above the threshold.
+    assert dense_young_stand_scaling.total_stem_count(scaled_to_2200) > 2200
+    assert dense_young_stand_scaling.total_stem_count(scaled_to_2200) == pytest.approx(
+        2200
+    )
+
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            scaled_to_2200, _DEFAULT_SCALING_CONFIG
+        )
+        is None
     )
 
 
@@ -1169,6 +1206,20 @@ def test_a_stand_scaled_to_a_target_above_the_default_threshold_is_still_listed(
     ) == [StandID("20")]
 
 
+def test_a_stand_scaled_to_a_target_equal_to_the_default_threshold_is_not_listed():
+    # A config whose spruce target is 2200, the default spruce threshold: the
+    # stand is grown from exactly its threshold, so the default rule would
+    # not scale it, whatever the rounding of the scaled stem counts' sum.
+    stand_id = StandID("1")
+    assert (
+        dense_young_stand_scaling.stands_the_default_rule_would_scale(
+            {stand_id: _STAND_SUMMING_JUST_OVER_2200_WHEN_SCALED},
+            scaling_factors={stand_id: 2200 / 3100},
+        )
+        == []
+    )
+
+
 # %% print_formatting: dense young stand scaling
 
 
@@ -1197,8 +1248,12 @@ def test_print_dense_young_stand_warning_names_the_stands_and_links_the_docs(cap
     printed = capsys.readouterr().out
     assert "Warning" in printed
     assert "20, 31" in printed
-    assert "dense_young_stand_scaling" in printed
-    assert dense_young_stand_scaling.DOCS_URL in printed
+    # The one sentence: what these stands are, what happens to them, and
+    # what scales them down.
+    assert "young stands with more stems than the default limits" in printed
+    assert "will be grown that way" in printed
+    assert "[dense_young_stand_scaling] in the config file" in printed
+    assert dense_young_stand_scaling.DENSE_YOUNG_STAND_SCALING_DOCS_URL in printed
 
 
 def test_print_dense_young_stand_warning_prints_nothing_without_stands(capsys):
