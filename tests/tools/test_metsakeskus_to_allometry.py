@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import math
+import tomllib
 from pathlib import Path
 
 import geopandas as gpd
@@ -23,7 +24,10 @@ from susi.io.stand_data import (
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from susi.io.utils import SRC_DIR
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
-from tools.shared_allometry_tool_utils import input_validation
+from tools.shared_allometry_tool_utils import (
+    dense_young_stand_scaling,
+    input_validation,
+)
 
 # %% ExtractionConfig
 #
@@ -90,6 +94,43 @@ def test_extraction_config_overrides_defaults():
     assert config.n_trees == 5
 
 
+def test_extraction_config_dense_young_stand_scaling_is_off_by_default():
+    config = m.ExtractionConfig.model_validate(
+        {"target_year": 2018, "altitude": 150.0, "ddy": 1200.0}
+    )
+    assert config.dense_young_stand_scaling == (
+        dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    )
+    assert config.dense_young_stand_scaling.enabled is False
+
+
+def test_load_extraction_config_reads_the_dense_young_stand_scaling_table(tmp_path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "[dense_young_stand_scaling]\n"
+        "enabled = true\n"
+        "target_stem_count_spruce = 1500\n"
+    )
+    config = m.load_extraction_config(config_path)
+    assert config.dense_young_stand_scaling.enabled is True
+    assert config.dense_young_stand_scaling.target_stem_count_spruce == 1500
+    # Keys left out of the table keep their defaults.
+    assert config.dense_young_stand_scaling.stem_count_threshold_spruce == 2200
+
+
+def test_extraction_config_rejects_an_unknown_dense_young_stand_scaling_key():
+    with pytest.raises(ValueError, match="typo_field"):
+        m.ExtractionConfig.model_validate(
+            {
+                "target_year": 2018,
+                "altitude": 150.0,
+                "ddy": 1200.0,
+                "dense_young_stand_scaling": {"typo_field": 1},
+            }
+        )
+
+
 def test_extraction_config_is_frozen():
     config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0)
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
@@ -125,6 +166,20 @@ def test_default_config_toml_optional_fields_match_model_defaults():
     assert config.start_year == defaults.start_year
     assert config.end_year == defaults.end_year
     assert config.step_years == defaults.step_years
+
+    # The [dense_young_stand_scaling] table: every key is shipped (so the
+    # comparison below isn't just defaults against defaults), and each one
+    # carries the model's own default.
+    shipped_table = tomllib.loads(DEFAULT_CONFIG_PATH.read_text())[
+        "dense_young_stand_scaling"
+    ]
+    assert set(shipped_table) == set(
+        dense_young_stand_scaling.DenseYoungStandScalingConfig.model_fields
+    )
+    assert config.dense_young_stand_scaling == defaults.dense_young_stand_scaling
+    assert config.dense_young_stand_scaling == (
+        dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    )
 
 
 def test_default_config_toml_required_fields_are_deliberately_out_of_range():
@@ -499,6 +554,12 @@ def test_total_basal_area_sums_all_three_species():
     assert m.total_basal_area(_strata(10, 5, 2)) == pytest.approx(17)
 
 
+def test_total_basal_area_is_the_shared_function():
+    # One definition, next to the dense young stand scaling rule that also
+    # reads it -- this tool used to carry its own copy.
+    assert m.total_basal_area is dense_young_stand_scaling.total_basal_area
+
+
 def test_determine_dominant_and_subdominant_species_ranks_by_basal_area():
     dominant, subdominant = m.determine_dominant_and_subdominant_species(
         _strata(10, 20, 5)
@@ -800,6 +861,47 @@ def test_build_stand_is_total_for_a_viable_candidate():
     assert stand.subdominant_species == 2
 
 
+# Paroninkorpi stand 20's three strata: a dense young stand. 2809 stems/ha in
+# total, spruce-dominated (largest basal area), basal-area-weighted mean
+# diameter 4.06 cm. With the default numbers, dense young stand scaling takes
+# it to 1800 stems/ha: a factor of 0.6408. All three species carry basal area,
+# so in this tool spruce is the dominant layer, deciduous the subdominant one,
+# and pine is dropped.
+_DENSE_YOUNG_STRATA = m.PerSpecies(
+    pine=m.TreeStratum(
+        age=10, basal_area=0.21, stem_count=258, mean_diameter=4.11, mean_height=2.93
+    ),
+    spruce=m.TreeStratum(
+        age=14, basal_area=0.84, stem_count=949, mean_diameter=4.97, mean_height=4.5
+    ),
+    deciduous=m.TreeStratum(
+        age=7, basal_area=0.4, stem_count=1602, mean_diameter=2.13, mean_height=3.21
+    ),
+)
+_DENSE_YOUNG_SCALING_FACTOR = 1800 / 2809
+
+
+def _dense_young_candidate(stand_id="20"):
+    # _candidate supplies the site attributes and the geometry only: its own
+    # strata (and so the pine_ba it is given) are replaced wholesale.
+    return dataclasses.replace(
+        _candidate(stand_id, pine_ba=0), strata=_DENSE_YOUNG_STRATA
+    )
+
+
+def test_build_stand_mean_diameter_is_the_one_the_scaling_rule_uses():
+    stand = m.build_stand(_dense_young_candidate())
+
+    # (0.21 * 4.11 + 0.84 * 4.97 + 0.4 * 2.13) / 1.45, the worked example of
+    # docs/dense_young_stand_scaling.md.
+    assert stand.stand_meandiameter == pytest.approx(4.06, abs=0.005)
+    # Not merely close to the rule's mean diameter: the same number, because
+    # build_stand gets it from the rule's own function.
+    assert stand.stand_meandiameter == (
+        dense_young_stand_scaling.basal_area_weighted_mean_diameter(stand.strata)
+    )
+
+
 def test_build_stands_isolates_one_bad_candidate(monkeypatch):
     # build_stand can still raise for a structurally pathological
     # geometry (e.g. all-coincident points) even after partition_viable_candidates
@@ -906,7 +1008,7 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     # ... but it never became an allometry CSV.
     assert isinstance(outcome, m.StandWritten)
@@ -954,7 +1056,7 @@ def test_process_stand_writes_two_csvs(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.dominant_csv.exists()
@@ -971,7 +1073,7 @@ def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.dominant_csv.exists()
@@ -989,7 +1091,7 @@ def test_process_stand_skips_on_failure(tmp_path, monkeypatch):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(m, "build_growth_and_yield_table", _boom)
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandSkipped)
     assert outcome.stand_id == stand.id
@@ -1019,7 +1121,7 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
         return real_build(*args, **kwargs)
 
     monkeypatch.setattr(m, "build_growth_and_yield_table", _fail_on_second_call)
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandSkipped)
     assert list(tmp_path.glob("*.csv")) == []
@@ -1039,7 +1141,7 @@ def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandSkipped)
     assert list(tmp_path.glob("*.csv")) == []
@@ -1068,7 +1170,7 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     stand_data = outcome.stand_data
@@ -1099,7 +1201,7 @@ def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     stand_data = outcome.stand_data
@@ -1118,7 +1220,7 @@ def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.stand_data.soil_type is None
@@ -1131,7 +1233,7 @@ def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_pa
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
@@ -1165,7 +1267,7 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.stand_data.initial_age_per_layer == {
@@ -1181,7 +1283,7 @@ def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.stand_data.initial_age_per_layer == {
@@ -1196,12 +1298,143 @@ def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tm
         target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
     )
 
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
     assert CanopyLayerName.dominant in allometry_file_per_layer
     assert CanopyLayerName.subdominant not in allometry_file_per_layer
+
+
+# %% process_stand: dense young stand scaling
+#
+# The scaling factor is decided in main() and handed to process_stand, which
+# never decides on its own. Stand 20's strata (_DENSE_YOUNG_STRATA) carry
+# three species, so the whole-stand-then-split order shows: all three are
+# scaled by the one factor, and only then are the dominant (spruce) and
+# subdominant (deciduous) layers picked out.
+
+
+def _year_0_row(csv_path) -> pd.Series:
+    table = pd.read_csv(csv_path)
+    return table.loc[table["Year"] == 0].iloc[0]
+
+
+def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
+    tmp_path,
+):
+    stand = m.build_stand(_dense_young_candidate())
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(
+        stand, config, tmp_path, scaling_factor=_DENSE_YOUNG_SCALING_FACTOR
+    )
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.subdominant_csv is not None
+    # 2809 stems in total, so the factor is 1800 / 2809 = 0.641. The dominant
+    # spruce layer is grown from 949 * 0.641 = 608 stems and the subdominant
+    # deciduous layer from 1602 * 0.641 = 1027. (The growth model's own Year-0
+    # stem count is a little below what it is given, hence the tolerance.)
+    dominant_year_0 = _year_0_row(outcome.dominant_csv)
+    subdominant_year_0 = _year_0_row(outcome.subdominant_csv)
+    assert dominant_year_0["N"] == pytest.approx(608, rel=0.02)
+    assert subdominant_year_0["N"] == pytest.approx(1027, rel=0.02)
+    # Same trees, fewer of them: each layer still starts at its own species'
+    # stratum age.
+    assert dominant_year_0["Age"] == 14
+    assert subdominant_year_0["Age"] == 7
+
+
+def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
+    tmp_path,
+):
+    stand = m.build_stand(_dense_young_candidate())
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(
+        stand, config, tmp_path, scaling_factor=_DENSE_YOUNG_SCALING_FACTOR
+    )
+
+    assert isinstance(outcome, m.StandWritten)
+    stand_data = outcome.stand_data
+    # The record says the stand was scaled, and by how much...
+    assert stand_data.dense_young_stand_scaling_applied is True
+    assert stand_data.dense_young_stand_scaling_factor == pytest.approx(
+        0.6408, abs=1e-4
+    )
+    # ...while every figure stays as the inventory recorded it: the stem
+    # count the rule judged the stand by (258 + 949 + 1602), the basal area
+    # (0.21 + 0.84 + 0.4) and the basal-area-weighted mean diameter.
+    assert stand_data.stem_count == 2809
+    assert stand_data.basal_area == pytest.approx(1.45)
+    assert stand_data.mean_diameter == pytest.approx(4.06, abs=0.005)
+
+
+def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
+    tmp_path,
+):
+    # A dense young stand, but no factor was decided for it (the option is
+    # off): process_stand never decides on its own.
+    stand = m.build_stand(_dense_young_candidate())
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.subdominant_csv is not None
+    # Both layers start from the recorded stem counts: 949 spruce, 1602
+    # deciduous.
+    assert _year_0_row(outcome.dominant_csv)["N"] == pytest.approx(949, rel=0.02)
+    assert _year_0_row(outcome.subdominant_csv)["N"] == pytest.approx(1602, rel=0.02)
+    stand_data = outcome.stand_data
+    assert stand_data.dense_young_stand_scaling_applied is False
+    assert stand_data.dense_young_stand_scaling_factor is None
+    # The stem count is recorded for every stand, scaled or not.
+    assert stand_data.stem_count == 2809
+
+
+def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_path):
+    # A dense young spruce monoculture: 3000 stems/ha, scaled to 1800. Pine
+    # and deciduous carry no basal area, and scaling zero by a positive factor
+    # leaves zero, so there is still no second layer to write (docs/adr/0002).
+    # (As in _dense_young_candidate, _candidate's own strata are replaced.)
+    candidate = dataclasses.replace(
+        _candidate("1", pine_ba=0),
+        strata=m.PerSpecies(
+            pine=m.ZERO_STRATUM,
+            spruce=m.TreeStratum(
+                age=14,
+                basal_area=2.0,
+                stem_count=3000,
+                mean_diameter=4.97,
+                mean_height=4.5,
+            ),
+            deciduous=m.ZERO_STRATUM,
+        ),
+    )
+    stand = m.build_stand(candidate)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    )
+
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=1800 / 3000)
+
+    assert isinstance(outcome, m.StandWritten)
+    assert outcome.subdominant_csv is None
+    assert list(tmp_path.glob("*.csv")) == [outcome.dominant_csv]
+    assert _year_0_row(outcome.dominant_csv)["N"] == pytest.approx(1800, rel=0.02)
+    assert outcome.stand_data.dense_young_stand_scaling_applied is True
+    assert outcome.stand_data.stem_count == 3000
+    assert CanopyLayerName.subdominant not in (
+        outcome.stand_data.allometry_file_per_layer
+    )
 
 
 def test_dump_stand_data_document_is_the_shared_function():
@@ -1214,42 +1447,72 @@ def test_dump_stand_data_document_is_the_shared_function():
 # %% End-to-end pipeline, against a tiny synthetic .gpkg
 
 
-def _write_synthetic_gpkg(path: Path, crs: str | None = SOURCE_CRS) -> None:
+def _write_synthetic_gpkg(
+    path: Path, crs: str | None = SOURCE_CRS, *, dense_young: bool = False
+) -> None:
     """A minimal 3-layer gpkg exercising load_gpkg_layers + the whole
     filter/merge/aggregate chain: two stands that survive filtering (one
     pine-only monoculture, one pine+spruce mix) and three that each fail a
-    different filter/step, so the pipeline's skip-reporting is exercised too."""
+    different filter/step, so the pipeline's skip-reporting is exercised too.
+
+    dense_young adds a third surviving stand, "20": a dense young stand with
+    Paroninkorpi stand 20's three strata (_DENSE_YOUNG_STRATA)."""
     helsinki_area = Point(385000, 6685000).buffer(50)
 
+    stand_rows = [
+        _stand_row(1, subgroup=2, drainagestate=7, fertilityclass=3),  # survives
+        _stand_row(2, subgroup=2, drainagestate=8, fertilityclass=4),  # survives
+        _stand_row(3, maingroup=2),  # excluded: not forest land
+        _stand_row(4, subgroup=2, drainagestate=6),  # excluded: undrained
+        _stand_row(
+            5, subgroup=2, drainagestate=7, fertilityclass=3
+        ),  # excluded: no type=1 snapshot in target year
+    ]
+    treestand_rows = [
+        _treestand_row(1, 101, "2018-06-01", 1),
+        _treestand_row(2, 102, "2018-07-01", 1),
+        _treestand_row(3, 103, "2018-06-01", 1),
+        _treestand_row(4, 104, "2018-06-01", 1),
+        _treestand_row(5, 105, "2015-06-01", 1),  # wrong year -- no 2018 match
+    ]
+    dense_young_treestratum_rows = []
+    if dense_young:
+        stand_rows.append(
+            _stand_row(20, subgroup=2, drainagestate=7, fertilityclass=3)  # survives
+        )
+        treestand_rows.append(_treestand_row(20, 120, "2018-06-01", 1))
+        # Stand 20 (treestandid 120): one row per species slot, straight off
+        # _DENSE_YOUNG_STRATA. treespecies 1 pine, 2 spruce, 3 a deciduous code.
+        dense_young_treestratum_rows = [
+            {
+                "treestandid": 120,
+                "treespecies": treespecies,
+                "age": float(stratum.age),
+                "basalarea": stratum.basal_area,
+                "stemcount": float(stratum.stem_count),
+                "meandiameter": stratum.mean_diameter,
+                "meanheight": stratum.mean_height,
+            }
+            for treespecies, stratum in (
+                (1, _DENSE_YOUNG_STRATA.pine),
+                (2, _DENSE_YOUNG_STRATA.spruce),
+                (3, _DENSE_YOUNG_STRATA.deciduous),
+            )
+        ]
+
     stand = gpd.GeoDataFrame(
-        [
-            _stand_row(1, subgroup=2, drainagestate=7, fertilityclass=3),  # survives
-            _stand_row(2, subgroup=2, drainagestate=8, fertilityclass=4),  # survives
-            _stand_row(3, maingroup=2),  # excluded: not forest land
-            _stand_row(4, subgroup=2, drainagestate=6),  # excluded: undrained
-            _stand_row(
-                5, subgroup=2, drainagestate=7, fertilityclass=3
-            ),  # excluded: no type=1 snapshot in target year
-        ],
+        stand_rows,
         geometry="geometry",
         # The geometry below is EPSG:3067. Left unlabelled only when the
         # test asks for a layer with no CRS at all.
         crs=SOURCE_CRS if crs is not None else None,
     )
-    stand["geometry"] = [helsinki_area] * 5
+    stand["geometry"] = [helsinki_area] * len(stand_rows)
     if crs is not None:
         # The same stands, really in `crs`: reprojected, not just relabelled.
         stand = stand.to_crs(crs)
 
-    treestand = pd.DataFrame(
-        [
-            _treestand_row(1, 101, "2018-06-01", 1),
-            _treestand_row(2, 102, "2018-07-01", 1),
-            _treestand_row(3, 103, "2018-06-01", 1),
-            _treestand_row(4, 104, "2018-06-01", 1),
-            _treestand_row(5, 105, "2015-06-01", 1),  # wrong year -- no 2018 match
-        ]
-    )
+    treestand = pd.DataFrame(treestand_rows)
 
     treestratum = pd.DataFrame(
         [
@@ -1282,6 +1545,7 @@ def _write_synthetic_gpkg(path: Path, crs: str | None = SOURCE_CRS) -> None:
                 "meandiameter": 14.0,
                 "meanheight": 12.0,
             },
+            *dense_young_treestratum_rows,
         ]
     )
 
@@ -1360,7 +1624,10 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     allometry_dir.mkdir(parents=True)
     outcomes = {
         str(o.stand_id): o
-        for o in (m.process_stand(s, config, allometry_dir) for s in parsed_stands)
+        for o in (
+            m.process_stand(s, config, allometry_dir, scaling_factor=None)
+            for s in parsed_stands
+        )
     }
     outcome_1, outcome_2 = outcomes["1"], outcomes["2"]
     assert isinstance(outcome_1, m.StandWritten)
@@ -1527,6 +1794,131 @@ def test_main_fails_the_run_on_a_stand_layer_without_a_crs(
     assert not (project_dir / "inputs" / "allometry").exists()
 
 
+# %% main: dense young stand scaling
+#
+# The synthetic gpkg's two ordinary stands ("1" and "2") plus one dense young
+# stand ("20", Paroninkorpi stand 20's strata).
+
+_SCALING_LINE = "20: 2809 -> 1800 stems/ha (scaling factor 0.641)"
+
+
+def _run_main_with_a_dense_young_stand(
+    monkeypatch, tmp_path, project_dir, *, scaling_table: str = "", dry_run=False
+) -> None:
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path, dense_young=True)
+    (project_dir / "inputs" / "config.toml").write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+        + scaling_table
+    )
+    argv = [
+        "metsakeskus_to_allometry.py",
+        str(gpkg_path),
+        f"--project-dir={project_dir}",
+    ]
+    if dry_run:
+        argv.append("--dry-run")
+    monkeypatch.setattr("sys.argv", argv)
+
+    m.main()
+
+
+def _warning_lines(printed: str) -> list[str]:
+    return [line for line in printed.splitlines() if line.startswith("Warning")]
+
+
+def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    _run_main_with_a_dense_young_stand(monkeypatch, tmp_path, project_dir)
+
+    printed = capsys.readouterr().out
+    (warning,) = _warning_lines(printed)
+    assert warning.endswith(": 20")
+    assert dense_young_stand_scaling.DENSE_YOUNG_STAND_SCALING_DOCS_URL in printed
+    assert _SCALING_LINE not in printed
+
+    # The stand is grown as recorded, and its record says so.
+    stands = load_stand_data_document_from_json(
+        project_dir / "inputs" / "stand_data.json"
+    ).stands
+    assert stands[StandID("20")].dense_young_stand_scaling_applied is False
+    assert stands[StandID("20")].dense_young_stand_scaling_factor is None
+    allometry_dir = project_dir / "inputs" / "allometry"
+    assert _year_0_row(allometry_dir / "20_dominant.csv")["N"] == pytest.approx(
+        949, rel=0.02
+    )
+    assert _year_0_row(allometry_dir / "20_subdominant.csv")["N"] == pytest.approx(
+        1602, rel=0.02
+    )
+
+
+def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    _run_main_with_a_dense_young_stand(
+        monkeypatch,
+        tmp_path,
+        project_dir,
+        scaling_table="[dense_young_stand_scaling]\nenabled = true\n",
+    )
+
+    printed = capsys.readouterr().out
+    assert _SCALING_LINE in printed
+    assert _warning_lines(printed) == []
+
+    stands = load_stand_data_document_from_json(
+        project_dir / "inputs" / "stand_data.json"
+    ).stands
+    # Only the dense young stand is scaled...
+    assert stands[StandID("1")].dense_young_stand_scaling_applied is False
+    assert stands[StandID("2")].dense_young_stand_scaling_applied is False
+    assert stands[StandID("20")].dense_young_stand_scaling_applied is True
+    assert stands[StandID("20")].dense_young_stand_scaling_factor == pytest.approx(
+        0.6408, abs=1e-4
+    )
+    # ...both of its layers start from the scaled-down stand (949 and 1602
+    # stems times 0.641), and its record still holds the inventory's stem
+    # count. Every stand's record has one, scaled or not.
+    allometry_dir = project_dir / "inputs" / "allometry"
+    assert _year_0_row(allometry_dir / "20_dominant.csv")["N"] == pytest.approx(
+        608, rel=0.02
+    )
+    assert _year_0_row(allometry_dir / "20_subdominant.csv")["N"] == pytest.approx(
+        1027, rel=0.02
+    )
+    assert stands[StandID("20")].stem_count == 2809
+    assert stands[StandID("1")].stem_count == 500
+    assert stands[StandID("2")].stem_count == 700
+
+
+@pytest.mark.parametrize(
+    "scaling_table, expect_warning",
+    [
+        ("", True),
+        ("[dense_young_stand_scaling]\nenabled = true\n", False),
+    ],
+)
+def test_main_dry_run_reports_the_scaling_the_same_way_and_writes_nothing(
+    monkeypatch, tmp_path, project_dir, capsys, scaling_table, expect_warning
+):
+    _run_main_with_a_dense_young_stand(
+        monkeypatch, tmp_path, project_dir, scaling_table=scaling_table, dry_run=True
+    )
+
+    printed = capsys.readouterr().out
+    if expect_warning:
+        (warning,) = _warning_lines(printed)
+        assert warning.endswith(": 20")
+        assert _SCALING_LINE not in printed
+    else:
+        assert _warning_lines(printed) == []
+        assert _SCALING_LINE in printed
+
+    assert not (project_dir / "inputs" / "allometry").exists()
+    assert not (project_dir / "inputs" / "stand_data.json").exists()
+
+
 # %% plan_stand_outputs / csv_counts
 
 
@@ -1571,7 +1963,7 @@ def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     )
 
     plan = m.plan_stand_outputs(stand, tmp_path)
-    outcome = m.process_stand(stand, config, tmp_path)
+    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.dominant_csv == plan.dominant_csv

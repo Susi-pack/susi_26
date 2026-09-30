@@ -71,6 +71,8 @@ Altitude and temperature sum are not part of the Metsäkeskus data, so you suppl
 
 There are other parameters that modify, e.g., which fertility and development classes to keep, how far forward each stand's growth is projected etc., is optional, and documented in the [reference](metsakeskus_to_allometry.md#config-file).
 
+The config file can also turn on [dense young stand scaling](dense_young_stand_scaling.md), which scales down young stands recorded with a very large number of stems before their growth is computed. It is off by default.
+
 
 ## 3. Run the tool
 
@@ -130,6 +132,26 @@ inputs/uusimaa/allometry/
 
 Each stand gets one file per canopy layer: `_dominant.csv` always, and `_subdominant.csv` when a second species is present.
 The JSON alongside them records what was extracted for every converted stand; it is the place to look when you want to know why a stand came out the way it did.
+
+If the data holds dense young stands, the Filtering section says so after the "Stands ready for allometry" line.
+With the option off (the default), it is a warning naming the stands. In the run above, 12 of the 786:
+
+```
+Warning: 12 dense young stand(s): 32175706, 32175707, 32175794, 32176520, 32176550, 32177051, 32177293, 32344874, 32484519, 32487471, 32559296, 32559664
+  These are young stands with more stems than the default limits of dense young stand scaling, and they will be grown that way. [dense_young_stand_scaling] in the config file scales such stands down: https://susi-pack.github.io/susi_26/dense_young_stand_scaling/
+```
+
+With `enabled = true` in the `[dense_young_stand_scaling]` table, it is one line per scaled stand instead:
+
+```
+Dense young stand scaling -- 12 stand(s) scaled down before the growth model runs:
+  32175706: 5398 -> 2000 stems/ha (scaling factor 0.371)
+  32175707: 2684 -> 2000 stems/ha (scaling factor 0.745)
+  32175794: 2668 -> 1800 stems/ha (scaling factor 0.675)
+  ...
+```
+
+See [Dense young stand scaling](dense_young_stand_scaling.md) for what both mean, and its [Metsäkeskus section](dense_young_stand_scaling.md#with-metsakeskus-data) for what is particular to this tool.
 
 ??? question "Why did I get so few stands?"
 

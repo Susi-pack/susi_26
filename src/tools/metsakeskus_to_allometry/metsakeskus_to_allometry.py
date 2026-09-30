@@ -43,6 +43,15 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     finalize_cli_config,
     resolve_config_path,
 )
+from tools.shared_allometry_tool_utils.dense_young_stand_scaling import (
+    DenseYoungStandScalingConfig,
+    basal_area_weighted_mean_diameter,
+    decide_scaling_factors,
+    stands_the_default_rule_would_scale,
+    strata_to_grow_from,
+    total_basal_area,
+    total_stem_count,
+)
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_isolated_growth_and_yield_table,
 )
@@ -56,6 +65,8 @@ from tools.shared_allometry_tool_utils.input_validation import (
 )
 from tools.shared_allometry_tool_utils.print_formatting import (
     StandSkipped,
+    print_dense_young_stand_warning,
+    print_scaled_stands,
     print_section,
     print_skips,
 )
@@ -188,6 +199,15 @@ class ExtractionConfig(AllometryGenerationDefaults):
     # peatland fertility classes of interest
     # restricting to 2-5 excludes the very richest and very poorest extremes.
     fertilityclass_filter: tuple[int, ...] = (2, 3, 4, 5)
+
+    # The optional [dense_young_stand_scaling] table: off, with the default
+    # numbers, when the config file leaves it out. The same table, defaults
+    # and rule as xml_to_allometry.py's XmlConfig. It lives here rather than
+    # on AllometryGenerationDefaults because new_growth_allometry.py's config
+    # subclasses that too, and the option means nothing there.
+    dense_young_stand_scaling: DenseYoungStandScalingConfig = (
+        DenseYoungStandScalingConfig()
+    )
 
 
 @dataclass(frozen=True)
@@ -525,10 +545,9 @@ def build_species_strata(stand_strata: pd.DataFrame) -> PerSpecies[TreeStratum]:
     )
 
 
-def total_basal_area(strata: PerSpecies[TreeStratum]) -> float:
-    return (
-        strata.pine.basal_area + strata.spruce.basal_area + strata.deciduous.basal_area
-    )
+# total_basal_area is now the shared
+# tools.shared_allometry_tool_utils.dense_young_stand_scaling function,
+# imported above -- it used to be a local copy.
 
 
 # %% Candidate assembly and viability
@@ -668,11 +687,12 @@ def build_stand(candidate: StandCandidate) -> ParsedStand:
         + strata.spruce.mean_height * strata.spruce.basal_area
         + strata.deciduous.mean_height * strata.deciduous.basal_area
     ) / stand_total_ba
-    stand_diameter = (
-        strata.pine.mean_diameter * strata.pine.basal_area
-        + strata.spruce.mean_diameter * strata.spruce.basal_area
-        + strata.deciduous.mean_diameter * strata.deciduous.basal_area
-    ) / stand_total_ba
+    # The diameter comes from the function dense young stand scaling judges a
+    # stand with, so the mean diameter recorded in StandData and the one the
+    # rule compares with its limit are the same number by construction. It
+    # raises for a stand with no basal area, which a viable candidate
+    # (partition_viable_candidates) never is.
+    stand_diameter = basal_area_weighted_mean_diameter(strata)
 
     dominant_species, subdominant_species = determine_dominant_and_subdominant_species(
         strata
@@ -832,7 +852,10 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
 
 
 def process_stand(
-    stand: ParsedStand, config: ExtractionConfig, output_dir: Path
+    stand: ParsedStand,
+    config: ExtractionConfig,
+    output_dir: Path,
+    scaling_factor: float | None,
 ) -> StandOutcome:
     """Builds the dominant canopy layer's allometry CSV (always) and the
     subdominant's (only when a genuine second species is present -- see
@@ -841,16 +864,38 @@ def process_stand(
     here is this one stand's problem, not the run's: it's caught and turned
     into a StandSkipped rather than aborting the batch.
 
+    scaling_factor is the stand's dense young stand scaling factor, decided
+    once in main(): None for a stand that isn't scaled. With a factor, the
+    whole stand is scaled first -- all three species' strata, by the one
+    factor -- and only then are the two layers split off it, so both growth
+    tables are built from the scaled-down strata. The StandData record is
+    filled from the unscaled stand either way, and says whether the stand
+    was scaled and by what factor.
+
     Both growth tables are computed in full, and the StandData record below
     is built (and pydantic-validated -- e.g. against a degenerate
     stand.area) BEFORE anything is written to disk: if any of that fails,
     we must not have already written the dominant CSV -- otherwise a
     StandSkipped outcome would leave a stray, unreferenced CSV behind,
     contradicting the reported result."""
+    # plan_stand_outputs reads the unscaled strata, on purpose: a positive
+    # factor can't change whether the subdominant species has basal area, so
+    # the plan is the same scaled or not -- and it stays the one a dry run
+    # reports, which never sees a scaled stratum.
     plan = plan_stand_outputs(stand, output_dir)
     try:
+        # Two sets of strata on purpose. stand.strata is what the inventory
+        # recorded, and is all that goes into the StandData record below. The
+        # growth model gets strata_to_grow: the scaled strata when there is a
+        # factor, the recorded ones otherwise. The scaling is applied here,
+        # to the whole stand, BEFORE build_growth_and_yield_table isolates a
+        # layer (docs/adr/0002): the rule judged the stand on all three
+        # species, so all three are multiplied by the one factor, including a
+        # third species that neither layer keeps.
+        strata_to_grow = strata_to_grow_from(stand.strata, scaling_factor)
+
         dominant_table = build_growth_and_yield_table(
-            stand.strata,
+            strata_to_grow,
             stand.dominant_species,
             stand.fertilityclass,
             stand.x_ykj,
@@ -866,7 +911,7 @@ def process_stand(
         subdominant_table: pd.DataFrame | None = None
         if plan.subdominant_csv is not None:
             subdominant_table = build_growth_and_yield_table(
-                stand.strata,
+                strata_to_grow,
                 stand.subdominant_species,
                 stand.fertilityclass,
                 stand.x_ykj,
@@ -913,12 +958,26 @@ def process_stand(
             stand_area=stand.area,
             main_group=MAINGROUP_FOREST_LAND,
             sub_group=stand.subgroup,
+            # The stand-level figures are raw, exactly as the inventory
+            # recorded them, for a scaled stand too: the record keeps what
+            # the inventory reported, and notes dense young stand scaling
+            # separately, in the two fields at the end.
             basal_area=stand.stand_basalarea,
             mean_height=stand.stand_meanheight,
             mean_diameter=stand.stand_meandiameter,
+            # The sum of the three species' stem counts, from the very
+            # function the rule judges a stand's density with. Without it,
+            # the scaling factor (target stem count over THIS number) would
+            # have nothing in the record to refer to. A species' stem count
+            # is an estimate when the inventory recorded none
+            # (aggregate_species_group, estimate_stemcount); the sum takes
+            # whatever the strata carry, estimated or not, as the rule does.
+            stem_count=total_stem_count(stand.strata),
             developmentclass=stand.developmentclass,
             drainagestate=stand.drainagestate,
             soil_type=stand.soiltype,
+            dense_young_stand_scaling_applied=scaling_factor is not None,
+            dense_young_stand_scaling_factor=scaling_factor,
         )
 
         # Both tables computed successfully (or there is no subdominant
@@ -1179,6 +1238,27 @@ def main() -> None:
 
     print(f"Stands ready for allometry: {len(parsed_stands):,}")
 
+    # Dense young stand scaling. Every stand's scaling factor is decided
+    # once, here: None for all of them unless the config file turns the
+    # option on. It is decided before the dry-run return below, so a dry run
+    # reports the scaled stands and the warning exactly as a real run does.
+    #
+    # The rule sees each stand's full strata -- all three species, before
+    # process_stand splits the stand into its dominant and subdominant
+    # layers (docs/adr/0002) -- so a stand is judged, and scaled, as a whole.
+    strata_per_stand = {stand.id: stand.strata for stand in parsed_stands}
+    scaling_factors = decide_scaling_factors(
+        strata_per_stand, cli_args.config.dense_young_stand_scaling
+    )
+    print_scaled_stands(strata_per_stand, scaling_factors)
+    # The warning: stands the DEFAULT numbers would scale, judged on the
+    # strata each stand is about to be grown from. With the option off, those
+    # are the dense young stands the user may not know about. It never blocks
+    # the run.
+    print_dense_young_stand_warning(
+        stands_the_default_rule_would_scale(strata_per_stand, scaling_factors)
+    )
+
     # Everything above this point is identical in a dry run: the filters and
     # the skip reports are precisely what a dry run exists to show. What it
     # skips is everything below -- the growth model (~all of a real run's
@@ -1198,7 +1278,13 @@ def main() -> None:
     print()
 
     outcomes = [
-        process_stand(stand, cli_args.config, output_dir) for stand in parsed_stands
+        process_stand(
+            stand,
+            cli_args.config,
+            output_dir,
+            scaling_factor=scaling_factors[stand.id],
+        )
+        for stand in parsed_stands
     ]
     written: list[StandWritten] = [o for o in outcomes if isinstance(o, StandWritten)]
     processing_skips: list[StandSkipped] = [

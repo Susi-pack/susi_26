@@ -9,7 +9,9 @@ Simulating such a stand as recorded is meaningless: no stand keeps that many ste
 ([issue #105](https://github.com/Susi-pack/susi_26/issues/105),
 [issue #312](https://github.com/Susi-pack/susi_26/issues/312)).
 
-**Dense young stand scaling** is an option of `susi-xml-to-allometry` for those stands.
+**Dense young stand scaling** is an option of `susi-xml-to-allometry` and
+`susi-metsakeskus-to-allometry` for those stands. Both tools use the same rule, with the same
+config table and the same defaults.
 When it is on, the tool multiplies the stem count and basal area of a dense young stand by one
 **scaling factor** before the growth model runs, so the stand's allometry file starts from the
 scaled-down stand.
@@ -153,3 +155,34 @@ For stand 20, with the option on:
 
 So a scaled stand's allometry file starts from fewer stems than its `stem_count`. The recorded
 stem count times the scaling factor gives the stem count the growth model was given.
+
+## With Metsäkeskus data
+
+`susi-metsakeskus-to-allometry` applies the same rule, and prints and records the same things.
+Four points follow from how that tool works.
+
+**The stand is scaled before its two layers are split.** The tool writes one allometry file per
+canopy layer, each grown from one species alone: the dominant species, and the subdominant one
+when it has basal area. The rule is judged on all three species, all three are multiplied by the
+one scaling factor, and only then are the two layers picked out. A third species is scaled like
+the others and then left out, as it always is.
+
+So the two files together start from fewer stems than the target whenever a third species is
+present. With stand 20's strata, the scaled stand has 1800 stems/ha, but the dominant spruce
+layer is grown from 608 of them and the subdominant deciduous layer from 1027. The 165 pine
+stems are in neither file.
+
+**Stem counts can be estimates.** When the inventory records a species' basal area but no stem
+count, the tool estimates the stem count from the basal area and the mean diameter. The rule uses
+whatever stem counts the strata carry, estimated or not.
+
+**Stems the tool does not grow still count.** A species recorded with a stem count but no basal
+area is never grown: the tool only builds a layer for a species with basal area. Its stems are
+still part of the stand's stem count, so they can take a stand over its threshold. The factor is
+then applied to the species that are grown. Look at the stands the tool lists before turning the
+option on for such data.
+
+**`stand_data.json` records the stand's stem count.** `stem_count` is the sum of the three
+species' stem counts, as the rule reads it, unscaled. `basal_area` and `mean_diameter` are the
+stand's basal area and its basal-area-weighted mean diameter, also unscaled: the same mean
+diameter the rule compares with its limit. This tool records no per-species figures.

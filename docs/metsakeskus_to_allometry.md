@@ -88,6 +88,23 @@ also opens with a row for the snapshot itself, at `Year` 0, so the defaults
 produce 17 rows per file. `Year` counts from the snapshot; the `Age` column
 adds the stand's measured age to it.
 
+#### `[dense_young_stand_scaling]`
+
+An optional table that scales down the stem count and basal area of dense
+young stands before the growth model runs. It is off by default, and explained
+in full on its own page: [Dense young stand scaling](dense_young_stand_scaling.md).
+A TOML table has to come after every top-level key, so keep it at the end of
+the file.
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Turns the scaling on. |
+| `max_mean_diameter` | `8.0` | Only stands with a mean diameter below this are scaled, cm. |
+| `stem_count_threshold_spruce` | `2200` | A spruce-dominated stand is scaled when its stem count is above this, stems/ha. |
+| `stem_count_threshold_other` | `2500` | The same, for a pine- or deciduous-dominated stand. |
+| `target_stem_count_spruce` | `1800` | The stem count a scaled spruce-dominated stand starts from, stems/ha. |
+| `target_stem_count_other` | `2000` | The same, for a pine- or deciduous-dominated stand. |
+
 ## Input data
 
 Three layers of the GeoPackage are read:
@@ -178,10 +195,20 @@ area but no usable diameter or height drops the whole stand (see
 **5. Viability check.** Drops stands whose basal area is zero across all three
 species: there is no growth to model.
 
+**Dense young stand scaling.** Not a filter: it removes no stand. After the
+last check, the tool reports
+[dense young stand scaling](dense_young_stand_scaling.md#with-metsakeskus-data):
+with the option on, one line per stand it scales down; and in any case a
+warning naming the dense young stands that are about to be grown with more
+stems than the default limits allow. A scaled stand has every species' stem
+count and basal area multiplied by its scaling factor before the growth model
+runs, and before the stand is split into its two layers.
+
 **Writing.** For each surviving stand, the polygon centroid is transformed from
 EPSG:3067 (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model, the species
 are ranked by basal area into a dominant and a subdominant, and one growth
-trajectory is computed per layer.
+trajectory is computed per layer. `stand_data.json` records the stand as the
+inventory reports it, and says whether it was scaled and by what factor.
 
 ## Dry runs
 
@@ -209,7 +236,7 @@ ran.
 |---|---|
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
-| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
+| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means, stem count, and whether [dense young stand scaling](dense_young_stand_scaling.md) was applied. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
 Each CSV follows the canonical allometry schema.
 The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.
