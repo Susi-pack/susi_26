@@ -66,6 +66,8 @@ Neither is part of the XML standard, so you supply them yourself, and the same p
 
 There are other parameters that modify how far forward each stand's growth is projected and at what resolution; they are optional, and documented in the [reference](xml_to_allometry.md#config-file).
 
+The config file can also turn on [dense young stand scaling](dense_young_stand_scaling.md), which scales down young stands recorded with a very large number of stems before their growth is computed. It is off by default.
+
 ## 3. Run the tool
 
 ```bash
@@ -133,6 +135,23 @@ Allometric road map successfully generated for stand 1
 Allometry files written: 21 stand(s) -- 21 CSV(s)
 Informational JSON written: /path/to/inputs/my_project/allometry/extra_xml_info.json
 ```
+
+If the file holds a dense young stand, the Filtering section says so after the "Stands ready for allometry" line.
+With the option off (the default), it is a warning naming the stand:
+
+```
+Warning: 1 dense young stand(s): 20
+  These are young stands with more stems than the default limits of dense young stand scaling, and they will be grown that way. [dense_young_stand_scaling] in the config file scales such stands down: https://susi-pack.github.io/susi_26/dense_young_stand_scaling/
+```
+
+With `enabled = true` in the `[dense_young_stand_scaling]` table, it is one line per scaled stand instead:
+
+```
+Dense young stand scaling -- 1 stand(s) scaled down before the growth model runs:
+  20: 2809 -> 1800 stems/ha (scaling factor 0.641)
+```
+
+See [Dense young stand scaling](dense_young_stand_scaling.md) for what both mean.
 
 Those 21 stands produced 21 CSV files, one per stand.
 

@@ -52,6 +52,7 @@ nav = [
     { "Weather data" = "weather_data.md" },
     { "XML --> allometry file" = "xml_to_allometry.md" },
     { "How to generate allometry from XML data" = "how_to_generate_allometry_from_xml.md" },
+    { "Dense young stand scaling" = "dense_young_stand_scaling.md" },
     { "How to generate allometry from Metsäkeskus data" = "how_to_generate_allometry_from_metsakeskus.md" },
     { "Metsäkeskus data --> allometry files" = "metsakeskus_to_allometry.md" },
     { "How to generate a new-growth allometry file" = "how_to_generate_new_growth_allometry.md" },

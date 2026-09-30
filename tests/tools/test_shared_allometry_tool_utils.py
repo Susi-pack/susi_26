@@ -18,6 +18,7 @@ from susi.io.load_output_data import StandID
 from tools.shared_allometry_tool_utils import (
     allometry_generation_defaults,
     cli_paths,
+    dense_young_stand_scaling,
     growth_and_yield_table,
     input_validation,
     print_formatting,
@@ -799,3 +800,407 @@ def test_build_growth_and_yield_table_peat_defaults_to_1():
     )
     pd.testing.assert_frame_equal(default_peat, explicit_peat)
 
+
+# %% dense_young_stand_scaling
+#
+# The rule both xml_to_allometry.py and metsakeskus_to_allometry.py use to
+# decide whether a dense young stand is scaled down before the growth model
+# runs (CONTEXT.md, "Dense young stand scaling"). Everything is read off the
+# strata, so these tests need no XML or gpkg: just PerSpecies[TreeStratum]
+# fixtures.
+
+
+def _stratum(
+    stem_count: float,
+    basal_area: float,
+    mean_diameter: float,
+    *,
+    age: float = 10.0,
+    mean_height: float = 4.0,
+) -> tree_stratum.TreeStratum:
+    return tree_stratum.TreeStratum(
+        age=age,
+        basal_area=basal_area,
+        stem_count=stem_count,
+        mean_diameter=mean_diameter,
+        mean_height=mean_height,
+    )
+
+
+# Paroninkorpi stand 20, as the XML records it: spruce-dominated (largest
+# basal area), 2809 stems/ha in total, basal-area-weighted mean diameter
+# (0.21*4.11 + 0.84*4.97 + 0.4*2.13) / 1.45 = 4.06 cm.
+_STAND_20_STRATA = tree_stratum.PerSpecies(
+    pine=_stratum(258, 0.21, 4.11, age=10.0, mean_height=2.93),
+    spruce=_stratum(949, 0.84, 4.97, age=14.0, mean_height=4.5),
+    deciduous=_stratum(1602, 0.4, 2.13, age=7.0, mean_height=3.21),
+)
+
+# Paroninkorpi stand 5: pine-dominated and denser than stand 20 (3265
+# stems/ha), but its weighted mean diameter is 8.98 cm, above the 8 cm limit.
+_STAND_5_STRATA = tree_stratum.PerSpecies(
+    pine=_stratum(1024, 4.61, 9.62, age=16.0, mean_height=6.9),
+    spruce=_stratum(368, 1.62, 10.39, age=19.0, mean_height=8.81),
+    deciduous=_stratum(1873, 2.22, 6.64, age=14.0, mean_height=8.19),
+)
+
+
+def test_total_stem_count_sums_the_three_species():
+    assert dense_young_stand_scaling.total_stem_count(_STAND_20_STRATA) == 2809
+
+
+def test_basal_area_weighted_mean_diameter_weighs_each_species_by_basal_area():
+    assert dense_young_stand_scaling.basal_area_weighted_mean_diameter(
+        _STAND_20_STRATA
+    ) == pytest.approx(4.062, abs=1e-3)
+    assert dense_young_stand_scaling.basal_area_weighted_mean_diameter(
+        _STAND_5_STRATA
+    ) == pytest.approx(8.98, abs=5e-3)
+
+
+def test_main_species_is_the_one_with_the_largest_basal_area():
+    assert dense_young_stand_scaling.main_species(_STAND_20_STRATA) == 2
+    assert dense_young_stand_scaling.main_species(_STAND_5_STRATA) == 1
+
+
+def test_scaling_factor_of_stand_20_with_the_default_config_is_1800_over_2809():
+    factor = dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _STAND_20_STRATA, dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    )
+    assert factor == pytest.approx(1800 / 2809)
+    assert factor == pytest.approx(0.6408, abs=1e-4)
+
+
+def test_scale_strata_multiplies_every_species_stems_and_basal_area_by_the_factor():
+    factor = 1800 / 2809
+
+    scaled = dense_young_stand_scaling.scale_strata(_STAND_20_STRATA, factor)
+
+    assert dense_young_stand_scaling.total_stem_count(scaled) == pytest.approx(1800)
+    for species in ("pine", "spruce", "deciduous"):
+        recorded = getattr(_STAND_20_STRATA, species)
+        scaled_stratum = getattr(scaled, species)
+        assert scaled_stratum.stem_count == pytest.approx(recorded.stem_count * factor)
+        assert scaled_stratum.basal_area == pytest.approx(recorded.basal_area * factor)
+        # Only stems and basal area change.
+        assert scaled_stratum.age == recorded.age
+        assert scaled_stratum.mean_diameter == recorded.mean_diameter
+        assert scaled_stratum.mean_height == recorded.mean_height
+    # Spot check against hand-computed figures: 949 * 0.6408 and 0.84 * 0.6408.
+    assert scaled.spruce.stem_count == pytest.approx(608.1, abs=0.1)
+    assert scaled.spruce.basal_area == pytest.approx(0.538, abs=1e-3)
+
+
+def _one_species_stand(
+    species: str, stem_count: float, mean_diameter: float = 5.0
+) -> tree_stratum.PerSpecies[tree_stratum.TreeStratum]:
+    """A stand with a single species, which is therefore its main species, and
+    whose mean diameter is therefore that species' own."""
+    zero = tree_stratum.ZERO_STRATUM
+    stratum = _stratum(stem_count, 3.0, mean_diameter)
+    return tree_stratum.PerSpecies(
+        pine=stratum if species == "pine" else zero,
+        spruce=stratum if species == "spruce" else zero,
+        deciduous=stratum if species == "deciduous" else zero,
+    )
+
+
+_DEFAULT_SCALING_CONFIG = dense_young_stand_scaling.DenseYoungStandScalingConfig()
+
+
+@pytest.mark.parametrize("species", ["pine", "deciduous"])
+def test_pine_and_deciduous_dominated_stands_use_the_other_threshold_and_target(
+    species,
+):
+    # 2300 stems/ha is above the spruce threshold (2200) but below the
+    # "other" one (2500), so only a spruce-dominated stand is scaled there.
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _one_species_stand(species, 2300), _DEFAULT_SCALING_CONFIG
+        )
+        is None
+    )
+    assert dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _one_species_stand("spruce", 2300), _DEFAULT_SCALING_CONFIG
+    ) == pytest.approx(1800 / 2300)
+
+    # Above the "other" threshold, the stand is scaled to the "other" target.
+    assert dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _one_species_stand(species, 2600), _DEFAULT_SCALING_CONFIG
+    ) == pytest.approx(2000 / 2600)
+
+
+def test_a_dense_stand_above_the_diameter_limit_is_not_scaled():
+    # Stand 5: 3265 stems/ha, well above its threshold (2500, pine-dominated),
+    # but its weighted mean diameter is 8.98 cm.
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _STAND_5_STRATA, _DEFAULT_SCALING_CONFIG
+        )
+        is None
+    )
+
+
+def test_a_stand_exactly_at_its_stem_count_threshold_is_not_scaled():
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _one_species_stand("spruce", 2200), _DEFAULT_SCALING_CONFIG
+        )
+        is None
+    )
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _one_species_stand("spruce", 2201), _DEFAULT_SCALING_CONFIG
+        )
+        is not None
+    )
+
+
+def test_a_stand_exactly_at_the_diameter_limit_is_not_scaled():
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _one_species_stand("spruce", 3000, mean_diameter=8.0),
+            _DEFAULT_SCALING_CONFIG,
+        )
+        is None
+    )
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _one_species_stand("spruce", 3000, mean_diameter=7.9),
+            _DEFAULT_SCALING_CONFIG,
+        )
+        is not None
+    )
+
+
+def test_a_stand_with_no_basal_area_is_not_judged():
+    # Stems but no basal area: the weighted mean diameter would divide by
+    # zero. There is nothing to judge, so the answer is None, not an error.
+    no_basal_area = tree_stratum.PerSpecies(
+        pine=_stratum(3000, 0.0, 2.0),
+        spruce=tree_stratum.ZERO_STRATUM,
+        deciduous=tree_stratum.ZERO_STRATUM,
+    )
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            no_basal_area, _DEFAULT_SCALING_CONFIG
+        )
+        is None
+    )
+
+
+def test_a_stand_with_no_stems_is_not_judged():
+    no_stems = tree_stratum.PerSpecies(
+        pine=_stratum(0, 3.0, 2.0),
+        spruce=tree_stratum.ZERO_STRATUM,
+        deciduous=tree_stratum.ZERO_STRATUM,
+    )
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            no_stems, _DEFAULT_SCALING_CONFIG
+        )
+        is None
+    )
+
+
+def test_basal_area_weighted_mean_diameter_refuses_a_stand_with_no_basal_area():
+    no_basal_area = tree_stratum.PerSpecies(
+        pine=tree_stratum.ZERO_STRATUM,
+        spruce=tree_stratum.ZERO_STRATUM,
+        deciduous=tree_stratum.ZERO_STRATUM,
+    )
+    with pytest.raises(ValueError, match="no basal area"):
+        dense_young_stand_scaling.basal_area_weighted_mean_diameter(no_basal_area)
+
+
+def test_the_rule_ignores_enabled():
+    # Whether the option is on is the caller's question: the warning asks
+    # this function about stands the option is off for.
+    disabled = dense_young_stand_scaling.DenseYoungStandScalingConfig(enabled=False)
+    enabled = dense_young_stand_scaling.DenseYoungStandScalingConfig(enabled=True)
+    assert dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _STAND_20_STRATA, disabled
+    ) == dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _STAND_20_STRATA, enabled
+    )
+
+
+def test_the_rule_uses_the_configs_numbers():
+    # Stand 20 (4.06 cm, 2809 stems/ha, spruce-dominated) with a lower
+    # diameter limit is no longer young...
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _STAND_20_STRATA,
+            dense_young_stand_scaling.DenseYoungStandScalingConfig(
+                max_mean_diameter=4.0
+            ),
+        )
+        is None
+    )
+    # ...with a higher spruce threshold it is no longer dense...
+    assert (
+        dense_young_stand_scaling.dense_young_stand_scaling_factor(
+            _STAND_20_STRATA,
+            dense_young_stand_scaling.DenseYoungStandScalingConfig(
+                stem_count_threshold_spruce=3000
+            ),
+        )
+        is None
+    )
+    # ...and with another spruce target it gets another factor.
+    assert dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _STAND_20_STRATA,
+        dense_young_stand_scaling.DenseYoungStandScalingConfig(
+            target_stem_count_spruce=1500
+        ),
+    ) == pytest.approx(1500 / 2809)
+
+
+def test_dense_young_stand_scaling_config_defaults_to_off_with_the_pre_250_numbers():
+    config = dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    assert config.enabled is False
+    assert config.max_mean_diameter == 8.0
+    assert config.stem_count_threshold_spruce == 2200
+    assert config.stem_count_threshold_other == 2500
+    assert config.target_stem_count_spruce == 1800
+    assert config.target_stem_count_other == 2000
+
+
+@pytest.mark.parametrize("main_species_name", ["spruce", "other"])
+def test_dense_young_stand_scaling_config_refuses_a_target_above_its_threshold(
+    main_species_name,
+):
+    # Such a config would scale a stand sitting between the two numbers UP.
+    with pytest.raises(pydantic.ValidationError, match="more stems than"):
+        dense_young_stand_scaling.DenseYoungStandScalingConfig.model_validate(
+            {
+                f"stem_count_threshold_{main_species_name}": 2000,
+                f"target_stem_count_{main_species_name}": 2100,
+            }
+        )
+
+
+def test_dense_young_stand_scaling_config_accepts_a_target_equal_to_its_threshold():
+    # Only stands strictly above the threshold are scaled, so the factor is
+    # still below 1.
+    config = dense_young_stand_scaling.DenseYoungStandScalingConfig(
+        stem_count_threshold_spruce=2000, target_stem_count_spruce=2000
+    )
+    factor = dense_young_stand_scaling.dense_young_stand_scaling_factor(
+        _STAND_20_STRATA, config
+    )
+    assert factor is not None
+    assert factor < 1
+
+
+def test_dense_young_stand_scaling_config_refuses_an_unknown_key():
+    with pytest.raises(pydantic.ValidationError, match="typo_field"):
+        dense_young_stand_scaling.DenseYoungStandScalingConfig.model_validate(
+            {"typo_field": 1}
+        )
+
+
+def test_strata_to_grow_from_are_the_recorded_strata_without_a_factor():
+    assert (
+        dense_young_stand_scaling.strata_to_grow_from(_STAND_20_STRATA, None)
+        is _STAND_20_STRATA
+    )
+
+
+def test_strata_to_grow_from_are_the_scaled_strata_with_a_factor():
+    grown_from = dense_young_stand_scaling.strata_to_grow_from(_STAND_20_STRATA, 0.5)
+    assert grown_from == dense_young_stand_scaling.scale_strata(_STAND_20_STRATA, 0.5)
+    assert dense_young_stand_scaling.total_stem_count(grown_from) == pytest.approx(
+        2809 / 2
+    )
+
+
+def test_decide_scaling_factors_is_none_for_every_stand_when_the_option_is_off():
+    strata_per_stand = {StandID("5"): _STAND_5_STRATA, StandID("20"): _STAND_20_STRATA}
+    assert dense_young_stand_scaling.decide_scaling_factors(
+        strata_per_stand,
+        dense_young_stand_scaling.DenseYoungStandScalingConfig(enabled=False),
+    ) == {StandID("5"): None, StandID("20"): None}
+
+
+def test_decide_scaling_factors_applies_the_rule_to_every_stand_when_the_option_is_on():
+    strata_per_stand = {StandID("5"): _STAND_5_STRATA, StandID("20"): _STAND_20_STRATA}
+    factors = dense_young_stand_scaling.decide_scaling_factors(
+        strata_per_stand,
+        dense_young_stand_scaling.DenseYoungStandScalingConfig(enabled=True),
+    )
+    assert factors == {StandID("5"): None, StandID("20"): pytest.approx(1800 / 2809)}
+
+
+# The warning: which stands are dense young stands by the DEFAULT numbers,
+# judged on the strata each stand is about to be grown from.
+
+_STRATA_OF_STANDS_5_AND_20 = {
+    StandID("5"): _STAND_5_STRATA,
+    StandID("20"): _STAND_20_STRATA,
+}
+
+
+def test_with_the_option_off_the_default_rule_would_scale_the_dense_young_stand():
+    assert dense_young_stand_scaling.stands_the_default_rule_would_scale(
+        _STRATA_OF_STANDS_5_AND_20,
+        scaling_factors={StandID("5"): None, StandID("20"): None},
+    ) == [StandID("20")]
+
+
+def test_a_stand_scaled_to_the_default_target_is_no_longer_one_the_rule_would_scale():
+    # Stand 20 grown from 1800 stems/ha: below its 2200 threshold.
+    assert (
+        dense_young_stand_scaling.stands_the_default_rule_would_scale(
+            _STRATA_OF_STANDS_5_AND_20,
+            scaling_factors={StandID("5"): None, StandID("20"): 1800 / 2809},
+        )
+        == []
+    )
+
+
+def test_a_stand_scaled_to_a_target_above_the_default_threshold_is_still_listed():
+    # A config with a spruce threshold and target of 2500: stand 20 is grown
+    # from 2500 stems/ha, which the default numbers (threshold 2200) would
+    # still scale.
+    assert dense_young_stand_scaling.stands_the_default_rule_would_scale(
+        _STRATA_OF_STANDS_5_AND_20,
+        scaling_factors={StandID("5"): None, StandID("20"): 2500 / 2809},
+    ) == [StandID("20")]
+
+
+# %% print_formatting: dense young stand scaling
+
+
+def test_print_scaled_stands_prints_stems_before_and_after_and_the_factor(capsys):
+    print_formatting.print_scaled_stands(
+        _STRATA_OF_STANDS_5_AND_20,
+        scaling_factors={StandID("5"): None, StandID("20"): 1800 / 2809},
+    )
+    printed = capsys.readouterr().out
+    assert "1 stand(s)" in printed
+    assert "20: 2809 -> 1800 stems/ha (scaling factor 0.641)" in printed
+    # Stand 5 has no factor, so it has no line.
+    assert "5: 3265" not in printed
+
+
+def test_print_scaled_stands_prints_nothing_when_no_stand_is_scaled(capsys):
+    print_formatting.print_scaled_stands(
+        _STRATA_OF_STANDS_5_AND_20,
+        scaling_factors={StandID("5"): None, StandID("20"): None},
+    )
+    assert capsys.readouterr().out == ""
+
+
+def test_print_dense_young_stand_warning_names_the_stands_and_links_the_docs(capsys):
+    print_formatting.print_dense_young_stand_warning([StandID("20"), StandID("31")])
+    printed = capsys.readouterr().out
+    assert "Warning" in printed
+    assert "20, 31" in printed
+    assert "dense_young_stand_scaling" in printed
+    assert dense_young_stand_scaling.DOCS_URL in printed
+
+
+def test_print_dense_young_stand_warning_prints_nothing_without_stands(capsys):
+    print_formatting.print_dense_young_stand_warning([])
+    assert capsys.readouterr().out == ""

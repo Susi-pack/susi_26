@@ -202,6 +202,102 @@ def test_stand_data_accepts_ages_for_exactly_the_allometry_layers():
     }
 
 
+# %% StandData's dense young stand scaling record
+#
+# Whether the generating tool scaled the stand down before the growth model
+# ran, and by what factor (CONTEXT.md, "Dense young stand scaling"). The two
+# fields say one thing between them, so StandData refuses a record where they
+# disagree.
+
+
+def _stand_with_scaling_record(**scaling_fields) -> stand_data.StandData:
+    return stand_data.StandData(
+        site_fertility_class=3,
+        allometry_file_per_layer={},
+        initial_age_per_layer={},
+        x_ykj=339,
+        y_ykj=6675,
+        **scaling_fields,
+    )
+
+
+def test_stand_data_defaults_to_not_scaled():
+    stand = _stand_with_scaling_record()
+    assert stand.dense_young_stand_scaling_applied is False
+    assert stand.dense_young_stand_scaling_factor is None
+
+
+def test_stand_data_accepts_a_scaled_stand_with_its_factor():
+    stand = _stand_with_scaling_record(
+        dense_young_stand_scaling_applied=True, dense_young_stand_scaling_factor=0.64
+    )
+    assert stand.dense_young_stand_scaling_applied is True
+    assert stand.dense_young_stand_scaling_factor == 0.64
+
+
+def test_stand_data_rejects_a_scaling_factor_on_a_stand_that_was_not_scaled():
+    with pytest.raises(pydantic.ValidationError, match="dense_young_stand_scaling"):
+        _stand_with_scaling_record(
+            dense_young_stand_scaling_applied=False,
+            dense_young_stand_scaling_factor=0.64,
+        )
+
+
+def test_stand_data_rejects_a_scaled_stand_with_no_scaling_factor():
+    with pytest.raises(pydantic.ValidationError, match="dense_young_stand_scaling"):
+        _stand_with_scaling_record(dense_young_stand_scaling_applied=True)
+
+
+@pytest.mark.parametrize("bad_factor", [0.0, 1.0, 1.5, -0.2])
+def test_stand_data_rejects_a_scaling_factor_outside_0_to_1(bad_factor):
+    # The factor is a target stem count over a larger recorded one: strictly
+    # between 0 and 1. Anything else isn't a scaling DOWN.
+    with pytest.raises(
+        pydantic.ValidationError, match="dense_young_stand_scaling_factor"
+    ):
+        _stand_with_scaling_record(
+            dense_young_stand_scaling_applied=True,
+            dense_young_stand_scaling_factor=bad_factor,
+        )
+
+
+def test_a_document_written_before_the_scaling_record_existed_still_loads(tmp_path):
+    # A stand exactly as stand_data.json held it before these two fields
+    # existed: neither key present. It loads as "not scaled".
+    json_path = tmp_path / STAND_DATA_FILENAME
+    json_path.write_text(
+        json.dumps(
+            {
+                "crs": stand_data.SOURCE_CRS,
+                "altitude": 120.0,
+                "ddy": 1250.0,
+                "stands": {
+                    "20": {
+                        "site_fertility_class": 3,
+                        "allometry_file_per_layer": {
+                            "dominant": {
+                                "file_path": "allometry/20.csv",
+                                "species_id": 2,
+                            }
+                        },
+                        "initial_age_per_layer": {"dominant": 11.0},
+                        "x_ykj": 338,
+                        "y_ykj": 6769,
+                        "stem_count": 2809.0,
+                    }
+                },
+            }
+        )
+    )
+
+    stand = stand_data.load_stand_data_document_from_json(json_path).stands[
+        StandID("20")
+    ]
+
+    assert stand.dense_young_stand_scaling_applied is False
+    assert stand.dense_young_stand_scaling_factor is None
+
+
 # %% stand_data.StandData / StandDataDocument round-trip
 
 # Fabricated AllometryFileAndSpecies values, mirroring
@@ -270,6 +366,14 @@ def stand_data_strategy(draw):
     initial_age_per_layer = {
         layer: draw(_initial_age) for layer in allometry_file_per_layer
     }
+    # Same for the scaling record: a factor is present exactly when the stand
+    # was scaled, so `applied` follows from the drawn factor.
+    scaling_factor = draw(
+        st.one_of(
+            st.none(),
+            st.floats(min_value=0, max_value=1, exclude_min=True, exclude_max=True),
+        )
+    )
     return draw(
         st.builds(
             stand_data.StandData,
@@ -301,6 +405,8 @@ def stand_data_strategy(draw):
             stem_count=_optional_nonneg_float,
             developmentclass=_optional_positive_int,
             drainagestate=_optional_positive_int,
+            dense_young_stand_scaling_applied=st.just(scaling_factor is not None),
+            dense_young_stand_scaling_factor=st.just(scaling_factor),
         )
     )
 

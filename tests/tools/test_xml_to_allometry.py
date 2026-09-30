@@ -1,5 +1,7 @@
 import json
+import tomllib
 
+import pandas as pd
 import pytest
 import xmltodict
 from hypothesis import given
@@ -19,7 +21,10 @@ from susi.io.stand_data import (
 )
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
 from susi.io.utils import SRC_DIR
-from tools.shared_allometry_tool_utils import input_validation
+from tools.shared_allometry_tool_utils import (
+    dense_young_stand_scaling,
+    input_validation,
+)
 from tools.xml_to_allometry import xml_to_allometry
 
 # %% out_of_range_message reuse (from the shared package)
@@ -83,6 +88,42 @@ def test_xml_config_overrides_defaults():
     assert config.step_years == 10
 
 
+def test_xml_config_dense_young_stand_scaling_is_off_by_default():
+    config = xml_to_allometry.XmlConfig.model_validate(
+        {"altitude": 150.0, "ddy": 1200.0}
+    )
+    assert config.dense_young_stand_scaling == (
+        dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    )
+    assert config.dense_young_stand_scaling.enabled is False
+
+
+def test_load_xml_config_reads_the_dense_young_stand_scaling_table(tmp_path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "altitude = 150.0\nddy = 1200.0\n"
+        "[dense_young_stand_scaling]\n"
+        "enabled = true\n"
+        "target_stem_count_spruce = 1500\n"
+    )
+    config = xml_to_allometry.load_xml_config(config_path)
+    assert config.dense_young_stand_scaling.enabled is True
+    assert config.dense_young_stand_scaling.target_stem_count_spruce == 1500
+    # Keys left out of the table keep their defaults.
+    assert config.dense_young_stand_scaling.stem_count_threshold_spruce == 2200
+
+
+def test_xml_config_rejects_an_unknown_dense_young_stand_scaling_key():
+    with pytest.raises(ValueError, match="typo_field"):
+        xml_to_allometry.XmlConfig.model_validate(
+            {
+                "altitude": 150.0,
+                "ddy": 1200.0,
+                "dense_young_stand_scaling": {"typo_field": 1},
+            }
+        )
+
+
 def test_xml_config_is_frozen():
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0)
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
@@ -113,6 +154,20 @@ def test_default_config_toml_optional_fields_match_model_defaults():
     assert config.end_year == defaults.end_year
     assert config.step_years == defaults.step_years
 
+    # The [dense_young_stand_scaling] table: every key is shipped (so the
+    # comparison below isn't just defaults against defaults), and each one
+    # carries the model's own default.
+    shipped_table = tomllib.loads(DEFAULT_CONFIG_PATH.read_text())[
+        "dense_young_stand_scaling"
+    ]
+    assert set(shipped_table) == set(
+        dense_young_stand_scaling.DenseYoungStandScalingConfig.model_fields
+    )
+    assert config.dense_young_stand_scaling == defaults.dense_young_stand_scaling
+    assert config.dense_young_stand_scaling == (
+        dense_young_stand_scaling.DenseYoungStandScalingConfig()
+    )
+
 
 def test_default_config_toml_required_fields_are_deliberately_out_of_range():
     """The shipped file's altitude/ddy placeholders must stay outside
@@ -141,11 +196,47 @@ def _hole_coordinates(offset: float = 0.0) -> str:
     return f"{x0},{y0} {x0 + 10},{y0} {x0 + 10},{y0 + 10} {x0},{y0 + 10}"
 
 
+# Paroninkorpi stand 20's three strata, as its XML records them: a dense
+# young stand. 2809 stems/ha in total, spruce-dominated (largest basal area),
+# basal-area-weighted mean diameter 4.06 cm. With the default numbers, dense
+# young stand scaling takes it to 1800 stems/ha: a factor of 0.6408.
+_DENSE_YOUNG_TREE_STRATA_BLOCK = """
+          <tst:TreeStrata>
+            <tst:TreeStratum>
+              <tst:TreeSpecies>1</tst:TreeSpecies>
+              <tst:Age>10</tst:Age>
+              <tst:BasalArea>0.21</tst:BasalArea>
+              <tst:StemCount>258</tst:StemCount>
+              <tst:MeanDiameter>4.11</tst:MeanDiameter>
+              <tst:MeanHeight>2.93</tst:MeanHeight>
+            </tst:TreeStratum>
+            <tst:TreeStratum>
+              <tst:TreeSpecies>2</tst:TreeSpecies>
+              <tst:Age>14</tst:Age>
+              <tst:BasalArea>0.84</tst:BasalArea>
+              <tst:StemCount>949</tst:StemCount>
+              <tst:MeanDiameter>4.97</tst:MeanDiameter>
+              <tst:MeanHeight>4.5</tst:MeanHeight>
+            </tst:TreeStratum>
+            <tst:TreeStratum>
+              <tst:TreeSpecies>3</tst:TreeSpecies>
+              <tst:Age>7</tst:Age>
+              <tst:BasalArea>0.4</tst:BasalArea>
+              <tst:StemCount>1602</tst:StemCount>
+              <tst:MeanDiameter>2.13</tst:MeanDiameter>
+              <tst:MeanHeight>3.21</tst:MeanHeight>
+            </tst:TreeStratum>
+          </tst:TreeStrata>
+"""
+_DENSE_YOUNG_SCALING_FACTOR = 1800 / 2809
+
+
 def _stand_xml_block(
     stand_id: str,
     *,
     include_tree_strata: bool,
     include_second_species: bool = False,
+    dense_young: bool = False,
     srs_name: str | None = SOURCE_CRS,
     exterior_coordinates: str | None = None,
     interior_coordinates: tuple[str, ...] = (),
@@ -181,6 +272,11 @@ def _stand_xml_block(
         if include_tree_strata
         else ""
     )
+    # dense_young swaps the strata for stand 20's. The tss:TreeStandSummary
+    # below is left as it is (MeanDiameter 20.0) on purpose: the rule reads
+    # the strata, never the summary.
+    if dense_young:
+        tree_strata_block = _DENSE_YOUNG_TREE_STRATA_BLOCK
     srs_attribute = f' srsName="{srs_name}"' if srs_name is not None else ""
     interior_blocks = "".join(
         f"""
@@ -243,6 +339,7 @@ def _parsed_stand(
     *,
     include_tree_strata: bool,
     include_second_species: bool = False,
+    dense_young: bool = False,
     **polygon_options,
 ) -> dict:
     """One <st:Stand> parsed back into the dict shape
@@ -255,6 +352,7 @@ def _parsed_stand(
             stand_id,
             include_tree_strata=include_tree_strata,
             include_second_species=include_second_species,
+            dense_young=dense_young,
             **polygon_options,
         )
     )
@@ -524,13 +622,14 @@ def test_parse_coordinates_roundtrip(coords):
 
 
 def _parsed_stand_data(
-    stand_id="1", *, include_second_species=False
+    stand_id="1", *, include_second_species=False, dense_young=False
 ) -> xml_to_allometry.ParsedStand:
     return xml_to_allometry.get_stand_data_from_xml(
         _parsed_stand(
             stand_id,
             include_tree_strata=True,
             include_second_species=include_second_species,
+            dense_young=dense_young,
         )
     )
 
@@ -547,7 +646,7 @@ def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_p
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
     stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
+        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
     )
 
     output_path = xml_to_allometry.plan_stand_output(parsed_stand, tmp_path)
@@ -567,7 +666,7 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
     stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
+        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
     )
 
     assert stand_data.site_fertility_class == parsed_stand.fertility_class
@@ -593,7 +692,7 @@ def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
     stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
+        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
     )
 
     assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 39.0}
@@ -607,7 +706,7 @@ def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_p
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
     stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path
+        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
     )
 
     # Raw XML figures, not adjusted by any thinning heuristic.
@@ -620,6 +719,91 @@ def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_p
     # real 0.0 ("measured, none there") rather than None ("not recorded").
     assert stand_data.basal_area_deciduous == 0.0
     assert stand_data.stem_count_deciduous == 0.0
+
+
+def _year_0_row(csv_path) -> pd.Series:
+    table = pd.read_csv(csv_path)
+    return table.loc[table["Year"] == 0].iloc[0]
+
+
+def test_process_stand_with_a_scaling_factor_grows_the_stand_from_fewer_stems(
+    tmp_path,
+):
+    parsed_stand = _parsed_stand_data("20", dense_young=True)
+    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+    recorded_dir = tmp_path / "recorded"
+    scaled_dir = tmp_path / "scaled"
+    recorded_dir.mkdir()
+    scaled_dir.mkdir()
+
+    xml_to_allometry.process_stand(
+        config, parsed_stand, PEAT=1, output_dir=recorded_dir, scaling_factor=None
+    )
+    xml_to_allometry.process_stand(
+        config,
+        parsed_stand,
+        PEAT=1,
+        output_dir=scaled_dir,
+        scaling_factor=_DENSE_YOUNG_SCALING_FACTOR,
+    )
+
+    # The growth model's own Year-0 stem count is a little below what it is
+    # given (2809 recorded, 1800 scaled), hence the tolerance.
+    recorded_year_0 = _year_0_row(recorded_dir / "20.csv")
+    scaled_year_0 = _year_0_row(scaled_dir / "20.csv")
+    assert recorded_year_0["N"] == pytest.approx(2809, rel=0.02)
+    assert scaled_year_0["N"] == pytest.approx(1800, rel=0.02)
+    assert scaled_year_0["BA"] < recorded_year_0["BA"]
+    # Same trees, fewer of them: the curve starts at the same age.
+    assert scaled_year_0["Age"] == recorded_year_0["Age"]
+
+
+def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
+    tmp_path,
+):
+    parsed_stand = _parsed_stand_data("20", dense_young=True)
+    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+
+    stand_data = xml_to_allometry.process_stand(
+        config,
+        parsed_stand,
+        PEAT=1,
+        output_dir=tmp_path,
+        scaling_factor=_DENSE_YOUNG_SCALING_FACTOR,
+    )
+
+    # The record says the stand was scaled, and by how much...
+    assert stand_data.dense_young_stand_scaling_applied is True
+    assert stand_data.dense_young_stand_scaling_factor == pytest.approx(
+        0.6408, abs=1e-4
+    )
+    # ...while every figure stays exactly as the XML recorded it.
+    assert stand_data.stem_count == 2809
+    assert stand_data.stem_count_pine == 258
+    assert stand_data.stem_count_spruce == 949
+    assert stand_data.stem_count_deciduous == 1602
+    assert stand_data.basal_area_pine == 0.21
+    assert stand_data.basal_area_spruce == 0.84
+    assert stand_data.basal_area_deciduous == 0.4
+    # The summary figures of the fixture's tss:TreeStandSummary.
+    assert stand_data.basal_area == 20.0
+    assert stand_data.mean_diameter == 20.0
+
+
+def test_process_stand_without_a_scaling_factor_records_that_nothing_was_scaled(
+    tmp_path,
+):
+    # A dense young stand, but no factor was decided for it (the option is
+    # off): process_stand never decides on its own.
+    parsed_stand = _parsed_stand_data("20", dense_young=True)
+    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+
+    stand_data = xml_to_allometry.process_stand(
+        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
+    )
+
+    assert stand_data.dense_young_stand_scaling_applied is False
+    assert stand_data.dense_young_stand_scaling_factor is None
 
 
 def test_dump_stand_data_document_is_the_shared_function():
@@ -936,3 +1120,114 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
     )
     assert dominant.file_path == project_dir / "inputs" / "allometry" / "1.csv"
     assert dominant.file_path.exists()
+
+
+# %% main: dense young stand scaling
+#
+# One ordinary stand ("1") and one dense young stand ("20", Paroninkorpi
+# stand 20's strata) in the XML.
+
+_SCALING_LINE = "20: 2809 -> 1800 stems/ha (scaling factor 0.641)"
+
+
+def _run_main_with_a_dense_young_stand(
+    monkeypatch, tmp_path, project_dir, *, scaling_table: str = "", dry_run=False
+) -> None:
+    xml_path = tmp_path / "stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(
+            _stand_xml_block("1", include_tree_strata=True)
+            + _stand_xml_block("20", include_tree_strata=True, dense_young=True)
+        )
+    )
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n" + scaling_table
+    )
+    argv = ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir}"]
+    if dry_run:
+        argv.append("--dry-run")
+    monkeypatch.setattr("sys.argv", argv)
+
+    xml_to_allometry.main()
+
+
+def _warning_lines(printed: str) -> list[str]:
+    return [line for line in printed.splitlines() if line.startswith("Warning")]
+
+
+def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    _run_main_with_a_dense_young_stand(monkeypatch, tmp_path, project_dir)
+
+    printed = capsys.readouterr().out
+    (warning,) = _warning_lines(printed)
+    assert warning.endswith(": 20")
+    assert dense_young_stand_scaling.DOCS_URL in printed
+    assert _SCALING_LINE not in printed
+
+    # The stand is grown as recorded, and its record says so.
+    stands = load_stand_data_document_from_json(
+        project_dir / "inputs" / "stand_data.json"
+    ).stands
+    assert stands[StandID("20")].dense_young_stand_scaling_applied is False
+    assert stands[StandID("20")].dense_young_stand_scaling_factor is None
+    year_0 = _year_0_row(project_dir / "inputs" / "allometry" / "20.csv")
+    assert year_0["N"] == pytest.approx(2809, rel=0.02)
+
+
+def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    _run_main_with_a_dense_young_stand(
+        monkeypatch,
+        tmp_path,
+        project_dir,
+        scaling_table="[dense_young_stand_scaling]\nenabled = true\n",
+    )
+
+    printed = capsys.readouterr().out
+    assert _SCALING_LINE in printed
+    assert _warning_lines(printed) == []
+
+    stands = load_stand_data_document_from_json(
+        project_dir / "inputs" / "stand_data.json"
+    ).stands
+    # Only the dense young stand is scaled...
+    assert stands[StandID("1")].dense_young_stand_scaling_applied is False
+    assert stands[StandID("20")].dense_young_stand_scaling_applied is True
+    assert stands[StandID("20")].dense_young_stand_scaling_factor == pytest.approx(
+        0.6408, abs=1e-4
+    )
+    # ...its allometry starts from the scaled-down stand, and its record still
+    # holds the inventory's stem count.
+    year_0 = _year_0_row(project_dir / "inputs" / "allometry" / "20.csv")
+    assert year_0["N"] == pytest.approx(1800, rel=0.02)
+    assert stands[StandID("20")].stem_count == 2809
+
+
+@pytest.mark.parametrize(
+    "scaling_table, expect_warning",
+    [
+        ("", True),
+        ("[dense_young_stand_scaling]\nenabled = true\n", False),
+    ],
+)
+def test_main_dry_run_reports_the_scaling_the_same_way_and_writes_nothing(
+    monkeypatch, tmp_path, project_dir, capsys, scaling_table, expect_warning
+):
+    _run_main_with_a_dense_young_stand(
+        monkeypatch, tmp_path, project_dir, scaling_table=scaling_table, dry_run=True
+    )
+
+    printed = capsys.readouterr().out
+    if expect_warning:
+        (warning,) = _warning_lines(printed)
+        assert warning.endswith(": 20")
+        assert _SCALING_LINE not in printed
+    else:
+        assert _warning_lines(printed) == []
+        assert _SCALING_LINE in printed
+
+    assert not (project_dir / "inputs" / "allometry").exists()
+    assert not (project_dir / "inputs" / "stand_data.json").exists()

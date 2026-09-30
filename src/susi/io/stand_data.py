@@ -287,6 +287,42 @@ class StandData(StrictFrozenModel):
             "species-code >= 3 bucketing as basal_area_deciduous."
         ),
     )
+    # The record of dense young stand scaling (CONTEXT.md). Every other figure
+    # on this model stays as the inventory reported it, scaled stand or not:
+    # these two fields are the only trace of the scaling. Both have defaults,
+    # so a stand_data.json written before they existed still loads.
+    dense_young_stand_scaling_applied: bool = Field(
+        default=False,
+        description=(
+            "Whether the generating tool scaled this stand down before the "
+            "growth model ran (dense young stand scaling). When true, the "
+            "stand's allometry starts from fewer stems and less basal area "
+            "than the figures recorded here."
+        ),
+    )
+    dense_young_stand_scaling_factor: float | None = Field(
+        default=None,
+        gt=0,
+        lt=1,
+        description=(
+            "The factor every species' basal area and stem count were "
+            "multiplied by before the growth model ran: the target stem count "
+            "over the recorded stem count. Present exactly when "
+            "dense_young_stand_scaling_applied is true."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def scaling_factor_is_present_exactly_when_scaling_was_applied(self) -> Self:
+        has_factor = self.dense_young_stand_scaling_factor is not None
+        if self.dense_young_stand_scaling_applied != has_factor:
+            raise ValueError(
+                "dense_young_stand_scaling_factor must be present exactly when "
+                "dense_young_stand_scaling_applied is true, but got "
+                f"dense_young_stand_scaling_applied={self.dense_young_stand_scaling_applied} "
+                f"and dense_young_stand_scaling_factor={self.dense_young_stand_scaling_factor}"
+            )
+        return self
 
     @model_validator(mode="after")
     def initial_ages_match_allometry_layers(self) -> Self:

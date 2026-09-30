@@ -80,6 +80,23 @@ outside the range blocks the run unless you pass `--allow-out-of-range-values`.
 These four are passed straight to `Growth_and_Yield_Table`, and set how far
 forward each stand's growth is projected and at what resolution.
 
+#### `[dense_young_stand_scaling]`
+
+An optional table that scales down the stem count and basal area of dense
+young stands before the growth model runs. It is off by default, and explained
+in full on its own page: [Dense young stand scaling](dense_young_stand_scaling.md).
+A TOML table has to come after every top-level key, so keep it at the end of
+the file.
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Turns the scaling on. |
+| `max_mean_diameter` | `8.0` | Only stands with a mean diameter below this are scaled, cm. |
+| `stem_count_threshold_spruce` | `2200` | A spruce-dominated stand is scaled when its stem count is above this, stems/ha. |
+| `stem_count_threshold_other` | `2500` | The same, for a pine- or deciduous-dominated stand. |
+| `target_stem_count_spruce` | `1800` | The stem count a scaled spruce-dominated stand starts from, stems/ha. |
+| `target_stem_count_other` | `2000` | The same, for a pine- or deciduous-dominated stand. |
+
 ## Input XML structure
 
 The input XML files follow the **Finnish national forest information
@@ -175,6 +192,12 @@ whose `TreeStandDataDate` has no `TreeStrata` container at all is skipped
 piece of missing required data aborts immediately, since it signals a
 malformed file rather than an unremarkable gap.
 
+The same section then reports
+[dense young stand scaling](dense_young_stand_scaling.md): with the option on,
+one line per scaled stand; and in any case a warning naming the dense young
+stands that are about to be grown with more stems than the default limits
+allow. Neither removes a stand from the run.
+
 **Writing.** For each stand that survives filtering:
 
 - Its up to three `TreeStratum` entries are mapped into fixed species slots —
@@ -182,6 +205,11 @@ malformed file rather than an unremarkable gap.
   species code into slot 2 (deciduous) — with a slot left at zero when the
   stand has no stratum for that species.
 - The **main species** is the slot with the largest basal area.
+- If [dense young stand scaling](dense_young_stand_scaling.md) is on and the
+  stand is a dense young stand, every species' stem count and basal area are
+  multiplied by the stand's scaling factor before the growth model runs.
+  `stand_data.json` still records the stand as the XML reports it, and says
+  whether it was scaled and by what factor.
 - The stand's first coordinate pair is transformed from EPSG:3067
   (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model.
 - One growth trajectory is computed by `Growth_and_Yield_Table`, covering all

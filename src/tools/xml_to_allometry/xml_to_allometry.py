@@ -33,6 +33,14 @@ from tools.shared_allometry_tool_utils.cli_paths import (
     finalize_cli_config,
     resolve_config_path,
 )
+from tools.shared_allometry_tool_utils.dense_young_stand_scaling import (
+    DenseYoungStandScalingConfig,
+    decide_scaling_factors,
+    main_species,
+    stands_the_default_rule_would_scale,
+    strata_to_grow_from,
+    total_stem_count,
+)
 from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table,
     initial_age,
@@ -44,6 +52,8 @@ from tools.shared_allometry_tool_utils.input_validation import (
 )
 from tools.shared_allometry_tool_utils.print_formatting import (
     StandSkipped,
+    print_dense_young_stand_warning,
+    print_scaled_stands,
     print_section,
     print_skips,
 )
@@ -68,6 +78,14 @@ class XmlConfig(AllometryGenerationDefaults):
     # Required, no defaults
     altitude: float
     ddy: float
+
+    # The optional [dense_young_stand_scaling] table: off, with the default
+    # numbers, when the config file leaves it out. It lives here rather than
+    # on AllometryGenerationDefaults because new_growth_allometry.py's config
+    # subclasses that too, and the option means nothing there.
+    dense_young_stand_scaling: DenseYoungStandScalingConfig = (
+        DenseYoungStandScalingConfig()
+    )
 
 
 def load_xml_config(config_path: Path) -> XmlConfig:
@@ -271,26 +289,6 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
 
     tree_strata = get_tree_strata_data(tree_strata_xml_data)
 
-    strata_basal_areas_per_stratum = [
-        tree_strata.pine.basal_area,
-        tree_strata.spruce.basal_area,
-        tree_strata.deciduous.basal_area,
-    ]
-    strata_stem_counts_per_stratum = [
-        tree_strata.pine.stem_count,
-        tree_strata.spruce.stem_count,
-        tree_strata.deciduous.stem_count,
-    ]
-
-    # The main species is the one with the largest basal area
-    #           index 0 -> TreeSpecies 1 (Pine)
-    #           index 1 -> TreeSpecies 2 (Spruce)
-    #           index 2 -> TreeSpecies >= 3 (Deciduous trees)
-    # The +1 is there to convert index number to tree species code
-    main_species = (
-        strata_basal_areas_per_stratum.index(max(strata_basal_areas_per_stratum)) + 1
-    )
-
     gml_polygon = stand_basic_data["gdt:PolygonGeometry"]["gml:polygonProperty"][
         "gml:Polygon"
     ]
@@ -306,10 +304,13 @@ def get_stand_data_from_xml(stand: dict) -> ParsedStand:
         fertility_class=int(float(stand_basic_data["st:FertilityClass"])),
         polygon=polygon,
         tree_strata=tree_strata,
-        main_species=main_species,
+        # The main species (largest basal area) and the total stem count are
+        # read off the strata by the same shared functions dense young stand
+        # scaling judges a stand with, so there is one definition of each.
+        main_species=main_species(tree_strata),
         x_ykj=x_ykj,
         y_ykj=y_ykj,
-        stem_count=round(sum(strata_stem_counts_per_stratum)),
+        stem_count=round(total_stem_count(tree_strata)),
         mean_diameter=float(tree_stand_summary["tss:MeanDiameter"]),
         # Optionals
         main_group=int(stand_basic_data["st:MainGroup"]),
@@ -369,15 +370,28 @@ def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> Path:
 
 
 def process_stand(
-    config: XmlConfig, parsed_stand: ParsedStand, PEAT: int, output_dir: Path
+    config: XmlConfig,
+    parsed_stand: ParsedStand,
+    PEAT: int,
+    output_dir: Path,
+    scaling_factor: float | None,
 ) -> StandData:
     """
     Builds the single allometry CSV for this stand
+
+    scaling_factor is the stand's dense young stand scaling factor, decided
+    once in main(): None for a stand that isn't scaled. With a factor, the
+    growth table is built from the scaled-down strata. The StandData record
+    is filled from the unscaled parsed_stand either way, and says whether the
+    stand was scaled and by what factor.
     """
+    # Two sets of strata on purpose. `strata` is what the inventory recorded,
+    # and is all that goes into the StandData record below. The growth model
+    # gets the scaled strata when there is a factor.
     strata = parsed_stand.tree_strata
 
     page_1 = build_growth_and_yield_table(
-        strata=strata,
+        strata=strata_to_grow_from(strata, scaling_factor),
         fertility_class=parsed_stand.fertility_class,
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
@@ -407,7 +421,9 @@ def process_stand(
         # the dominant layer starts at the growth model's basal-area-weighted
         # pooled age of every species -- the curve's own Year-0 Age -- not at
         # the inventory's tss:MeanAge, which is computed differently and can
-        # disagree with it.
+        # disagree with it. Dense young stand scaling doesn't move it: every
+        # species' basal area is multiplied by the same factor, so the
+        # weights keep their proportions.
         initial_age_per_layer={CanopyLayerName.dominant: initial_age(page_1)},
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
@@ -424,17 +440,18 @@ def process_stand(
         # Per-species figures straight off the fixed species slots
         # get_tree_strata_data filled (pine/spruce/deciduous, the last one
         # bucketing every species code >= 3). Raw, exactly as the XML
-        # recorded them: any thinning-decision adjustment (e.g.
-        # paroninkorpi.py's sapling thinning rate) belongs to the consumer
-        # making that decision, not to the stand record. A species with no
-        # stratum is ZERO_STRATUM, so its figures are 0.0 here rather than
-        # None.
+        # recorded them, for a scaled stand too: the record keeps what the
+        # inventory reported, and notes dense young stand scaling separately,
+        # in the two fields at the end. A species with no stratum is
+        # ZERO_STRATUM, so its figures are 0.0 here rather than None.
         basal_area_pine=strata.pine.basal_area,
         basal_area_spruce=strata.spruce.basal_area,
         basal_area_deciduous=strata.deciduous.basal_area,
         stem_count_pine=strata.pine.stem_count,
         stem_count_spruce=strata.spruce.stem_count,
         stem_count_deciduous=strata.deciduous.stem_count,
+        dense_young_stand_scaling_applied=scaling_factor is not None,
+        dense_young_stand_scaling_factor=scaling_factor,
     )
 
     page_1.to_csv(output_path, index=False)
@@ -573,6 +590,25 @@ def main():
     print()
     print(f"Stands ready for allometry: {len(parsed_stands):,}")
 
+    # Dense young stand scaling. Every stand's scaling factor is decided
+    # once, here: None for all of them unless the config file turns the
+    # option on. It is decided before the dry-run return below, so a dry run
+    # reports the scaled stands and the warning exactly as a real run does.
+    strata_per_stand = {
+        parsed_stand.id: parsed_stand.tree_strata for parsed_stand in parsed_stands
+    }
+    scaling_factors = decide_scaling_factors(
+        strata_per_stand, cli_args.config.dense_young_stand_scaling
+    )
+    print_scaled_stands(strata_per_stand, scaling_factors)
+    # The warning: stands the DEFAULT numbers would scale, judged on the
+    # strata each stand is about to be grown from. With the option off, those
+    # are the dense young stands the user may not know about. It never blocks
+    # the run.
+    print_dense_young_stand_warning(
+        stands_the_default_rule_would_scale(strata_per_stand, scaling_factors)
+    )
+
     # Everything above this point is identical in a dry run: reading and
     # filtering are precisely what a dry run exists to show. What it skips is
     # everything below -- the growth model and every write, the output
@@ -594,7 +630,11 @@ def main():
     print("Assuming all sites are peatland sites!")
     final_stands: dict[StandID, StandData] = {
         parsed_stand.id: process_stand(
-            cli_args.config, parsed_stand, PEAT=1, output_dir=output_dir
+            cli_args.config,
+            parsed_stand,
+            PEAT=1,
+            output_dir=output_dir,
+            scaling_factor=scaling_factors[parsed_stand.id],
         )
         for parsed_stand in parsed_stands
     }
