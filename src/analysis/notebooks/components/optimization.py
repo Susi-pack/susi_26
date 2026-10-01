@@ -176,6 +176,14 @@ def format_target_specs_as_code(
     offer. Anything else, such as a hand-written lambda, raises instead of
     printing code that would not run.
     """
+    imports = """
+
+    from analysis.optimization.core import Direction, TargetSpec
+    from susi.io.load_output_data import (
+        NetcdfVariableArray,
+        NetcdfVariablePath,
+    )
+    """
     lines = ["target_specs = {"]
     for var_path, target_spec in target_specs.items():
         # getattr: the aggregation's type is a bare Callable, which need not
@@ -194,7 +202,7 @@ def format_target_specs_as_code(
             "    ),",
         ]
     lines.append("}")
-    return "\n".join(lines)
+    return imports + "\n".join(lines)
 
 
 def display_pareto_corner_plot(
