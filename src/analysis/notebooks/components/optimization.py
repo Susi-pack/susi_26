@@ -1,29 +1,6 @@
 """
 Notebook equivalent of `analysis.streamlit.pages.optimization`.
 
-Covers the three parts of the Streamlit page that aren't already ported
-elsewhere: showing a project's stand areas, configuring how each chosen
-netcdf variable becomes an optimization target, and plotting the resulting
-Pareto front. Project selection reuses `folder_selection`, and variable
-selection reuses `variable_selection`.
-
-Per #215's picker/renderer split, `build_target_config` is a picker (it
-displays its widgets and returns them, to be read in a later cell by
-`target_variable_properties`), while `display_stand_areas` and
-`display_pareto_corner_plot` are renderers (they display their output and
-also return the underlying data).
-
-The Streamlit page wraps the configuration in an `st.form` with a "Run
-Optimization" submit button. A notebook needs neither: running the next cell
-is the submit, and there is no re-run-on-every-widget-change to guard
-against.
-
-Stand areas come from the shared `analysis.optimization.stand_areas`, exactly
-as in the Streamlit page. That lookup needs both halves of the project/run
-selection -- the project for its `inputs/stand_data.json`, the run for the
-stands it actually simulated -- so `display_stand_areas` takes both rather than
-the run folder alone.
-
 Typical usage, one call per cell:
 
     stand_areas_ha = optimization.display_stand_areas(
@@ -38,7 +15,6 @@ Typical usage, one call per cell:
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
@@ -47,18 +23,12 @@ from IPython.display import display
 
 import analysis.optimization.core as opti_core
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
-from analysis.optimization.stand_areas import stand_areas_for_run
 from susi.io.load_output_data import NetcdfVariablePath, StandID
 
-_INVERT_SIGN_TOOLTIP = (
-    "If selected, adds a negative sign to the data for the optimization "
-    "algorithm, which always tries to minimize. This should be selected if "
-    "you want to a) minimize a variable with negative values, or b) maximize "
-    "a variable with positive values."
-)
+_INVERT_SIGN_TOOLTIP = """If selected, adds a negative sign to the data for the optimization  algorithm, which always tries to minimize. This should be selected if  you want to a) minimize a variable with negative values, or b) maximize a variable with positive values."""
 
 
-def display_stand_areas(project_dir: Path, run_id: str) -> dict[StandID, float]:
+def display_stand_areas(stand_areas: dict[StandID, float]) -> None:
     """
     Display the area in hectares of every stand in a run, and return them.
 
@@ -70,12 +40,10 @@ def display_stand_areas(project_dir: Path, run_id: str) -> dict[StandID, float]:
     Raises if the project's `stand_data.json` carries no area for one of the
     run's stands; see `analysis.optimization.stand_areas`.
     """
-    stand_areas_ha = stand_areas_for_run(project_dir=project_dir, run_id=run_id)
-
     areas_dataframe = pd.DataFrame(
         {
-            "stand": list(stand_areas_ha.keys()),
-            "area_ha": list(stand_areas_ha.values()),
+            "stand": list(stand_areas.keys()),
+            "area_ha": list(stand_areas.values()),
         }
     )
     # Replaces the Streamlit page's collapsed "View stand areas" expander:
@@ -84,9 +52,8 @@ def display_stand_areas(project_dir: Path, run_id: str) -> dict[StandID, float]:
     # stand list).
     with pd.option_context("display.max_rows", None):
         display(areas_dataframe)
-    print(f"Total area: {sum(stand_areas_ha.values()):.1f} ha")
+    print(f"Total area: {sum(stand_areas.values()):.1f} ha")
 
-    return stand_areas_ha
 
 
 @dataclass(frozen=True)

@@ -25,9 +25,7 @@ run_dirpath = selection.run_dir
 # %% Specify stand areas
 # Read from the project's own inputs/stand_data.json. Shared with the notebook
 # port so both frontends read the same areas the same way.
-stand_areas_ha: dict[load_output.StandID, float] = stand_areas_for_run(
-    project_dir=selection.project_dir, run_id=selection.run_id
-)
+stand_areas_ha: dict[load_output.StandID, float] = stand_areas_for_run(run_dirpath)
 
 st.subheader("Stand areas")
 with st.expander("View stand areas", expanded=False):
@@ -35,9 +33,7 @@ with st.expander("View stand areas", expanded=False):
 
 # %% Choose Netcdf variabales
 # The golden test netcdf is used to read the variable structure  of the netcdf file
-sample_netcdf_filepath = (
-    io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
-)
+sample_netcdf_filepath = io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
 all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 
 _DEFAULT_VARIABLES = [
@@ -110,9 +106,7 @@ if submitted:
 if "optimization_results" in st.session_state and st.button(
     "Plot Results", type="secondary"
 ):
-    results: opti_core.OptimizationResults = st.session_state[
-        "optimization_results"
-    ]
+    results: opti_core.OptimizationResults = st.session_state["optimization_results"]
     var_paths = st.session_state.get("optimization_var_paths", [])
 
     fig = pareto_corner_plot(

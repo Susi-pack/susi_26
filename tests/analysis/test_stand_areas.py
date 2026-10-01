@@ -257,7 +257,7 @@ def test_stand_areas_for_run_reads_the_document_from_the_layouts_path(tmp_path):
     for stand_id in ["stand-1", "stand-2"]:
         (run_dirpath / stand_id).mkdir(parents=True)
 
-    areas_ha = stand_areas_for_run(project_dir=project_dir, run_id="run_a")
+    areas_ha = stand_areas_for_run(run_dir=run_dirpath)
 
     assert areas_ha == {StandID("stand-1"): 2.4, StandID("stand-2"): 1.9}
 
@@ -326,7 +326,7 @@ def test_the_netcdf_read_and_the_area_lookup_list_a_runs_stands_in_the_same_orde
     for stand_id in stand_ids:
         _write_one_scenario_stand_folder(run_dirpath=run_dirpath, stand_id=stand_id)
 
-    areas_ha = stand_areas_for_run(project_dir=project_dir, run_id="run_a")
+    areas_ha = stand_areas_for_run(run_dir=run_dirpath)
     data_store = opti_core.read_data(
         run_dirpath=run_dirpath,
         variable_info={

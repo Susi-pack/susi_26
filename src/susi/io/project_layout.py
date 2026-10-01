@@ -102,6 +102,14 @@ def run_dir(project_dir: Path, run_id: str) -> Path:
     """One run of a project. Stand and scenario folders nest below this."""
     return outputs_dir_for_project(project_dir) / run_id
 
+def project_dir_from_run_dir(run_dir: Path)->Path:
+    """
+    Return the project where a run is located.
+    The folder structure is always project/outputs/run,
+    so the project directory is two folders higher than the run directory.
+    """
+    return run_dir.parent.parent
+
 
 def require_outputs_dir(project_dir: Path) -> Path:
     """
@@ -141,3 +149,4 @@ def require_project_dir(project_dir: Path) -> None:
             f"{inputs_dir}). A project keeps everything it is simulated from "
             "in inputs/ and everything its runs produce in outputs/."
         )
+

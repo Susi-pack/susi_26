@@ -31,7 +31,7 @@ from susi.io.stand_data import (
 )
 
 
-def stand_areas_for_run(project_dir: Path, run_id: str) -> dict[StandID, float]:
+def stand_areas_for_run(run_dir: Path) -> dict[StandID, float]:
     """
     Return the area in hectares of every stand in one run of a project.
 
@@ -48,14 +48,14 @@ def stand_areas_for_run(project_dir: Path, run_id: str) -> dict[StandID, float]:
     user picks target variables, so a run whose folder names do not match the
     document fails here, before the slow netcdf read.
     """
+    project_dir = project_layout.project_dir_from_run_dir(run_dir)
+
     stand_data_document = load_stand_data_document_from_json(
         path=project_layout.stand_data_path_for_project(project_dir=project_dir)
     )
-
-    run_dirpath = project_layout.run_dir(project_dir=project_dir, run_id=run_id)
     stand_ids = [
         StandID(stand_dirpath.name)
-        for stand_dirpath in load_output.list_stand_folders(run_dirpath=run_dirpath)
+        for stand_dirpath in load_output.list_stand_folders(run_dirpath=run_dir)
     ]
 
     return areas_from_stand_data_document(
