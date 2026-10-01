@@ -165,10 +165,10 @@ def format_target_specs_as_code(
     """
     Write target specs out as Python that rebuilds them.
 
-    The returned code assigns `target_specs`, and runs as-is in a notebook
-    that imports `TargetSpec`, `Direction`, `NetcdfVariableArray` and
-    `NetcdfVariablePath`. Printing it lets a user pick their targets with the
-    widgets once, then paste the result in place of the widget cells.
+    The returned code imports the names it uses and assigns `target_specs`,
+    so it runs as-is in any notebook cell. Printing it lets a user pick their
+    targets with the widgets once, then paste the result in place of the
+    widget cells.
 
     An aggregation is written by its `__qualname__`, e.g.
     `NetcdfVariableArray.mean_of_all_values`. That works for every method of
@@ -176,15 +176,12 @@ def format_target_specs_as_code(
     offer. Anything else, such as a hand-written lambda, raises instead of
     printing code that would not run.
     """
-    imports = """
-
-    from analysis.optimization.core import Direction, TargetSpec
-    from susi.io.load_output_data import (
-        NetcdfVariableArray,
-        NetcdfVariablePath,
-    )
-    """
-    lines = ["target_specs = {"]
+    lines = [
+        "from analysis.optimization.core import Direction, TargetSpec",
+        "from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath",
+        "",
+        "target_specs = {",
+    ]
     for var_path, target_spec in target_specs.items():
         # getattr: the aggregation's type is a bare Callable, which need not
         # have a __qualname__.
@@ -202,7 +199,7 @@ def format_target_specs_as_code(
             "    ),",
         ]
     lines.append("}")
-    return imports + "\n".join(lines)
+    return "\n".join(lines)
 
 
 def display_pareto_corner_plot(

@@ -3,8 +3,8 @@ Tests for the optimization notebook's printed configuration.
 
 The notebook prints the target specs chosen with its widgets as Python, so a
 user can paste them into the notebook's in-code cell instead of clicking
-through the widgets again. That only works if the printed code, run with the
-notebook's own imports, rebuilds exactly the same target specs.
+through the widgets again. That only works if the printed code, run on its
+own, rebuilds exactly the same target specs.
 """
 
 from typing import Any
@@ -34,13 +34,9 @@ def test_printed_target_specs_rebuild_the_same_specs_in_the_same_order():
 
     code = optimization.format_target_specs_as_code(target_specs)
 
-    # The names the notebook's import cell provides, and nothing else.
-    namespace: dict[str, Any] = {
-        "Direction": Direction,
-        "TargetSpec": TargetSpec,
-        "NetcdfVariableArray": NetcdfVariableArray,
-        "NetcdfVariablePath": NetcdfVariablePath,
-    }
+    # Empty, so the printed code must bring its own imports, and a wrong
+    # import path fails here.
+    namespace: dict[str, Any] = {}
     exec(code, namespace)  # noqa: S102 -- running the printed code is the test
 
     assert namespace["target_specs"] == target_specs
