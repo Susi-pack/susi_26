@@ -329,10 +329,10 @@ def test_the_netcdf_read_and_the_area_lookup_list_a_runs_stands_in_the_same_orde
     areas_ha = stand_areas_for_run(run_dir=run_dirpath)
     data_store = opti_core.read_data(
         run_dirpath=run_dirpath,
-        variable_info={
-            NetcdfVariablePath("/volume"): opti_core.TargetVariableProperties(
-                aggregation_function=load_output.NetcdfVariableArray.mean_of_all_values,
-                invert_optimization=False,
+        target_specs={
+            NetcdfVariablePath("/volume"): opti_core.TargetSpec(
+                aggregation=load_output.NetcdfVariableArray.mean_of_all_values,
+                direction=opti_core.Direction.MINIMIZE,
             )
         },
     )

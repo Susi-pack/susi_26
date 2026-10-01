@@ -47,11 +47,9 @@ with st.form(key="optimization_config"):
         netcdf_variables=all_variables, preselected=_DEFAULT_VARIABLES
     )
 
-    st.subheader("Choose aggregation method per variable")
+    st.subheader("Choose aggregation method and direction per variable")
 
-    chosen_var_properties: dict[
-        load_output.NetcdfVariablePath, opti_core.TargetVariableProperties
-    ] = {}
+    target_specs: dict[load_output.NetcdfVariablePath, opti_core.TargetSpec] = {}
     for var_path in chosen_netcdf_variables:
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
@@ -64,23 +62,25 @@ with st.form(key="optimization_config"):
                 label_visibility="collapsed",
             )
         with col3:
-            invert_optimization = st.checkbox(
-                label="Invert sign?",
-                value=False,
-                help="If selected, adds a negative sign to the data for the optimization algorithm, which always tries to minimize. This should be selected if you want to a) minimize a variable with negative values, or b) maximize a variable with positive values.",
-                key=f"invert_{var_path}",
+            direction = st.selectbox(
+                label="Direction",
+                options=list(opti_core.Direction),
+                format_func=lambda direction: direction.value.capitalize(),
+                help=opti_core.DIRECTION_HELP,
+                key=f"direction_{var_path}",
+                label_visibility="collapsed",
             )
-        chosen_var_properties[var_path] = opti_core.TargetVariableProperties(
-            aggregation_function=opti_core.AGGREGATION_METHODS_BY_LABEL[
+        target_specs[var_path] = opti_core.TargetSpec(
+            aggregation=opti_core.AGGREGATION_METHODS_BY_LABEL[
                 chosen_aggregation_label
             ],
-            invert_optimization=invert_optimization,
+            direction=direction,
         )
 
     epsilon = st.number_input(
         label="Epsilon (Pareto front precision)",
-        min_value=1e-9,
-        max_value=1e4,
+        min_value=opti_core.EPSILON_MIN,
+        max_value=opti_core.EPSILON_MAX,
         value=1e-7,
         format="%.1e",
         help="Controls the granularity of the Pareto front. Smaller values give more precise results but require more computation.",
@@ -91,14 +91,14 @@ with st.form(key="optimization_config"):
 if submitted:
     with st.spinner("Running optimization..."):
         results = opti_core.run_optimization(
-            variable_info=chosen_var_properties,
+            target_specs=target_specs,
             run_dirpath=run_dirpath,
             stand_areas=stand_areas_ha,
             epsilon=epsilon,
             n_random_points=10000,
         )
         st.session_state["optimization_results"] = results
-        st.session_state["optimization_var_paths"] = list(chosen_var_properties.keys())
+        st.session_state["optimization_var_paths"] = list(target_specs.keys())
     st.success("Optimization complete")
 
 # %% Visualize solutions
