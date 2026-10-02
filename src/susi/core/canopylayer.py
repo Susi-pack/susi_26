@@ -622,12 +622,11 @@ class Canopylayer:
         # comparison. In "fixed" mode we zero the increment fed to leaf
         # dynamics so it re-targets the same (fixed) biomass every year;
         # self.NPP itself is left untouched for diagnostics/outputs.
-        # TODO: remove noqa when fixed.
         match self.growth_mode:
             case GrowthMode.dynamic:
                 leaf_bm_increment = bm_increment
             case GrowthMode.fixed:
-                leaf_bm_increment = np.zeros_like(bm_increment)  # noqa: F841
+                leaf_bm_increment = np.zeros_like(bm_increment)
             case _:
                 assert_never(self.growth_mode)
 
@@ -653,7 +652,7 @@ class Canopylayer:
                 self.leafarea[cols],
             ) = self.leaf_dynamics(
                 bm[cols],
-                bm_increment[cols],
+                leaf_bm_increment[cols],
                 current_leafmass[cols],
                 previous_nut_stat[cols],
                 nut_stat[cols],
