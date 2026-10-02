@@ -29,6 +29,7 @@ from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
+    GrowthMode,
     LocationsForPhotoParams,
     get_photo_parameters_by_location,
 )
@@ -122,6 +123,7 @@ def _make_stand() -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode=GrowthMode.dynamic,
     )
     stand.update()
     return stand
@@ -571,6 +573,7 @@ class TestMultiZoneCanopylayer:
             photopara=get_photo_parameters_by_location(
                 location=LocationsForPhotoParams("All_data")
             ),
+            growth_mode=GrowthMode.dynamic,
         )
 
     def test_construction_does_not_crash_with_multiple_zones(self):

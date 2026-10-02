@@ -25,6 +25,7 @@ from susi.io.susi_parameter_model import (
     ClearCut,
     ContinuousCover,
     CuttingManagementParams,
+    GrowthMode,
     LocationsForPhotoParams,
     Thinning,
     get_photo_parameters_by_location,
@@ -65,6 +66,7 @@ def _make_stand() -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode=GrowthMode.dynamic,
     )
     stand.update()
     return stand
