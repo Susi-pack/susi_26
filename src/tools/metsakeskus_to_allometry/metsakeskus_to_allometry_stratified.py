@@ -72,6 +72,10 @@ from tools.shared_allometry_tool_utils.cli_paths import (
 # building, species aggregation, growth-table construction, CSV writing,
 # per-stand orchestration (process_stand already includes peat_type after
 # the patch applied to that file).
+from tools.shared_allometry_tool_utils.dense_young_stand_scaling import (
+    DenseYoungStandScalingConfig,
+    decide_scaling_factors,
+)
 from tools.metsakeskus_to_allometry.metsakeskus_to_allometry import (
     TREESTAND_MEASURED_TYPE,
     ParsedStand,
@@ -113,6 +117,14 @@ class StratifiedExtractionConfig(AllometryGenerationDefaults):
     # TOTAL_BUDGET_PER_DC / MIN_PER_STRATUM). Keyed by developmentclass.
     sample_budget_per_developmentclass: dict[int, int] = {1: 30, 2: 90, 3: 90}
     min_stands_per_stratum: int = 3
+
+    # NOTE (2026-10-04): added when merging in create-input-structure's
+    # dense young stand scaling work (PR #312). Same field, same default,
+    # same rationale as ExtractionConfig's -- process_stand() now requires
+    # a scaling_factor argument regardless of which tool calls it.
+    dense_young_stand_scaling: DenseYoungStandScalingConfig = (
+        DenseYoungStandScalingConfig()
+    )
 
 
 @dataclass(frozen=True)
@@ -430,8 +442,23 @@ def main() -> None:
     output_dir.mkdir(parents=True)
     print()
 
+    # NOTE (2026-10-04): process_stand() now requires a scaling_factor
+    # (create-input-structure's dense young stand scaling, PR #312). Decided
+    # here, scoped to selected_stands (the sampled subset actually written),
+    # mirroring metsakeskus_to_allometry.py's own call site.
+    strata_per_stand = {stand.id: stand.strata for stand in selected_stands}
+    scaling_factors = decide_scaling_factors(
+        strata_per_stand, cli_args.config.dense_young_stand_scaling
+    )
+
     outcomes: list[StandOutcome] = [
-        process_stand(stand, cli_args.config, output_dir) for stand in selected_stands
+        process_stand(
+            stand,
+            cli_args.config,
+            output_dir,
+            scaling_factor=scaling_factors[stand.id],
+        )
+        for stand in selected_stands
     ]
     written: list[StandWritten] = [o for o in outcomes if isinstance(o, StandWritten)]
     processing_skips: list[StandSkipped] = [
