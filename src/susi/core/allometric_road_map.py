@@ -60,18 +60,10 @@ class Growth_and_Yield_Table:
         self.Dg_2 = Dg_2  # mean diameter of spruce, cm
         self.Hg_2 = Hg_2  # mean height of spruce, m
         self.age_3 = age_3  # age of deciduous trees, years (assuming Betula pubescens)
-        self.G_3 = (
-            G_3  # basal area of deciduous trees, m2/ha (assuming Betula pubescens)
-        )
-        self.N_3 = (
-            N_3  # stem number of deciduous trees, /ha (assuming Betula pubescens)
-        )
-        self.Dg_3 = (
-            Dg_3  # mean diameter of deciduous trees, cm (assuming Betula pubescens)
-        )
-        self.Hg_3 = (
-            Hg_3  # mean height of deciduous trees, m (assuming Betula pubescens)
-        )
+        self.G_3 = G_3  # basal area of deciduous trees, m2/ha (assuming Betula pubescens)
+        self.N_3 = N_3  # stem number of deciduous trees, /ha (assuming Betula pubescens)
+        self.Dg_3 = Dg_3  # mean diameter of deciduous trees, cm (assuming Betula pubescens)
+        self.Hg_3 = Hg_3  # mean height of deciduous trees, m (assuming Betula pubescens)
         self.DDY = DDY  # temperature sum, Degree Days per Year
         self.fertility_class = fertility_class  # as integer 1...6
         self.peat = peat  # peat soil = 1
@@ -245,7 +237,7 @@ class Growth_and_Yield_Table:
         altitude,
         DDY,
         fertility_class,
-        peatland=1,
+        peatland,
         planted=0,
     ):
         log, pulp, total = 0, 0, 0
@@ -259,7 +251,7 @@ class Growth_and_Yield_Table:
                     row["D"],
                     row["H"],
                     int(row["sp"]),
-                    age,
+                    max(5, age),
                     y,
                     x,
                     altitude,
@@ -301,7 +293,7 @@ class Growth_and_Yield_Table:
         fx = np.zeros(len(D))
         for i in range(len(D)):
             if D[i] == 0:
-                fx[i] = 3           # If D == 0, survival set to approximately 95%. Just a wild guess by Mikko without scientific argumentation.
+                fx[i] = 3           # If D == 0, survival set to approximately 95%
             else:
                 # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
                 if sp[i] <= 2:
@@ -325,7 +317,7 @@ class Growth_and_Yield_Table:
         return survival
 
     # Predict survival rate:
-    def predict_survival_5_years(self, ReferenceTrees, peat=1):
+    def predict_survival_5_years(self, ReferenceTrees, peat):
         """
         Pukkala et al. 2021. https://doi.org/10.1093/forestry/cpab008
         input:
@@ -444,7 +436,7 @@ class Growth_and_Yield_Table:
 
     # Predict diameter increment for next 5 years:
     def predict_diameter_increment_5_years(
-        self, ReferenceTrees, fertilityClass, temperatureSum, peat=1
+        self, ReferenceTrees, fertilityClass, temperatureSum, peat
     ):
         """
         Timo Pukkala and others, Self-learning growth simulator for modelling forest stand dynamics in
@@ -521,22 +513,24 @@ class Growth_and_Yield_Table:
         altitude,
         DDY,
         fertility_class,
-        peatland=1,
+        peat,
     ):
         # predict 5-year tree survival
-        survival_rate = self.predict_survival_5_years(ReferenceTrees, peat=1)
+        survival_rate = self.predict_survival_5_years(ReferenceTrees, peat)
 
         # predict 5-year diameter increment
         ReferenceTrees["D"] = ReferenceTrees["D"] + self.predict_diameter_increment_5_years(
-            ReferenceTrees, self.fertility_class, self.DDY, self.peat
+            ReferenceTrees, fertility_class, DDY, peat
         )
 
         # predict height of reference trees after 5 years
         height = []
         for index, row in ReferenceTrees.iterrows():
             if row["H"] <= 1.3:
+                # Function approximated from Huuskonen & Miina's (2007) height growth models. ForEcoManag 241, 1-3, p. 49-61
                 height.append(
-                    row["H"] + np.interp(self.fertility_class, [1, 6], [2.0, 1.3])              # This is the first iteration. It came from Mikko's hat.
+                    row["H"] + 
+                    np.interp(fertility_class, [2, 5], [1.3, 1.0]) * np.interp(DDY, [700, 1300], [0.6, 1.4])
                 )
             else:
                 height_estimate = naslund_height(row["D"], row["sp"])
@@ -553,11 +547,19 @@ class Growth_and_Yield_Table:
         ReferenceTrees["Nd"] = survival_rate * ReferenceTrees["Nd"]
 
         # calculate mean attributes, timber assortments and biomass components
-        mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
-            ReferenceTrees
-        )
+        if ReferenceTrees["D"].sum() == 0:
+            mean_height = np.average(
+                ReferenceTrees["H"],
+                weights=ReferenceTrees["Nd"],
+            )
+            mean_diameter = 0
+        else:
+            mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
+                ReferenceTrees
+            )
+        
         assortments = self.get_assortment_volumes(
-            ReferenceTrees, max(5, age), y, x, altitude, DDY, fertility_class, peatland
+            ReferenceTrees, age, y, x, altitude, DDY, fertility_class, peat
         )
         biomass = self.get_biomass_components(ReferenceTrees)
 
@@ -577,7 +579,7 @@ class Growth_and_Yield_Table:
                 )
             ],
             "Hg": [round(mean_height, 1)],
-            "Dg": [round(mean_diameter, 1)],
+            "Dg": [round(mean_diameter, 1)] if mean_height >= 1.3 else 0.0,
             "Hdom": [round(self.dominant_height(ReferenceTrees), 1)],
             "Volume": [assortments["total"]],
             "Logs": [assortments["log"]],
@@ -660,11 +662,11 @@ class Growth_and_Yield_Table:
 
         ReferenceTrees = pd.concat(ReferenceTrees, ignore_index=True)
 
-        # Height correction
+        # Height correction (sapling stands iterated using empirical data)
         h_scalar = [
-            0.8 if self.Dg_1 == 0 else naslund_correction(1, self.Dg_1, self.Hg_1),         # The 0.8 also came from Mikko's hat and needs calibrating.
-            0.8 if self.Dg_2 == 0 else naslund_correction(2, self.Dg_2, self.Hg_2),
-            0.8 if self.Dg_3 == 0 else naslund_correction(3, self.Dg_3, self.Hg_3),
+            0.7 if self.Dg_1 == 0 else naslund_correction(1, self.Dg_1, self.Hg_1),
+            1.0 if self.Dg_2 == 0 else naslund_correction(2, self.Dg_2, self.Hg_2),
+            0.75 if self.Dg_3 == 0 else naslund_correction(3, self.Dg_3, self.Hg_3),
         ]
 
         # Height estimates
@@ -706,7 +708,7 @@ class Growth_and_Yield_Table:
         # Assortment volumes
         assortments = self.get_assortment_volumes(
             ReferenceTrees,
-            max(5, self.age),
+            self.age,
             self.y,
             self.x,
             self.altitude,
@@ -767,7 +769,7 @@ class Growth_and_Yield_Table:
                 self.altitude,
                 self.DDY,
                 self.fertility_class,
-                peatland=self.peat,
+                self.peat,
             )
             susi_input = pd.concat(
                 [susi_input, pd.DataFrame(next_state)], ignore_index=True
@@ -777,9 +779,6 @@ class Growth_and_Yield_Table:
 
 
 """
-import os
-os.chdir('C:/Users/mikkoni/AEMES/Coding/susi_2024-master-20250806')
-
 import numpy as np
 import pandas as pd
 
