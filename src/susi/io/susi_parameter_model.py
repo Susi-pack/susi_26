@@ -69,10 +69,26 @@ def read_allometry_info_from_csv(filepath: Path) -> pd.DataFrame:
     return df
 
 
+class GrowthMode(str, Enum):
+    """
+    Whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed.
+    Dynamic growth mode is the default: it models a stand that grows normally.
+    In fixed growth mode the forest does not grow.
+    This is useful to do causal inference of the the impact of growth on other variables.
+    """
+
+    dynamic = "dynamic"
+    fixed = "fixed"
+
+
 class SimulationConfig(StrictFrozenModel):
-    # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
+
+    growth_mode: GrowthMode = Field(
+        default=GrowthMode.dynamic,
+        description="whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed",
+    )
 
 
 class WeatherParams(StrictFrozenModel):
