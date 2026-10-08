@@ -22,7 +22,7 @@ def preprune_pareto_dominated_scenarios(A: np.ndarray, eps: float = 1e-9) -> lis
         Indices of non-dominated scenarios
     """
 
-    n_scenarios, n_optimization_variables = A.shape
+    n_scenarios, _n_optimization_variables = A.shape
 
     # Create array holding all possible pairwise comparisons
     # Initialize with no domination at all

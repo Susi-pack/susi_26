@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sun Jan 30 10:44:18 2022
 
 @author: alauren
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Generic, TypeVar
+from typing import Generic, TypeVar
 
 import numpy as np
 import pandas as pd

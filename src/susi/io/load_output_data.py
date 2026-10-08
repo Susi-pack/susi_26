@@ -1,16 +1,16 @@
 # Read netcdf files and load variables into and OutputDataStore
-from functools import cached_property
-
 import re
-from typing import NewType, Sequence, Callable
-from pathlib import Path
-import pandas as pd
-import numpy as np
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
+from typing import NewType
+
 import netCDF4
+import numpy as np
+import pandas as pd
 
 import susi.io.utils as io_utils
-
 
 # %% dataclasses
 # Strings by other names
@@ -236,18 +236,44 @@ def list_subdirectories_sorted(path: Path) -> list[Path]:
     Shared by the Streamlit and notebook folder-selection widgets
     (analysis.streamlit.components.folder_selection,
     analysis.notebooks.components.folder_selection), which both need a
-    stable, predictable subfolder order for their dropdowns.
+    stable, predictable subfolder order for their dropdowns, and by
+    list_stand_folders below, which is what to call for the stands of a run.
     """
     return sorted(list_subdirectories(path), key=_natural_sort_key)
 
 
+def list_stand_folders(run_dirpath: Path) -> list[Path]:
+    """
+    Return the stand folders of one run, naturally sorted by stand ID.
+
+    run_dirpath is a run's folder, `<project>/outputs/<run_id>/`. This is the
+    one place that states the rule "every folder of a run is a stand": a run
+    folder holds stand folders and nothing else, and each is named by its
+    stand ID (see CONTEXT.md, Run and Stand ID). So nothing is filtered out
+    here, by name or by content. A stray folder (`figures/`,
+    `.ipynb_checkpoints/`) is returned like any other, and is reported by
+    whichever reader meets it first: the optimization's area lookup, as a
+    stand folder with no entry in `stand_data.json`, or the metadata loader
+    below, as a folder that holds no scenario folders. It is never skipped,
+    because skipping would also make a half-written stand vanish without
+    notice.
+
+    Anything that needs a run's stands should call this rather than listing
+    the run folder itself, so that every reader agrees on which stands there
+    are and in what order. The order is the natural sort of the stand IDs
+    ("2" before "10"), the same on every machine, not the order the
+    filesystem happens to return.
+    """
+    return list_subdirectories_sorted(path=run_dirpath)
+
+
 def read_params_from_jsons(
-    experiment_folderpath: Path,
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> SimulationParamsFromJSON:
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
+    metadata_filepath = simulation_folderpath.joinpath(metadata_filename)
+    params_filepath = simulation_folderpath.joinpath(params_filename)
 
     metadata, params = map(
         io_utils.read_json_file, [metadata_filepath, params_filepath]
@@ -255,8 +281,8 @@ def read_params_from_jsons(
     return SimulationParamsFromJSON(metadata=metadata, susi_params=params)
 
 
-def _load_single_experiment_metadatas(
-    experiment_folderpath: Path,
+def _load_single_simulation_metadatas(
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> pd.DataFrame:
@@ -265,7 +291,7 @@ def _load_single_experiment_metadatas(
     Returns dict of all json values.
     """
     params_from_json = read_params_from_jsons(
-        experiment_folderpath, metadata_filename, params_filename
+        simulation_folderpath, metadata_filename, params_filename
     )
 
     return pd.json_normalize(params_from_json.metadata | params_from_json.susi_params)
@@ -291,11 +317,35 @@ def modify_after_load(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _load_all_metadatas_from_single_stand(folder: Path) -> pd.DataFrame:
-    experiment_folderpaths = list_subdirectories(folder)
+    """
+    Read the metadata of every scenario of one stand, one row per scenario.
+
+    folder is a stand folder: each of its subfolders is one scenario.
+
+    Raises ValueError if folder has no subfolders at all. That is either a
+    folder that is not a stand (`figures/`, `.ipynb_checkpoints/` left in a
+    run folder) or a stand none of whose simulations were written. It is
+    reported by name rather than skipped: skipping would let a half-written
+    stand vanish from the project summary and the optimization without
+    notice. Without this check the empty list reaches `pd.concat`, whose "No
+    objects to concatenate" never says which folder was the problem.
+
+    A scenario folder that lacks `metadata.json` is a different case, and
+    already raises a FileNotFoundError naming the path.
+    """
+    simulation_folderpaths = list_subdirectories(folder)
+    if not simulation_folderpaths:
+        raise ValueError(
+            f"The folder {folder} holds no scenario folders, so it cannot be "
+            "read as a stand. A run folder must contain only stand folders, "
+            "each holding one folder per scenario: move or delete this folder "
+            "if it is not a stand, or rerun its simulations if it is one."
+        )
+
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
-            for exp_fpath in experiment_folderpaths
+            _load_single_simulation_metadatas(exp_fpath)
+            for exp_fpath in simulation_folderpaths
         ]
     )
 
@@ -329,7 +379,7 @@ def list_all_netcdf_variables(
                 name=var_name,
                 dimension_names=var.dimensions,
                 shape=var.shape,
-                units=getattr(var, "units"),
+                units=var.units,
             )
             variables[path] = variable
 
@@ -407,7 +457,7 @@ def get_netcdf_filepaths_for_stand(metadata_df: pd.DataFrame) -> list[Path]:
 def read_netcdf_files_for_selected_variables(
     selected_variables: Sequence[NetcdfVariablePath],
     scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
-    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
+    netcdf_filepaths_by_stand: dict[StandID, Sequence[Path]],
 ) -> OutputDataStore:
     stands: list[StandID] = []
     data: dict[
@@ -440,7 +490,7 @@ def read_netcdf_files_for_selected_variables_from_metadatas(
 ) -> OutputDataStore:
     """
     Read selected variables from
-    all available stands x scenarios for a project
+    all available stands x scenarios of one run of a project
     """
 
     scenarios_by_stand = {}

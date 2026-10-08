@@ -5,19 +5,25 @@ import xarray as xr
 import pandas as pd
 
 import susi.io.utils as io_utils
-from susi.io.app_settings import AppSettings
+from susi.io.project_layout import project_dir, run_dir
 
 # %%
 
-app_settings = AppSettings()
+# Which run to poke at. A scenario's metadata lives at
+# projects/<project>/outputs/<run_id>/<stand_id>/<scenario_id>/, so there is
+# no single global outputs folder to default to any more -- name the run.
+PROJECT_ID = "paroninkorpi"
+RUN_ID = "paroninkorpi"
+
+RUN_DIR = run_dir(project_dir(PROJECT_ID), run_id=RUN_ID)
 
 
 def list_subdirectories(path: Path):
     return (x for x in path.iterdir() if x.is_dir())
 
 
-def _load_single_experiment_metadatas(
-    experiment_folderpath: Path,
+def _load_single_simulation_metadatas(
+    simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",
     params_filename: str = "params.json",
 ) -> pd.DataFrame:
@@ -25,8 +31,8 @@ def _load_single_experiment_metadatas(
     Reads metadata and parameter info from json files.
     Returns dict of all json values.
     """
-    metadata_filepath = experiment_folderpath.joinpath(metadata_filename)
-    params_filepath = experiment_folderpath.joinpath(params_filename)
+    metadata_filepath = simulation_folderpath.joinpath(metadata_filename)
+    params_filepath = simulation_folderpath.joinpath(params_filename)
 
     metadata, params = map(
         io_utils.read_json_file, [metadata_filepath, params_filepath]
@@ -42,7 +48,7 @@ def coerce_datetime_format(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def modify_after_load(
-    df: pd.DataFrame, set_experiment_id_as_index: bool = False
+    df: pd.DataFrame, set_run_id_as_index: bool = False
 ) -> pd.DataFrame:
     df = df.copy()
 
@@ -52,21 +58,19 @@ def modify_after_load(
     # sort by starting date first
     df = df.sort_values(by="timestamp_start", ignore_index=True, ascending=False)
 
-    # set experiment_id as index
-    if set_experiment_id_as_index:
-        df = df.set_index(keys="experiment_id")
+    # set run_id as index
+    if set_run_id_as_index:
+        df = df.set_index(keys="run_id")
 
     return df
 
 
-def load_all_metadatas_from_folder(
-    folder: Path = app_settings.output_folder,
-) -> pd.DataFrame:
-    experiment_folderpaths = list_subdirectories(folder)
+def load_all_metadatas_from_folder(folder: Path) -> pd.DataFrame:
+    simulation_folderpaths = list_subdirectories(folder)
     df = pd.concat(
         [
-            _load_single_experiment_metadatas(exp_fpath)
-            for exp_fpath in experiment_folderpaths
+            _load_single_simulation_metadatas(exp_fpath)
+            for exp_fpath in simulation_folderpaths
         ]
     )
 
@@ -77,9 +81,7 @@ def load_all_metadatas_from_folder(
 for stand_n in range(1, 22):
     stand_foldername = f"stand_{stand_n:02d}"
 
-    output_folder = app_settings.output_folder / "paroninkorpi" + stand_foldername
-
-    df = load_all_metadatas_from_folder(folder=output_folder)
+    df = load_all_metadatas_from_folder(folder=RUN_DIR / stand_foldername)
 
 # %% Read netcdf data with xarray into single array (Not complete yet)
 # Example: get all _partialblocking scenarios
@@ -94,17 +96,17 @@ xr.open_mfdataset(paths=partialblocking_paths, decode_times=False)
 
 # %% Query and filter as desired
 # Example: get all _partialblocking
-df = df[df["experiment_id"].str.contains("partialblocking")]
+df = df[df["run_id"].str.contains("partialblocking")]
 
 
 # %% Read ncdf data into python dictionary with netcdf
 
-# Netcdf data is saved in a dictionary where the experimentID is the key.
+# Netcdf data is saved in a dictionary where the run_id is the key.
 data = {}
 
-for _, experiment_info in df.iterrows():
-    netcdf_filepath = Path(experiment_info["netcdf_output_filepath"])
-    data[experiment_info["experiment_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
+for _, simulation_info in df.iterrows():
+    netcdf_filepath = Path(simulation_info["netcdf_output_filepath"])
+    data[simulation_info["run_id"]] = netCDF4.Dataset(netcdf_filepath, "r")
 
 
 # %% Experimental widgets
@@ -115,9 +117,9 @@ from IPython.display import display
 
 output = ipywidgets.Output()
 
-experiment_ID_dropdown = ipywidgets.Dropdown(
-    options=sorted(list(data.keys())), description="Experiment ID"
+run_id_dropdown = ipywidgets.Dropdown(
+    options=sorted(list(data.keys())), description="Run ID"
 )
 
 
-display(experiment_ID_dropdown)
+display(run_id_dropdown)

@@ -1,6 +1,9 @@
 from __future__ import annotations
-from typing import Any, Sequence
+
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
+
 import numpy as np
 from tqdm import tqdm
 
@@ -86,7 +89,7 @@ def from_numpy_arrays_to_nested_tuples(
 def from_numpy_arrays_to_nested_lists(
     arrays: Sequence[np.ndarray],
 ) -> list[list[Any]]:
-    return list(list(arr.tolist()) for arr in arrays)
+    return [list(arr.tolist()) for arr in arrays]
 
 
 def from_nested_tuples_to_numpy_arrays(
@@ -112,7 +115,7 @@ def compress_into_buckets(
     for point in points:
         bucket_key = assign_bucket_to_point(point, epsilon=epsilon)
 
-        if bucket_key not in buckets.keys():
+        if bucket_key not in buckets:
             buckets[bucket_key] = point
         else:
             # If bucket already full, check if current

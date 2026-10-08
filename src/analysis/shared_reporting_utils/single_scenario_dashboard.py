@@ -12,15 +12,15 @@ that used to be hand-copied independently in each frontend, and per #233
 to share the per-section (title, plot_fn) pairing (`SECTIONS`) too.
 """
 
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Callable, Sequence
 
 from matplotlib.figure import Figure
 
 import susi.io.load_output_data as load_output
-from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 from analysis.shared_reporting_utils import plots
+from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 # The fixed variable-path list behind the Single Scenario Dashboard's 7
 # figures (stand, hydrology, mass, carbon, nutrient balance x3). Order

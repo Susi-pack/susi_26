@@ -1,46 +1,71 @@
 # Default/template config for src/tools/new_growth_allometry/new_growth_allometry.py.
 #
 # Copy this file, fill in the required fields for your project, and pass it
-# via --config.
+# via --config (or name it new_growth_config.toml inside --project-dir,
+# where the tool finds it with no --config flag needed). The name is
+# this tool's own: xml_to_allometry.py and metsakeskus_to_allometry.py
+# default to config.toml, so all three can share one project folder.
 #
-# Every other field is optional.
+# This one template covers BOTH of the tool's modes; which one you are in is
+# decided by the command line, not by this file:
+#
+#   * standalone mode -- no --stand-data/--stand-id. Every fact about the
+#     stand is typed out here. All the fields below apply.
+#
+#   * sourced mode -- both --stand-data <stand_data.json> and --stand-id <id>
+#     given (either one alone is an error). The five fields marked
+#     "STANDALONE ONLY" below are read from that document instead, so they
+#     must be DELETED from this file: the config model rejects unknown fields
+#     (extra="forbid"), and leaving a stale value behind would be silently
+#     misleading anyway.
+#
+# Every field not marked REQUIRED is optional.
 # new_growth_allometry.py already applies the value shown here if the key is
 # omitted entirely.
 #
 
-# --- Required, no code-level default ---
+# --- STANDALONE ONLY -- required in standalone mode, delete in sourced mode ---
 
 # Site elevation, metres.
 # Enforced range: [0, 1000]
-altitude = -1 # REQUIRED
+# Sourced mode reads this from the stand-data document's root instead.
+altitude = -1 # REQUIRED (standalone only)
 
 # Degree-day-years, cumulative temperature sum.
 # Enforced range: [500, 2000]
-ddy = 0 # REQUIRED
+# Sourced mode reads this from the stand-data document's root instead.
+ddy = 0 # REQUIRED (standalone only)
 
 # Fertility class of the site.
-fertility_class = -1 # REQUIRED
+# Sourced mode reads this from stands[<stand-id>].site_fertility_class instead.
+fertility_class = -1 # REQUIRED (standalone only)
 
 # Coordinates of the stand, in ETRS-TM35FIN (EPSG:3067) metres.
 # Converted internally to YKJ for the growth model.
-x = -1 # REQUIRED
-y = -1 # REQUIRED
+# Sourced mode reads stands[<stand-id>].x_ykj/.y_ykj instead -- those are
+# already YKJ, and are used with no further conversion.
+x = -1 # REQUIRED (standalone only)
+y = -1 # REQUIRED (standalone only)
+
+# --- Required in BOTH modes -- no stand-data document supplies these ---
 
 # The one species growing in this new-growth stand.
 # Must be exactly one of "pine", "spruce", "birch".
 # this tool models a single-species regenerated stand.
-species = "" # REQUIRED
+species = "" # REQUIRED (both modes)
 
 # Stem count of that species, in stems/ha.
 # Must be a positive integer.
-stems_count = -1 # REQUIRED
+stems_count = -1 # REQUIRED (both modes)
 
-# --- Optional -- shown here with the same values parse_new_growth_config()
-# --- would apply anyway if the key were simply absent from this file.
+# --- Optional, in BOTH modes -- shown here with the same values
+# --- NewGrowthConfig would apply anyway if the key were simply absent.
 
 # n_trees, start_year, end_year, step_years all feed
 # Growth_and_Yield_Table.get_table(): how many trees the allometric model
 # tracks, and the age range/step of the growth trajectory it returns.
+# A stand-data document says nothing about any of them, so they stay here in
+# sourced mode too.
 n_trees = 20
 start_year = 5
 end_year = 80

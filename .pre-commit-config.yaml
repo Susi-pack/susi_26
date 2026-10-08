@@ -5,10 +5,17 @@ repos:
     rev: 0.9.1
     hooks:
       - id: nbstripout
-        # Only strip outputs from the notebooks that live under src/analysis/notebooks/
-        files: ^src/analysis/notebooks/.*\.ipynb$
+        # Only strip outputs from the analysis notebooks and the testing
+        # projects' notebooks (their figures come from untracked data).
+        files: ^(src/analysis/notebooks|test_projects)/.*\.ipynb$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
+    rev: v0.16.9
     hooks:
       - id: ruff-check
+
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    # ty version.
+    rev: v0.0.84
+    hooks:
+      - id: ty

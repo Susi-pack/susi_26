@@ -1,16 +1,16 @@
 import pytest
 from pydantic import ValidationError
+
 from susi.core.fertilization import (
     NO_EFFECT,
     fertilization_effect_in_year,
 )
 from susi.io.susi_parameter_model import (
-    StandardNPKFertilizationParameters,
-    NutrientFertilizationParameters,
     AshFertilizationParameters,
     FertilizationParameters,
+    NutrientFertilizationParameters,
+    StandardNPKFertilizationParameters,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pinned values
@@ -240,7 +240,7 @@ def test_ash_pH_increment_starts_the_year_after_application():
 
 # Every year from the application year on, far enough to cover the K storage
 # running out (2013) in ASH_K_RUNS_OUT.
-YEARS_SINCE_APPLICATION = range(0, 31)
+YEARS_SINCE_APPLICATION = range(31)
 
 
 def with_changes(

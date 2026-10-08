@@ -13,12 +13,12 @@ When running multiple simulations (batch mode), several issues can arise if not 
 
 - **Duplicate parameters**: Running the same simulation twice wastes computational resources
 - **Duplicate output paths**: Accidentally overwriting previous results with new simulations
-- **Inconsistent experiment IDs**: Mixing different experiments in one batch makes results hard to organize
+- **Inconsistent run IDs**: Mixing different runs in one batch makes results hard to organize
 - **Missing identifiers**: Forgetting to specify which stand or scenario a run belongs to
 
 The `MultipleSusis` class addresses these problems through built-in validation checks:
 
-1. **Consistent experiment ID**: All runs must share the same `experiment_id`
+1. **Consistent run ID**: All runs must share the same `run_id`
 2. **Complete identifiers**: All runs must have both `stand_id` and `scenario_id` (or neither)
 3. **Unique output paths**: No two runs can write to the same folder
 4. **Unique parameter sets**: Duplicate SUSI parameter configurations are rejected
@@ -31,8 +31,8 @@ The `MultipleSusis` class addresses these problems through built-in validation c
 When running a single simulation using `SimulationParams`, outputs are stored in a flat structure:
 
 ```
-parent_output_folder/
-└── experiment_id/
+<project_dir>/outputs/
+└── <run_id>/
     ├── metadata.json
     ├── params.json
     └── susi.nc
@@ -43,17 +43,21 @@ parent_output_folder/
 ```python
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
-from inputs.parameters import golden_test
+from susi.io.project_layout import project_dir
+from system_inputs.parameters import golden_test
 
 simulation_parameters = SimulationParams(
-    metadata=SimulationMetaData(experiment_id="testing2"),
+    metadata=SimulationMetaData(project_dir=project_dir("testing"), run_id="testing2"),
     susi_params=golden_test.PARAMETERS,
 )
 ```
 
-In this case, only `experiment_id` is required in `SimulationMetaData`. The output folder will be:
+In this case, only `project_dir` and `run_id` are required in `SimulationMetaData`.
+`project_dir` is the project's folder -- here `project_dir("testing")`, the user
+project `testing` under the projects root. The run always writes into that
+folder's own `outputs/`, which must already exist, and the output folder will be:
 ```
-output_folder/testing2/
+projects/testing/outputs/testing2/
 ├── metadata.json
 ├── params.json
 └── susi.nc
@@ -66,8 +70,8 @@ output_folder/testing2/
 When running multiple simulations using `MultipleSusis`, outputs are organized in a hierarchical structure:
 
 ```
-parent_output_folder/
-└── experiment_id/
+<project_dir>/outputs/
+└── <run_id>/
     ├── stand_A/
     │   ├── scenario_1/
     │   │   ├── metadata.json
@@ -85,11 +89,13 @@ parent_output_folder/
 ```python
 from susi.io.execution_config import MultipleSusis, SimulationParams
 from susi.io.metadata_model import SimulationMetaData
+from susi.io.project_layout import project_dir
 
 all_parameters = [
     SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id="ditch_depth_experiment",
+            project_dir=project_dir("ditch_depth"),
+            run_id="run_01",
             stand_id="stand_01",
             scenario_id="deep_ditch",
         ),
@@ -97,7 +103,8 @@ all_parameters = [
     ),
     SimulationParams(
         metadata=SimulationMetaData(
-            experiment_id="ditch_depth_experiment",
+            project_dir=project_dir("ditch_depth"),
+            run_id="run_01",
             stand_id="stand_01",
             scenario_id="shallow_ditch",
         ),
@@ -120,8 +127,9 @@ execution_config = MultipleSusis(
 |--------|-----------|---------------|
 | `stand_id` | Not required | Required |
 | `scenario_id` | Not required | Required |
-| `experiment_id` | Required | Required, must be same for all runs |
-| Folder structure | `experiment_id/` | `experiment_id/stand_id/scenario_id/` |
+| `project_dir` | Required | Required |
+| `run_id` | Required | Required, must be same for all runs |
+| Folder structure | `<run_id>/` | `<run_id>/stand_id/scenario_id/` |
 | Class used | `SimulationParams` | `MultipleSusis` |
 
 ---
@@ -131,6 +139,6 @@ execution_config = MultipleSusis(
 When using `MultipleSusis`, the following rules are enforced:
 
 1. **Paired fields**: `stand_id` and `scenario_id` must either both be set or both be unset
-2. **Consistent experiment ID**: All runs must share the same `experiment_id`
+2. **Consistent run ID**: All runs must share the same `run_id`
 3. **Unique paths**: No two runs can have the same output folder path
 4. **Folder-safe names**: `stand_id` and `scenario_id` cannot contain path separators (`/` or `\`)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 This module applies diameter increment and survival rate models of Pukkala et al. (2021)
 to produce similar input array to Motti-simulator (see Laurén et al. (2021), chapter 2.3.8).
@@ -8,18 +7,19 @@ to produce similar input array to Motti-simulator (see Laurén et al. (2021), ch
 
 import numpy as np
 import pandas as pd
-from susi.core.stem_curve import StemCurve
-from susi.core.weibull_recovery import generate_weibull_tree_list
-from susi.core.metsi.naslund import naslund_height, naslund_correction
+
 from susi.core.metsi.biomass_repola import (
-    stem_wood_biomass_1,
-    stem_bark_biomass_1,
-    living_branches_biomass_1,
     dead_branches_biomass_1,
     foliage_biomass_1,
-    stump_biomass_1,
+    living_branches_biomass_1,
     roots_biomass_1,
+    stem_bark_biomass_1,
+    stem_wood_biomass_1,
+    stump_biomass_1,
 )
+from susi.core.metsi.naslund import naslund_correction, naslund_height
+from susi.core.stem_curve import StemCurve
+from susi.core.weibull_recovery import generate_weibull_tree_list
 
 
 class Growth_and_Yield_Table:
@@ -140,11 +140,11 @@ class Growth_and_Yield_Table:
                 ),
             )
         ) / sum(
-            (
+            
                 ReferenceTrees["Nd"]
                 * np.pi
                 * np.power((ReferenceTrees["D"] / 2) / 100, 2)
-            )
+            
         )
         Dg = sum(
             d * g
@@ -157,11 +157,11 @@ class Growth_and_Yield_Table:
                 ),
             )
         ) / sum(
-            (
+            
                 ReferenceTrees["Nd"]
                 * np.pi
                 * np.power((ReferenceTrees["D"] / 2) / 100, 2)
-            )
+            
         )
         return Hg, Dg
 
@@ -598,7 +598,6 @@ class Growth_and_Yield_Table:
         return ReferenceTrees, next_state
 
     def get_table(self, start_year: int, end_year: int, step_years=5):
-        """ """
         ReferenceTrees = []
 
         # Pine
@@ -686,8 +685,7 @@ class Growth_and_Yield_Table:
                 else:
                     spi = 2
                 height_scaled = h_scalar[spi] * height_estimate
-                if height_scaled < 1.3:
-                    height_scaled = 1.3
+                height_scaled = max(height_scaled, 1.3)
                 height.append(height_scaled)
         ReferenceTrees["H"] = height
 

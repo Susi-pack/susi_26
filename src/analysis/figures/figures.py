@@ -5,10 +5,10 @@ Created on Tue Feb 15 17:37:58 2022
 """
 
 import matplotlib.pylab as plt
-import matplotlib.gridspec as gridspec
-from netCDF4 import Dataset
 import numpy as np
 import pandas as pd
+from matplotlib import gridspec
+from netCDF4 import Dataset
 
 
 def _create_profile_line(
@@ -68,15 +68,25 @@ def _create_profile_boxplot(
     hidex=True,
     hidey=False,
 ):
-    df = pd.DataFrame(data=datain, columns=list(range(cols)))
+    df = pd.DataFrame(data=datain, columns=range(cols))
     df.boxplot(
         ax=ax,
-        color=dict(boxes=colorin, whiskers=colorin, medians=colorin, caps=colorin),
-        boxprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color=colorin, alpha=0.6),
+        color={
+            "boxes": colorin,
+            "whiskers": colorin,
+            "medians": colorin,
+            "caps": colorin,
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": colorin, "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": colorin,
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": colorin, "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -192,7 +202,7 @@ def hydrology(ff, scen):
 
     # axwtts.get_xaxis().set_visible(False)
     axwtts.tick_params(axis="y", labelsize=fs)
-    axwtts.set_ylim([wtmin, 0])
+    axwtts.set_ylim((wtmin, 0))
     axwtts.set_ylabel("WT m", fontsize=fs)
     axwtts.legend(loc="upper left")
     axwtts.grid(visible=False)
@@ -202,7 +212,7 @@ def hydrology(ff, scen):
     ulimruno = max(runoff) * 1.1 * 1000.0
     axruno = fig.add_subplot(gs[7, :])  # axwtts.twinx()
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="blue", label="total runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim((0.0, ulimruno))
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="blue", alpha=0.3
     )
@@ -216,7 +226,7 @@ def hydrology(ff, scen):
     runoff = np.cumsum(ncf["strip"]["roffwest"][scen, :])
     axruno = fig.add_subplot(gs[6, :])  # axwtts.twinx()
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="green", label="west runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim((0.0, ulimruno))
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="green", alpha=0.3
     )
@@ -230,7 +240,7 @@ def hydrology(ff, scen):
     runoff = np.cumsum(ncf["strip"]["roffeast"][scen, :])
     axruno = fig.add_subplot(gs[5, :])  # axwtts.twinx()
     axruno.plot(range(len(runoff)), runoff * 1000.0, color="red", label="east runoff")
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim((0.0, ulimruno))
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="red", alpha=0.3
     )
@@ -246,7 +256,7 @@ def hydrology(ff, scen):
     axruno.plot(
         range(len(runoff)), runoff * 1000.0, color="orange", label="surface runoff"
     )
-    axruno.set_ylim([0.0, ulimruno])
+    axruno.set_ylim((0.0, ulimruno))
     axruno.fill_between(
         range(len(runoff)), 0.0, runoff * 1000.0, color="orange", alpha=0.3
     )
@@ -259,7 +269,7 @@ def hydrology(ff, scen):
 
     # ------deltas-----------------
     deltas = ncf["strip"]["deltas"][scen, 1:, :] * 1000.0
-    dfdeltas = pd.DataFrame(data=deltas, columns=list(range(cols)))
+    dfdeltas = pd.DataFrame(data=deltas, columns=range(cols))
 
     ax = fig.add_subplot(gs[2:4, :4])
     _ax = create_profile_boxplot(
@@ -276,7 +286,7 @@ def hydrology(ff, scen):
 
     # ------ETs-----------------
     ET = ncf["cpy"]["ET_yr"][scen, 1:, :] * 1000.0
-    dfET = pd.DataFrame(data=ET, columns=list(range(cols)))
+    dfET = pd.DataFrame(data=ET, columns=range(cols))
 
     ax = fig.add_subplot(gs[2:4, 4:8])
     _ax = create_profile_boxplot(
@@ -285,7 +295,7 @@ def hydrology(ff, scen):
 
     # ------transpi-----------------
     transpi = ncf["cpy"]["transpi_yr"][scen, 1:, :] * 1000.0
-    dftranspi = pd.DataFrame(data=transpi, columns=list(range(cols)))
+    dftranspi = pd.DataFrame(data=transpi, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     ax = create_profile_boxplot(
         ax,
@@ -302,7 +312,7 @@ def hydrology(ff, scen):
 
     # ------efloor-----------------
     efloor = ncf["cpy"]["efloor_yr"][scen, 1:, :] * 1000.0
-    dfefloor = pd.DataFrame(data=efloor, columns=list(range(cols)))
+    dfefloor = pd.DataFrame(data=efloor, columns=range(cols))
 
     ax = fig.add_subplot(gs[:2, :4])
     ax = create_profile_boxplot(
@@ -320,7 +330,7 @@ def hydrology(ff, scen):
 
     # ------SWE max-----------------
     swe = ncf["cpy"]["SWEmax"][scen, 1:, :]
-    dfswe = pd.DataFrame(data=swe, columns=list(range(cols)))
+    dfswe = pd.DataFrame(data=swe, columns=range(cols))
 
     ax = fig.add_subplot(gs[:2, 4:8])
     ax = create_profile_boxplot(
@@ -338,7 +348,7 @@ def hydrology(ff, scen):
 
     # ------Interc max-----------------
     interc = ncf["cpy"]["interc_yr"][scen, 1:, :] * 1000.0
-    dfinterc = pd.DataFrame(data=interc, columns=list(range(cols)))
+    dfinterc = pd.DataFrame(data=interc, columns=range(cols))
 
     ax = fig.add_subplot(gs[:2, 8:])
     ax = create_profile_boxplot(
@@ -384,7 +394,7 @@ def stand(ff, scen):
     ax.hlines(y=-0.35, xmin=0, xmax=cols, color="red", linestyles="--")
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
-    ax.set_ylim([wtmin, 0])
+    ax.set_ylim((wtmin, 0))
     ax.set_ylabel("WT m", fontsize=fs)
     ax.legend()
     ax.grid(visible=False)
@@ -393,16 +403,21 @@ def stand(ff, scen):
     # ------------stand growth--------------------
     vol = ncf["stand"]["volume"][scen, :, :]
     growth = np.diff(vol, axis=0)
-    dfgrowth = pd.DataFrame(data=growth, columns=list(range(cols)))
+    dfgrowth = pd.DataFrame(data=growth, columns=range(cols))
     axgrowth = fig.add_subplot(gs[8:10, :4])
     dfgrowth.boxplot(
         ax=axgrowth,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -486,23 +501,33 @@ def stand(ff, scen):
 
     # -----------------leaf mass------------------
     lmass = ncf["stand"]["leafmass"][scen, :, :]
-    df = pd.DataFrame(data=lmass, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmass, columns=range(cols))
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
     )
 
     ax.set_title("Leaf mass")
-    ax.set_ylabel("$kg \ ha^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
@@ -583,15 +608,20 @@ def stand(ff, scen):
         ncf["stand"]["dominant"]["NPP"][scen, :, :]
         / ncf["stand"]["dominant"]["NPP_pot"][scen, :, :]
     )
-    df = pd.DataFrame(data=dom_phys_r, columns=list(range(cols)))
+    df = pd.DataFrame(data=dom_phys_r, columns=range(cols))
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -619,39 +649,54 @@ def stand(ff, scen):
     ax.set_xlabel("nutrient status")
 
     ndemand = ncf["stand"]["n_demand"][scen, :, :]
-    df = pd.DataFrame(data=ndemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=ndemand, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
     )
 
     ax.set_title("N demand")
-    ax.set_ylabel("$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
+    ax.set_ylabel(r"$kg \ ha^{-1} \ yr^{-1}$", fontsize=fs)
 
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
 
     pdemand = ncf["stand"]["p_demand"][scen, :, :]
-    df = pd.DataFrame(data=pdemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=pdemand, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -664,16 +709,26 @@ def stand(ff, scen):
     ax.set_facecolor(facecolor)
 
     kdemand = ncf["stand"]["k_demand"][scen, :, :]
-    df = pd.DataFrame(data=kdemand, columns=list(range(cols)))
+    df = pd.DataFrame(data=kdemand, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, 8:])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -747,7 +802,7 @@ def mass(ff, scen):
     ax.hlines(y=-0.35, xmin=0, xmax=cols, color="red", linestyles="--")
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
-    ax.set_ylim([wtmin, 0])
+    ax.set_ylim((wtmin, 0))
     ax.set_ylabel("WT m", fontsize=fs)
     ax.legend()
     ax.grid(visible=False)
@@ -766,16 +821,21 @@ def mass(ff, scen):
 
     soilout = ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1
 
-    df = pd.DataFrame(data=soil, columns=list(range(cols)))
+    df = pd.DataFrame(data=soil, columns=range(cols))
     ax = fig.add_subplot(gs[8:10, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -837,7 +897,7 @@ def mass(ff, scen):
     )
 
     ax.set_title("Organic soil mass, kg $m^{-2}$")
-    ax.set_ylim([minval * 0.95, maxval * 1.025])
+    ax.set_ylim((minval * 0.95, maxval * 1.025))
     ax.get_xaxis().set_visible(False)
     ax.tick_params(axis="y", labelsize=fs)
     ax.set_facecolor(facecolor)
@@ -845,16 +905,26 @@ def mass(ff, scen):
 
     # ------Litter input --------------------------------------------
 
-    df = pd.DataFrame(data=litter, columns=list(range(cols)))
+    df = pd.DataFrame(data=litter, columns=range(cols))
     ax = fig.add_subplot(gs[6:8, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -870,16 +940,26 @@ def mass(ff, scen):
     # -------ground vegetation biomass change  kg/ha/m2---------------------------
     gv = ncf["groundvegetation"]["gv_tot"][scen, :, :] / 10000.0
     grgv = np.diff(gv, axis=0)
-    df = pd.DataFrame(data=grgv, columns=list(range(cols)))
+    df = pd.DataFrame(data=grgv, columns=range(cols))
     ax = fig.add_subplot(gs[4:6, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -895,16 +975,26 @@ def mass(ff, scen):
     # -------stand biomass change  kg/m2/yr---------------------------
     stand = ncf["stand"]["biomass"][scen, :, :] / 10000.0
     gr = np.diff(stand, axis=0)
-    df = pd.DataFrame(data=gr, columns=list(range(cols)))
+    df = pd.DataFrame(data=gr, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -919,16 +1009,26 @@ def mass(ff, scen):
 
     # -------Site mass balance kg/m2/yr---------------------------
     site = gr + grgv + soilout[1:, :] + litter[1:, :]
-    df = pd.DataFrame(data=site, columns=list(range(cols)))
+    df = pd.DataFrame(data=site, columns=range(cols))
     ax = fig.add_subplot(gs[:2, :4])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="green", whiskers="green", medians="green", caps="green"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="green", alpha=0.6),
+        color={
+            "boxes": "green",
+            "whiskers": "green",
+            "medians": "green",
+            "caps": "green",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "green",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "green", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -947,16 +1047,21 @@ def mass(ff, scen):
         - ncf["stand"]["finerootlitter"][scen, :, :]
     )
 
-    df = pd.DataFrame(data=leaflitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=leaflitter, columns=range(cols))
     ax = fig.add_subplot(gs[:2, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="blue", whiskers="blue", medians="blue", caps="blue"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="blue", alpha=0.6),
+        color={"boxes": "blue", "whiskers": "blue", "medians": "blue", "caps": "blue"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "blue",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "blue", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -972,16 +1077,26 @@ def mass(ff, scen):
     # ------- leaf litter kg/m2/yr---------------------------
     finerootlitter = ncf["stand"]["finerootlitter"][scen, :, :]
 
-    df = pd.DataFrame(data=finerootlitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=finerootlitter, columns=range(cols))
     ax = fig.add_subplot(gs[2:4, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="orange", whiskers="orange", medians="orange", caps="orange"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="orange", alpha=0.6),
+        color={
+            "boxes": "orange",
+            "whiskers": "orange",
+            "medians": "orange",
+            "caps": "orange",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "orange",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "orange", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -997,16 +1112,26 @@ def mass(ff, scen):
     # ------- woody litter kg/m2/yr---------------------------
     woodylitter = ncf["stand"]["woodylitter"][scen, :, :]
 
-    df = pd.DataFrame(data=woodylitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=woodylitter, columns=range(cols))
     ax = fig.add_subplot(gs[4:6, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="brown", whiskers="brown", medians="brown", caps="brown"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="brown", alpha=0.6),
+        color={
+            "boxes": "brown",
+            "whiskers": "brown",
+            "medians": "brown",
+            "caps": "brown",
+        },
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "brown", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "brown",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "brown", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1026,16 +1151,16 @@ def mass(ff, scen):
         + ncf["groundvegetation"]["s_litterfall"][scen, :, :]
     )
 
-    df = pd.DataFrame(data=gvlitter, columns=list(range(cols)))
+    df = pd.DataFrame(data=gvlitter, columns=range(cols))
     ax = fig.add_subplot(gs[6:8, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="red", whiskers="red", medians="red", caps="red"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="red", alpha=0.6),
+        color={"boxes": "red", "whiskers": "red", "medians": "red", "caps": "red"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "red", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1051,16 +1176,21 @@ def mass(ff, scen):
     # ---soil mass outflux----------
     out = ncf["esom"]["Mass"]["out"][scen, :, :] / 10000.0 * -1
 
-    df = pd.DataFrame(data=out, columns=list(range(cols)))
+    df = pd.DataFrame(data=out, columns=range(cols))
     ax = fig.add_subplot(gs[8:10, 4:8])
     df.boxplot(
         ax=ax,
-        color=dict(boxes="grey", whiskers="grey", medians="grey", caps="grey"),
-        boxprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
-        flierprops=dict(linestyle="-", linewidth=1.5),
-        medianprops=dict(linestyle="-", linewidth=1.5),
-        whiskerprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
-        capprops=dict(linestyle="-", linewidth=1.5, color="grey", alpha=0.6),
+        color={"boxes": "grey", "whiskers": "grey", "medians": "grey", "caps": "grey"},
+        boxprops={"linestyle": "-", "linewidth": 1.5, "color": "grey", "alpha": 0.6},
+        flierprops={"linestyle": "-", "linewidth": 1.5},
+        medianprops={"linestyle": "-", "linewidth": 1.5},
+        whiskerprops={
+            "linestyle": "-",
+            "linewidth": 1.5,
+            "color": "grey",
+            "alpha": 0.6,
+        },
+        capprops={"linestyle": "-", "linewidth": 1.5, "color": "grey", "alpha": 0.6},
         showfliers=False,
         grid=False,
         rot=0,
@@ -1239,7 +1369,7 @@ def carbon(ff, scen):
     # -------------LMW to Ditch----------------------------
     lmwtoditch = ncf["balance"]["C"]["LMWdoc_to_water"][scen, :, :] * -1
     ax = fig.add_subplot(gs[10:12, :6])
-    df = pd.DataFrame(data=lmwtoditch, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmwtoditch, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1255,7 +1385,7 @@ def carbon(ff, scen):
     # -------------HMW to Ditch----------------------------
     hmwtoditch = ncf["balance"]["C"]["HMW_to_water"][scen, :, :] * -1
     ax = fig.add_subplot(gs[10:12, 6:])
-    df = pd.DataFrame(data=hmwtoditch, columns=list(range(cols)))
+    df = pd.DataFrame(data=hmwtoditch, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1271,7 +1401,7 @@ def carbon(ff, scen):
     # -----------LMW to atmosphere--------------------
     lmwtoatm = ncf["balance"]["C"]["LMWdoc_to_atm"][scen, :, :] * -1
     ax = fig.add_subplot(gs[8:10, :6])
-    df = pd.DataFrame(data=lmwtoatm, columns=list(range(cols)))
+    df = pd.DataFrame(data=lmwtoatm, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1287,7 +1417,7 @@ def carbon(ff, scen):
     # -----------HMW to atmosphere--------------------
     hmwtoatm = ncf["balance"]["C"]["HMW_to_atm"][scen, :, :] * -1
     ax = fig.add_subplot(gs[8:10, 6:])
-    df = pd.DataFrame(data=hmwtoatm, columns=list(range(cols)))
+    df = pd.DataFrame(data=hmwtoatm, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1303,7 +1433,7 @@ def carbon(ff, scen):
     # -----------CO2C to atmosphere--------------------
     co2 = ncf["balance"]["C"]["co2c_release"][scen, :, :] * -1
     ax = fig.add_subplot(gs[6:8, :6])
-    df = pd.DataFrame(data=co2, columns=list(range(cols)))
+    df = pd.DataFrame(data=co2, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1319,7 +1449,7 @@ def carbon(ff, scen):
     # -----------CH4C to atmosphere--------------------
     co2 = ncf["balance"]["C"]["ch4c_release"][scen, :, :] * -1
     ax = fig.add_subplot(gs[6:8, 6:])
-    df = pd.DataFrame(data=co2, columns=list(range(cols)))
+    df = pd.DataFrame(data=co2, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1335,7 +1465,7 @@ def carbon(ff, scen):
     # -----------stand litter in--------------------
     standl = ncf["balance"]["C"]["stand_litter_in"][scen, :, :]
     ax = fig.add_subplot(gs[4:6, :6])
-    df = pd.DataFrame(data=standl, columns=list(range(cols)))
+    df = pd.DataFrame(data=standl, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1351,7 +1481,7 @@ def carbon(ff, scen):
     # -----------ground vegetation litter in--------------------
     gvl = ncf["balance"]["C"]["gv_litter_in"][scen, :, :]
     ax = fig.add_subplot(gs[4:6, 6:])
-    df = pd.DataFrame(data=gvl, columns=list(range(cols)))
+    df = pd.DataFrame(data=gvl, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1367,7 +1497,7 @@ def carbon(ff, scen):
     # -----------soil balance c--------------------
     soilc = ncf["balance"]["C"]["soil_c_balance_c"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, :6])
-    df = pd.DataFrame(data=soilc, columns=list(range(cols)))
+    df = pd.DataFrame(data=soilc, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1383,7 +1513,7 @@ def carbon(ff, scen):
     # -----------soil balance co2 equivalents--------------------
     soilco2 = ncf["balance"]["C"]["soil_c_balance_co2eq"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, 6:])
-    df = pd.DataFrame(data=soilco2, columns=list(range(cols)))
+    df = pd.DataFrame(data=soilco2, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1399,7 +1529,7 @@ def carbon(ff, scen):
     # -----------stand balance c--------------------
     standc = ncf["balance"]["C"]["stand_c_balance_c"][scen, :, :]
     ax = fig.add_subplot(gs[:2, :6])
-    df = pd.DataFrame(data=standc, columns=list(range(cols)))
+    df = pd.DataFrame(data=standc, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1415,7 +1545,7 @@ def carbon(ff, scen):
     # -----------stand balance co2 equivalents--------------------
     standco2 = ncf["balance"]["C"]["stand_c_balance_co2eq"][scen, :, :]
     ax = fig.add_subplot(gs[:2, 6:])
-    df = pd.DataFrame(data=standco2, columns=list(range(cols)))
+    df = pd.DataFrame(data=standco2, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -1490,7 +1620,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------to Ditch----------------------------
     towater = ncf["balance"][substance]["to_water"][scen, :, :]
     ax = fig.add_subplot(gs[8:10, :6])
-    df = pd.DataFrame(data=towater, columns=list(range(cols)))
+    df = pd.DataFrame(data=towater, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1506,7 +1636,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------below root layer----------------------------
     brl = ncf["balance"][substance]["decomposition_below_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[8:10, 6:])
-    df = pd.DataFrame(data=brl, columns=list(range(cols)))
+    df = pd.DataFrame(data=brl, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1522,7 +1652,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Release in decomposition----------------------------
     de = ncf["balance"][substance]["decomposition_tot"][scen, :, :]
     ax = fig.add_subplot(gs[6:8, :6])
-    df = pd.DataFrame(data=de, columns=list(range(cols)))
+    df = pd.DataFrame(data=de, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1538,7 +1668,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Release in decomposition----------------------------
     dert = ncf["balance"][substance]["decomposition_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[6:8, 6:])
-    df = pd.DataFrame(data=dert, columns=list(range(cols)))
+    df = pd.DataFrame(data=dert, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1559,7 +1689,7 @@ def nutrient_balance(ff, substance, scen):
     )
 
     ax = fig.add_subplot(gs[4:6, :6])
-    df = pd.DataFrame(data=supply, columns=list(range(cols)))
+    df = pd.DataFrame(data=supply, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1575,7 +1705,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Release in fertilization----------------------------
     fert = ncf["balance"][substance]["fertilization_release"][scen, :, :]
     ax = fig.add_subplot(gs[4:6, 6:])
-    df = pd.DataFrame(data=fert, columns=list(range(cols)))
+    df = pd.DataFrame(data=fert, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1591,7 +1721,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Stand uptake----------------------------
     dem = ncf["balance"][substance]["stand_demand"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, :6])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1607,7 +1737,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------ground vegetation uptake----------------------------
     dem = ncf["balance"][substance]["gv_demand"][scen, :, :]
     ax = fig.add_subplot(gs[2:4, 6:])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1623,7 +1753,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Stand nutrient balance----------------------------
     dem = ncf["balance"][substance]["balance_root_lyr"][scen, :, :]
     ax = fig.add_subplot(gs[:2, :6])
-    df = pd.DataFrame(data=dem, columns=list(range(cols)))
+    df = pd.DataFrame(data=dem, columns=range(cols))
     _ax = create_profile_boxplot(
         ax,
         df,
@@ -1639,7 +1769,7 @@ def nutrient_balance(ff, substance, scen):
     # -------------Stand volume growth----------------------------
     vg = ncf["stand"]["volumegrowth"][scen, :, :]
     ax = fig.add_subplot(gs[:2, 6:])
-    df = pd.DataFrame(data=vg, columns=list(range(cols)))
+    df = pd.DataFrame(data=vg, columns=range(cols))
     ax = create_profile_boxplot(
         ax,
         df,
@@ -2059,7 +2189,7 @@ def compare_scens(ff):
     wt = np.mean(
         ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2)
     )  # mean annual wr dim: nscens
-    sd = np.std(ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2))  #
+    sd = np.std(ncf["strip"]["dwtyr_latesummer"][:, :, :], axis=(1, 2))
     ax = fig.add_subplot(gs[0, 1])
     ax = draw_comparison(
         ax,
@@ -2087,7 +2217,7 @@ def compare_scens(ff):
         standco2bal,
         standco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Stand $CO_2$ balance",
         "grey",
         facecolor,
@@ -2107,7 +2237,7 @@ def compare_scens(ff):
         soilco2bal,
         soilco2balsd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "Soil $CO_2$ balance",
         "grey",
         facecolor,
@@ -2125,7 +2255,7 @@ def compare_scens(ff):
         ntowater,
         ntowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "N to water",
         "red",
         facecolor,
@@ -2143,7 +2273,7 @@ def compare_scens(ff):
         ptowater,
         ptowatersd,
         "",
-        "$kg \ ha^{-1} yr^{-1}$",
+        r"$kg \ ha^{-1} yr^{-1}$",
         "P to water",
         "orange",
         facecolor,

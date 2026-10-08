@@ -1,3 +1,4 @@
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -5,12 +6,12 @@ import netCDF4
 import numpy as np
 import pytest
 
-from susi.io.load_output_data import NetcdfVariablePath
 from analysis.shared_reporting_utils import plots
 from analysis.shared_reporting_utils.single_scenario_dashboard import (
     SECTIONS,
     load_report_data,
 )
+from susi.io.load_output_data import NetcdfVariablePath
 
 
 def create_mock_netcdf_file(filepath: Path) -> None:
@@ -119,5 +120,6 @@ class TestSections:
     def test_nutrient_balance_sections_wire_to_matching_substance(self):
         for substance in ("N", "P", "K"):
             _, plot_fn = SECTIONS[substance]
+            assert isinstance(plot_fn, partial)
             assert plot_fn.func is plots.nutrient_balance
             assert plot_fn.keywords == {"substance": substance}

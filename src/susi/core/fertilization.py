@@ -1,19 +1,19 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sat Mar  5 19:31:27 2022
 
 @author: alauren
 """
 
-import numpy as np
-from typing import assert_never
 from dataclasses import dataclass
+from typing import assert_never
+
+import numpy as np
 
 from susi.io.susi_parameter_model import (
     AshFertilizationParameters,
-    StandardNPKFertilizationParameters,
     FertilizationParameters,
     NutrientFertilizationParameters,
+    StandardNPKFertilizationParameters,
 )
 
 

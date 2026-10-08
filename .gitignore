@@ -1,29 +1,11 @@
 # Ignore the contents of the some folders,
 # but track the folders themselves
 
-outputs/*
-!outputs/.gitkeep
+projects/*
+!projects/.gitkeep
 
 src/analysis/exports/*
 !src/analysis/exports/.gitkeep
-
-inputs/*
-!inputs/.gitkeep
-
-
-# Ignore src/inputs/, except for src/inputs/system/ (tracked dev data needed
-# for susi tests and examples) and src/inputs/user_parameters/ (tracked as an
-# empty folder; its own contents stay untracked, see below). The negations
-# for user_parameters/ must live in this same block: git won't recurse into
-# an already-excluded directory, so a later, separate `!.../.gitkeep` rule
-# can't re-include anything inside it.
-src/inputs/*
-!src/inputs/system/
-!src/inputs/user_parameters/
-
-src/inputs/user_parameters/*
-!src/inputs/user_parameters/.gitkeep
-
 
 #python stuff
 venv/
@@ -73,8 +55,8 @@ requirements_inaki.txt
 
 analysis/eyeballing.py
 pyrightconfig.json
-paroninkorpi/
-tests/golden_file_test/golden_file_new_experiment
+# The golden file test runs into tests/golden_file_test/ as a project
+tests/golden_file_test/outputs/
 
 # docs
 site/
@@ -90,13 +72,8 @@ devlog/
 # streamlit
 .streamlit/
 
-# Output from simulations and other stuff
-xmltomotti_no_thinning
-xmltomotti_yes_thinning
-xmltoallometry_with_areas
-susi_2021/
-
 # LLM stuf
+.scratch/
 CONTEXT.md
 CONTEXT-MAP.md
 AGENTS.md
@@ -106,6 +83,30 @@ tmp
 
 # Data
 DATA/
+/paroninkorpi/
+xmltomotti_no_thinning
+xmltomotti_yes_thinning
+xmltoallometry_with_areas
+/susi_2021/
+
+# Testing projects track their code and parameters, not their data (27 MB,
+# redistribution terms unchecked) or outputs. The .gitkeeps keep data/,
+# inputs/ and outputs/ on a fresh clone, so the README has somewhere to point.
+test_projects/*/data/*
+!test_projects/*/data/.gitkeep
+test_projects/*/inputs/allometry/
+test_projects/*/outputs/*
+!test_projects/*/outputs/.gitkeep
+
+# Example projects track everything they are run from -- code, data and
+# inputs -- so they run straight after a clone. Only what a run writes is
+# ignored.
+example_projects/*/outputs/*
+!example_projects/*/outputs/.gitkeep
+
+# We do not have the rights to publish this data.
+example_projects/paroninkorpi/data/Paroninkorpi.xml
+example_projects/paroninkorpi/data/ditch_depth_1m.tif
 
 # Jupyter stuff
 .jupyter_ystore.db

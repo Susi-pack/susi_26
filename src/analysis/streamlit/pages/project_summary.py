@@ -1,19 +1,20 @@
 import streamlit as st
 
-from analysis.streamlit.components import folder_selection, netcdf_reader
+import susi.io.load_output_data as load_output
 from analysis.shared_reporting_utils.project_summary import (
     SUMMARY_VARIABLES,
     build_summary_dataframe,
 )
-import susi.io.load_output_data as load_output
+from analysis.streamlit.components import folder_selection, netcdf_reader
 
 st.header("Project summary")
 
-dir_path = folder_selection.build_folder_selection_widget(
-    dir_path=st.session_state.settings["data_folder"], label="project"
-)
+# The stands are one level below a run, not below the project itself.
+run_dirpath = folder_selection.build_project_and_run_selection_widget(
+    projects_root=st.session_state.settings["projects_root"]
+).run_dir
 
-stand_folderpaths = load_output.list_subdirectories(path=dir_path)
+stand_folderpaths = load_output.list_stand_folders(run_dirpath=run_dirpath)
 
 metadata_by_stand = load_output.load_all_metadatas_from_stands(
     folders=stand_folderpaths

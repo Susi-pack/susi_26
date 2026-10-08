@@ -1,11 +1,11 @@
 import numpy as np
 from matplotlib.figure import Figure
 
-from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 from analysis.shared_reporting_utils.quick_look_plots import (
     quick_look_sections,
     unsupported_shape_message,
 )
+from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath
 
 
 def _make_variable_array(shape: tuple[int, ...]) -> NetcdfVariableArray:

@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, model_validator
 import json
 
+from pydantic import BaseModel, Field, model_validator
 
 from susi.io.extra_pydantic_types import PositiveInt
 from susi.io.metadata_model import SimulationMetaData
@@ -42,7 +42,6 @@ class MultipleSusis(BaseModel):
             raise ValueError(
                 "'n_parallel_processes' cannot be greater than 'n_runs'. There must be at most one process per run."
             )
-        return None
 
     def _check_for_duplicated_susi_params(self) -> None:
         """
@@ -60,9 +59,8 @@ class MultipleSusis(BaseModel):
             if serialized in seen:
                 raise ValueError("Duplicate Susi Parameter models detected.")
             seen.add(serialized)
-        return None
 
-    def _check_for_duplicated_experiment_folder_paths(self) -> None:
+    def _check_for_duplicated_simulation_folder_paths(self) -> None:
         """
         We don't want two Susi simulations to write outputs to the same folder,
         for this would overwrite one with the other.
@@ -72,15 +70,14 @@ class MultipleSusis(BaseModel):
         seen = set()
 
         for simulation_run in self.simulation_parameter_list:
-            experiment_folder_path = simulation_run.metadata.experiment_folder_path
+            simulation_folder_path = simulation_run.metadata.simulation_folder_path
 
-            if experiment_folder_path in seen:
-                raise ValueError("Duplicate experiment folder paths detected.")
+            if simulation_folder_path in seen:
+                raise ValueError("Duplicate simulation folder paths detected.")
 
             else:
-                seen.add(experiment_folder_path)
+                seen.add(simulation_folder_path)
 
-        return None
 
     def _check_stand_and_scenario_ids_are_set(self) -> None:
         """
@@ -95,25 +92,25 @@ class MultipleSusis(BaseModel):
                     "SimulationMetadata without `stand_id` and/or `scenario_id` detected."
                 )
 
-    def _check_single_experiment_id(self) -> None:
+    def _check_single_run_id(self) -> None:
         seen = set()
         for simulation_run in self.simulation_parameter_list:
-            experiment_id = simulation_run.metadata.experiment_id
-            if experiment_id not in seen:
-                seen.add(experiment_id)
+            run_id = simulation_run.metadata.run_id
+            if run_id not in seen:
+                seen.add(run_id)
 
         if len(seen) > 1:
             raise ValueError(
-                f"All MultipleSusi runs must have the same experiment_id. Found the following instead: {seen}."
+                f"All MultipleSusi runs must have the same run_id. Found the following instead: {seen}."
             )
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
         self._check_stand_and_scenario_ids_are_set()
-        self._check_single_experiment_id()
+        self._check_single_run_id()
         self._check_not_more_processes_than_runs()
         self._check_for_duplicated_susi_params()
-        self._check_for_duplicated_experiment_folder_paths()
+        self._check_for_duplicated_simulation_folder_paths()
 
         return self

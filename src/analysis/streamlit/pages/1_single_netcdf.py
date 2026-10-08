@@ -1,40 +1,40 @@
-import streamlit as st
 from pathlib import Path
 
-import susi.io.load_output_data as load_output
-from susi.io.app_settings import AppSettings
+import streamlit as st
 
+import susi.io.load_output_data as load_output
+import susi.io.utils as io_utils
 from analysis.streamlit.components import (
+    folder_selection,
     metadata_expander,
     netcdf_variable_explorer,
     netcdf_variable_plots_ui,
-    folder_selection,
 )
 
 # %% Choose folder
-st.header("Choose project folder")
+st.header("Choose scenario folder")
 
 col1, col2, col3 = st.columns([2, 3, 1])
 
 with col1:
-    st.markdown("**Data folder**")
+    st.markdown("**Projects root**")
 
 with col2:
-    st.write(st.session_state.settings["data_folder"])
+    st.write(st.session_state.settings["projects_root"])
 
 with col3:
     if st.button("Browse…", use_container_width=True):
         result = folder_selection.pick_folder_popup()
         if result:
-            st.session_state.settings["data_folder"] = result
+            st.session_state.settings["projects_root"] = result
             st.rerun()
 
 
 chosen_scenario_folder = folder_selection.build_folder_selection_widget(
     dir_path=folder_selection.build_folder_selection_widget(
-        dir_path=folder_selection.build_folder_selection_widget(
-            dir_path=st.session_state.settings["data_folder"], label="project"
-        ),
+        dir_path=folder_selection.build_project_and_run_selection_widget(
+            projects_root=st.session_state.settings["projects_root"]
+        ).run_dir,
         label="stand",
     ),
     label="scenario",
@@ -43,7 +43,7 @@ chosen_scenario_folder = folder_selection.build_folder_selection_widget(
 
 # %% Metadata expander
 params = load_output.read_params_from_jsons(
-    experiment_folderpath=chosen_scenario_folder
+    simulation_folderpath=chosen_scenario_folder
 )
 
 metadata_expander.build(metadata=params.metadata, susi_params=params.susi_params)
@@ -57,7 +57,7 @@ st.write("summary table will go here")
 # %% Read Netcdf variabales
 # The golden test netcdf is used to read the variable structure  of the netcdf file
 sample_netcdf_filepath = (
-    AppSettings().project_root_path / "tests/golden_file_test/golden_susi.nc"
+    io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
 )
 all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
 

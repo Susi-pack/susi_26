@@ -1,15 +1,14 @@
-from typing import NewType, Any
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
+from typing import Any, NewType
 
 from susi.io.load_output_data import (
-    StandID,
     ScenarioID,
     SimulationParamsFromJSON,
-    read_params_from_jsons,
+    StandID,
     list_subdirectories,
+    read_params_from_jsons,
 )
-
 
 ParamName = NewType("ParamName", str)
 
@@ -23,13 +22,14 @@ _EXCLUDED_DIFFERING_PARAMS = frozenset({"site_parameters/scenario_name"})
 
 
 def retrieve_scenarios_for_stand(
-    stand_id: StandID, outputs_dir: Path
+    stand_id: StandID, run_dirpath: Path
 ) -> dict[ScenarioID, Path]:
     """
     Finds all scenarios for a given stand based on folder structure.
-    Scenarios are subdirectories under output_dir/stand_id/.
+    run_dirpath is one run's folder (`<project>/outputs/<run_id>/`).
+    Scenarios are subdirectories under run_dirpath/stand_id/.
     """
-    stand_dir = outputs_dir / stand_id
+    stand_dir = run_dirpath / stand_id
     if not stand_dir.exists() or not stand_dir.is_dir():
         return {}
 
@@ -38,13 +38,13 @@ def retrieve_scenarios_for_stand(
 
 
 def retrieve_parameters_for_stand(
-    stand_id: StandID, output_dir: Path
+    stand_id: StandID, run_dirpath: Path
 ) -> dict[ScenarioID, SimulationParamsFromJSON]:
     """
     Gets susi parameters from params.json files for all scenarios of a given stand.
     """
     parameters_per_stand: dict[ScenarioID, SimulationParamsFromJSON] = {}
-    scenarios = retrieve_scenarios_for_stand(stand_id, output_dir)
+    scenarios = retrieve_scenarios_for_stand(stand_id, run_dirpath)
 
     for scenario_id, scenario_folderpath in scenarios.items():
         parameters_per_stand[scenario_id] = read_params_from_jsons(scenario_folderpath)
@@ -67,13 +67,13 @@ def _traverse_susi_params(params: dict, parent_path: str = "") -> dict[str, Any]
 
 
 def _get_flat_params_per_scenario(
-    stand_id: StandID, output_dir: Path
+    stand_id: StandID, run_dirpath: Path
 ) -> dict[ScenarioID, dict[str, Any]]:
     """
     Returns flat parameter mappings for each scenario of a stand.
     Each scenario maps to {flat_param_path: value}.
     """
-    scenario_params = retrieve_parameters_for_stand(stand_id, output_dir)
+    scenario_params = retrieve_parameters_for_stand(stand_id, run_dirpath)
     if not scenario_params:
         return {}
 
@@ -123,14 +123,14 @@ def _build_param_value_mapping(
 
 
 def find_differing_params(
-    stand_id: StandID, output_dir: Path
+    stand_id: StandID, run_dirpath: Path
 ) -> dict[ParamName, dict[Any, list[ScenarioID]]]:
     """
     Detect parameters that differ between scenarios for the same stand.
     Returns dict mapping parameter names to dict of {param_value: [list of ScenarioIDs with that value]}.
     Only includes parameters that have differing values across scenarios.
     """
-    flat_params = _get_flat_params_per_scenario(stand_id, output_dir)
+    flat_params = _get_flat_params_per_scenario(stand_id, run_dirpath)
     if not flat_params:
         return {}
 
@@ -146,13 +146,13 @@ def find_differing_params(
     }
 
 
-def find_unique_params(stand_id: StandID, output_dir: Path) -> dict[ParamName, Any]:
+def find_unique_params(stand_id: StandID, run_dirpath: Path) -> dict[ParamName, Any]:
     """
     Detect parameters that have identical values across all scenarios for a stand.
     Returns dict mapping parameter names to their unique value.
     Only includes parameters that have the same value in all scenarios.
     """
-    flat_params = _get_flat_params_per_scenario(stand_id, output_dir)
+    flat_params = _get_flat_params_per_scenario(stand_id, run_dirpath)
     if not flat_params:
         return {}
 

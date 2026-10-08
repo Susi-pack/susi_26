@@ -19,14 +19,17 @@
 # NPP/leaf-litter/demand/etc. for columns that were never cut. do_clearcut
 # is now correctly scoped to cut_cols, and this test passes.
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 
 from susi.core.canopylayer import Canopylayer, Zone
 from susi.core.stand import Stand, _build_zones
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
+    GrowthMode,
     LocationsForPhotoParams,
     get_photo_parameters_by_location,
 )
@@ -94,8 +97,11 @@ GROUP_B_FIELDS = (
 
 def _make_stand() -> Stand:
     allometry_params = CanopyLayerAllometry(
-        allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(
+                file_path=DATA_DIR / "test_allometry.csv", species_id=1
+            )
+        },
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -117,6 +123,7 @@ def _make_stand() -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode=GrowthMode.dynamic,
     )
     stand.update()
     return stand
@@ -360,8 +367,11 @@ class TestDoClearcutAllometrySwitchover:
         """Build new_zones straight from a CanopyLayerAllometry, exactly the
         way Stand.apply_cutting_management does in production."""
         new_growth_allometry = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
-            allometry_file_registry={1: "post_clearcut_allom.csv"},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "post_clearcut_allom.csv", species_id=1
+                )
+            },
             pointers={
                 CanopyLayerName.dominant: [1] * len(cut_cols_global),
                 CanopyLayerName.subdominant: None,
@@ -455,10 +465,13 @@ class TestDoClearcutAllometrySwitchover:
         cut_cols_global = np.array(CUT_COLS)  # [0, 2]
 
         new_growth_allometry = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
             allometry_file_registry={
-                1: "post_clearcut_allom.csv",
-                2: "test_allometry.csv",
+                1: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "post_clearcut_allom.csv", species_id=1
+                ),
+                2: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
             },
             pointers={
                 # col 0 -> zone 1, col 2 -> zone 2 (order matches strip order
@@ -476,7 +489,7 @@ class TestDoClearcutAllometrySwitchover:
             SFC,
         )
         assert len(new_zones) == 2
-        assert set(z.id for z in new_zones) == {1, 2}
+        assert {z.id for z in new_zones} == {1, 2}
         assert list(new_zones[0].cols) == [CUT_COLS[0]]
         assert list(new_zones[1].cols) == [CUT_COLS[1]]
 
@@ -517,22 +530,28 @@ class TestMultiZoneCanopylayer:
     """
 
     N = 5
-    ZONE1_COLS = [0, 1]
-    ZONE2_COLS = [2, 3, 4]
+    ZONE1_COLS: ClassVar[list[int]] = [0, 1]
+    ZONE2_COLS: ClassVar[list[int]] = [2, 3, 4]
     # dominant layer has 2 real zone ids (1 and 2) instead of the single
     # zone every other test/config in this repo uses.
-    POINTERS = [1, 1, 2, 2, 2]
+    POINTERS: ClassVar[list[int]] = [1, 1, 2, 2, 2]
     # zone 1's columns all have sfc=1, zone 2's all have sfc=4 -- distinct
     # medians per zone, so the two zones must fit distinct allometries.
     SFC = np.array([1, 1, 4, 4, 4])
 
     def _make_multizone_stand(self) -> Stand:
         allometry_params = CanopyLayerAllometry(
-            allometry_dir_path=DATA_DIR,
             # Same underlying file registered under two different zone
             # ids: both zones are the same species/growth-and-yield data,
             # differing only in sfc.
-            allometry_file_registry={1: "test_allometry.csv", 2: "test_allometry.csv"},
+            allometry_file_registry={
+                1: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
+                2: AllometryFileAndSpecies(
+                    file_path=DATA_DIR / "test_allometry.csv", species_id=1
+                ),
+            },
             pointers={
                 CanopyLayerName.dominant: self.POINTERS,
                 CanopyLayerName.subdominant: None,
@@ -554,6 +573,7 @@ class TestMultiZoneCanopylayer:
             photopara=get_photo_parameters_by_location(
                 location=LocationsForPhotoParams("All_data")
             ),
+            growth_mode=GrowthMode.dynamic,
         )
 
     def test_construction_does_not_crash_with_multiple_zones(self):

@@ -1,29 +1,28 @@
-from functools import lru_cache
 import datetime
+from collections.abc import Callable
 from enum import Enum
+from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import Callable, Self, Union, TypeAlias
+from typing import Self, TypeAlias
+
 import numpy as np
 import pandas as pd
-
 from pydantic import (
-    DirectoryPath,
     Field,
     FilePath,
     SkipValidation,
     field_validator,
-    PrivateAttr,
     model_validator,
 )
 
+from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 from susi.io.extra_pydantic_types import (
-    StrictFrozenModel,
-    PositiveFloat,
     NonNegativeFloat,
     NonPositiveFloat,
+    PositiveFloat,
     PositiveInt,
+    StrictFrozenModel,
 )
-from susi.core.allometry_columns import ALLOMETRY_COLUMNS
 
 
 def mass_mor_from_drainage_Pitkanen(drain_age: float) -> float:
@@ -43,10 +42,10 @@ def h_mor_from_drainage_and_mass_mor_Pitkanen(
     return mass_mor_from_drainage_Pitkanen(drain_age) / rho_mor
 
 
-@lru_cache()
-def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
+@lru_cache
+def read_allometry_info_from_csv(filepath: Path) -> pd.DataFrame:
     """
-    Read allometry file, return the allometry dataframe and its species id.
+    Read allometry file and return the allometry dataframe.
     It is cached so that the same file is not read twice.
     """
     column_names = [c.name for c in ALLOMETRY_COLUMNS]
@@ -60,13 +59,6 @@ def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
     if extra:
         raise ValueError(f"Allometry file {filepath} has unexpected columns: {extra}")
 
-    species_ids = df["Species_ID"].unique()
-    if len(species_ids) != 1:
-        raise ValueError(
-            f"{filepath}: Species_ID column must be constant, found {species_ids}"
-        )
-    species_id = int(species_ids[0])
-
     # ---- find thinnings and add a small time to lines with the age to enable interpolation---------
     df = df.loc[df["Age"] != 0]
 
@@ -74,13 +66,29 @@ def read_allometry_info_from_csv(filepath: Path) -> tuple[pd.DataFrame, int]:
     idx = np.ravel(np.argwhere(steps < 1.0)) + 1
     df.loc[idx, "Age"] = df.loc[idx, "Age"] + 5.0 / 365.0
 
-    return df, species_id
+    return df
+
+
+class GrowthMode(str, Enum):
+    """
+    Whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed.
+    Dynamic growth mode is the default: it models a stand that grows normally.
+    In fixed growth mode the forest does not grow.
+    This is useful to do causal inference of the the impact of growth on other variables.
+    """
+
+    dynamic = "dynamic"
+    fixed = "fixed"
 
 
 class SimulationConfig(StrictFrozenModel):
-    # Time
     start_date: datetime.datetime = Field(description="Simulation start date.")
     end_date: datetime.datetime = Field(description="Simulation end date.")
+
+    growth_mode: GrowthMode = Field(
+        default=GrowthMode.dynamic,
+        description="whether canopy strucure (volume, age, stem count, leaf area) is updated from NPP or held fixed",
+    )
 
 
 class WeatherParams(StrictFrozenModel):
@@ -98,6 +106,11 @@ class CanopyLayerName(str, Enum):
     under = "under"
 
 
+class AllometryFileAndSpecies(StrictFrozenModel):
+    file_path: Path
+    species_id: PositiveInt
+
+
 AllometryRegistryNumber: TypeAlias = PositiveInt
 
 
@@ -106,21 +119,19 @@ class CanopyLayerAllometry(StrictFrozenModel):
     Allometry parameters
     """
 
-    allometry_dir_path: DirectoryPath = Field(
-        description="Folder where to look for the allometry files."
-    )
-    allometry_file_registry: dict[AllometryRegistryNumber, str] = Field(
-        description="Map: allometry registry number -> allometry file. Example: {1:'pines.csv', 2:'spruces.csv'}"
+    allometry_file_registry: dict[AllometryRegistryNumber, AllometryFileAndSpecies] = (
+        Field(
+            description=(
+                "Map: allometry registry number -> allometry file. Example: "
+                "{1:AllometryFileAndSpecies(file_path=Path('pines.csv'), "
+                "species_id=1), 2:AllometryFileAndSpecies("
+                "file_path=Path('spruces.csv'), species_id=2)}"
+            )
+        )
     )
     pointers: dict[CanopyLayerName, list[AllometryRegistryNumber] | None] = Field(
         description="Map: canopy layer name-> list of pointers, length ncols. Example: {'dominant': [1,1,1,1,2,2,2], 'subdominant': None, 'under': None}"
     )
-
-    # Information read from the excel file, not serialized
-    # Map: Allometry registry number -> allometry path dataframe read from file
-    _zones_data: dict[AllometryRegistryNumber, pd.DataFrame] = PrivateAttr()
-    # Map: Allometry registry number -> species ID
-    _zones_species_id: dict[AllometryRegistryNumber, int] = PrivateAttr()
 
     @model_validator(mode="after")
     def pointers_must_reference_declared_zones(self) -> Self:
@@ -137,32 +148,60 @@ class CanopyLayerAllometry(StrictFrozenModel):
                 )
         return self
 
-    @model_validator(mode="after")
-    def parse_allometry_files(self) -> Self:
-        _zones_data = {}
-        _zones_species_id = {}
-
-        for allometry_registry_number, filename in self.allometry_file_registry.items():
-            df, species_id = read_allometry_info_from_csv(
-                filepath=self.allometry_dir_path / filename
-            )
-            _zones_data[allometry_registry_number] = df
-            _zones_species_id[allometry_registry_number] = species_id
-
-        self._zones_data = _zones_data
-        self._zones_species_id = _zones_species_id
-
-        return self
-
-    @property
+    @cached_property
     def zones_data(
         self,
     ) -> dict[AllometryRegistryNumber, pd.DataFrame]:
-        return self._zones_data
+        return {
+            reg_number: read_allometry_info_from_csv(
+                filepath=fpath_and_species.file_path
+            )
+            for reg_number, fpath_and_species in self.allometry_file_registry.items()
+        }
 
-    @property
+    @cached_property
     def zones_species_id(self) -> dict[AllometryRegistryNumber, int]:
-        return self._zones_species_id
+
+        return {
+            reg_number: fpath_and_species.species_id
+            for reg_number, fpath_and_species in self.allometry_file_registry.items()
+        }
+
+    @classmethod
+    def with_single_allometry_per_layer(
+        cls, layers: dict[CanopyLayerName, AllometryFileAndSpecies], n: PositiveInt
+    ) -> Self:
+        """
+        Builds a homogeneous CanopyLayerAllometry: one allometry file per canopy layer.
+        Takes a plain per-layer mapping and expands it into the required registry + pointers.
+        A stand needing several files/species within one layer can't be expressed this way;
+        for those, construct CanopyLayerAllometry directly instead.
+
+        n here is the number of soil columns.
+        """
+        allometry_file_registry: dict[
+            AllometryRegistryNumber, AllometryFileAndSpecies
+        ] = {}
+        registry_number_for_layer: dict[CanopyLayerName, AllometryRegistryNumber] = {}
+        for registry_number, (layer_name, allometry_file_and_species) in enumerate(
+            layers.items(), start=1
+        ):
+            allometry_file_registry[registry_number] = allometry_file_and_species
+            registry_number_for_layer[layer_name] = registry_number
+
+        pointers = {
+            layer_name: (
+                [registry_number_for_layer[layer_name]] * n
+                if layer_name in registry_number_for_layer
+                else None
+            )
+            for layer_name in CanopyLayerName
+        }
+
+        return cls(
+            allometry_file_registry=allometry_file_registry,
+            pointers=pointers,
+        )
 
 
 class CanopyStateParams(StrictFrozenModel):
@@ -530,7 +569,7 @@ class AshFertilizationParameters(StrictFrozenModel):
         description="Amount of phosphorus in the fertilizer (kg/ha)"
     )
     time_exp: NonNegativeFloat = Field(
-        description="Exponent in the grain cracking function."
+        description="Exponent in the grain cracking function.", default=2.0
     )
     pH_increment_per_dissolved_ash: NonNegativeFloat = Field(
         default=2.5 / 15000,
@@ -538,9 +577,9 @@ class AshFertilizationParameters(StrictFrozenModel):
     )
 
 
-FertilizationParameters = Union[
+FertilizationParameters = (
     StandardNPKFertilizationParameters | AshFertilizationParameters
-]
+)
 
 
 class ClearCut(StrictFrozenModel):
@@ -631,7 +670,7 @@ class CuttingManagementParams(StrictFrozenModel):
     application_yr: int = Field(
         description="Year for cutting management application. Must be inside the simulation period."
     )
-    management_type: Union[ClearCut | ContinuousCover | Thinning] = Field(
+    management_type: ClearCut | ContinuousCover | Thinning = Field(
         description="Type of cutting management selected."
     )
 
@@ -656,16 +695,40 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
+class StandParams(StrictFrozenModel):
+    site_fertility_class: PositiveInt = Field(
+        description="Site fertility class. This is set to all nodes in the strip."
+    )
+
+    canopy_layer_allometry: CanopyLayerAllometry
+    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
+        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
+    )
+
+    @field_validator("initial_canopylayer_age_years")
+    @classmethod
+    def every_layer_has_an_initial_age(
+        cls, ages: dict[CanopyLayerName, float]
+    ) -> dict[CanopyLayerName, float]:
+        # The engine builds a Canopylayer for every layer, including ones with
+        # no allometry (Stand.__init__, Stand.reset_domain), so each needs an
+        # age. Without this check a missing one is a KeyError deep in the run.
+        missing = [layer.value for layer in CanopyLayerName if layer not in ages]
+        if missing:
+            raise ValueError(
+                f"initial_canopylayer_age_years is missing canopy layers {missing}; "
+                f"every layer {[layer.value for layer in CanopyLayerName]} needs an "
+                "initial age (use 0.0 for a layer the stand doesn't have)"
+            )
+        return ages
+
+
 class SiteParams(StrictFrozenModel):
     """
     Soil and stand parameters
     """
 
     # Forest
-    # Age of different forest layers at the beginning of the simulation
-    initial_canopylayer_age_years: dict[CanopyLayerName, NonNegativeFloat] = Field(
-        description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
-    )
 
     L: float = Field(description="Strip width, i.e., distance between ditches, m")
 
@@ -674,12 +737,7 @@ class SiteParams(StrictFrozenModel):
         ge=3,
     )
 
-    site_fertility_class: PositiveInt = Field(
-        description="Site fertility class. This is set to all nodes in the strip."
-    )
-
     sitename: str
-    species: TreeSpecies
     sfc_specification: float
     hdom: float | None
     vol: list[float] | None
@@ -750,19 +808,6 @@ class SiteParams(StrictFrozenModel):
     )
     peat_temperature: PeatTemperatureParams
 
-    @property
-    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
-        """Age of stand for all nodes along the strip"""
-        return {
-            layer_name: self.initial_canopylayer_age_years[layer_name] * np.ones(self.n)
-            for layer_name in CanopyLayerName
-        }
-
-    @property
-    def sfc(self) -> SkipValidation[np.ndarray]:
-        """site fertility class for all nodes in the strip"""
-        return np.ones(self.n, dtype=int) * self.site_fertility_class
-
     @field_validator("h_mor", mode="before")
     @classmethod
     def compute_if_callable(cls, hmor, info):
@@ -776,7 +821,7 @@ class SiteParams(StrictFrozenModel):
             try:
                 return hmor(drain_age, rho_mor)
             except Exception as e:
-                raise ValueError(f"Failed to compute h_mor: {e}")
+                raise ValueError(f"Failed to compute h_mor: {e}") from e
         return hmor
 
     @model_validator(mode="before")
@@ -823,13 +868,15 @@ class SiteParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def clear_cut_elements_same_as_soil_columns(self) -> Self:
-        if self.cutting_management is not None:
-            if isinstance(self.cutting_management.management_type, ClearCut):
-                if len(self.cutting_management.management_type.strips_to_cut) != self.n:
-                    raise ValueError(
-                        f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
-                        f"but must have {self.n} elements (equal to the number of soil columns)"
-                    )
+        if (
+            self.cutting_management is not None
+            and isinstance(self.cutting_management.management_type, ClearCut)
+            and len(self.cutting_management.management_type.strips_to_cut) != self.n
+        ):
+            raise ValueError(
+                f"ClearCut.strips_to_cut has {len(self.cutting_management.management_type.strips_to_cut)} elements, "
+                f"but must have {self.n} elements (equal to the number of soil columns)"
+            )
         return self
 
 
@@ -840,13 +887,66 @@ class SusiParams(StrictFrozenModel):
 
     params_schema_version: int = 1
     weather_parameters: WeatherParams
-    allometry_parameters: CanopyLayerAllometry
+    stand_params: StandParams
     simulation_config: SimulationConfig
     canopy_parameters: CanopyParams
     organic_layer_parameters: OrganicLayerParams
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+
+    @property
+    def sfc(self) -> SkipValidation[np.ndarray]:
+        """site fertility class for all nodes in the strip"""
+        return (
+            np.ones(self.site_parameters.n, dtype=int)
+            * self.stand_params.site_fertility_class
+        )
+
+    @property
+    def age(self) -> SkipValidation[dict[CanopyLayerName, np.ndarray]]:
+        """Age of stand for all nodes along the strip"""
+        return {
+            layer_name: self.stand_params.initial_canopylayer_age_years[layer_name]
+            * np.ones(self.site_parameters.n)
+            for layer_name in CanopyLayerName
+        }
+
+    @model_validator(mode="after")
+    def allometry_files_exist(self) -> Self:
+        """
+        Every allometry file this run will read must exist: the stand's own
+        registry, plus a ClearCut's new-growth registry.
+        It lives here instead of in AllometryFileAndSpecies.file_path
+        because building allometry models or loading
+        stand_data.json doesn't need the files to be there yet.
+
+        Defined first on purpose: pydantic runs "after" model validators in
+        definition order, and later ones (stand_age_vs_allometry_pathway) read
+        the CSVs, which would fail on a missing one with a bare
+        FileNotFoundError before this could list them all.
+        """
+        registries = [self.stand_params.canopy_layer_allometry.allometry_file_registry]
+        cutting_management = self.site_parameters.cutting_management
+        if cutting_management is not None and isinstance(
+            cutting_management.management_type, ClearCut
+        ):
+            registries.append(
+                cutting_management.management_type.new_growth_allometry.allometry_file_registry
+            )
+
+        missing = [
+            file_and_species.file_path
+            for registry in registries
+            for file_and_species in registry.values()
+            if not file_and_species.file_path.is_file()
+        ]
+        if missing:
+            raise ValueError(
+                "Allometry file(s) not found: "
+                + ", ".join(str(file_path) for file_path in missing)
+            )
+        return self
 
     @model_validator(mode="after")
     def check_cutting_within_years(self) -> Self:
@@ -890,16 +990,18 @@ class SusiParams(StrictFrozenModel):
 
         # Each layer might have a different initial stand age
         for canopy_layer in CanopyLayerName:
-            layer_pointers = self.allometry_parameters.pointers.get(canopy_layer)
+            layer_pointers = self.stand_params.canopy_layer_allometry.pointers.get(
+                canopy_layer
+            )
             if layer_pointers is None:
                 continue
             layer_zones = {
-                zone_id: self.allometry_parameters.zones_data[zone_id]
+                zone_id: self.stand_params.canopy_layer_allometry.zones_data[zone_id]
                 for zone_id in set(layer_pointers)
             }
             self._validate_layer_age(
                 layer_name=canopy_layer.value,
-                initial_age=self.site_parameters.initial_canopylayer_age_years[
+                initial_age=self.stand_params.initial_canopylayer_age_years[
                     canopy_layer
                 ],
                 allometry_data=layer_zones,
@@ -914,7 +1016,7 @@ class SusiParams(StrictFrozenModel):
         for (
             layer_name,
             pointer_column_list,
-        ) in self.allometry_parameters.pointers.items():
+        ) in self.stand_params.canopy_layer_allometry.pointers.items():
             if pointer_column_list is None:
                 continue
 
@@ -936,7 +1038,10 @@ class SusiParams(StrictFrozenModel):
         if not isinstance(management_type, ClearCut):
             return self
 
-        for layer, pre_cut_pointers in self.allometry_parameters.pointers.items():
+        for (
+            layer,
+            pre_cut_pointers,
+        ) in self.stand_params.canopy_layer_allometry.pointers.items():
             if pre_cut_pointers is None:
                 continue
 
@@ -951,9 +1056,9 @@ class SusiParams(StrictFrozenModel):
 
     @model_validator(mode="after")
     def thinning_only_targets_layers_with_allometry(self) -> Self:
-        """A canopy layer with pointers=None in allometry_parameters has no
-        real stand growing in it -- Thinning.target_basal_area must not name
-        a layer that doesn't exist."""
+        """A canopy layer with pointers=None in stand_params.canopy_layer_allometry
+        has no real stand growing in it -- Thinning.target_basal_area must not
+        name a layer that doesn't exist."""
         cutting_management = self.site_parameters.cutting_management
         if cutting_management is None:
             return self
@@ -963,10 +1068,10 @@ class SusiParams(StrictFrozenModel):
             return self
 
         for layer in management_type.target_basal_area:
-            if self.allometry_parameters.pointers.get(layer) is None:
+            if self.stand_params.canopy_layer_allometry.pointers.get(layer) is None:
                 raise ValueError(
                     f"Thinning.target_basal_area targets the '{layer.value}' layer, "
-                    f"but that layer does not exist (allometry_parameters.pointers"
+                    f"but that layer does not exist (stand_params.canopy_layer_allometry.pointers"
                     f"['{layer.value}'] is None) -- there is no stand there to thin."
                 )
         return self
