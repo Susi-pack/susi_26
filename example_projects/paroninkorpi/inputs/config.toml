@@ -27,7 +27,7 @@ ddy = 1250 # REQUIRED
 # tracks, and the age range/step of the growth trajectory it returns.
 n_trees = 20
 start_year = 5
-end_year = 80
+end_year = 120
 step_years = 5
 
 # --- Optional: dense young stand scaling (off by default) ---
