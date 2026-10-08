@@ -44,10 +44,21 @@ from susi.io.extra_pydantic_types import (
     StrictFrozenModel,
 )
 from susi.io.load_output_data import StandID
+
+# STAND_DATA_FILENAME is owned by susi.io.project_layout, so that `susi/` can
+# name this file without importing `tools/`. Imported back here (the allowed
+# direction) so `stand_data.STAND_DATA_FILENAME` keeps working. The tools
+# themselves no longer need it -- they ask susi.io.project_layout for the
+# whole path -- but the name stays reachable beside the document model it
+# names, which is where the tool tests look for it.
+from susi.io.project_layout import (
+    STAND_DATA_FILENAME as STAND_DATA_FILENAME,  # noqa: PLC0414
+)
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
+    PeatTypes,
     StandParams,
 )
 

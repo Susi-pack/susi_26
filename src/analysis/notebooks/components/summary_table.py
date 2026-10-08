@@ -19,6 +19,7 @@ Typical usage:
     df_summary = summary_table.display_summary_table(run_dropdown.value)
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -27,11 +28,14 @@ from IPython.display import display
 import susi.io.load_output_data as load_output
 from analysis.shared_reporting_utils.project_summary import (
     SUMMARY_VARIABLES,
+    AggregatedNetcdfVar,
     build_summary_dataframe,
 )
 
 
-def display_summary_table(run_dirpath: Path) -> pd.DataFrame:
+def display_summary_table(
+    run_dirpath: Path, variables: Sequence[AggregatedNetcdfVar] = SUMMARY_VARIABLES
+) -> pd.DataFrame:
     """
     Compute and display the per-stand/scenario summary table for run_dirpath.
 
@@ -48,11 +52,11 @@ def display_summary_table(run_dirpath: Path) -> pd.DataFrame:
     )
 
     data_store = load_output.read_netcdf_files_for_selected_variables_from_metadatas(
-        selected_variables=[var.netcdf_path for var in SUMMARY_VARIABLES],
+        selected_variables=[var.netcdf_path for var in variables],
         metadata_by_stand=metadata_by_stand,
     )
 
-    df_summary = build_summary_dataframe(data_store, SUMMARY_VARIABLES)
+    df_summary = build_summary_dataframe(data_store, variables)
     # Show every row and column -- pandas' defaults for `display.max_rows`
     # (60) and `display.max_columns` (20) would otherwise collapse the
     # middle rows/columns into an ellipsis for this table.

@@ -104,9 +104,6 @@ test_projects/*/outputs/*
 example_projects/*/outputs/*
 !example_projects/*/outputs/.gitkeep
 
-# We do not have the rights to publish this data.
-example_projects/paroninkorpi/data/Paroninkorpi.xml
-example_projects/paroninkorpi/data/ditch_depth_1m.tif
 
 # Jupyter stuff
 .jupyter_ystore.db

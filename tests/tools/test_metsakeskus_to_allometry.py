@@ -817,7 +817,10 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
 # %% partition_viable_candidates
 
 
-def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8, peat_type="A"):
+_PEAT_TYPE_A = m.PeatTypes("A")
+
+
+def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8, peat_type=_PEAT_TYPE_A):
     return m.StandCandidate(
         area=area,
         id=StandID(stand_id),
