@@ -179,7 +179,7 @@ class GpkgLayers:
     treestratum: pd.DataFrame
 
 
-class ExtractionConfig(AllometryGenerationDefaults):
+class StandProcessingConfig(AllometryGenerationDefaults):
     """
     Defaulted/required parameters, loaded from a TOML file. Hard-coded,
     non-negotiable parameters live as module constants above instead.
@@ -194,7 +194,6 @@ class ExtractionConfig(AllometryGenerationDefaults):
     """
 
     # Required, no defaults
-    target_year: int
     altitude: float
     ddy: float
 
@@ -215,6 +214,14 @@ class ExtractionConfig(AllometryGenerationDefaults):
     dense_young_stand_scaling: DenseYoungStandScalingConfig = (
         DenseYoungStandScalingConfig()
     )
+
+
+class ExtractionConfig(StandProcessingConfig):
+    """Everything process_stand needs, plus the exact measurement year this
+    tool selects its snapshot on. The stratified tool uses a year FLOOR
+    instead, so target_year lives here and not on the shared base."""
+
+    target_year: int
 
 
 @dataclass(frozen=True)
@@ -888,7 +895,7 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
 
 def process_stand(
     stand: ParsedStand,
-    config: ExtractionConfig,
+    config: StandProcessingConfig,
     output_dir: Path,
     scaling_factor: float | None,
 ) -> StandOutcome:
