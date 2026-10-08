@@ -66,6 +66,7 @@ SUMMARY_VARIABLES = (
     aggregate_var("/export/hmwtoditch", _mean),
     aggregate_var("/export/lmwtoditch", _mean),
     aggregate_var("/balance/C/stand_c_balance_co2eq", _mean),
+    aggregate_var("/balance/C/soil_c_balance_co2eq", _mean),
     aggregate_var("/balance/C/co2c_release", _mean),
     aggregate_var("/balance/C/ch4c_release", _mean),
     aggregate_var("/balance/N/balance_root_lyr", _mean),
@@ -73,8 +74,6 @@ SUMMARY_VARIABLES = (
     aggregate_var("/balance/K/balance_root_lyr", _mean),
     aggregate_var("/balance/N/to_water", _mean),
     aggregate_var("/balance/P/to_water", _mean),
-    aggregate_var("/balance/K/to_water", _mean),
-    aggregate_var("/balance/K/to_water", _mean),
     aggregate_var("/balance/K/to_water", _mean),
 )
 

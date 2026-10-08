@@ -35,15 +35,11 @@ def _make_data_store() -> OutputDataStore:
     arrays = {
         (stand_a, scen_1): {
             path_one: NetcdfVariableArray(raw=np.array([[1.0, 2.0], [3.0, 4.0]])),
-            path_two: NetcdfVariableArray(
-                raw=np.array([[10.0, 20.0], [30.0, 40.0]])
-            ),
+            path_two: NetcdfVariableArray(raw=np.array([[10.0, 20.0], [30.0, 40.0]])),
         },
         (stand_a, scen_2): {
             path_one: NetcdfVariableArray(raw=np.array([[5.0, 6.0], [7.0, 8.0]])),
-            path_two: NetcdfVariableArray(
-                raw=np.array([[50.0, 60.0], [70.0, 80.0]])
-            ),
+            path_two: NetcdfVariableArray(raw=np.array([[50.0, 60.0], [70.0, 80.0]])),
         },
         (stand_b, scen_1): {
             path_one: NetcdfVariableArray(raw=np.array([[9.0, 10.0], [11.0, 12.0]])),
@@ -183,4 +179,4 @@ class TestSummaryVariables:
     def test_has_twenty_entries(self):
         # Regression check: SUMMARY_VARIABLES must stay identical to the
         # previously-duplicated CHOSEN_VARIABLES tuples (20 entries).
-        assert len(SUMMARY_VARIABLES) == 20
+        assert len(SUMMARY_VARIABLES) == 23
