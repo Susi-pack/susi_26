@@ -188,6 +188,7 @@ class Susi:
         cpy = CanopyGrid(
             cpara=self.parameters.canopy_parameters,
             state=canopy_state_parameters_array,
+            photopara=self.parameters.photo_parameters,
             outputs=False,
         )  # initialize above ground vegetation hydrology model
         cpy.update_amax(stand.nut_stat)

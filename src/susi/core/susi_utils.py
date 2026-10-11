@@ -5,6 +5,8 @@ Created on Tue Aug 08 10:38:45 2017
 @author: lauren
 """
 
+import os
+
 import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
@@ -972,6 +974,11 @@ def rewFloor(dwt, LAI):  # Leenan testi
 
 
 def rew_drylimit(dwt):
+    # SUSI_REW_MODE=off removes the soil-water limitation from BOTH transpiration
+    # and photosynthesis at once, by making relative extractable water unity.
+    if os.environ.get("SUSI_REW_MODE") == "off":
+        return np.ones_like(np.asarray(dwt, dtype=float))
+
     # Koivusalo et al. 2008 HESS without wet side limit
     # wt=np.array([-150.0, -1.2, -0.7, -0.15, 0.0])   #water table in m
     # re=np.array([0.0, 0.5, 1.0, 1.0, 1.0])    #relative water uptake

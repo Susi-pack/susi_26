@@ -18,6 +18,7 @@ last edit: Oct 2018 / Samuli
 
 import configparser
 import copy
+import os
 
 import numpy as np
 
@@ -25,7 +26,7 @@ eps = np.finfo(float).eps
 
 
 class CanopyGrid:
-    def __init__(self, cpara, state, outputs=False):
+    def __init__(self, cpara, state, photopara, outputs=False):
         """
         initializes CanopyGrid -object
 
@@ -43,6 +44,10 @@ class CanopyGrid:
             Also leaf-growth & senescence parameters are intialized to zero.
         """
         epsi = 0.01
+
+        # Photosynthesis parameters, so canopy conductance can apply the same
+        # soil-water response the assimilation model uses (SUSI_REW_MODE=sigmoid).
+        self.photopara = photopara
 
         # physiology: transpi + floor evap
         self.amax = copy.deepcopy(cpara.physpara.amax_init)
@@ -357,9 +362,34 @@ class CanopyGrid:
         # Kelliher et al. 1995 AFM but the resulting equation is not exact integral of K95.
         # fQ = 1./ kp * np.log((Qp + q50) / (Qp*np.exp(-kp*self.LAI) + q50))
 
-        # soil moisture response: Lagergren & Lindroth, xxxx"""
-        #        fRew = np.minimum(1.0, np.maximum(Rew / rw, rwmin))
-        fRew = Rew
+        # Soil-moisture response of canopy conductance.
+        #
+        # The default is SUSI's historical behaviour, so this module's physics
+        # does not change silently for existing users. Production runs opt in to
+        # `lagergren` explicitly: the run scripts set SUSI_REW_MODE and record it
+        # in the run_id, because nothing in the netCDF output names the mode.
+        #
+        #   proportional (default) fRew = REW
+        #   lagergren     Lagergren & Lindroth (2002) Eqs. 11-12, f = min(1,
+        #                 REW/rw), as implemented in SpaFHy (Launiainen et al.
+        #                 2019, Eq. 6) -- this module's parent model. rw = 0.20
+        #                 is their weighted-mean threshold for Scots pine; the
+        #                 rwmin floor is an implementation safeguard, not part
+        #                 of the published function.
+        #   sigmoid       same form as susi_utils.assimilation (Makela 2008)
+        #   off           rew_drylimit returns 1.0, so this yields 1.0
+        _rew_mode = os.environ.get("SUSI_REW_MODE", "proportional")
+        _rew = np.clip(Rew, 0.0, 1.0)
+        if _rew_mode == "lagergren":
+            fRew = np.minimum(
+                1.0, np.maximum(_rew / cpara.physpara.rw, cpara.physpara.rwmin)
+            )
+        elif _rew_mode == "sigmoid":
+            fRew = (
+                1.0 + ((1.0 - _rew) / self.photopara.alfa) ** self.photopara.nu
+            ) ** (-1.0)
+        else:
+            fRew = Rew
 
         # CO2 -response of canopy conductance, derived from APES-simulations
         # (Launiainen et al. 2016, Global Change Biology). relative to 380 ppm
