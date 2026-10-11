@@ -336,10 +336,19 @@ def test_duplicate_folder_names(two_duplicate_simulation_folder_paths):
 
 
 def test_maximum_number_of_parallel_processes_validation(one_hundred_valid_simus):
-    # No more than 40 cores are allowed in multiprocessing
-    with pytest.raises(ValueError, match="less than or equal to 40"):
+    # NOTE (2026-10-04): cap raised from 40 to 384 cores to match CSC Roihu's
+    # 384-core nodes (the old le=40 cap was specific to CSC Puhti-style nodes).
+    # Old test (kept for reference):
+    # # No more than 40 cores are allowed in multiprocessing
+    # with pytest.raises(ValueError, match="less than or equal to 40"):
+    #     MultipleSusis(
+    #         n_parallel_processes=41,
+    #         simulation_parameter_list=one_hundred_valid_simus,
+    #     )
+    # No more than 384 cores are allowed in multiprocessing
+    with pytest.raises(ValueError, match="less than or equal to 384"):
         MultipleSusis(
-            n_parallel_processes=41,
+            n_parallel_processes=385,
             simulation_parameter_list=one_hundred_valid_simus,
         )
 

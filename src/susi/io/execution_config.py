@@ -24,11 +24,20 @@ class MultipleSusis(BaseModel):
     Enables the creation of multiple SUSI simulations.
     """
 
+    # NOTE (2026-10-01): le=40 was specific to CSC Puhti-style nodes (40 cores/node).
+    # Running on CSC Roihu, whose CPU nodes have 384 cores, so raised the cap to 384.
+    # Old code (kept for reference):
+    # n_parallel_processes: PositiveInt = Field(
+    #     ge=1,
+    #     le=40,
+    #     frozen=True,
+    #     description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 40 at most (40 is the maximum number of cores in a single node, at least in CSC).",
+    # )
     n_parallel_processes: PositiveInt = Field(
         ge=1,
-        le=40,
+        le=384,
         frozen=True,
-        description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 40 at most (40 is the maximum number of cores in a single node, at least in CSC).",
+        description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 384 at most (384 is the maximum number of cores in a single node on CSC Roihu).",
     )
     simulation_parameter_list: list[SimulationParams] = Field(
         description="A list of parameters fully specifying each run. The length of the list determines the number of simulations than will be run, regardless of how many parallel processes are specified in `n_parallel_processes`. E.g., a `simulation_parameter_list` of length 2 will execute 2 full susi runs no matter the number of parallel processes specified (which in such case can only be either 1 or 2).",
