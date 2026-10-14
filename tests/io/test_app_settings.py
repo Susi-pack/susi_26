@@ -30,3 +30,13 @@ class TestProjectsRoot:
 
         with pytest.raises(ValueError, match=PROJECTS_ROOT_ENV_VAR):
             AppSettings()
+
+    def test_outside_a_checkout_the_env_var_is_required(self, monkeypatch, tmp_path):
+        # An installed (non-editable) SUSI has no checkout, so
+        # `<repo root>/projects` would be `.../lib/python3.11/projects`. The
+        # error must say which variable to set, not complain about that path.
+        monkeypatch.delenv(PROJECTS_ROOT_ENV_VAR, raising=False)
+        monkeypatch.setattr(io_utils, "repo_root", lambda: tmp_path)
+
+        with pytest.raises(ValueError, match=PROJECTS_ROOT_ENV_VAR):
+            AppSettings()

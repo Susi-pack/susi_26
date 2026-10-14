@@ -50,6 +50,18 @@ def repo_root() -> Path:
     return SUSI_REPO_ROOT
 
 
+def is_checkout(root: Path) -> bool:
+    """Whether `root` (callers pass `repo_root()`) is a SUSI checkout, as
+    opposed to where an installed copy lives.
+
+    In an installed (non-editable) copy `repo_root()` is the site-packages'
+    parent, e.g. `.../lib/python3.11`, where there is no pyproject.toml.
+    Anything that only makes sense in a checkout (asking git for the commit,
+    the `<repo root>/projects` default) asks this first.
+    """
+    return (root / "pyproject.toml").exists()
+
+
 def create_folder(path: Path) -> None:
     try:
         path.mkdir(parents=True, exist_ok=False)
@@ -71,7 +83,7 @@ def get_git_revision_short_hash() -> str:
     warning on stderr.
     """
     checkout = repo_root()
-    if not (checkout / "pyproject.toml").exists():
+    if not is_checkout(checkout):
         return _git_hash_fallback(f"{checkout} is not a SUSI checkout")
 
     try:
