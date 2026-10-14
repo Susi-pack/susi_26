@@ -96,9 +96,7 @@ def test_git_revision_ignores_the_repository_the_run_was_started_in(
 
 
 def _is_the_fallback(git_commit_hash: str) -> bool:
-    return git_commit_hash.startswith(
-        "could not get git commit hash. The package version was: "
-    )
+    return git_commit_hash.startswith(io_utils.GIT_HASH_FALLBACK_PREFIX)
 
 
 def test_git_revision_falls_back_without_asking_git_outside_a_checkout(
@@ -130,3 +128,21 @@ def test_git_revision_falls_back_when_git_is_not_installed(monkeypatch, capsys):
 
     assert _is_the_fallback(io_utils.get_git_revision_short_hash())
     assert "could not get git commit hash" in capsys.readouterr().err
+
+
+def test_git_revision_fallback_survives_an_uninstalled_susi(monkeypatch, capsys):
+    # Source run without installing SUSI (e.g. PYTHONPATH=src) and git
+    # unavailable: there is no package version either. The fallback must
+    # still not crash the run.
+    monkeypatch.setenv("PATH", "")
+
+    def not_installed(name):
+        raise io_utils.importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(io_utils.importlib.metadata, "version", not_installed)
+
+    assert io_utils.get_git_revision_short_hash() == (
+        io_utils.GIT_HASH_FALLBACK_PREFIX + "unknown"
+    )
+    # The warning must not claim a version is being recorded.
+    assert "package version is unknown" in capsys.readouterr().err

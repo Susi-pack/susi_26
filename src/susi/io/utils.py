@@ -66,8 +66,9 @@ def get_git_revision_short_hash() -> str:
     """The SUSI checkout's current commit, for `SimulationMetaData`'s
     provenance record.
     When there is no commit to be had, the sentence
-    `"could not get git commit hash. The package version was: <version>"`,
-    with a one-line warning on stderr.
+    `"could not get git commit hash. The package version was: <version>"`
+    (`<version>` is `unknown` if SUSI is not installed), with a one-line
+    warning on stderr.
     """
     checkout = repo_root()
     if not (checkout / "pyproject.toml").exists():
@@ -95,12 +96,19 @@ def _git_hash_fallback(reason: str) -> str:
 
     A sentence rather than the bare version, so that the value in
     metadata.json reads as a fallback and not as a commit hash."""
+    # Not installed at all (a source run, e.g. with PYTHONPATH=src): there is
+    # no version either, and that must not crash the run.
+    try:
+        version = importlib.metadata.version("susi-26")
+        recording = "Recording the package version instead."
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+        recording = "SUSI is not installed, so the package version is unknown too."
     print(
-        f"Warning: could not get git commit hash ({reason}). "
-        "Recording the package version instead.",
+        f"Warning: could not get git commit hash ({reason}). {recording}",
         file=sys.stderr,
     )
-    return GIT_HASH_FALLBACK_PREFIX + importlib.metadata.version("susi-26")
+    return GIT_HASH_FALLBACK_PREFIX + version
 
 
 def read_json_file(path: Path) -> dict:
