@@ -1,5 +1,7 @@
+import importlib.metadata
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 # The SUSI checkout, and its source tree: this file is
@@ -57,25 +59,48 @@ def create_folder(path: Path) -> None:
         )
 
 
+GIT_HASH_FALLBACK_PREFIX = "could not get git commit hash. The package version was: "
+
+
 def get_git_revision_short_hash() -> str:
     """The SUSI checkout's current commit, for `SimulationMetaData`'s
     provenance record.
+    When there is no commit to be had, the sentence
+    `"could not get git commit hash. The package version was: <version>"`,
+    with a one-line warning on stderr.
+    """
+    checkout = repo_root()
+    if not (checkout / "pyproject.toml").exists():
+        return _git_hash_fallback(f"{checkout} is not a SUSI checkout")
 
-    `cwd` is the checkout, not the process's working directory. Without it
-    git answers about whatever repository it finds by searching upward from
-    wherever the run was started -- so a run launched from inside a project
-    folder that is its own git repository recorded *that* repository's
-    commit, and a run launched from a project outside any repository (what
-    SUSI_PROJECTS_ROOT is for) crashed before the simulation began.
-    `SUSI_REPO_ROOT` is anchored on this file, so it names the code that is
-    actually running whatever the caller's cwd is."""
-    return (
-        subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=SUSI_REPO_ROOT
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=checkout,
+                stderr=subprocess.PIPE,
+            )
+            .decode("ascii")
+            .strip()
         )
-        .decode("ascii")
-        .strip()
+    except FileNotFoundError:
+        return _git_hash_fallback("git is not installed")
+    except subprocess.CalledProcessError as error:
+        git_says = error.stderr.decode(errors="replace").strip().splitlines()
+        return _git_hash_fallback(git_says[0] if git_says else str(error))
+
+
+def _git_hash_fallback(reason: str) -> str:
+    """What `get_git_revision_short_hash` records when git cannot be asked.
+
+    A sentence rather than the bare version, so that the value in
+    metadata.json reads as a fallback and not as a commit hash."""
+    print(
+        f"Warning: could not get git commit hash ({reason}). "
+        "Recording the package version instead.",
+        file=sys.stderr,
     )
+    return GIT_HASH_FALLBACK_PREFIX + importlib.metadata.version("susi-26")
 
 
 def read_json_file(path: Path) -> dict:
