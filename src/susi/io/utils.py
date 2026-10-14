@@ -21,14 +21,13 @@ from pathlib import Path
 # checkout.
 #
 # Not an `AppSettings` field: where the running code lives is a fact, not a
-# setting, and nothing a user may point elsewhere -- the same reasoning that
-# turned `AppSettings.input_folder` into `system_inputs.SYSTEM_INPUTS_DIR`.
+# setting, and nothing a user may point elsewhere.
 SUSI_REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# `src/`: the package itself, plus its siblings `tools/`, `analysis/` and
-# `system_inputs/`. Only meaningful in a checkout -- an
+# `src/`: the package itself, plus its siblings `tools/` and `analysis/`.
+# Only meaningful in a checkout -- an
 # installed copy of the package has no src/, and pyproject.toml installs
-# `susi*` and `analysis*` only -- which is fine for its callers, all of
+# `susi*`, `analysis*` and `tools*` only -- which is fine for its callers, all of
 # which are scripts and tools run from the checkout.
 SRC_DIR = SUSI_REPO_ROOT / "src"
 

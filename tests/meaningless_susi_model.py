@@ -2,6 +2,7 @@
 # to run some tests with it.
 
 import datetime
+from pathlib import Path
 
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
@@ -23,13 +24,15 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
-from system_inputs import SYSTEM_INPUTS_DIR
+
+# The tests' shared fixtures folder, tests/data/.
+DATA_DIR = Path(__file__).parent / "data"
 
 _N_SOIL_COLS = 5
 
 PARAMETERS = SusiParams(
     weather_parameters=WeatherParams(
-        FMI_weather_filepath=SYSTEM_INPUTS_DIR.joinpath("weather/CFw.csv"),
+        FMI_weather_filepath=DATA_DIR / "weather.csv",
     ),
     simulation_config=SimulationConfig(
         start_date=datetime.datetime(2004, 1, 1),
@@ -40,7 +43,7 @@ PARAMETERS = SusiParams(
         canopy_layer_allometry=CanopyLayerAllometry(
             allometry_file_registry={
                 1: AllometryFileAndSpecies(
-                    file_path=SYSTEM_INPUTS_DIR.joinpath("allometry/CF_41.csv"),
+                    file_path=DATA_DIR / "CF_41.csv",
                     species_id=1,
                 )
             },
