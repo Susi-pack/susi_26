@@ -2,7 +2,6 @@ import streamlit as st
 
 import analysis.optimization.core as opti_core
 import susi.io.load_output_data as load_output
-import susi.io.utils as io_utils
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
 from analysis.optimization.stand_areas import stand_areas_for_run
 from analysis.streamlit.components import (
@@ -32,9 +31,14 @@ with st.expander("View stand areas", expanded=False):
     st.write(stand_areas_ha)
 
 # %% Choose Netcdf variabales
-# The golden test netcdf is used to read the variable structure  of the netcdf file
-sample_netcdf_filepath = io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
-all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
+# Every netcdf of the run has the same variables, so the first one is read to
+# list them.
+first_netcdf_filepath = load_output.netcdf_filepath_of_first_scenario(
+    run_dirpath=run_dirpath
+)
+all_variables = load_output.list_all_netcdf_variables(
+    netcdf_filepath=first_netcdf_filepath
+)
 
 _DEFAULT_VARIABLES = [
     "/stand/volume",

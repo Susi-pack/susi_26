@@ -1,7 +1,14 @@
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from susi.io.load_output_data import list_stand_folders, list_subdirectories_sorted
+import pytest
+
+from susi.io.load_output_data import (
+    list_stand_folders,
+    list_subdirectories_sorted,
+    netcdf_filepath_of_first_scenario,
+)
 
 
 class TestListSubdirectoriesSorted:
@@ -59,3 +66,42 @@ class TestListStandFolders:
         result = list_stand_folders(run_dirpath=tmp_path)
 
         assert [p.name for p in result] == ["1", "figures"]
+
+
+def _write_scenario(scenario_dirpath: Path, netcdf_filepath: Path) -> None:
+    """A scenario folder with the two jsons a simulation writes."""
+    scenario_dirpath.mkdir(parents=True)
+    (scenario_dirpath / "metadata.json").write_text(
+        json.dumps({"netcdf_output_filepath": str(netcdf_filepath)})
+    )
+    (scenario_dirpath / "params.json").write_text(json.dumps({}))
+
+
+class TestNetcdfFilepathOfFirstScenario:
+    def test_returns_the_netcdf_of_the_first_scenario_of_the_first_stand(
+        self, tmp_path
+    ):
+        # Stands and scenarios created out of order: "first" is the natural
+        # sort of the names, so stand "2" before "10", scenario "1" before "3".
+        for stand_id in ["10", "2"]:
+            for scenario_id in ["3", "1"]:
+                _write_scenario(
+                    scenario_dirpath=tmp_path / stand_id / scenario_id,
+                    netcdf_filepath=Path(f"/somewhere/{stand_id}_{scenario_id}.nc"),
+                )
+
+        result = netcdf_filepath_of_first_scenario(run_dirpath=tmp_path)
+
+        assert result == Path("/somewhere/2_1.nc")
+
+    def test_a_run_with_no_stands_is_reported_by_name(self, tmp_path):
+        # An empty run folder (e.g. a run whose simulations were never
+        # written) must say which folder it is, not raise a bare IndexError.
+        with pytest.raises(ValueError, match=str(tmp_path)):
+            netcdf_filepath_of_first_scenario(run_dirpath=tmp_path)
+
+    def test_a_stand_with_no_scenarios_is_reported_by_name(self, tmp_path):
+        (tmp_path / "1").mkdir()
+
+        with pytest.raises(ValueError, match=str(tmp_path / "1")):
+            netcdf_filepath_of_first_scenario(run_dirpath=tmp_path)
