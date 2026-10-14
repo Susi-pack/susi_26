@@ -22,7 +22,7 @@ from susi.io.stand_data import (
     dump_stand_data_document as shared_dump_stand_data_document,
 )
 from susi.io.susi_parameter_model import CanopyLayerName, read_allometry_info_from_csv
-from susi.io.utils import SRC_DIR
+from tools.metsakeskus_to_allometry import DEFAULT_CONFIG_PATH
 from tools.metsakeskus_to_allometry import metsakeskus_to_allometry as m
 from tools.shared_allometry_tool_utils import (
     dense_young_stand_scaling,
@@ -151,10 +151,6 @@ def test_load_extraction_config_reads_toml(tmp_path):
 #
 # Guards against the shipped default/template config drifting from
 # ExtractionConfig's own field defaults -- see that file's header comment.
-
-DEFAULT_CONFIG_PATH = (
-    SRC_DIR / "tools" / "metsakeskus_to_allometry" / "default_config.toml"
-)
 
 
 def test_default_config_toml_optional_fields_match_model_defaults():
@@ -1286,9 +1282,7 @@ def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
-    assert outcome.stand_data.initial_age_per_layer == {
-        CanopyLayerName.dominant: 30.0
-    }
+    assert outcome.stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 30.0}
 
 
 def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tmp_path):
