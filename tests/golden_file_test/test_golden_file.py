@@ -1,5 +1,5 @@
 # Checks whether the results of a simulation with the golden_test.py
-# parameters (src/system_inputs/parameters/) change over time or not.
+# parameters (next to this file) change over time or not.
 # Useful to know if my changes are changing the code in any way.
 
 # PROCEDURE
@@ -20,7 +20,7 @@ from susi.io import load_output_data
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.project_layout import outputs_dir_for_project, run_dir
-from system_inputs.parameters import golden_test
+from tests.golden_file_test import golden_test_params
 
 
 def masked_arrays_equal(a, b, rtol=1e-5, atol=1e-5):
@@ -101,7 +101,7 @@ def test_golden_susi():
             project_dir=GOLDEN_TEST_PROJECT_DIR,
             run_id=new_golden_run_id,
         ),
-        susi_params=golden_test.PARAMETERS,
+        susi_params=golden_test_params.PARAMETERS,
     )
 
     susi = Susi(

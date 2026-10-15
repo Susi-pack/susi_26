@@ -23,7 +23,7 @@ from susi.io.project_layout import (
     outputs_dir_for_project,
     project_dir,
 )
-from susi.io.utils import SRC_DIR
+from tools import metsakeskus_to_allometry, xml_to_allometry
 
 # %% Constants
 
@@ -58,10 +58,7 @@ class SourceSeed:
 SOURCE_SEEDS = {
     DataSource.XML: SourceSeed(
         prompt_label="an XML stand-data export  (xml_to_allometry.py)",
-        config_template_path=SRC_DIR
-        / "tools"
-        / "xml_to_allometry"
-        / "default_config.toml",
+        config_template_path=xml_to_allometry.DEFAULT_CONFIG_PATH,
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
             "susi-xml-to-allometry against your XML export -- see "
@@ -71,10 +68,7 @@ SOURCE_SEEDS = {
     ),
     DataSource.METSAKESKUS: SourceSeed(
         prompt_label="a Metsakeskus .gpkg      (metsakeskus_to_allometry.py)",
-        config_template_path=SRC_DIR
-        / "tools"
-        / "metsakeskus_to_allometry"
-        / "default_config.toml",
+        config_template_path=metsakeskus_to_allometry.DEFAULT_CONFIG_PATH,
         next_step=(
             "Next: fill in the REQUIRED fields of {config_path}, then run "
             "susi-metsakeskus-to-allometry against your .gpkg -- see "
@@ -182,7 +176,8 @@ The standard analysis notebooks live in `src/analysis/notebooks/` in the SUSI
 checkout: `project_summary`, `single_netcdf`, `compare_scenarios_for_stand`,
 `single_scenario_dashboard` and `optimization`. They are project-agnostic --
 each opens a folder selector, so point it at this project's `outputs/`. There
-is a Streamlit frontend over the same data too: `susi-analyze`.
+is a Streamlit frontend over the same data too; from the SUSI checkout, run
+`uv run streamlit run src/analysis/streamlit/main.py`.
 
 They are not copied into a project on purpose: a copy per project is five
 stale forks waiting to happen. A project may of course keep bespoke notebooks

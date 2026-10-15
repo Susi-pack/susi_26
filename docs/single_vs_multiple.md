@@ -41,14 +41,16 @@ When running a single simulation using `SimulationParams`, outputs are stored in
 ### Example: `susi_calls.py`
 
 ```python
+# parameters.py beside this script: the project's SusiParams.
+import parameters
+
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.project_layout import project_dir
-from system_inputs.parameters import golden_test
 
 simulation_parameters = SimulationParams(
     metadata=SimulationMetaData(project_dir=project_dir("testing"), run_id="testing2"),
-    susi_params=golden_test.PARAMETERS,
+    susi_params=parameters.PARAMETERS,
 )
 ```
 

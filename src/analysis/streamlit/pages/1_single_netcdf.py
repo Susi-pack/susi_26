@@ -3,7 +3,6 @@ from pathlib import Path
 import streamlit as st
 
 import susi.io.load_output_data as load_output
-import susi.io.utils as io_utils
 from analysis.streamlit.components import (
     folder_selection,
     metadata_expander,
@@ -55,14 +54,12 @@ st.subheader("Summary")
 st.write("summary table will go here")
 
 # %% Read Netcdf variabales
-# The golden test netcdf is used to read the variable structure  of the netcdf file
-sample_netcdf_filepath = (
-    io_utils.repo_root() / "tests/golden_file_test/golden_susi.nc"
-)
-all_variables = load_output.list_all_netcdf_variables(sample_netcdf_filepath)
-
-# Actual netcdf file path for reading values (not only structure of the file)
+# The chosen run's own netcdf: its variables are listed here and their values
+# plotted below.
 chosen_netcdf_filepath = Path(params.metadata["netcdf_output_filepath"])
+all_variables = load_output.list_all_netcdf_variables(
+    netcdf_filepath=chosen_netcdf_filepath
+)
 
 chosen_netcdf_variables = netcdf_variable_explorer.build(netcdf_variables=all_variables)
 

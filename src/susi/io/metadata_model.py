@@ -81,7 +81,9 @@ class SimulationMetaData(BaseModel):
         frozen=True,
         init=False,
         default_factory=io_utils.get_git_revision_short_hash,
-        description="Git commit identifier.",
+        description=(
+            f"Short git commit hash of the SUSI code that ran. When there is none to be had (an installed, non-editable copy; or git missing or failing), the sentence '{io_utils.GIT_HASH_FALLBACK_PREFIX}<version>'."
+        ),
     )
 
     host_info: str = Field(

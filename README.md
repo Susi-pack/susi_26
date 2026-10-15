@@ -6,6 +6,8 @@ Peatland simulator SUSI version used in Saari et al. (nimi) 2025 and Niemi et al
 Clone this repo.
 Then, navigate to the project directory and install it using some Python package manager.
 
+Install from a `git clone`, not from a GitHub "Download ZIP".
+
 ## Using [`uv`](https://docs.astral.sh/uv/getting-started/installation/) (recommended)
 Create a virtual environment and install the project + core dependencies:
 ```
@@ -41,7 +43,8 @@ pip install -e .
 
 # Run
 ## SUSI model
-The script `example_projects/minimal/single_simulation.py` runs a single SUSI simulation. It is the simplest entry point.
+The script `example_projects/minimal/single_simulation.py` runs a single SUSI simulation.
+It is the simplest entry point.
 `python example_projects/minimal/single_simulation.py`
 
 More complete examples live in `example_projects/`: each is a whole project folder (inputs, data, run scripts and outputs), laid out like a project of your own.
@@ -60,7 +63,12 @@ active, or prefixed with `uv run`):
 Each takes `--help`.
 
 ## GUI for output analysis (under development)
-`susi-analyze`
+A Streamlit app over the simulation outputs. From the SUSI checkout (its
+dependencies are in the `ui` dependency group, installed by default):
+
+```
+uv run streamlit run src/analysis/streamlit/main.py
+```
 
 
 # Project structure

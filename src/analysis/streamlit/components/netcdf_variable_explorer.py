@@ -66,7 +66,16 @@ def build(
 ) -> dict[NetcdfVariablePath, NetcdfVariableInfo]:
     """
     Displays the netcdf variable tree and returns selected variables
+
+    Preselected paths that are not among netcdf_variables are dropped, so a
+    default selection that the chosen netcdf file lacks is not ticked rather
+    than handed to the tree as a node that does not exist.
     """
+    if preselected is not None:
+        preselected = [
+            var_path for var_path in preselected if var_path in netcdf_variables
+        ]
+
     col_left, col_right = st.columns(2)
 
     # Build tree and render

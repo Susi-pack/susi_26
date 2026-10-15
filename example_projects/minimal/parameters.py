@@ -31,11 +31,6 @@ from susi.io.susi_parameter_model import (
 )
 from susi.io.utils import repo_root
 
-# This project's folder. The scripts beside this file pass it to
-# SimulationMetaData, so their outputs land in this project's own outputs/.
-# An example project lives in the SUSI checkout, so it names itself from
-# repo_root(); a user project under the projects root would use
-# `project_dir("<name>")` from susi.io.project_layout instead (ADR 0006).
 PROJECT_DIR = repo_root() / "example_projects" / "minimal"
 
 _N_SOIL_COLS = 20

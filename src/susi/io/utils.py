@@ -1,5 +1,7 @@
+import importlib.metadata
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 # The SUSI checkout, and its source tree: this file is
@@ -19,14 +21,13 @@ from pathlib import Path
 # checkout.
 #
 # Not an `AppSettings` field: where the running code lives is a fact, not a
-# setting, and nothing a user may point elsewhere -- the same reasoning that
-# turned `AppSettings.input_folder` into `system_inputs.SYSTEM_INPUTS_DIR`.
+# setting, and nothing a user may point elsewhere.
 SUSI_REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# `src/`: the package itself, plus its siblings `tools/`, `analysis/` and
-# `system_inputs/`. Only meaningful in a checkout -- an
+# `src/`: the package itself, plus its siblings `tools/` and `analysis/`.
+# Only meaningful in a checkout -- an
 # installed copy of the package has no src/, and pyproject.toml installs
-# `susi*` and `analysis*` only -- which is fine for its callers, all of
+# `susi*`, `analysis*` and `tools*` only -- which is fine for its callers, all of
 # which are scripts and tools run from the checkout.
 SRC_DIR = SUSI_REPO_ROOT / "src"
 
@@ -48,6 +49,18 @@ def repo_root() -> Path:
     return SUSI_REPO_ROOT
 
 
+def is_checkout(root: Path) -> bool:
+    """Whether `root` (callers pass `repo_root()`) is a SUSI checkout, as
+    opposed to where an installed copy lives.
+
+    In an installed (non-editable) copy `repo_root()` is the site-packages'
+    parent, e.g. `.../lib/python3.11`, where there is no pyproject.toml.
+    Anything that only makes sense in a checkout (asking git for the commit,
+    the `<repo root>/projects` default) asks this first.
+    """
+    return (root / "pyproject.toml").exists()
+
+
 def create_folder(path: Path) -> None:
     try:
         path.mkdir(parents=True, exist_ok=False)
@@ -57,25 +70,56 @@ def create_folder(path: Path) -> None:
         )
 
 
+GIT_HASH_FALLBACK_PREFIX = "could not get git commit hash. The package version was: "
+
+
 def get_git_revision_short_hash() -> str:
     """The SUSI checkout's current commit, for `SimulationMetaData`'s
     provenance record.
+    When there is no commit to be had, the sentence
+    `"could not get git commit hash. The package version was: <version>"`
+    (`<version>` is `unknown` if SUSI is not installed), with a one-line
+    warning on stderr.
+    """
+    checkout = repo_root()
+    if not is_checkout(checkout):
+        return _git_hash_fallback(f"{checkout} is not a SUSI checkout")
 
-    `cwd` is the checkout, not the process's working directory. Without it
-    git answers about whatever repository it finds by searching upward from
-    wherever the run was started -- so a run launched from inside a project
-    folder that is its own git repository recorded *that* repository's
-    commit, and a run launched from a project outside any repository (what
-    SUSI_PROJECTS_ROOT is for) crashed before the simulation began.
-    `SUSI_REPO_ROOT` is anchored on this file, so it names the code that is
-    actually running whatever the caller's cwd is."""
-    return (
-        subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=SUSI_REPO_ROOT
+    try:
+        return (
+            subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=checkout,
+                stderr=subprocess.PIPE,
+            )
+            .decode("ascii")
+            .strip()
         )
-        .decode("ascii")
-        .strip()
+    except FileNotFoundError:
+        return _git_hash_fallback("git is not installed")
+    except subprocess.CalledProcessError as error:
+        git_says = error.stderr.decode(errors="replace").strip().splitlines()
+        return _git_hash_fallback(git_says[0] if git_says else str(error))
+
+
+def _git_hash_fallback(reason: str) -> str:
+    """What `get_git_revision_short_hash` records when git cannot be asked.
+
+    A sentence rather than the bare version, so that the value in
+    metadata.json reads as a fallback and not as a commit hash."""
+    # Not installed at all (a source run, e.g. with PYTHONPATH=src): there is
+    # no version either, and that must not crash the run.
+    try:
+        version = importlib.metadata.version("susi-26")
+        recording = "Recording the package version instead."
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"
+        recording = "SUSI is not installed, so the package version is unknown too."
+    print(
+        f"Warning: could not get git commit hash ({reason}). {recording}",
+        file=sys.stderr,
     )
+    return GIT_HASH_FALLBACK_PREFIX + version
 
 
 def read_json_file(path: Path) -> dict:

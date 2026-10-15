@@ -281,6 +281,30 @@ def read_params_from_jsons(
     return SimulationParamsFromJSON(metadata=metadata, susi_params=params)
 
 
+def netcdf_filepath_of_first_scenario(run_dirpath: Path) -> Path:
+    """
+    Return the netcdf file of the first scenario of the first stand of one run.
+    """
+    stand_dirpaths = list_stand_folders(run_dirpath=run_dirpath)
+    if not stand_dirpaths:
+        raise ValueError(
+            f"The run folder {run_dirpath} holds no stand folders, so it has no "
+            "netcdf file to read the variables from."
+        )
+    first_stand_dirpath = stand_dirpaths[0]
+
+    scenario_dirpaths = list_subdirectories_sorted(path=first_stand_dirpath)
+    if not scenario_dirpaths:
+        raise ValueError(
+            f"The stand folder {first_stand_dirpath} holds no scenario folders, "
+            "so it has no netcdf file to read the variables from."
+        )
+    first_scenario_dirpath = scenario_dirpaths[0]
+
+    params = read_params_from_jsons(simulation_folderpath=first_scenario_dirpath)
+    return Path(params.metadata["netcdf_output_filepath"])
+
+
 def _load_single_simulation_metadatas(
     simulation_folderpath: Path,
     metadata_filename: str = "metadata.json",

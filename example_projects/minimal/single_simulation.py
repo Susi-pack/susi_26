@@ -1,4 +1,3 @@
-
 # parameters.py beside this script: the project's parameters and its folder.
 import parameters
 
