@@ -176,7 +176,8 @@ The standard analysis notebooks live in `src/analysis/notebooks/` in the SUSI
 checkout: `project_summary`, `single_netcdf`, `compare_scenarios_for_stand`,
 `single_scenario_dashboard` and `optimization`. They are project-agnostic --
 each opens a folder selector, so point it at this project's `outputs/`. There
-is a Streamlit frontend over the same data too: `susi-analyze`.
+is a Streamlit frontend over the same data too; from the SUSI checkout, run
+`uv run streamlit run src/analysis/streamlit/main.py`.
 
 They are not copied into a project on purpose: a copy per project is five
 stale forks waiting to happen. A project may of course keep bespoke notebooks

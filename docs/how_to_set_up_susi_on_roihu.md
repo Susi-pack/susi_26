@@ -44,28 +44,93 @@ Items marked **(verify)** have not been tried on Roihu yet.
 - [ ] Check quotas (MyCSC):
     - `/projappl`: 15 GiB / 150 000 files default. One release ≈ the env size. **(verify env size)**
     - `/scratch`: 250 GiB / 500 000 files default. Raise it in MyCSC before large runs (up to 10 TiB is approved automatically). Outputs stay on scratch, no Allas for now.
-- [ ] Create `/projappl/project_<NNN>/susi/{releases,modulefiles}`.
+- Add the install and build folders to `~/.bashrc` on Roihu:
+
+    ```bash
+    cat >> ~/.bashrc <<'EOF'
+    export SUSI_ROOT=/projappl/project_2020769/susi
+    export SUSI_TMP=/scratch/project_2020769/$USER/susi-build
+    EOF
+    source ~/.bashrc
+    ```
+
+- Create the install folders:
+
+    ```bash
+    mkdir -p $SUSI_ROOT/releases $SUSI_ROOT/modulefiles
+    ```
 
 ## Building a release (first install and every update)
 
-- When: on demand, when main has something users need.
-- [ ] Release a version `X.Y.Z`: see [How to release a new SUSI version](how_to_release_a_new_version.md).
-- [ ] On Roihu: `module purge && module load tykky`
-    - Use `sinteractive --account project_<NNN> --time 1:00:00 --cores 8` if the login node runs out of memory.
-- [ ] Shallow-clone the tag into a temporary folder (e.g. on scratch). Keep its `.git`: `setuptools-scm` reads the version from it.
-    - `git clone --depth 1 --branch X.Y.Z https://github.com/Susi-pack/susi_26.git <tmp>/susi_26`
-- [ ] Export the locked runtime requirements, including Jupyter for the web interface **(verify uv availability on Roihu; otherwise export on a laptop at the same tag)**:
-    - From `/projappl/project_<NNN>/susi`: `uv export --project <tmp>/susi_26 --locked --no-default-groups --group notebook --no-hashes --no-emit-project -o releases/<release>/req-roihu.txt`
-- [ ] Append the clone's path (non-editable) to `req-roihu.txt`: `<tmp>/susi_26`
-- [ ] Build: `pip-containerize new --slim --uv --prefix releases/<release>/env releases/<release>/req-roihu.txt` **(verify)**
+Every command below can be pasted as-is: only the variables block needs editing.
+`SUSI_ROOT` and `SUSI_TMP` come from `~/.bashrc` (see One-time prerequisites).
+On the other hand, `SUSI_TAG` and `SUSI_RELEASE` live only in the current shell, but are useful variables to copy-paste later code snippets.
+
+1. Release a version `X.Y.Z`: see [How to release a new SUSI version](how_to_release_a_new_version.md).
+
+2. Create `SUSI_TAG` and `SUSI_RELEASE`:
+        ```bash
+        SUSI_TAG=X.Y.Z
+        SUSI_RELEASE=${SUSI_TAG}_$(date +%F)
+        ```
+
+3. On Roihu:
+    ```bash
+    module purge && module load tykky
+    ```
+
+    NOTE: Use `sinteractive --account project_2020769 --time 1:00:00 --cores 8` if the login node runs out of memory.
+
+4. Create the folders
+    ```bash
+    cd $SUSI_ROOT
+    mkdir -p releases/$SUSI_RELEASE $SUSI_TMP
+    ```
+
+5. Shallow-clone the tag into the temporary folder. Keep its `.git`, because `setuptools-scm` reads the version from it.
+    ```bash
+    git clone --depth 1 --branch $SUSI_TAG https://github.com/Susi-pack/susi_26.git $SUSI_TMP/susi_26
+    ```
+
+6. Export the locked runtime requirements, including Jupyter for the web interface:
+    ```bash
+    uv export --project $SUSI_TMP/susi_26 --locked --no-default-groups --group notebook \
+      --no-hashes --no-emit-project -o releases/$SUSI_RELEASE/req-roihu.txt
+    ```
+
+7. Add SUSI as a dependency to be installed by append the git clone's path to `req-roihu.txt`:
+    ```bash
+    echo $SUSI_TMP/susi_26 >> releases/$SUSI_RELEASE/req-roihu.txt
+    ```
+
+8. Build:
+    ```bash
+    pip-containerize new --slim --uv --prefix releases/$SUSI_RELEASE/env releases/$SUSI_RELEASE/req-roihu.txt
+    ```
+
     - `--slim`: a minimal container with its own Python. **(verify its Python version; `.python-version` says 3.11)**
 - [ ] Delete the temporary clone: the code now lives in the image.
+
+    ```bash
+    rm -rf $SUSI_TMP/susi_26
+    ```
+
 - Smoke test:
-    - [ ] `releases/<release>/env/bin/python -c "import importlib.metadata as m; print(m.version('susi-26'))"` prints the tag.
+    - [ ] Prints the tag (`$SUSI_TAG`):
+
+        ```bash
+        releases/$SUSI_RELEASE/env/bin/python -c "import importlib.metadata as m; print(m.version('susi-26'))"
+        ```
+
     - [ ] Run a copy of `example_projects/minimal` (adapted to `project_dir("minimal")`) with `SUSI_PROJECTS_ROOT` pointing to scratch.
     - [ ] `metadata.json` says `could not get git commit hash. The package version was: <tag>`.
-- [ ] Switch: `ln -sfn releases/<release> current`
-- [ ] Announce the new release to users (what changed, release name).
+- [ ] Switch:
+
+    ```bash
+    ln -sfn releases/$SUSI_RELEASE current
+    ```
+
+- [ ] Announce the new release to users (what changed, release name `$SUSI_RELEASE`).
 
 ## Module file (optional, but it hides the details from users)
 

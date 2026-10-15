@@ -63,7 +63,12 @@ active, or prefixed with `uv run`):
 Each takes `--help`.
 
 ## GUI for output analysis (under development)
-`susi-analyze`
+A Streamlit app over the simulation outputs. From the SUSI checkout (its
+dependencies are in the `ui` dependency group, installed by default):
+
+```
+uv run streamlit run src/analysis/streamlit/main.py
+```
 
 
 # Project structure
