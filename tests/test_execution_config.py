@@ -335,13 +335,12 @@ def test_duplicate_folder_names(two_duplicate_simulation_folder_paths):
         )
 
 
-def test_maximum_number_of_parallel_processes_validation(one_hundred_valid_simus):
-    # No more than 40 cores are allowed in multiprocessing
-    with pytest.raises(ValueError, match="less than or equal to 40"):
-        MultipleSusis(
-            n_parallel_processes=41,
-            simulation_parameter_list=one_hundred_valid_simus,
-        )
+def test_no_hardware_cap_on_parallel_processes(one_hundred_valid_simus):
+    multiple = MultipleSusis(
+        n_parallel_processes=41,
+        simulation_parameter_list=one_hundred_valid_simus,
+    )
+    assert multiple.n_parallel_processes == 41
 
 
 def test_less_parallel_processes_than_simus(two_valid_simus):
