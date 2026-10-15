@@ -2,60 +2,91 @@
 icon: lucide/cpu
 ---
 
-# How to run SUSI jobs on Roihu (users)
+# How to run SUSI jobs on Roihu
 
-DRAFT: schematic bullet points, to be rewritten.
-Items marked **(verify)** have not been tried on Roihu yet.
-
-## Before the first job (once per user)
-
-- [ ] Be a member of CSC project `project_<NNN>` (ask the project manager).
-- [ ] Log in: `ssh <user>@roihu-cpu.csc.fi`.
-- [ ] Create your folder on scratch: `/scratch/project_<NNN>/$USER/susi_projects/`.
+## Setup before the first job (once per user)
+- Make sure you are a member of the CSC project `project_2020769` (ask the project manager if you aren't).
+- Log in to Roihu. Follow their docs.
+- (Recommended) Inside Roihu, create a dedicated folder for SUSI projects: `/scratch/project_2020769/$USER/susi_projects/`.
 
 ## Where things live
 
-- SUSI code + Python: `/projappl/project_<NNN>/susi/` (read-only for you, managed by the maintainer).
-- Your SUSI projects (inputs, data, outputs): `/scratch/project_<NNN>/$USER/susi_projects/<project>/`.
-    - Point SUSI at it with `export SUSI_PROJECTS_ROOT=/scratch/project_<NNN>/$USER/susi_projects`.
-- Scratch is temporary:
-    - Files not used for 90–180 days are deleted.
-    - Nothing is backed up.
-    - The quota (space and number of files) is shared by the whole project.
-    - Each simulation writes 3 files.
-    - Long-term storage of results: **(TBD)**
+- SUSI code + Python: `/projappl/project_2020769/susi/` (managed by the maintainer).
+- Your SUSI projects (inputs, data, outputs): `/scratch/project_2020769/$USER/susi_projects/<project>/`.
 
-## Using SUSI
+Note that you will later need point each SUSI simulation to its project folder it before each run with `export SUSI_PROJECTS_ROOT=/scratch/project_<NNN>/$USER/susi_projects`.
+More details below.
 
-- Make SUSI's modules visible (once per shell; put it in `~/.bashrc` to forget about it):
-  `module use /projappl/project_<NNN>/susi/modulefiles`
-- `module load susi` gives the latest release.
-    - For reproducible series of runs, load a fixed release: `module load susi/X.Y.Z`.
-    - `module avail susi` lists the releases.
-- After loading, `python` and the `susi-*` commands are SUSI's.
-- Don't run simulations on the login node; use batch jobs, or `sinteractive` for small tests.
+!!! warning "Scratch is temporary"
+    Files not used for 90–180 days are deleted, and nothing is backed up.
+    For longer storage, you should move the files to `Allas`, the CSC storage solution.
 
-## Batch job template
+## Running SUSI
 
-- `#SBATCH --account=project_<NNN>`
-- `#SBATCH --partition=small` (shared node) or a full-node partition for big runs **(verify partition names)**
-- `#SBATCH --time=...`, `--cpus-per-task=...`, `--mem-per-cpu=...`
-- `set -euo pipefail`
-- `module use /projappl/project_<NNN>/susi/modulefiles`
-- `module load susi` (or `susi/X.Y.Z`)
-- `export SUSI_PROJECTS_ROOT=...`
-- `python <project>/<run script>.py`
-- Outputs land in `<project>/outputs/<run>/` on scratch.
+### Load the pre-installed SUSI module
+1. Pre-load all susi modules
+    ```bash
+    module use /projappl/project_2020769/susi/modulefiles
+    ```
+2. Load the latest module
+    ```bash
+    module load susi
+    ```
 
-## Large runs
+    !!! note "Permanent setup"
+        You may also set these commands once in `~/.bashrc` to forget about them. They will load at startup.
 
-- Estimate first: ≈ (number of stands) × (number of scenarios) × (size of one `susi.nc`), plus 3 files per simulation.
-- If it doesn't fit, ask the maintainer to raise the project's scratch quota.
+    !!! info "Other useful commands"
+        - `module avail susi` lists the available modules.
+        - `module load susi` loads the latest SUSI version. If you want to use another specific version use `module load susi/X.Y.Z`, where X.Y.Z is the version tag.
+
+After loading, `python` and the `susi-*` commands are the ones coming from the SUSI installation.
+
+!!! warning "Don't run bare simulations"
+    Don't run simulations on the login node!
+    Instead, use batch jobs or `sinteractive` for small tests.
+
+## Create a batch job
+
+[Official CSC docs](https://docs.csc.fi/computing/running/creating-job-scripts-roihu/).
+
+We offer a ready-to-run example in `example_projects/minimal/parallel_simulations.sh`, next to the `parallel_simulations.py` it runs.
+Copy the `minimal` folder into your `susi_projects/` folder, `cd` into it and submit with `sbatch parallel_simulations.sh`.
+
+### Number of parallel processes
+
+Slurm (Roihu) exposes the number of cpus per task set as `--cpus-per-task` via `$SLURM_CPUS_PER_TASK`, and this job passes it on to the run script, so the cores you reserve and the processes SUSI starts are always the same number.
+
+- Keep `--ntasks=1` and `--nodes=1`: SUSI's parallel runs are processes of one program on one node, not separate tasks.
+- `--cpus-per-task` cannot be greater than the number of simulations (stands × scenarios) in the run; SUSI refuses to start otherwise, so you don't pay for idle cores.
+- A Roihu node has 384 cores, which is the most one job can get on `small`.
+
+### Memory
+
+Every parallel process holds its own simulation, so memory grows with the number of processes.
+That is why the template uses `--mem-per-cpu` (memory per core) rather than `--mem` (memory per job).
+
+!!! info "how much memory?"
+    To choose the value, run a single simulation with `--cpus-per-task=1` first, then check its peak memory with `sacct -j <job id> -o JobID,MaxRSS,Elapsed`.
+    Set `--mem-per-cpu` a bit above that `MaxRSS`.
+    Note that if a job uses more memory than it reserved, Slurm kills it.
+
+## Run batch job
+[Official CSC docs](https://docs.csc.fi/computing/running/submitting-jobs/).
+
+First `cd` to the location your Python script needs to be called from.
+In our example, that would be (`minimal/` inside the SUSI projects folder).
+
+Then, run the example batch job with
+```bash
+sbatch parallel_simulations.sh
+```
 
 ## Analysing results
+THIS PART OF THE DOCUMENTATION IS INCOMPLETE YET.
 
+There will be two ways of running the jupyter notebooks to analyze the results:
 - On your own machine: copy the run folder from scratch (`rsync`/`scp`) and use [Read data from runs](reading_output_data.md).
 - On Roihu: Jupyter app in the web interface, Python → "Custom path" → the path that
   `module load susi && which python` prints. Create the notebook in your scratch folder. **(verify)**
     - That path names one release: to use a newer one, look up the path again.
-- The notebooks in the repo are templates: create your own notebook for your own runs.
