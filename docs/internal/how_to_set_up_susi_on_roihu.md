@@ -7,7 +7,7 @@ icon: lucide/server-cog
   The information in this page is only useful for the maintainer of the REPO, it covers:
   - How to do a one-time set up of SUSI on Roihu
   - How to update it with newer versions
-  If you want to know how to run SUSI in CSC as a user, see [How to run SUSI on Roihu](how_to_run_susi_on_roihu.md).
+  If you want to know how to run SUSI in CSC as a user, see [How to run SUSI on Roihu](../how_to_run_susi_on_roihu.md).
 
 ## Goal
 - One shared SUSI installation for everyone in CSC project `project_2020769`.
