@@ -61,6 +61,11 @@ nav = [
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
+    { "How to run on Roihu (CSC)" = "how_to_run_susi_on_roihu.md" },
+    { "Maintainers" = [
+        "internal/how_to_release_a_new_version.md",
+        "internal/how_to_set_up_susi_on_roihu.md",
+    ] },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
