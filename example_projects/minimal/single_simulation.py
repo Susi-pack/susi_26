@@ -1,4 +1,4 @@
-# parameters.py beside this script: the project's parameters and its folder.
+# parameters.py sitting side-by-side with this script
 import parameters
 
 from susi.core.susi_main import Susi
