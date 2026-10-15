@@ -27,10 +27,12 @@ Items marked **(verify)** have not been tried on Roihu yet.
 
 ## Using SUSI
 
-- `module use /projappl/project_<NNN>/susi/modulefiles && module load susi`
-    - or `export PATH=/projappl/project_<NNN>/susi/current/env/bin:$PATH`
+- Make SUSI's modules visible (once per shell; put it in `~/.bashrc` to forget about it):
+  `module use /projappl/project_<NNN>/susi/modulefiles`
 - `module load susi` gives the latest release.
-    - For reproducible series of runs, load a fixed release: `module load susi/<release>`.
+    - For reproducible series of runs, load a fixed release: `module load susi/X.Y.Z`.
+    - `module avail susi` lists the releases.
+- After loading, `python` and the `susi-*` commands are SUSI's.
 - Don't run simulations on the login node; use batch jobs, or `sinteractive` for small tests.
 
 ## Batch job template
@@ -39,7 +41,8 @@ Items marked **(verify)** have not been tried on Roihu yet.
 - `#SBATCH --partition=small` (shared node) or a full-node partition for big runs **(verify partition names)**
 - `#SBATCH --time=...`, `--cpus-per-task=...`, `--mem-per-cpu=...`
 - `set -euo pipefail`
-- `module load susi`
+- `module use /projappl/project_<NNN>/susi/modulefiles`
+- `module load susi` (or `susi/X.Y.Z`)
 - `export SUSI_PROJECTS_ROOT=...`
 - `python <project>/<run script>.py`
 - Outputs land in `<project>/outputs/<run>/` on scratch.
@@ -52,5 +55,7 @@ Items marked **(verify)** have not been tried on Roihu yet.
 ## Analysing results
 
 - On your own machine: copy the run folder from scratch (`rsync`/`scp`) and use [Read data from runs](reading_output_data.md).
-- On Roihu: Jupyter app in the web interface, Python → "Custom path" → `/projappl/project_<NNN>/susi/current/env/bin/python`. Create the notebook in your scratch folder. **(verify)**
+- On Roihu: Jupyter app in the web interface, Python → "Custom path" → the path that
+  `module load susi && which python` prints. Create the notebook in your scratch folder. **(verify)**
+    - That path names one release: to use a newer one, look up the path again.
 - The notebooks in the repo are templates: create your own notebook for your own runs.
