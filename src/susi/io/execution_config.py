@@ -25,10 +25,8 @@ class MultipleSusis(BaseModel):
     """
 
     n_parallel_processes: PositiveInt = Field(
-        ge=1,
-        le=40,
         frozen=True,
-        description="Number of parallel processes to spawn. Cannot be greater than the number of simulations. Must be higher than 1, 40 at most (40 is the maximum number of cores in a single node, at least in CSC).",
+        description="Number of parallel processes to spawn. At least 1, and cannot be greater than the number of simulations. There is no hardware upper bound here: on CSC, Slurm decides how many cores a job gets (pass `$SLURM_CPUS_PER_TASK`), and locally more processes than cores just runs slower.",
     )
     simulation_parameter_list: list[SimulationParams] = Field(
         description="A list of parameters fully specifying each run. The length of the list determines the number of simulations than will be run, regardless of how many parallel processes are specified in `n_parallel_processes`. E.g., a `simulation_parameter_list` of length 2 will execute 2 full susi runs no matter the number of parallel processes specified (which in such case can only be either 1 or 2).",
@@ -77,7 +75,6 @@ class MultipleSusis(BaseModel):
 
             else:
                 seen.add(simulation_folder_path)
-
 
     def _check_stand_and_scenario_ids_are_set(self) -> None:
         """

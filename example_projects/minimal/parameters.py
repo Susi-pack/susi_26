@@ -1,13 +1,10 @@
-# The parameters contained in this file are the
-# parameters to replicate the default Susi simulation
-# from the original code.
-# The site parameters correspond to the "develop_scens" scenario
-
+# Parameters AND project directory for the example "minimal" SUSI simulations
 import datetime
 
 from susi.io.project_layout import (
     allometry_dir_for_project,
     data_dir_for_project,
+    project_dir,
 )
 from susi.io.susi_parameter_model import (
     AllometryFileAndSpecies,
@@ -29,9 +26,13 @@ from susi.io.susi_parameter_model import (
     get_photo_parameters_by_location,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
 )
-from susi.io.utils import repo_root
 
-PROJECT_DIR = repo_root() / "example_projects" / "minimal"
+# This project is not meant to be run in place, but copied and run in a projects folder.
+# Depending on whether you run locally or on CSC, that projects folder is:
+#   - locally: <repo>/projects/
+#   - on CSC:  whatever $SUSI_PROJECTS_ROOT points to
+# If you rename the copied folder, change "minimal" here to match.
+PROJECT_DIR = project_dir("minimal")
 
 _N_SOIL_COLS = 20
 

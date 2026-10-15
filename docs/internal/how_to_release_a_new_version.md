@@ -4,7 +4,8 @@ icon: lucide/tag
 
 # How to release a new SUSI version (maintainer)
 
-For the repo maintainer only. Users never need this page.
+For the repo maintainer only.
+Users never need this page.
 
 ## How versions work
 
@@ -39,28 +40,18 @@ For the repo maintainer only. Users never need this page.
 
 ## Steps
 
-- [ ] Everything that should go in the release is merged into `main`, and CI passed on it.
-- [ ] Update your local `main` and check that it is clean:
+1. Update your local `main` and check that it is clean:
     - `git switch main && git pull`
     - `git status` shows nothing to commit.
-- [ ] Optional sanity checks on that commit:
-    - `uv lock --locked`
-    - `uv run pytest`
-- [ ] Tag the commit: `git tag X.Y.Z`
-- [ ] Check the version a build gets: `rm -rf build dist && uv build --wheel`. It must produce
-  `dist/susi_26-X.Y.Z-py3-none-any.whl`. Delete `build/` and `dist/` afterwards (both gitignored).
-    - Remove `build/` first: setuptools reuses it, so an old one puts modules long deleted from
-      `src/` into the wheel.
-    - If the version has a `.devN+g...` or `.d<date>` suffix, the tag is not on the current commit or the
-      working tree is dirty. Fix that before pushing.
-- [ ] Push the tag: `git push origin X.Y.Z`
-    - Push only that tag. `git push --tags` would also push any stray local tag.
-- [ ] Optional: create a GitHub Release from the tag, with notes generated from the merged PRs:
-    - `gh release create X.Y.Z --generate-notes`
-    - Creating the release in the GitHub web UI also works. If you let it create the tag, name it
-      `X.Y.Z`, not `vX.Y.Z`, and pick `main` as the target.
-- [ ] Deploy the release where it is needed, e.g. on Roihu: see
-  [How to set up SUSI on Roihu](how_to_set_up_susi_on_roihu.md).
+    - Optional sanity checks on that commit:
+      - `uv lock --locked`
+      - `uv run pytest`
+2. Tag the commit: `git tag X.Y.Z`
+3. Push the tag: `git push origin X.Y.Z`
+    - Optional: create a GitHub Release from the tag, with notes generated from the merged PRs:
+      - `gh release create X.Y.Z --generate-notes`
+      - Creating the release in the GitHub web UI also works. If you let it create the tag, name it `X.Y.Z`, not `vX.Y.Z`, and pick `main` as the target.
+4. Deploy the release where it is needed, e.g. on Roihu: see [How to set up SUSI on Roihu](how_to_set_up_susi_on_roihu.md).
 
 ## If something went wrong
 
