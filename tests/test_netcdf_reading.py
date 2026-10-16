@@ -1,29 +1,29 @@
-import pytest
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import netCDF4
 import numpy as np
 import pandas as pd
-from pathlib import Path
-import netCDF4
-from tempfile import TemporaryDirectory
-import json
+import pytest
 
 from susi.io.load_output_data import (
-    list_all_netcdf_variables,
-    _get_variable_by_path,
-    read_value_several_variables_from_single_file,
-    coerce_datetime_format,
-    modify_after_load,
-    list_subdirectories,
-    _load_single_experiment_metadatas,
-    _load_all_metadatas_from_single_stand,
-    load_all_metadatas_from_stands,
+    NetcdfVariableArray,
     NetcdfVariablePath,
+    OutputDataStore,
     ScenarioID,
     StandID,
-    OutputDataStore,
+    _get_variable_by_path,
+    _load_all_metadatas_from_single_stand,
+    _load_single_simulation_metadatas,
+    coerce_datetime_format,
+    list_all_netcdf_variables,
+    list_subdirectories,
+    load_all_metadatas_from_stands,
+    modify_after_load,
     read_netcdf_files_for_selected_variables_from_metadatas,
+    read_value_several_variables_from_single_file,
 )
-
-from susi.io.load_output_data import NetcdfVariableArray
 
 
 def create_mock_netcdf_file(filepath: Path):
@@ -134,7 +134,7 @@ def test_modify_after_load():
         {
             "timestamp_start": ["2020-01-01", "2020-01-02"],
             "timestamp_end": ["2020-12-31", "2020-12-30"],
-            "experiment_id": ["exp1", "exp2"],
+            "run_id": ["exp1", "exp2"],
             "value": [1, 2],
         }
     )
@@ -150,7 +150,7 @@ def test_modify_after_load_with_index():
         {
             "timestamp_start": ["2020-01-01", "2020-01-02"],
             "timestamp_end": ["2020-12-31", "2020-12-30"],
-            "experiment_id": ["exp1", "exp2"],
+            "run_id": ["exp1", "exp2"],
             "value": [1, 2],
         }
     )
@@ -158,7 +158,7 @@ def test_modify_after_load_with_index():
     result = modify_after_load(df)
 
     assert pd.api.types.is_datetime64_any_dtype(result["timestamp_start"])
-    assert "experiment_id" in result.columns
+    assert "run_id" in result.columns
 
 
 def test_list_subdirectories():
@@ -174,12 +174,12 @@ def test_list_subdirectories():
         assert result_names == {"dir1", "dir2"}
 
 
-def create_mock_experiment_folder(base_path: Path, experiment_id: str):
-    exp_dir = base_path / experiment_id
+def create_mock_simulation_folder(base_path: Path, run_id: str):
+    exp_dir = base_path / run_id
     exp_dir.mkdir()
 
     metadata = {
-        "experiment_id": experiment_id,
+        "run_id": run_id,
         "timestamp_start": "2020-01-01T00:00:00",
         "timestamp_end": "2020-12-31T00:00:00",
     }
@@ -195,39 +195,39 @@ def create_mock_experiment_folder(base_path: Path, experiment_id: str):
 
 
 @pytest.fixture
-def mock_experiment_folders():
+def mock_simulation_folders():
     with TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        create_mock_experiment_folder(base, "exp1")
-        create_mock_experiment_folder(base, "exp2")
+        create_mock_simulation_folder(base, "exp1")
+        create_mock_simulation_folder(base, "exp2")
         yield base
 
 
-def test_load_single_experiment_metadatas(mock_experiment_folders):
-    exp_folder = mock_experiment_folders / "exp1"
+def test_load_single_simulation_metadatas(mock_simulation_folders):
+    exp_folder = mock_simulation_folders / "exp1"
 
-    result = _load_single_experiment_metadatas(exp_folder)
+    result = _load_single_simulation_metadatas(exp_folder)
 
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
-    assert result.iloc[0]["experiment_id"] == "exp1"
+    assert result.iloc[0]["run_id"] == "exp1"
     assert result.iloc[0]["param1"] == 1.0
 
 
-def test_load_all_metadatas_from_single_folder(mock_experiment_folders):
-    result = _load_all_metadatas_from_single_stand(mock_experiment_folders)
+def test_load_all_metadatas_from_single_folder(mock_simulation_folders):
+    result = _load_all_metadatas_from_single_stand(mock_simulation_folders)
 
     assert len(result) == 2
-    assert set(result["experiment_id"]) == {"exp1", "exp2"}
+    assert set(result["run_id"]) == {"exp1", "exp2"}
 
 
-def test_load_all_metadatas_from_stands(mock_experiment_folders):
-    folder1 = mock_experiment_folders / "stand_A"
-    folder2 = mock_experiment_folders / "stand_B"
+def test_load_all_metadatas_from_stands(mock_simulation_folders):
+    folder1 = mock_simulation_folders / "stand_A"
+    folder2 = mock_simulation_folders / "stand_B"
     folder1.mkdir()
     folder2.mkdir()
-    create_mock_experiment_folder(folder1, "exp3")
-    create_mock_experiment_folder(folder2, "exp4")
+    create_mock_simulation_folder(folder1, "exp3")
+    create_mock_simulation_folder(folder2, "exp4")
 
     result = load_all_metadatas_from_stands([folder1, folder2])
 
@@ -235,6 +235,28 @@ def test_load_all_metadatas_from_stands(mock_experiment_folders):
     assert set(result.keys()) == {StandID("stand_A"), StandID("stand_B")}
     assert len(result[StandID("stand_A")]) == 1
     assert len(result[StandID("stand_B")]) == 1
+
+
+def test_stand_folder_with_no_scenario_folders_raises_naming_it(
+    mock_simulation_folders,
+):
+    # A stray folder in a run (`figures/`, `.ipynb_checkpoints/`), or a stand
+    # whose simulations never got written, has no scenario folders to read.
+    # It must be reported by name, not skipped and not left to pandas'
+    # "No objects to concatenate".
+    stand_folder = mock_simulation_folders / "stand_A"
+    stray_folder = mock_simulation_folders / "figures"
+    stand_folder.mkdir()
+    stray_folder.mkdir()
+    create_mock_simulation_folder(stand_folder, "exp3")
+
+    with pytest.raises(ValueError) as error:
+        load_all_metadatas_from_stands([stand_folder, stray_folder])
+
+    message = str(error.value)
+    assert str(stray_folder) in message
+    assert "holds no scenario folders" in message
+    assert "A run folder must contain only stand folders" in message
 
 
 class TestNetcdfVariableArray:

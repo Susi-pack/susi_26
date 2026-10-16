@@ -117,7 +117,7 @@ git commit -m "<your commit message>"
 
 ## `pre-commit`: Automatic notebook hygiene and linting
 We currently enforce two things via **pre-commit**:
-* stripping Jupyter notebook outputs, via **nbstripout**, scoped to `src/analysis/notebooks/`.
+* stripping Jupyter notebook outputs, via **nbstripout**, scoped to `src/analysis/notebooks/` and `test_projects/`.
 * linting, via **`ruff check`**, over the whole repo (this does not auto-format your code — see the section above for that).
 
 Run this once per clone to install the hook locally:
@@ -126,7 +126,7 @@ pre-commit install
 ```
 
 After that, before every `git commit`:
-* notebook outputs under `src/analysis/notebooks/` are stripped automatically.
+* notebook outputs under `src/analysis/notebooks/` and `test_projects/` are stripped automatically.
 * `ruff check` runs on the codebase; if it reports issues, the commit is blocked until you fix them (or run `ruff check --fix`).
 
 Note that you can also run pre-commit manually:

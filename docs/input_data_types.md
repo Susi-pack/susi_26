@@ -5,25 +5,24 @@ icon: lucide/layers
 # SUSI's three input data types
 
 Every SUSI run is built from three kinds of input: **weather**, **allometry**,
-and a **`SusiParams`** instance. This page explains what each one is and how
-you get it. For where to put your own copies of these and how to reference
+and a **`SusiParams`** instance.
+This page explains what each one is and how
+you get it.
+For where to put your own copies of these and how to reference
 them, see [How to handle input data](how_to_handle_input_data.md).
 
-## Why input data is split into system data and user data
+## Where input data lives
 
-SUSI needs two very different kinds of input data:
+Your input data is *user data*: site-specific weather files, allometry
+tables, XML stand exports, parameter models, and so on.
+It is personal to your machine and must never end up in a commit.
+It lives in a
+project's own `inputs/` and `data/` folders under the projects root, found through the project folder a run script names.
 
-- **System data** — small, reference weather/allometry files and parameter
-  models that tests and example scripts depend on. This has to stay tracked
-  in the repo so a fresh checkout keeps working.
-- **User data** — site-specific weather files, allometry tables, XML stand
-  exports, parameter models, and so on. This is personal to your machine and
-  must never end up in a commit.
-
-The repo keeps these apart with two folders and one settings object:
-`src/inputs/` (only `src/inputs/system/` is tracked) and the root `inputs/`
-folder (the folder is tracked, its contents are not), both resolved through
-`AppSettings.input_folder` / `AppSettings.user_input_folder`.
+The small weather/allometry files and parameter models in `tests/` are test
+fixtures: they back the test suite, not your runs.
+The example projects in
+`example_projects/` carry their own copies.
 
 ## Weather
 
@@ -42,7 +41,8 @@ count, mean diameter, and mean height for each tree stratum — that drives
 stand growth over the course of a run.
 
 How to get it: generate it with one of two converters, depending on the
-inventory data you start from. Both write the same allometry CSV format.
+inventory data you start from.
+Both write the same allometry CSV format.
 
 - From a Finnish forest XML stand export (metsätietostandardit):
   [`xml_to_allometry.py`](xml_to_allometry.md).

@@ -1,40 +1,22 @@
 """
 Notebook equivalent of `analysis.streamlit.pages.optimization`.
 
-Covers the three parts of the Streamlit page that aren't already ported
-elsewhere: showing a project's stand areas, configuring how each chosen
-netcdf variable becomes an optimization target, and plotting the resulting
-Pareto front. Project selection reuses `folder_selection`, and variable
-selection reuses `variable_selection`.
-
-Per #215's picker/renderer split, `build_target_config` is a picker (it
-displays its widgets and returns them, to be read in a later cell by
-`target_variable_properties`), while `display_stand_areas` and
-`display_pareto_corner_plot` are renderers (they display their output and
-also return the underlying data).
-
-The Streamlit page wraps the configuration in an `st.form` with a "Run
-Optimization" submit button. A notebook needs neither: running the next cell
-is the submit, and there is no re-run-on-every-widget-change to guard
-against.
-
-Stand areas are still Paroninkorpi-only, exactly as in the Streamlit page --
-they come from the shared `analysis.optimization.stand_areas`, whose
-generalization is issue #216.
-
 Typical usage, one call per cell:
 
-    stand_areas_ha = optimization.display_stand_areas(project_dropdown.value)
+    optimization.display_stand_areas(stand_areas_ha)
 
     # -- next cell, after ticking variables in a variable_selection selector --
-    config = optimization.build_target_config(chosen_netcdf_variables)
+    widgets = optimization.build_target_spec_widgets(chosen_netcdf_variables)
 
-    # -- next cell, after choosing aggregations --
-    variable_info = optimization.target_variable_properties(config)
+    # -- next cell, after choosing aggregations and directions --
+    target_specs = optimization.target_specs_from_widgets(widgets)
+    print(optimization.format_target_specs_as_code(target_specs))
+
+The widgets are only one way to produce `target_specs`: the printed code can
+replace that last cell, so a notebook can fix its configuration in code.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
@@ -43,34 +25,25 @@ from IPython.display import display
 
 import analysis.optimization.core as opti_core
 from analysis.optimization.pareto_corner_plot import pareto_corner_plot
-from analysis.optimization.stand_areas import stand_areas_for_project
 from susi.io.load_output_data import NetcdfVariablePath, StandID
 
-_INVERT_SIGN_TOOLTIP = (
-    "If selected, adds a negative sign to the data for the optimization "
-    "algorithm, which always tries to minimize. This should be selected if "
-    "you want to a) minimize a variable with negative values, or b) maximize "
-    "a variable with positive values."
-)
 
-
-def display_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
+def display_stand_areas(stand_areas: dict[StandID, float]) -> None:
     """
-    Display the area in hectares of every stand in a project, and return them.
+    Display the area in hectares of every stand in a run, and return them.
 
-    project_dirpath is a project output folder -- e.g. the `.value` of a
-    project-level `folder_selection.build_dropdown()`. The returned dict is
+    project_dir is the project's own folder -- the `.value` of the project
+    dropdown -- and run_id names one of its runs, i.e. the `.name` of the
+    `folder_selection.build_run_dropdown()` selection. The returned dict is
     what `core.prepare_optimization_data()` expects as `stand_areas`.
 
-    Raises for any project other than Paroninkorpi (#216); see
-    `analysis.optimization.stand_areas`.
+    Raises if the project's `stand_data.json` carries no area for one of the
+    run's stands; see `analysis.optimization.stand_areas`.
     """
-    stand_areas_ha = stand_areas_for_project(project_dirpath=project_dirpath)
-
     areas_dataframe = pd.DataFrame(
         {
-            "stand": list(stand_areas_ha.keys()),
-            "area_ha": list(stand_areas_ha.values()),
+            "stand": list(stand_areas.keys()),
+            "area_ha": list(stand_areas.values()),
         }
     )
     # Replaces the Streamlit page's collapsed "View stand areas" expander:
@@ -79,47 +52,41 @@ def display_stand_areas(project_dirpath: Path) -> dict[StandID, float]:
     # stand list).
     with pd.option_context("display.max_rows", None):
         display(areas_dataframe)
-    print(f"Total area: {sum(stand_areas_ha.values()):.1f} ha")
-
-    return stand_areas_ha
+    print(f"Total area: {sum(stand_areas.values()):.1f} ha")
 
 
 @dataclass(frozen=True)
-class TargetConfig:
+class TargetSpecWidgets:
     """
-    The widgets configuring how chosen variables become optimization targets.
+    The widgets choosing how each chosen variable becomes a target spec.
 
-    One aggregation Dropdown and one invert Checkbox per variable, plus the
-    single epsilon input for the whole run. Returned by build_target_config()
-    so a later cell can read the user's choices via
-    target_variable_properties() and `config.epsilon.value`.
-
-    container is exposed mainly for completeness/debugging -- reading the
-    configuration needs only the dropdowns, checkboxes and epsilon.
+    One aggregation Dropdown and one direction Dropdown per variable.
+    Returned by build_target_spec_widgets() so that a later cell, run after
+    the user has made their choices, can read them with
+    target_specs_from_widgets().
     """
 
     aggregation_dropdowns: dict[NetcdfVariablePath, widgets.Dropdown]
-    invert_checkboxes: dict[NetcdfVariablePath, widgets.Checkbox]
-    epsilon: widgets.BoundedFloatText
-    container: widgets.VBox
+    direction_dropdowns: dict[NetcdfVariablePath, widgets.Dropdown]
 
 
-def build_target_config(
+def build_target_spec_widgets(
     variable_paths: list[NetcdfVariablePath],
     default_aggregation_label: str | None = None,
-) -> TargetConfig:
+) -> TargetSpecWidgets:
     """
     Build, display, and return one configuration row per target variable.
 
     Each row is the notebook counterpart of the Streamlit page's three
     columns: the variable's path, the aggregation method that collapses its
-    array to a single number, and whether to flip its sign (the optimizer
-    only ever minimizes). Aggregation options come from
-    `core.AGGREGATION_METHODS_BY_LABEL`, shared with the Streamlit page.
+    array to a single number, and the direction (minimize or maximize).
+    Aggregation options and the direction's help text come from `core`,
+    shared with the Streamlit page.
 
     default_aggregation_label preselects an aggregation for every row;
-    it defaults to the first entry of that shared mapping, matching the
-    Streamlit selectbox's own default.
+    it defaults to the first entry of `core.AGGREGATION_METHODS_BY_LABEL`,
+    matching the Streamlit selectbox's own default. Every row starts out
+    minimizing, as the Streamlit page's do.
     """
     aggregation_labels = list(opti_core.AGGREGATION_METHODS_BY_LABEL.keys())
     if default_aggregation_label is None:
@@ -131,7 +98,7 @@ def build_target_config(
         )
 
     aggregation_dropdowns: dict[NetcdfVariablePath, widgets.Dropdown] = {}
-    invert_checkboxes: dict[NetcdfVariablePath, widgets.Checkbox] = {}
+    direction_dropdowns: dict[NetcdfVariablePath, widgets.Dropdown] = {}
     rows: list[widgets.HBox] = []
 
     for var_path in variable_paths:
@@ -140,11 +107,15 @@ def build_target_config(
             value=default_aggregation_label,
             layout=widgets.Layout(width="320px"),
         )
-        invert_checkboxes[var_path] = widgets.Checkbox(
-            value=False,
-            description="Invert sign?",
-            tooltip=_INVERT_SIGN_TOOLTIP,
-            indent=False,
+        direction_dropdowns[var_path] = widgets.Dropdown(
+            # (label, value) pairs: the dropdown's value is the Direction
+            # itself, so reading it back needs no lookup.
+            options=[
+                (direction.value.capitalize(), direction)
+                for direction in opti_core.Direction
+            ],
+            value=opti_core.Direction.MINIMIZE,
+            tooltip=opti_core.DIRECTION_HELP,
             layout=widgets.Layout(width="150px"),
         )
         rows.append(
@@ -155,61 +126,80 @@ def build_target_config(
                         layout=widgets.Layout(width="320px"),
                     ),
                     aggregation_dropdowns[var_path],
-                    invert_checkboxes[var_path],
+                    direction_dropdowns[var_path],
                 ]
             )
         )
 
-    epsilon = widgets.BoundedFloatText(
-        value=1e-7,
-        min=1e-9,
-        max=1e4,
-        description="Epsilon:",
-        style={"description_width": "initial"},
-    )
-    epsilon_row = widgets.HBox(
-        [
-            epsilon,
-            widgets.HTML(
-                value=(
-                    "<i>Pareto front precision. Smaller values give more "
-                    "precise results but require more computation.</i>"
-                )
-            ),
-        ]
-    )
+    display(widgets.VBox(rows))
 
-    container = widgets.VBox([*rows, epsilon_row])
-    display(container)
-
-    return TargetConfig(
+    return TargetSpecWidgets(
         aggregation_dropdowns=aggregation_dropdowns,
-        invert_checkboxes=invert_checkboxes,
-        epsilon=epsilon,
-        container=container,
+        direction_dropdowns=direction_dropdowns,
     )
 
 
-def target_variable_properties(
-    config: TargetConfig,
-) -> dict[NetcdfVariablePath, opti_core.TargetVariableProperties]:
+def target_specs_from_widgets(
+    target_spec_widgets: TargetSpecWidgets,
+) -> dict[NetcdfVariablePath, opti_core.TargetSpec]:
     """
-    Read a TargetConfig's widgets into the optimization's input API.
+    Read the widgets' current choices into target specs.
 
     The result is what `core.prepare_optimization_data()` takes as
-    `variable_info`. Its insertion order sets the column order of the
+    `target_specs`. Its insertion order sets the column order of the
     optimization's target vectors, so it also fixes the axis order of
     display_pareto_corner_plot()'s labels.
     """
     return {
-        var_path: opti_core.TargetVariableProperties(
-            aggregation_function=opti_core.AGGREGATION_METHODS_BY_LABEL[
-                dropdown.value
-            ],
-            invert_optimization=config.invert_checkboxes[var_path].value,
+        var_path: opti_core.TargetSpec(
+            aggregation=opti_core.AGGREGATION_METHODS_BY_LABEL[dropdown.value],
+            direction=target_spec_widgets.direction_dropdowns[var_path].value,
         )
-        for var_path, dropdown in config.aggregation_dropdowns.items()
+        for var_path, dropdown in target_spec_widgets.aggregation_dropdowns.items()
     }
+
+
+def format_target_specs_as_code(
+    target_specs: dict[NetcdfVariablePath, opti_core.TargetSpec],
+) -> str:
+    """
+    Write target specs out as Python that rebuilds them.
+
+    The returned code imports the names it uses and assigns `target_specs`,
+    so it runs as-is in any notebook cell. Printing it lets a user pick their
+    targets with the widgets once, then paste the result in place of the
+    widget cells.
+
+    An aggregation is written by its `__qualname__`, e.g.
+    `NetcdfVariableArray.mean_of_all_values`. That works for every method of
+    `NetcdfVariableArray`, which covers all the aggregations the widgets
+    offer. Anything else, such as a hand-written lambda, raises instead of
+    printing code that would not run.
+    """
+    lines = [
+        "from analysis.optimization.core import Direction, TargetSpec",
+        "from susi.io.load_output_data import NetcdfVariableArray, NetcdfVariablePath",
+        "",
+        "target_specs = {",
+    ]
+    for var_path, target_spec in target_specs.items():
+        # getattr: the aggregation's type is a bare Callable, which need not
+        # have a __qualname__.
+        aggregation_name = getattr(target_spec.aggregation, "__qualname__", "")
+        if not aggregation_name.startswith("NetcdfVariableArray."):
+            raise ValueError(
+                f"Cannot print the aggregation of '{var_path}' as code: "
+                f"{target_spec.aggregation!r} is not a method of "
+                "NetcdfVariableArray."
+            )
+        lines += [
+            f'    NetcdfVariablePath("{var_path}"): TargetSpec(',
+            f"        aggregation={aggregation_name},",
+            f"        direction=Direction.{target_spec.direction.name},",
+            "    ),",
+        ]
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def display_pareto_corner_plot(
@@ -220,8 +210,8 @@ def display_pareto_corner_plot(
     Display the Pareto front as a corner plot, against the random points.
 
     labels names one target variable per axis, in the same order as the
-    variable_info passed to the optimization -- e.g.
-    `list(variable_info.keys())`.
+    target_specs passed to the optimization -- e.g.
+    `list(target_specs.keys())`.
 
     Returns the figure so a later cell can adjust or save it.
     """

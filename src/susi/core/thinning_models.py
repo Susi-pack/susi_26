@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 Created on 5th November 2025
 
 @author: Mikko Niemi
 """
 
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
 
 """ THINNING MODELS """
 # Source: https://api.metsanhoidonsuositukset.fi/v2/docs/#/Thinning%20Model/get_thinning_models_search

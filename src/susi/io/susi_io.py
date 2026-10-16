@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 Created on Thu Jan 24 22:04:53 2019
 
 @author: lauren
 """
 
-import pandas as pd
-import numpy as np
 import matplotlib.pylab as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
 
 sns.set()
@@ -96,7 +95,7 @@ def output_dwt_growing_season(
     """
     import datetime
 
-    days, n = np.shape(dwt)
+    _days, n = np.shape(dwt)
     #    dfOut = pd.DataFrame(data={'dwt': dwt},
     #                   index=pd.date_range(start_date,periods=length))  #len(deltas)
     dfOut = pd.DataFrame(
@@ -127,12 +126,11 @@ def output_dwt_growing_season(
 
 def write_mese(fout, nro, v_ini, v, iv5, Nrel, Prel, Krel, Crel, dwt_loc, cb, cbt, sfc):
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     # fout = outpara['outfolder'] + outpara['ofile']
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     for i in range(rb.nsheets):
         sheet = rb.sheet_by_index(i)
@@ -161,8 +159,8 @@ def write_mese(fout, nro, v_ini, v, iv5, Nrel, Prel, Krel, Crel, dwt_loc, cb, cb
 
 def write_mese_scen(fout, nro, v_ini, v_end, gr, w, dw):
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     r = len(v_end)  # rounds
     ix0 = range(2, 2 + r)
@@ -176,7 +174,6 @@ def write_mese_scen(fout, nro, v_ini, v_end, gr, w, dw):
     2 + 8 * r
     # fout = outpara['outfolder'] + outpara['ofile']
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     for i in range(rb.nsheets):
         sheet = rb.sheet_by_index(i)
@@ -203,8 +200,8 @@ def write_mese_scen(fout, nro, v_ini, v_end, gr, w, dw):
 
 def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, cb, dcb, w, dw, runo, druno):
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     r = len(v_end)  # rounds
     ix0 = range(2, 2 + r)
@@ -217,7 +214,6 @@ def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, cb, dcb, w, dw, runo, drun
 
     # fout = outpara['outfolder'] + outpara['ofile']
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     for i in range(rb.nsheets):
         sheet = rb.sheet_by_index(i)
@@ -250,12 +246,11 @@ def write_jaali_scen(fout, nro, ID, v_ini, v_end, gr, cb, dcb, w, dw, runo, drun
 
 def write_demand(fout, nro, Ndem, Pdem, Kdem):
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     # fout = outpara['outfolder'] + outpara['ofile']
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     for i in range(rb.nsheets):
         sheet = rb.sheet_by_index(i)
@@ -278,12 +273,11 @@ def write_excel(
     wlocation, wpara, spara, outpara, LAI, hdom, h0_west, h0_east, summer, summermed
 ):
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     fout = outpara["outfolder"] + outpara["ofile"]
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     for i in range(rb.nsheets):
         sheet = rb.sheet_by_index(i)
@@ -317,13 +311,12 @@ def write_excel(
 def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr_crd):
     print("now printing gr-excel")
     # from xlutils.copy import copy
-    from xlutils import copy
     import xlrd
+    from xlutils import copy
 
     title = "Control vs " + spara.scenario_name[c]
     fout = outpara["outfolder"] + outpara["gr_file"]
     rb = xlrd.open_workbook(fout)  # ,formatting_info=True)
-    rb.sheet_by_name("Summary").ncols
     rows = rb.sheet_by_name("Summary").nrows
     print(rows)
     for i in range(rb.nsheets):
@@ -349,7 +342,9 @@ def write_gr_excel(wlocation, wpara, spara, outpara, gN, gP, gK, c, cr_depth, gr
     outSummary.write(rows, 12, spara.vonP_bottom)
     outSummary.write(rows, 13, spara.vol)
     outSummary.write(rows, 14, spara.hdom)
-    outSummary.write(rows, 15, spara.species)
+    outSummary.write(
+        rows, 15, str(spara.stand_params.canopy_layer_allometry.zones_species_id)
+    )
     outSummary.write(rows, 16, spara.sfc)
     outSummary.write(rows, 17, str(wpara["start_yr"]) + " " + str(wpara["end_yr"]))
     outSummary.write(rows, 18, float(gN))
@@ -396,17 +391,17 @@ def outfig(
     plt.show()
 
 
-def print_site_description(spara):
+def print_site_description(spara, sfc, age):
     print("  + Site:")
     print("   + Number of columns:", spara.n)
     print("    - Site fertility class:")
-    print("    ", spara.sfc)
+    print("    ", sfc)
     print("  + Stand:")
     # print ('    - vol:', np.round(spara['vol'],0),'m3/ha' )
     print("    - age:")
-    print("        dominant:", spara.age["dominant"], "yrs")
-    print("        subdominat:", spara.age["subdominant"], "yrs")
-    print("        under:", spara.age["under"], "yrs")
+    print("        dominant:", age["dominant"], "yrs")
+    print("        subdominat:", age["subdominant"], "yrs")
+    print("        under:", age["under"], "yrs")
 
     print("  + Soil: ")
     if spara.vonP:
@@ -536,7 +531,7 @@ def fig_stand_growth_node(
     gr_limit = 0.15  # allowed difference from table growth
 
     plt.subplot(211)  # growth figure
-    length = end_yr - start_yr + 1.0  #
+    length = end_yr - start_yr + 1.0
 
     for column, agerange in enumerate(agearray.T):
         start = max(0.0, ageSim[column] - 3.0)
@@ -553,7 +548,7 @@ def fig_stand_growth_node(
         plt.fill_between(gr_age, gr_low, gr_up, color="gray", alpha=0.3)
 
         colors = ["blue", "red", "green", "yellow", "cyan", "magenta"]
-        rnds, yrs, nodes = np.shape(vols)
+        rnds, _yrs, _nodes = np.shape(vols)
         for r in range(rnds):
             vtmp = vols[r, :, column]
             vtmp = np.insert(vtmp, 0, ageToVol(ageSim[column]))
@@ -561,7 +556,7 @@ def fig_stand_growth_node(
     # ---------------------------------------------------------
 
     plt.subplot(212)
-    rnds, days, nodes = np.shape(dwts)
+    rnds, days, _nodes = np.shape(dwts)
     agedays = np.array(range(days))
     for r in range(rnds):
         dwttmp = dwts[r, :, 1:-1]
@@ -601,7 +596,7 @@ def fig_hydro(
     n = spara.n
     L = spara.L
     sim_yrs = len(het) / 365.0
-    aa, bb = np.shape(hts)
+    aa, _bb = np.shape(hts)
     x = np.linspace(0, L, n)
     float(L / n)
     fig = plt.figure(
@@ -614,7 +609,7 @@ def fig_hydro(
     low = min([ele[0] + h0_west, ele[n - 1] + h0_east]) * 0.4
     high = max(ele) * 1.2
     ax.set_ylim([low, high])
-    (line2,) = ax.plot(
+    (_line2,) = ax.plot(
         x[1 : n - 1], ele[1 : n - 1], "k-", linewidth=2, label="Surface elevation"
     )
     line1 = Line2D(
@@ -834,7 +829,7 @@ def weather_fig(df):
 
     t1 = "Mean annual rainfall " + str(np.round(np.mean(annual_prec.values))) + " mm"
     ax2.set_title(t1, fontsize=14)
-    y_pos = np.arange((len(annual_prec)))
+    y_pos = np.arange(len(annual_prec))
     plt.bar(y_pos, annual_prec.values, align="center", alpha=0.5)
     plt.xticks(y_pos, annual_prec.index.year, rotation=45)
     ax2.set_ylabel("mm")
@@ -849,21 +844,21 @@ def weather_fig(df):
     ax3.fill_between(
         df.index, df["T"], 0, where=df["T"] >= 0.0, facecolor="r", alpha=0.3
     )
-    ax3.set_ylabel("Air temperature, $^\circ$ C", fontsize=fs)
+    ax3.set_ylabel("Air temperature,  C", fontsize=fs)
 
     annual_temp = df["T"].resample("A").mean()
     t2 = (
         "Mean annual temperature "
         + str(np.round(np.mean(annual_temp.values), 2))
-        + "  $^\circ$ C"
+        + " C"
     )
 
     ax4 = fig.add_axes([0.73, 0.08, 0.25, 0.35])
     ax4.set_title(t2, fontsize=14)
-    y_pos = np.arange((len(annual_temp)))
+    y_pos = np.arange(len(annual_temp))
     plt.bar(y_pos, annual_temp.values, align="center", alpha=0.5)
     plt.xticks(y_pos, annual_temp.index.year, rotation=45)
-    ax4.set_ylabel(" $^\circ$ C", fontsize=fs)
+    ax4.set_ylabel(" C", fontsize=fs)
     plt.show()
 
 

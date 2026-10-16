@@ -16,9 +16,10 @@ instead of through `netcdf_reader.cached_read_netcdf_files`.
 
 Typical usage:
 
-    df_summary = summary_table.display_summary_table(project_dropdown.value)
+    df_summary = summary_table.display_summary_table(run_dropdown.value)
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -27,32 +28,35 @@ from IPython.display import display
 import susi.io.load_output_data as load_output
 from analysis.shared_reporting_utils.project_summary import (
     SUMMARY_VARIABLES,
+    AggregatedNetcdfVar,
     build_summary_dataframe,
 )
 
 
-def display_summary_table(dir_path: Path) -> pd.DataFrame:
+def display_summary_table(
+    run_dirpath: Path, variables: Sequence[AggregatedNetcdfVar] = SUMMARY_VARIABLES
+) -> pd.DataFrame:
     """
-    Compute and display the per-stand/scenario summary table for dir_path.
+    Compute and display the per-stand/scenario summary table for run_dirpath.
 
-    dir_path is a project folder containing one subfolder per stand, each
-    holding one subfolder per scenario -- e.g. the `.value` of a project-level
-    `folder_selection.build_dropdown()`.
+    run_dirpath is one run of a project -- `projects/<project>/outputs/<run_id>/`,
+    the `.value` of `folder_selection.build_run_dropdown()`. It contains one
+    subfolder per stand, each holding one subfolder per scenario.
 
     Returns the aggregated DataFrame (sorted by stand, then scenario) so a
     later cell can reuse it without recomputing.
     """
-    stand_folderpaths = load_output.list_subdirectories(path=dir_path)
+    stand_folderpaths = load_output.list_stand_folders(run_dirpath=run_dirpath)
     metadata_by_stand = load_output.load_all_metadatas_from_stands(
         folders=stand_folderpaths
     )
 
     data_store = load_output.read_netcdf_files_for_selected_variables_from_metadatas(
-        selected_variables=[var.netcdf_path for var in SUMMARY_VARIABLES],
+        selected_variables=[var.netcdf_path for var in variables],
         metadata_by_stand=metadata_by_stand,
     )
 
-    df_summary = build_summary_dataframe(data_store, SUMMARY_VARIABLES)
+    df_summary = build_summary_dataframe(data_store, variables)
     # Show every row and column -- pandas' defaults for `display.max_rows`
     # (60) and `display.max_columns` (20) would otherwise collapse the
     # middle rows/columns into an ellipsis for this table.

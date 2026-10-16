@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Created on Tue Aug 08 10:38:45 2017
@@ -6,13 +5,13 @@ Created on Tue Aug 08 10:38:45 2017
 @author: lauren
 """
 
+import matplotlib.pylab as plt
 import numpy as np
 import pandas as pd
+from pyproj import CRS, Transformer
+from scipy.interpolate import InterpolatedUnivariateSpline as interS
 from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
-import matplotlib.pylab as plt
-from scipy.interpolate import InterpolatedUnivariateSpline as interS
-from pyproj import CRS, Transformer
 
 
 def peat_hydrol_properties(x, unit="g/cm3", var="bd", ptype="A"):
@@ -88,7 +87,7 @@ def peat_hydrol_properties(x, unit="g/cm3", var="bd", ptype="A"):
     if np.shape(x)[0] > 1 and len(ptype) == 1:
         ptype = np.repeat(ptype, np.shape(x)[0])
     vgen = np.zeros((np.size(x), 4))
-    Ksat = np.zeros((np.size(x)))
+    Ksat = np.zeros(np.size(x))
 
     # wcont = lambda x, (a0, a1, a2): a0 + a1*x + a2*x**2.
     def wcont(x, *a):
@@ -120,7 +119,7 @@ def peat_hydrol_properties(x, unit="g/cm3", var="bd", ptype="A"):
     for i, s in enumerate(np.transpose(wc)):
         try:
             vgen[i], _ = curve_fit(van_g, potentials, s, p0=vg_ini)
-        except Exception:
+        except RuntimeError:  # curve_fit's "optimal parameters not found"
             print(
                 "water retention parameters did not converge, Replaced with generic velues"
             )
@@ -309,8 +308,7 @@ def potential_peat_heterotrophic_respiration(T, sfc, V):
     # sfc=spara['sfc']
 
     # Ojanen et al. 2010 Forest Ecology and Management 260:411-421
-    if T > 16.0:
-        T = 16.0
+    T = min(T, 16.0)
     # Computes momentary Total CO2 flux as a function of soil temperature and peat bulk density
     B = 350.0
     T5ref = 10.0
@@ -1008,7 +1006,7 @@ def assimilation(photopara, rg, vpd, Ta_minus1, Ta, rew, LAI, Xk, Ns, Ps, Ks, hd
     )  # Unit conversion to mol/m2/day, 0.5 is the share of par from rg
 
     """ Eq 2 """
-    fL = 1.0 / (photopara.gamma * par + 1.0)  #
+    fL = 1.0 / (photopara.gamma * par + 1.0)
 
     """Eq. 3a and 3b"""
     Xk = Xk + (Ta - Xk) / photopara.tau
@@ -1168,12 +1166,12 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
     return npp_arr * 10.0, npp_arr_pot * 10.0  # kg/ha organic matter
 
 
-def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
+def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara, sfc):
     """
     Output:
         mean time series kg CO2 ha-1 day-1 and annual sum for each computation  node
     """
-    sfc = np.median(spara.sfc)
+    sfc = np.median(sfc)
     # peat bulk density: change from g/cm3 to kg m-3 -> multiply by 1000
     bd_d = {
         2: 0.14,
@@ -1206,7 +1204,7 @@ def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
     ]
     Rhet = np.array(Rhet).T
     # Rhet_root = Rhet*air_ratio
-    n, days = np.shape(Rhet)
+    _n, days = np.shape(Rhet)
 
     return (
         days,
@@ -1215,11 +1213,11 @@ def heterotrophic_respiration_yr(t5, yr, dfwt, v, spara):
     )  # , np.sum(Rhet_root, axis=0)*10.
 
 
-def ojanen_2019(spara, yr, dfwt):
+def ojanen_2019(spara, yr, dfwt, sfc):
     wts = (
         dfwt[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0
     )  # .values[:-1])
-    sfc = np.median(spara.sfc)
+    sfc = np.median(sfc)
     if sfc < 3:
         soil_co2_balance = (
             (-115 + 12 * wts) * 10 * -1
@@ -1268,7 +1266,7 @@ def heterotrophic_respiration_yr_bck(t5, yr, dfwt, dfair_r, v, spara):
     ]
     Rhet = np.array(Rhet).T
     Rhet_root = Rhet * air_ratio
-    n, days = np.shape(Rhet)
+    _n, days = np.shape(Rhet)
 
     return (
         days,
@@ -1315,7 +1313,7 @@ def heterotrophic_respiration_yr_bck2(forc, yr, dfwt, dfair_r, v, spara):
     ]
     Rhet = np.array(Rhet).T
     Rhet_root = Rhet * air_ratio
-    n, days = np.shape(Rhet)
+    _n, days = np.shape(Rhet)
 
     return (
         days,
@@ -1841,7 +1839,7 @@ def understory_uptake(
         nup_litter,
         pup_litter,
         kup_litter,
-        gv_tot,
+        _gv_tot,
         litterfall_gv,
         gv_leafmass,
     ) = gv_biomass_and_nutrients(
@@ -1874,7 +1872,7 @@ def understory_uptake(
         nup_litter_end,
         pup_litter_end,
         kup_litter_end,
-        gv_tot_end,
+        _gv_tot_end,
         litterfall_gv_end,
         gv_leafmass_end,
     ) = gv_biomass_and_nutrients(

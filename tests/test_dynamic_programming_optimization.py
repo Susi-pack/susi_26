@@ -2,8 +2,8 @@ import numpy as np
 
 from analysis.optimization.dynamic_programming import (
     PartialParetoPoint,
-    recover_scenario_choices,
     get_minimum_values_per_variable,
+    recover_scenario_choices,
     shift_points_to_positive_values,
 )
 

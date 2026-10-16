@@ -1,28 +1,56 @@
 # %%
-from typing import Any, Sequence
-from numpy.typing import NDArray
+from collections.abc import Sequence
 from dataclasses import dataclass
-import numpy as np
+from enum import Enum
 from pathlib import Path
+from typing import Any, assert_never
 
+import numpy as np
 import pareto_dp
+from numpy.typing import NDArray
 
+import susi.io.load_output_data as load_output
 from analysis.optimization.dynamic_programming import from_numpy_arrays_to_nested_lists
 from analysis.optimization.prepruning import preprune_pareto_dominated_scenarios
-import susi.io.load_output_data as load_output
 from susi.io.load_output_data import (
     NetcdfVariablePath,
-    StandID,
-    ScenarioID,
     OutputDataStore,
+    ScenarioID,
+    StandID,
 )
 
 
 # INPUT API
+class Direction(Enum):
+    """
+    Whether the optimization seeks a target's smallest or largest value.
+
+    Always about the signed value: maximizing a variable that is always
+    negative brings it closer to zero. It never means "minimize the absolute
+    value", which would disagree with maximizing as soon as a variable's
+    values cross zero.
+    """
+
+    MINIMIZE = "minimize"
+    MAXIMIZE = "maximize"
+
+
 @dataclass(frozen=True)
-class TargetVariableProperties:
-    aggregation_function: load_output.NetcdfAggregationFn
-    invert_optimization: bool  # If True, this puts a minus sign in the value: turn maximization into minimization
+class TargetSpec:
+    """
+    How one netcdf variable becomes one target of the optimization.
+
+    aggregation collapses the variable's time/space array to the single
+    float the optimization needs, e.g. `NetcdfVariableArray.mean_of_all_values`.
+
+    A dict of these, keyed by the variable's path, is the optimization's
+    whole configuration. It can be written by hand or read off the
+    notebook's widgets, and its insertion order sets the order of the
+    target vectors' columns.
+    """
+
+    aggregation: load_output.NetcdfAggregationFn
+    direction: Direction
 
 
 # The reductions a user can pick from to collapse a target variable's
@@ -35,6 +63,21 @@ AGGREGATION_METHODS_BY_LABEL: dict[str, load_output.NetcdfAggregationFn] = {
     "Mean over space, sum over time": load_output.NetcdfVariableArray.mean_over_space_sum_over_time,
     "Spatial mean at initial timestep": load_output.NetcdfVariableArray.spatial_mean_at_initial_timestep,
 }
+
+# The range of epsilon (the Pareto front's precision) that solve_optimization
+# accepts. Smaller is more precise but slower. Here, not in a frontend, so that
+# the Streamlit page's input and a value typed into the notebook are held to
+# the same bounds.
+EPSILON_MIN = 1e-9
+EPSILON_MAX = 1e4
+
+# The help text shown next to a target's direction picker. Lives here for the
+# same reason as AGGREGATION_METHODS_BY_LABEL: one wording for both frontends.
+DIRECTION_HELP = (
+    "Whether to seek the target's smallest or largest value. This is about "
+    "the signed value: maximizing a variable that is always negative brings "
+    "it closer to zero."
+)
 
 
 # OUTPUT API
@@ -50,11 +93,11 @@ class PreparedOptimizationData:
     A project's netcdf data, reduced to what the Pareto search consumes.
 
     Produced by prepare_optimization_data() and passed to
-    solve_optimization(). variable_info is carried along because the solve
-    step needs it to undo the sign flip applied to inverted variables.
+    solve_optimization(). target_specs is carried along because the solve
+    step needs it to undo the sign flip applied to maximized targets.
     """
 
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties]
+    target_specs: dict[NetcdfVariablePath, TargetSpec]
 
     # One entry per stand; within a stand, one row per surviving scenario and
     # one column per target variable, already weighted by the stand's area.
@@ -94,7 +137,7 @@ class _TargetVariableArrays:
         StandID, Sequence[ScenarioID]
     ]  # {"stand_A": ["scen_1", "scen_2"], ...}
     variables: Sequence[NetcdfVariablePath]
-    variables_properties: Sequence[TargetVariableProperties]
+    variables_target_specs: Sequence[TargetSpec]
 
     # Each stand has a different area. This is weighted in the optimization.
     stand_areas: dict[StandID, float]
@@ -122,26 +165,55 @@ class _TargetVariableArrays:
 
 
 def read_data(
-    project_dirpath: Path,
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
+    run_dirpath: Path,
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
 ) -> OutputDataStore:
+    """
+    Read the target variables of every stand and scenario of one run.
 
+    run_dirpath is one run's folder (`<project>/outputs/<run_id>/`), not the
+    project's.
+
+    The stands come from `load_output.list_stand_folders`, the same listing
+    `stand_areas.stand_areas_for_run` uses. That is what lets
+    `build_optimization_array` look each stand of the returned store up in the
+    areas dict, and it fixes the stand order (natural sort of the stand IDs)
+    so that it does not depend on the filesystem.
+    """
     metadata_by_stand = load_output.load_all_metadatas_from_stands(
-        folders=load_output.list_subdirectories(project_dirpath)
+        folders=load_output.list_stand_folders(run_dirpath=run_dirpath)
     )
     return load_output.read_netcdf_files_for_selected_variables_from_metadatas(
-        selected_variables=list(variable_info.keys()),
+        selected_variables=list(target_specs.keys()),
         metadata_by_stand=metadata_by_stand,
     )
 
 
+def _sign_for_minimization(direction: Direction) -> int:
+    """
+    The factor that turns a target into one the optimizer can minimize.
+
+    The Pareto search only ever minimizes, so a maximized target goes in with
+    its sign flipped. Multiplying by the same factor again undoes the flip.
+    """
+    match direction:
+        case Direction.MINIMIZE:
+            return 1
+        case Direction.MAXIMIZE:
+            return -1
+        case _:
+            # A hand-written spec could carry e.g. the string "maximize";
+            # fail here, naming it, rather than multiply by None later.
+            assert_never(direction)
+
+
 def _aggregate_time_series_to_float(
-    target_variable_properties: TargetVariableProperties,
+    target_spec: TargetSpec,
     array: load_output.NetcdfVariableArray,
 ) -> float:
-    inverter: int = -1 if target_variable_properties.invert_optimization else 1
-
-    return inverter * target_variable_properties.aggregation_function(array)
+    return _sign_for_minimization(target_spec.direction) * target_spec.aggregation(
+        array
+    )
 
 
 def _product_of_elements_in_list(
@@ -162,15 +234,15 @@ def _compute_scenarios_cardinality(
 def build_optimization_array(
     data_store: OutputDataStore,
     stand_areas: dict[StandID, float],
-    optimization_variables: dict[NetcdfVariablePath, TargetVariableProperties],
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
 ) -> _TargetVariableArrays:
-    number_of_target_variables = len(optimization_variables)
+    number_of_target_variables = len(target_specs)
 
     variables = []
-    variables_properties = []
-    for var_path, var_properties in optimization_variables.items():
+    variables_target_specs = []
+    for var_path, target_spec in target_specs.items():
         variables.append(var_path)
-        variables_properties.append(var_properties)
+        variables_target_specs.append(target_spec)
 
     # Initialize output variable
     data = []
@@ -185,9 +257,7 @@ def build_optimization_array(
         )
 
         for scenario_i, scenario_name in enumerate(data_store.scenarios[stand_name]):
-            for var_i, (var_path, var_properties) in enumerate(
-                optimization_variables.items()
-            ):
+            for var_i, (var_path, target_spec) in enumerate(target_specs.items()):
                 target_var_array[scenario_i, var_i] = (
                     stand_area
                     * _aggregate_time_series_to_float(
@@ -196,7 +266,7 @@ def build_optimization_array(
                             stand_id=stand_name,
                             scenario_id=scenario_name,
                         ),
-                        target_variable_properties=var_properties,
+                        target_spec=target_spec,
                     )
                 )
         data.append(target_var_array)
@@ -204,7 +274,7 @@ def build_optimization_array(
         stands=data_store.stands,
         scenarios=data_store.scenarios,
         variables=variables,
-        variables_properties=variables_properties,
+        variables_target_specs=variables_target_specs,
         stand_areas=stand_areas,
         data_weighted_by_area=data,
     )
@@ -232,7 +302,7 @@ def _preprune_dominated_scenarios(
         stands=var_arrays.stands,
         scenarios=prepruned_scenarios,
         variables=var_arrays.variables,
-        variables_properties=var_arrays.variables_properties,
+        variables_target_specs=var_arrays.variables_target_specs,
         stand_areas=var_arrays.stand_areas,
         data_weighted_by_area=prepruned_data,
     )
@@ -270,19 +340,19 @@ def _print_cardinality_info(
 
 
 def find_pareto_front(
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
 ) -> list[pareto_dp.ParetoFrontSolution]:
 
     print("optimization - Reading data...")
 
-    data_store = read_data(variable_info=variable_info, project_dirpath=project_dirpath)
+    data_store = read_data(target_specs=target_specs, run_dirpath=run_dirpath)
 
     print("optimization - Transforming data...")
     target_var_arrays = build_optimization_array(
         data_store=data_store,
-        optimization_variables=variable_info,
+        target_specs=target_specs,
         stand_areas=stand_areas,
     )
     prepruned = _preprune_dominated_scenarios(target_var_arrays)
@@ -307,39 +377,42 @@ def _convert_list_of_points_to_array(
     )
 
 
-def _flip_inverted_variables_sign(
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
+def _restore_maximized_targets_sign(
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
     vectors: DesignAndTargetVectors,
 ) -> DesignAndTargetVectors:
-    """Reverses the sign flip applied to inverted target variables.
+    """Reverses the sign flip applied to maximized targets.
 
-    During optimization, variables with ``invert_optimization=True`` are
-    multiplied by -1 to convert maximization problems into minimization.
-    This function restores their original sign in the output.
+    During optimization, targets with ``Direction.MAXIMIZE`` are multiplied
+    by -1, because the Pareto search only ever minimizes. This function
+    restores their original sign in the output.
 
     Only ``target_vectors`` are modified; ``design_vectors`` are passed
     through unchanged.
 
     Example:
         >>> import numpy as np
-        >>> var_info = {
-        ...     NetcdfVariablePath("var_a"): TargetVariableProperties(aggregation_function=None, invert_optimization=False),
-        ...     NetcdfVariablePath("var_b"): TargetVariableProperties(aggregation_function=None, invert_optimization=True),
+        >>> target_specs = {
+        ...     NetcdfVariablePath("var_a"): TargetSpec(aggregation=None, direction=Direction.MINIMIZE),
+        ...     NetcdfVariablePath("var_b"): TargetSpec(aggregation=None, direction=Direction.MAXIMIZE),
         ... }
         >>> vectors = DesignAndTargetVectors(
         ...     design_vectors=np.array([[0.5, 0.5]]),
         ...     target_vectors=np.array([[10.0, -20.0]]),
         ... )
-        >>> result = _flip_inverted_variables_sign(var_info, vectors)
+        >>> result = _restore_maximized_targets_sign(target_specs, vectors)
         >>> result.target_vectors
         array([[10., 20.]])
         >>> result.design_vectors
         array([[0.5, 0.5]])
     """
+    # No points at all (e.g. n_random_points=0) come back as a 1-D empty
+    # array, which has no columns to index.
+    if vectors.target_vectors.size == 0:
+        return vectors
     target_vectors = vectors.target_vectors.copy()
-    for var_i, var_properties in enumerate(variable_info.values()):
-        if var_properties.invert_optimization:
-            target_vectors[:, var_i] *= -1
+    for var_i, target_spec in enumerate(target_specs.values()):
+        target_vectors[:, var_i] *= _sign_for_minimization(target_spec.direction)
     return DesignAndTargetVectors(
         target_vectors=target_vectors,
         design_vectors=vectors.design_vectors,
@@ -347,12 +420,12 @@ def _flip_inverted_variables_sign(
 
 
 def prepare_optimization_data(
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
 ) -> PreparedOptimizationData:
     """
-    Read the project's netcdfs and reduce them to the Pareto search's input.
+    Read a run's netcdfs and reduce them to the Pareto search's input.
 
     This is the slow, I/O-bound half of run_optimization: it reads every
     stand/scenario netcdf, aggregates each target variable to one
@@ -362,12 +435,12 @@ def prepare_optimization_data(
     """
     print("optimization - Reading data...")
 
-    data_store = read_data(variable_info=variable_info, project_dirpath=project_dirpath)
+    data_store = read_data(target_specs=target_specs, run_dirpath=run_dirpath)
 
     print("optimization - Transforming data...")
     target_var_arrays = build_optimization_array(
         data_store=data_store,
-        optimization_variables=variable_info,
+        target_specs=target_specs,
         stand_areas=stand_areas,
     )
     prepruned = _preprune_dominated_scenarios(target_var_arrays)
@@ -377,7 +450,7 @@ def prepare_optimization_data(
     )
 
     return PreparedOptimizationData(
-        variable_info=variable_info,
+        target_specs=target_specs,
         data_table=from_numpy_arrays_to_nested_lists(prepruned.data_weighted_by_area),
     )
 
@@ -394,6 +467,11 @@ def solve_optimization(
     one: cost grows with the number of scenario combinations reported by
     prepare_optimization_data() and with how fine epsilon is.
     """
+    if not EPSILON_MIN <= epsilon <= EPSILON_MAX:
+        raise ValueError(
+            f"epsilon must be between {EPSILON_MIN} and {EPSILON_MAX}, got {epsilon}."
+        )
+
     print("optimization - Finding Pareto front...")
     pareto_front = pareto_dp.find_pareto_front(
         data=prepared.data_table, epsilon=epsilon
@@ -405,26 +483,26 @@ def solve_optimization(
     )
 
     return OptimizationResults(
-        pareto_front=_flip_inverted_variables_sign(
-            variable_info=prepared.variable_info,
+        pareto_front=_restore_maximized_targets_sign(
+            target_specs=prepared.target_specs,
             vectors=_convert_list_of_points_to_array(pareto_front),
         ),
-        random_points=_flip_inverted_variables_sign(
-            variable_info=prepared.variable_info,
+        random_points=_restore_maximized_targets_sign(
+            target_specs=prepared.target_specs,
             vectors=_convert_list_of_points_to_array(random_points),
         ),
     )
 
 
 def run_optimization(
-    variable_info: dict[NetcdfVariablePath, TargetVariableProperties],
-    project_dirpath: Path,
+    target_specs: dict[NetcdfVariablePath, TargetSpec],
+    run_dirpath: Path,
     stand_areas: dict[StandID, float],
     epsilon: float,
     n_random_points: int = 10000,
 ) -> OptimizationResults:
     """
-    Read a project's data and find its Pareto front, in one call.
+    Read a run's data and find its Pareto front, in one call.
 
     Callers that want to inspect the problem's size before paying for the
     search (as the notebook does, one step per cell) can call
@@ -432,8 +510,8 @@ def run_optimization(
     """
     return solve_optimization(
         prepared=prepare_optimization_data(
-            variable_info=variable_info,
-            project_dirpath=project_dirpath,
+            target_specs=target_specs,
+            run_dirpath=run_dirpath,
             stand_areas=stand_areas,
         ),
         epsilon=epsilon,

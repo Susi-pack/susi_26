@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Fri Mar 24 11:01:50 2017
 
@@ -17,9 +16,10 @@ last edit: Oct 2018 / Samuli
 
 """
 
-import numpy as np
 import configparser
 import copy
+
+import numpy as np
 
 eps = np.finfo(float).eps
 
@@ -144,7 +144,7 @@ class CanopyGrid:
         fPheno = self._photoacclim(Ta, phenopara=cpara.phenology)
 
         """ --- aerodynamic conductances --- """
-        Ra, Rb, Ras, ustar, Uh, Ug = aerodynamics(
+        Ra, _Rb, Ras, _ustar, _Uh, _Ug = aerodynamics(
             self.LAI,
             self.hc,
             U,
@@ -160,7 +160,7 @@ class CanopyGrid:
         )
 
         """--- dry-canopy evapotranspiration [mm s-1] --- """
-        Transpi, Efloor, Gc = self.dry_canopy_et(
+        Transpi, Efloor, _Gc = self.dry_canopy_et(
             cpara=cpara,
             D=VPD,
             Qp=Par,

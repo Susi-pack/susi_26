@@ -18,10 +18,12 @@ import numpy as np
 
 from susi.core.stand import Stand
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     ClearCut,
     CuttingManagementParams,
+    GrowthMode,
     LocationsForPhotoParams,
     Thinning,
     get_photo_parameters_by_location,
@@ -34,8 +36,11 @@ SFC = np.ones(N, dtype=int) * 4
 
 def _make_stand(age: float = 70.0) -> Stand:
     allometry_params = CanopyLayerAllometry(
-        allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "test_allometry.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(
+                file_path=DATA_DIR / "test_allometry.csv", species_id=1
+            )
+        },
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -57,6 +62,7 @@ def _make_stand(age: float = 70.0) -> Stand:
         photopara=get_photo_parameters_by_location(
             location=LocationsForPhotoParams("All_data")
         ),
+        growth_mode=GrowthMode.dynamic,
     )
     stand.update()
     return stand
@@ -65,8 +71,11 @@ def _make_stand(age: float = 70.0) -> Stand:
 def _regeneration_allometry() -> CanopyLayerAllometry:
     """age must start at 1 -- see ClearCut.new_allometry_includes_age_one."""
     return CanopyLayerAllometry(
-        allometry_dir_path=DATA_DIR,
-        allometry_file_registry={1: "post_clearcut_allom.csv"},
+        allometry_file_registry={
+            1: AllometryFileAndSpecies(
+                file_path=DATA_DIR / "post_clearcut_allom.csv", species_id=1
+            )
+        },
         pointers={
             CanopyLayerName.dominant: [1] * N,
             CanopyLayerName.subdominant: None,
@@ -147,7 +156,7 @@ class TestThinningRefreshesStandAggregates:
         stand.apply_cutting_management(
             CuttingManagementParams(
                 application_yr=2005,
-                management_type=Thinning(target_basal_area={"dominant": 12}),
+                management_type=Thinning(target_basal_area={CanopyLayerName.dominant: 12}),
             ),
             yr=2005,
             sfc=SFC,

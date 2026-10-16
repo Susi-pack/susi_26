@@ -38,3 +38,20 @@ n_trees = 20
 start_year = 5
 end_year = 80
 step_years = 5
+
+# --- Optional: dense young stand scaling (off by default) ---
+# Explained at https://susi-pack.github.io/susi_26/dense_young_stand_scaling/
+[dense_young_stand_scaling]
+# Scale down the stems and basal area of dense young stands before the growth model runs.
+enabled = false
+
+# Only stands with a mean diameter below this are scaled, cm.
+max_mean_diameter = 8.0
+
+# A stand is scaled when its stem count is above this, stems/ha (by main species).
+stem_count_threshold_spruce = 2200
+stem_count_threshold_other = 2500
+
+# The stem count a scaled stand starts from, stems/ha (by main species).
+target_stem_count_spruce = 1800
+target_stem_count_other = 2000

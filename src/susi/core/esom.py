@@ -8,6 +8,7 @@ Created on Wed Feb  9 10:41:03 2022
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.sparse import diags
+
 from susi.core.susi_utils import peat_hydrol_properties, wrc
 
 
@@ -158,7 +159,6 @@ class Esom:
         self.sfc = np.expand_dims(sfc, axis=0)
         self.reset_storages()
 
-        #
         gwl = np.linspace(0, -6, 150)
         pF, _ = peat_hydrol_properties(
             self.bd[self.idtop], var="bd", ptype="A"
@@ -187,7 +187,6 @@ class Esom:
             )
             for g in gwl
         ]  # equilibrium head m
-        water_sto
         volume_fraction_of_air = (water_sto[0] - water_sto) / water_sto[0]
         self.wtToVfAir_middle = interp1d(
             gwl,
@@ -206,7 +205,6 @@ class Esom:
             )
             for g in gwl
         ]  # equilibrium head m
-        water_sto
         volume_fraction_of_air = (water_sto[0] - water_sto) / water_sto[0]
         self.wtToVfAir_bottom = interp1d(
             gwl,
@@ -222,7 +220,7 @@ class Esom:
         # temperature_functions:
         self.t2 = interp1d(
             [
-                -40.0,
+                -60.0,
                 -5.0,
                 -1,
                 25.0,
@@ -231,15 +229,15 @@ class Esom:
             ],  # effect of temperature on the decomposition rate
             [0.0, 0.0, 0.2, 1.53, 1.53, 0.0],
         )
-        self.t3 = interp1d([-40.0, -3.0, 0.0, 7.0, 60.0], [0.0, 0.0, 1.3, 1.3, 0.0])
+        self.t3 = interp1d([-60.0, -3.0, 0.0, 7.0, 60.0], [0.0, 0.0, 1.3, 1.3, 0.0])
         self.t4 = interp1d(
-            [-40.0, -5.0, 1.0, 20.0, 40.0, 80.0], [0.0, 0.0, 0.2, 1.0, 1.0, 0.0]
+            [-60.0, -5.0, 1.0, 20.0, 40.0, 80.0], [0.0, 0.0, 0.2, 1.0, 1.0, 0.0]
         )
         self.t5 = interp1d(
-            [-40.0, -5.0, 1.0, 13.0, 25.0, 50.0], [0.0, 0.0, 0.2, 1.0, 1.0, 0.0]
+            [-60.0, -5.0, 1.0, 13.0, 25.0, 50.0], [0.0, 0.0, 0.2, 1.0, 1.0, 0.0]
         )
         self.t6 = interp1d(
-            [-40.0, -5.0, 1.0, 27.5, 35.0, 60.0], [0.0, 0.0, 0.2, 1.95, 1.95, 0.0]
+            [-60.0, -5.0, 1.0, 27.5, 35.0, 60.0], [0.0, 0.0, 0.2, 1.95, 1.95, 0.0]
         )
         # self.t6 = interp1d([-40., -30., -20. ,-10.,   0.,  10.,  20.,  30.,  40.,  50.],             #Q10 = 2
         #               [ 0.03125,0.0625, 0.125, 0.25, 0.5, 1., 2., 4., 4., 4.])
@@ -463,7 +461,7 @@ class Esom:
             (0.00114 - 0.00028 * self.litterN) * self.t2(tair) * self.phi1236(wn) * nu,
             0.0,
             1.0,
-        )  #
+        )
         k3 = np.clip(
             (0.04 - 0.003 * self.litterN) * self.t3(tair) * self.phi1236(wn), 0.0, 1.0
         )
@@ -654,20 +652,17 @@ class Esom:
                 wts
             )  # Call interpolation function WT -> volume fraction of air
 
-            try:
-                k1, k2, k3, k4, k5, k6, k7, k8, k9 = self.get_rates(
-                    tair,
-                    tp_top,
-                    tp_middle,
-                    tp_bottom,
-                    wn,
-                    peat_w1,
-                    peat_w2,
-                    peat_w3,
-                    H_w,
-                )
-            except Exception:
-                print("fail in rates, esom run_yr")
+            k1, k2, k3, k4, k5, k6, k7, k8, k9 = self.get_rates(
+                tair,
+                tp_top,
+                tp_middle,
+                tp_bottom,
+                wn,
+                peat_w1,
+                peat_w2,
+                peat_w3,
+                H_w,
+            )
 
             if n == 243:  # n is day of the year
                 self.M[:, :, 0] = (

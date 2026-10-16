@@ -1,0 +1,590 @@
+# Declares data structures for the JSON document storing external stand data information
+from functools import lru_cache
+from pathlib import Path
+from typing import Annotated, Any, Self
+
+import shapely
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    Field,
+    InstanceOf,
+    PlainSerializer,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    ValidationInfo,
+    WithJsonSchema,
+    model_serializer,
+    model_validator,
+)
+from pyproj import Transformer
+from shapely.errors import ShapelyError
+from shapely.geometry import Polygon
+
+from susi.io.extra_pydantic_types import (
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    StrictFrozenModel,
+)
+from susi.io.load_output_data import StandID
+from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+    StandParams,
+)
+
+# %% Coordinates: SOURCE_CRS and the YKJ grid
+#
+# Every stand polygon in a StandDataDocument is in SOURCE_CRS (a generating
+# tool reprojects into it on the way in -- see
+# tools.shared_allometry_tool_utils.shared_utils.to_source_crs). From there,
+# EPSG:3067 -> EPSG:2393 (YKJ, what Growth_and_Yield_Table's x/y expect),
+# rounded/scaled to the grid units it wants (10 km easting units, 1 km
+# northing units).
+#
+SOURCE_CRS = "EPSG:3067"  # ETRS-TM35FIN, the CRS all stand geometry is brought into
+YKJ_CRS = "EPSG:2393"  # Finnish YKJ grid, what Growth_and_Yield_Table's x/y expect
+
+# The plausible range of a YKJ grid coordinate, in exactly the units
+# point_to_ykj returns below
+# Deliberately wider than Finland itself (real mainland stands land around
+# x 305-376, y 6600-7780), for the same reason ALTITUDE_MIN/MAX and
+# DDY_MIN/MAX are: this is a typo-catcher, not a border. It should catch a
+# coordinate that never went through the EPSG:3067 -> YKJ conversion, or
+# went through it with x and y swapped, while never rejecting a real stand.
+X_YKJ_MIN = 200  # YKJ easting, 10 km units
+X_YKJ_MAX = 550
+Y_YKJ_MIN = 6500  # YKJ northing, 1 km units
+Y_YKJ_MAX = 7900
+
+# Named types so a model field says which coordinate it holds, and picks up
+# the bounds by doing so.
+YkjEasting = Annotated[int, Field(ge=X_YKJ_MIN, le=X_YKJ_MAX)]
+YkjNorthing = Annotated[int, Field(ge=Y_YKJ_MIN, le=Y_YKJ_MAX)]
+
+
+@lru_cache(maxsize=1)
+def _ykj_transformer() -> Transformer:
+    """Built once and reused -- constructing a Transformer is comparatively
+    expensive, and point_to_ykj runs once per stand (thousands per real run)."""
+    return Transformer.from_crs(SOURCE_CRS, YKJ_CRS, always_xy=True)
+
+
+def point_to_ykj(x: float, y: float) -> tuple[int, int]:
+    """A single (x, y) point in EPSG:3067 -> YKJ grid coordinates, scaled to
+    the units Growth_and_Yield_Table expects."""
+    transformer = _ykj_transformer()
+    easting, northing = transformer.transform(x, y)
+    return round(easting / 10000), round(northing / 1000)
+
+
+def centroid_to_ykj(polygon: Polygon) -> tuple[int, int]:
+    """A stand polygon's centroid -> YKJ grid coordinates, via point_to_ykj.
+    The polygon must be in SOURCE_CRS (EPSG:3067)."""
+    return point_to_ykj(polygon.centroid.x, polygon.centroid.y)
+
+
+def require_source_crs(declared_crs: str | None, where: str) -> None:
+    """The "is this SOURCE_CRS?" check behind StandDataDocument.crs.
+    point_to_ykj hard-codes SOURCE_CRS, so geometry in any other CRS would
+    give wrong YKJ grid cells (and wrong raster pixels downstream) without
+    any error. The generating tools never hit this: they reproject into
+    SOURCE_CRS on the way in (to_source_crs). `where` names what declared
+    the CRS, for the error message."""
+    if declared_crs != SOURCE_CRS:
+        raise ValueError(
+            f"{where} is in CRS {declared_crs!r}, but only {SOURCE_CRS} is supported"
+        )
+
+
+def _parse_wkt(value: Any) -> Any:
+    """
+    StandPolygon's before-validator: a str is parsed as WKT (what
+    stand_data.json holds); anything else passes through untouched, for
+    InstanceOf[Polygon] to accept or reject.
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        return shapely.from_wkt(value)
+    except ShapelyError as error:
+        # Also catches the pre-ticket-22 on-disk format (raw
+        # gml:coordinates pairs), which isn't WKT.
+        raise ValueError(f"polygon is not valid WKT: {error}") from error
+
+
+def _require_non_empty(polygon: Polygon) -> Polygon:
+    """StandPolygon's after-validator: an empty Polygon is still a Polygon,
+    so InstanceOf lets it through; it has no area or centroid to use."""
+    if polygon.is_empty:
+        raise ValueError("polygon must not be empty")
+    return polygon
+
+
+# The stand boundary: a shapely Polygon in memory, a WKT string on disk. See
+# docs/adr/0004 for why WKT, and why the CRS lives on the document rather
+# than inside the string (shapely can't read EWKT's "SRID=...;" prefix).
+# Validation runs in order: _parse_wkt turns a WKT string into a geometry,
+# InstanceOf[Polygon] rejects anything that isn't a Polygon -- a MultiPolygon
+# included, since no source produces one (see ticket 22) and consumers call
+# Polygon-only API -- and _require_non_empty rejects an empty one.
+# InstanceOf checks the type without asking pydantic for a Polygon schema, and
+# WithJsonSchema describes it as the string it serializes to -- together they
+# let the model build without arbitrary_types_allowed, which on its own would
+# still leave the model unable to write or read a Polygon as JSON.
+StandPolygon = Annotated[
+    InstanceOf[Polygon],
+    BeforeValidator(_parse_wkt),
+    AfterValidator(_require_non_empty),
+    PlainSerializer(lambda polygon: polygon.wkt, return_type=str),
+    WithJsonSchema({"type": "string", "description": "WKT POLYGON"}),
+]
+
+
+def _validate_document_crs(crs: str) -> str:
+    """Only SOURCE_CRS is supported -- see require_source_crs."""
+    require_source_crs(crs, where="stand_data.json")
+    return crs
+
+
+DocumentCrs = Annotated[str, AfterValidator(_validate_document_crs)]
+
+
+class StandData(StrictFrozenModel):
+    """
+    A single stand as described by different output data sources (Metsäkeskus and XML standard)
+    This is used in the three allometry generating tools.
+    """
+
+    site_fertility_class: PositiveInt = Field(description="Site fertility class")
+    allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = Field(
+        description="Allometry file and species per canopy layer (dominant/subdominant/under). Same element type StandParams uses."
+    )
+    initial_age_per_layer: dict[CanopyLayerName, NonNegativeFloat] = Field(
+        description=(
+            "Age of each canopy layer's trees at the start of the simulation, in years. "
+            "Same keys as allometry_file_per_layer. build_stand_params turns it into "
+            "StandParams.initial_canopylayer_age_years."
+        )
+    )
+    x_ykj: YkjEasting = Field(
+        description=(
+            "The stand's YKJ grid location, easting (10 km units): an input to "
+            "the sawlog-reduction equation (StemCurve.sawlogReduction), taken at "
+            "the polygon centroid via centroid_to_ykj, and read back "
+            "by new_growth_allometry.py in its sourced mode."
+        ),
+    )
+    y_ykj: YkjNorthing = Field(
+        description=(
+            "The stand's YKJ grid location, northing (1 km units). Same role "
+            "and source as x_ykj. Bounded by Y_YKJ_MIN/MAX."
+        ),
+    )
+    polygon: StandPolygon | None = Field(
+        default=None,
+        description=(
+            "Stand boundary (exterior ring plus holes), in the document's crs. "
+            "A shapely Polygon in memory, WKT in stand_data.json."
+        ),
+    )
+
+    stand_area: PositiveFloat | None = Field(
+        default=None,
+        description="Stand area, ha. Important for later analysis if the numbers have to be scaled to region level. Nothing in the SUSI simulation depends on the total stand area, but it is necessary later to run, e.g., the optimization algorithm.",
+    )
+    main_group: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Finnish land-use main-group code (e.g. Metsakeskus 'maingroup' and XML st:MainGroup; 1 = forest land). Plain metadata here: the "
+            "source tools use it to filter stands before StandData is built, "
+            "not after."
+        ),
+    )
+    sub_group: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Finnish land-use sub-group code (e.g. Metsakeskus 'subgroup' and XML st:SubGroup; 2-3 = peatland). Plain metadata here, same "
+            "filter-before-building caveat as main_group."
+        ),
+    )
+    mean_height: NonNegativeFloat | None = Field(
+        default=None,
+        description="Mean tree height, m. Plain metadata, no current reader.",
+    )
+    mean_diameter: NonNegativeFloat | None = Field(
+        default=None,
+        description="Mean tree diameter, cm. Plain metadata, no current reader.",
+    )
+    total_volume: NonNegativeFloat | None = Field(
+        default=None,
+        description="Total stem volume, m3/ha. Plain metadata, no current reader.",
+    )
+    developmentclass: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Stand development-class code (e.g. 1 = open/seedling, "
+            "2 = young growing, 3 = grown-up). Plain metadata here: the "
+            "source tools use it to filter stands before StandData is built, "
+            "not after."
+        ),
+    )
+    drainagestate: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Drainage-state code (e.g. 7-9 = drained). Plain metadata "
+            "here, the "
+            "source tools use it to filter stands before StandData is built, "
+            "not after."
+        ),
+    )
+    soil_type: PositiveInt | None = Field(
+        default=None,
+        description=(
+            "Finnish land-use soil-type code (e.g. XML st:SoilType / "
+            "Metsakeskus soiltype). No SUSI-simulation consumer yet, but "
+            "expected to eventually map onto SiteParams.peat_type/"
+            "peat_type_bottom (susi_parameter_model.py) -- that mapping is "
+            "still open work (#280)."
+        ),
+    )
+    basal_area: NonNegativeFloat | None = Field(
+        default=None,
+        description="Stand basal area, m2/ha. Use to store basal area that is not species specific.",
+    )
+    basal_area_pine: NonNegativeFloat | None = Field(
+        default=None, description="Basal area of pines (m^2/ha)."
+    )
+    basal_area_spruce: NonNegativeFloat | None = Field(
+        default=None, description="Basal area of spruces (m^2/ha)."
+    )
+    basal_area_deciduous: NonNegativeFloat | None = Field(
+        default=None,
+        description=(
+            "Basal area of deciduous trees (m^2/ha): the bucket for every "
+            "species code >= 3, which at this inventory layer is a real mix "
+            "of species rather than SUSI's birch simplification -- the "
+            "engine's TreeSpecies.birch is the same bucket under the name "
+            "src/susi/core uses. See CONTEXT.md, Species."
+        ),
+    )
+    stem_count: NonNegativeFloat | None = Field(
+        default=None,
+        description="Stem count, trees/ha. Use to store number of stems that is not species specific.",
+    )
+    stem_count_pine: NonNegativeFloat | None = Field(
+        default=None, description="Number of pines per hectare, trees/ha"
+    )
+    stem_count_spruce: NonNegativeFloat | None = Field(
+        default=None, description="Number of spruces per hectare, trees/ha"
+    )
+    stem_count_deciduous: NonNegativeFloat | None = Field(
+        default=None,
+        description=(
+            "Number of deciduous trees per hectare, trees/ha. Same "
+            "species-code >= 3 bucketing as basal_area_deciduous."
+        ),
+    )
+    # The record of dense young stand scaling (CONTEXT.md). Every other figure
+    # on this model stays as the inventory reported it, scaled stand or not:
+    # these two fields are the only trace of the scaling. Both have defaults,
+    # so a stand_data.json written before they existed still loads.
+    dense_young_stand_scaling_applied: bool = Field(
+        default=False,
+        description=(
+            "Whether the generating tool scaled this stand down before the "
+            "growth model ran (dense young stand scaling). When true, the "
+            "stand's allometry starts from fewer stems and less basal area "
+            "than the figures recorded here."
+        ),
+    )
+    dense_young_stand_scaling_factor: float | None = Field(
+        default=None,
+        gt=0,
+        lt=1,
+        description=(
+            "The factor every species' basal area and stem count were "
+            "multiplied by before the growth model ran: the target stem count "
+            "over the recorded stem count. Present exactly when "
+            "dense_young_stand_scaling_applied is true."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def scaling_factor_is_present_exactly_when_scaling_was_applied(self) -> Self:
+        has_factor = self.dense_young_stand_scaling_factor is not None
+        if self.dense_young_stand_scaling_applied != has_factor:
+            raise ValueError(
+                "dense_young_stand_scaling_factor must be present exactly when "
+                "dense_young_stand_scaling_applied is true, but got "
+                f"dense_young_stand_scaling_applied={self.dense_young_stand_scaling_applied} "
+                f"and dense_young_stand_scaling_factor={self.dense_young_stand_scaling_factor}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def initial_ages_match_allometry_layers(self) -> Self:
+        # An age for a layer with no allometry file, or a file with no age, is
+        # a bug in the tool that wrote the document: catch it here, not as a
+        # silent 0.0 from build_stand_params.
+        allometry_layers = set(self.allometry_file_per_layer)
+        age_layers = set(self.initial_age_per_layer)
+        if allometry_layers != age_layers:
+            raise ValueError(
+                "initial_age_per_layer must have the same canopy layers as "
+                "allometry_file_per_layer, but got "
+                f"allometry_file_per_layer={sorted(layer.value for layer in allometry_layers)} "
+                f"and initial_age_per_layer={sorted(layer.value for layer in age_layers)}"
+            )
+        return self
+
+
+# Pydantic context key through which load_stand_data_document_from_json and
+# dump_stand_data_document tell StandDataDocument which folder the document
+# sits in: the folder every allometry file_path is relative to on disk.
+DOCUMENT_DIR_CONTEXT_KEY = "stand_data_document_dir"
+
+
+def _document_dir_from_context(context: Any) -> Path | None:
+    if not isinstance(context, dict):
+        return None
+    return context.get(DOCUMENT_DIR_CONTEXT_KEY)
+
+
+def _absolute_allometry_file_path(
+    file_path: str | Path, stand_id: StandID, document_dir: Path | None
+) -> Path:
+    """
+    The in-memory (absolute) form of one allometry file_path.
+
+    With document_dir (loading stand_data.json), file_path is the on-disk
+    form: it must be relative, stay inside document_dir (no `..`), and is
+    joined onto document_dir. Without it (a document built in memory, or
+    validated with no context), file_path must already be absolute: a
+    relative path is never quietly resolved against the current folder,
+    since that's the bug docs/adr/0005 removes.
+    """
+    path = Path(file_path)
+    if document_dir is None:
+        if not path.is_absolute():
+            raise ValueError(
+                f"Stand {stand_id!r}: allometry file_path {str(path)!r} is relative, "
+                "but no document folder to resolve it against was given. Read "
+                "stand_data.json with load_stand_data_document_from_json, or build "
+                "the document in memory with absolute paths."
+            )
+        return path
+    if path.is_absolute():
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file_path {str(path)!r} in "
+            "stand_data.json is absolute; it must be relative to the folder "
+            "holding stand_data.json."
+        )
+    if ".." in path.parts:
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file_path {str(path)!r} in "
+            "stand_data.json contains '..'; allometry files must be inside the "
+            "folder holding stand_data.json."
+        )
+    return document_dir / path
+
+
+def _with_absolute_allometry_paths(
+    stand: Any, stand_id: StandID, document_dir: Path | None
+) -> Any:
+    """
+    Returns `stand` with every allometry file_path made absolute (see
+    _absolute_allometry_file_path). A stand arrives either as raw data (a
+    dict, from JSON or keyword arguments) or as an already-built StandData
+    (when the document is built in memory); anything else is left for
+    pydantic's own validation to reject.
+    """
+
+    def absolute(entry: Any) -> Any:
+        if isinstance(entry, AllometryFileAndSpecies):
+            return entry.model_copy(
+                update={
+                    "file_path": _absolute_allometry_file_path(
+                        entry.file_path, stand_id, document_dir
+                    )
+                }
+            )
+        if isinstance(entry, dict) and isinstance(entry.get("file_path"), (str, Path)):
+            # str, not Path: when validating JSON, pydantic still validates
+            # this raw dict in JSON mode afterwards, where a Path field only
+            # accepts a string.
+            return {
+                **entry,
+                "file_path": str(
+                    _absolute_allometry_file_path(
+                        entry["file_path"], stand_id, document_dir
+                    )
+                ),
+            }
+        return entry
+
+    if isinstance(stand, StandData):
+        # StandData is frozen: model_copy is the only way to swap a field.
+        # It skips validation, which is fine -- absolute() only replaces a
+        # Path with another Path.
+        return stand.model_copy(
+            update={
+                "allometry_file_per_layer": {
+                    layer: absolute(entry)
+                    for layer, entry in stand.allometry_file_per_layer.items()
+                }
+            }
+        )
+    if isinstance(stand, dict) and isinstance(
+        stand.get("allometry_file_per_layer"), dict
+    ):
+        return {
+            **stand,
+            "allometry_file_per_layer": {
+                layer: absolute(entry)
+                for layer, entry in stand["allometry_file_per_layer"].items()
+            },
+        }
+    return stand
+
+
+def _relative_allometry_file_path(
+    file_path: Path, stand_id: StandID, document_dir: Path
+) -> str:
+    """
+    The on-disk form of one (absolute, in-memory) allometry file_path:
+    relative to document_dir, as a POSIX string so the document reads the
+    same on any OS. Both sides are resolved first, so a `..` inside
+    file_path, or a symlinked document_dir, can't make a file outside
+    document_dir look inside it (or the reverse).
+    """
+    try:
+        relative = file_path.resolve().relative_to(document_dir.resolve())
+    except ValueError:
+        raise ValueError(
+            f"Stand {stand_id!r}: allometry file {str(file_path)!r} is not inside "
+            f"{str(document_dir)!r}, the folder stand_data.json is written to. "
+            "Every allometry file must live inside the project: copy it into "
+            "the project's inputs/ folder first."
+        ) from None
+    return relative.as_posix()
+
+
+class StandDataDocument(StrictFrozenModel):
+    """
+    The serialized data structure that describes the whole stand data JSON document.
+    It contains all stands.
+
+    Allometry file paths are absolute in memory and relative to the
+    document's own folder on disk (docs/adr/0005). This class does the
+    conversion, driven by the DOCUMENT_DIR_CONTEXT_KEY context that
+    load_stand_data_document_from_json and dump_stand_data_document pass --
+    the only two intended ways in and out. AllometryFileAndSpecies itself is
+    left alone, since in SusiParams a relative path still means relative to
+    the current folder.
+    """
+
+    crs: DocumentCrs = Field(
+        description=(
+            "The CRS every stand polygon in this document is in -- one per "
+            "document, never per stand. Always SOURCE_CRS "
+            "(EPSG:3067): the generating tools reproject a source in any "
+            "other CRS into it on the way in. See docs/adr/0004."
+        ),
+    )
+    altitude: float = Field(description="Project altitude, m.")
+    ddy: float = Field(description="Project effective temperature sum (degree days).")
+    stands: dict[StandID, StandData] = Field(
+        description="All stands in the project, keyed by stand ID."
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def allometry_paths_are_absolute_in_memory(
+        cls, data: Any, info: ValidationInfo
+    ) -> Any:
+        # mode="before" because StandData is frozen: the paths have to be
+        # absolute before the StandDatas are built, not patched afterwards.
+        if not isinstance(data, dict) or not isinstance(data.get("stands"), dict):
+            return data
+        document_dir = _document_dir_from_context(info.context)
+        return {
+            **data,
+            "stands": {
+                stand_id: _with_absolute_allometry_paths(stand, stand_id, document_dir)
+                for stand_id, stand in data["stands"].items()
+            },
+        }
+
+    @model_serializer(mode="wrap")
+    def allometry_paths_are_relative_on_disk(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        data = handler(self)
+        document_dir = _document_dir_from_context(info.context)
+        # No context (e.g. a bare model_dump for inspection): paths stay
+        # absolute, which a context-free model_validate also accepts.
+        if document_dir is None:
+            return data
+        for stand_id, stand in self.stands.items():
+            dumped_layers = data["stands"][stand_id]["allometry_file_per_layer"]
+            for layer, entry in stand.allometry_file_per_layer.items():
+                dumped_layers[layer]["file_path"] = _relative_allometry_file_path(
+                    entry.file_path, stand_id, document_dir
+                )
+        return data
+
+
+def load_stand_data_document_from_json(path: Path) -> StandDataDocument:
+    """Reads stand_data.json. Its allometry file paths, relative to the
+    file's own folder on disk, come back absolute. The CSVs themselves need
+    not exist: whether they do is SusiParams' concern (docs/adr/0005)."""
+    return StandDataDocument.model_validate_json(
+        path.read_text(),
+        context={DOCUMENT_DIR_CONTEXT_KEY: path.resolve().parent},
+    )
+
+
+def dump_stand_data_document(output_path: Path, document: StandDataDocument) -> None:
+    """Writes a StandDataDocument as JSON to output_path -- the project's
+    stand_data.json, normally susi.io.project_layout.stand_data_path_for_project.
+    Takes the already-resolved path rather than a project_dir: both
+    xml_to_allometry.py's and metsakeskus_to_allometry.py's main() already
+    need that same path for their own status printing, so they derive it
+    once and pass it in here, instead of each deriving it a second time.
+
+    Allometry file paths are written relative to output_path's folder;
+    raises if any of them is outside it (see docs/adr/0005)."""
+    output_path.write_text(
+        document.model_dump_json(context={DOCUMENT_DIR_CONTEXT_KEY: output_path.parent})
+    )
+
+
+def build_stand_params(
+    stand_data_document: StandDataDocument,
+    stand_id: StandID,
+    n: int,
+) -> StandParams:
+    """
+    Builds a simulation-ready StandParams for one stand out of a whole project's StandDataDocument.
+    `n`, the number of soil columns, must be supplied by the caller:
+    It is a property of the run being built, never of the stand data itself.
+    """
+    stand_data = stand_data_document.stands[stand_id]
+
+    canopy_layer_allometry = CanopyLayerAllometry.with_single_allometry_per_layer(
+        layers=stand_data.allometry_file_per_layer, n=n
+    )
+
+    return StandParams(
+        site_fertility_class=stand_data.site_fertility_class,
+        canopy_layer_allometry=canopy_layer_allometry,
+        # The engine needs an age for every layer, including ones the stand
+        # has no allometry for: those start at 0.0.
+        initial_canopylayer_age_years={
+            layer: stand_data.initial_age_per_layer.get(layer, 0.0)
+            for layer in CanopyLayerName
+        },
+    )

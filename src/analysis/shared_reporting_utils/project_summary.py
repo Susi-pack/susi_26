@@ -7,8 +7,8 @@ Extracted per #230 to eliminate the duplicated fixed-variable-list tuple and
 row-building loop that used to live independently in each frontend.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import pandas as pd
 
@@ -62,10 +62,13 @@ SUMMARY_VARIABLES = (
     aggregate_var("/stand/harvested_volume", _sum),
     aggregate_var("/stand/harvested_log_volume", _sum),
     aggregate_var("/stand/harvested_pulp_volume", _sum),
+    aggregate_var("/stand/biomass", _mean),
     aggregate_var("/export/hmwtoditch", _mean),
     aggregate_var("/export/lmwtoditch", _mean),
     aggregate_var("/balance/C/stand_c_balance_co2eq", _mean),
     aggregate_var("/balance/C/soil_c_balance_co2eq", _mean),
+    aggregate_var("/balance/C/co2c_release", _mean),
+    aggregate_var("/balance/C/ch4c_release", _mean),
     aggregate_var("/balance/N/balance_root_lyr", _mean),
     aggregate_var("/balance/P/balance_root_lyr", _mean),
     aggregate_var("/balance/K/balance_root_lyr", _mean),

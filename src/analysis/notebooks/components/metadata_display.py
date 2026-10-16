@@ -9,11 +9,11 @@ back.
 
 Typical usage:
 
-    params = load_output.read_params_from_jsons(experiment_folderpath=chosen_scenario_folder)
+    params = load_output.read_params_from_jsons(simulation_folderpath=chosen_scenario_folder)
     metadata_display.display_metadata(params.metadata, params.susi_params)
 """
 
-from IPython.display import display, JSON, Markdown
+from IPython.display import JSON, Markdown, display
 
 
 def display_metadata(metadata: dict, susi_params: dict) -> None:

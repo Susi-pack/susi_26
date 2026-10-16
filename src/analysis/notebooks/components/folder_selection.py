@@ -10,12 +10,16 @@ notebook has been re-run up to that point and the user has made a selection.
 
 Typical chained usage, one call per cell:
 
-    project_dropdown = folder_selection.build_dropdown(DATA_FOLDER, label="project")
+    project_dropdown = folder_selection.build_dropdown(PROJECTS_ROOT, label="project")
     project_dropdown
 
     # -- next cell, run after picking a value above --
+    run_dropdown = folder_selection.build_run_dropdown(project_dropdown.value)
+    run_dropdown
+
+    # -- next cell --
     stand_dropdown = folder_selection.build_dropdown(
-        project_dropdown.value, label="stand"
+        run_dropdown.value, label="stand"
     )
     stand_dropdown
 
@@ -32,10 +36,11 @@ Typical chained usage, one call per cell:
 from pathlib import Path
 
 import ipywidgets as widgets
-from IPython.display import display
 from ipyfilechooser import FileChooser
+from IPython.display import display
 
 import susi.io.load_output_data as load_output
+from susi.io.project_layout import require_outputs_dir
 
 
 def build_dropdown(dir_path: Path | str, label: str) -> widgets.Dropdown:
@@ -68,6 +73,27 @@ def build_dropdown(dir_path: Path | str, label: str) -> widgets.Dropdown:
     )
     display(dropdown)
     return dropdown
+
+
+def build_run_dropdown(project_dirpath: Path | str) -> widgets.Dropdown:
+    """
+    Build, display, and return the run dropdown for an already-chosen project.
+
+    A project's results live at
+    `<project>/outputs/<run_id>/<stand_id>/<scenario_id>`, so the chain from a
+    project down to a stand has two steps in it, not one. Only one of them is
+    a choice: `outputs/` gets no dropdown, because a project has exactly one
+    and offering it as an option is what makes the next dropdown in the chain
+    list a project's `inputs` and `outputs` as if they were stands.
+
+    The stand dropdown chains off the returned widget's `.value` as usual.
+    """
+    # `require_outputs_dir` rather than plain path composition: it reports a
+    # project that has never been run, where build_dropdown would report the
+    # missing outputs/ folder as a missing "run" folder.
+    outputs_dirpath = require_outputs_dir(Path(project_dirpath))
+
+    return build_dropdown(outputs_dirpath, label="run")
 
 
 def resolve_start_folder(chooser: FileChooser, default: Path) -> Path:

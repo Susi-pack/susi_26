@@ -17,6 +17,18 @@ site_author = "Annamari Laurén"
 # Read more: https://zensical.org/docs/setup/basics/#site_url
 site_url = "https://Susi-pack.github.io/susi_26"
 
+# The repo_url adds a link to the GitHub repository in the header of every
+# page. The repo_name is the label shown next to it (defaults to "GitHub").
+#
+# Read more: https://zensical.org/docs/setup/repository/
+repo_url = "https://github.com/Susi-pack/susi_26"
+repo_name = "Susi-pack/susi_26"
+
+# Path used by the "edit this page" / "view source" buttons (the
+# content.action.* features below). Zensical defaults to the "master" branch,
+# but ours is "main", so without this those buttons would lead to a 404.
+edit_uri = "edit/main/docs/"
+
 # The copyright notice appears in the page footer and can contain an HTML
 # fragment.
 #
@@ -40,15 +52,20 @@ nav = [
     { "Weather data" = "weather_data.md" },
     { "XML --> allometry file" = "xml_to_allometry.md" },
     { "How to generate allometry from XML data" = "how_to_generate_allometry_from_xml.md" },
+    { "Dense young stand scaling" = "dense_young_stand_scaling.md" },
     { "How to generate allometry from Metsäkeskus data" = "how_to_generate_allometry_from_metsakeskus.md" },
     { "Metsäkeskus data --> allometry files" = "metsakeskus_to_allometry.md" },
     { "How to generate a new-growth allometry file" = "how_to_generate_new_growth_allometry.md" },
     { "New-growth allometry file" = "new_growth_allometry.md" },
-    { "Read data from experiments" = "reading_output_data.md" },
+    { "Read data from runs" = "reading_output_data.md" },
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
-    { "Get started with zensical" = "zensical_index.md" },
+    { "How to run on Roihu (CSC)" = "how_to_run_susi_on_roihu.md" },
+    { "Maintainers" = [
+        "internal/how_to_release_a_new_version.md",
+        "internal/how_to_set_up_susi_on_roihu.md",
+    ] },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize

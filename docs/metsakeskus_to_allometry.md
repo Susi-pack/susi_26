@@ -4,7 +4,7 @@ icon: lucide/table-2
 
 # Metsäkeskus data --> allometry files
 
-`src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py` converts a Metsäkeskus forest inventory
+`susi-metsakeskus-to-allometry` (`src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py`) converts a Metsäkeskus forest inventory
 GeoPackage (`.gpkg`) into the allometry CSVs SUSI reads.
 Every stand that survives the filters below is converted: there is no sampling
 and no grouping of stands.
@@ -19,9 +19,9 @@ instead, see [XML data --> allometry files](xml_to_allometry.md).
 ## Synopsis
 
 ```bash
-python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG \
+susi-metsakeskus-to-allometry INPUT_GPKG \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
-    [--allow-out-of-range-values] [--emit-xml] [--dry-run]
+    [--allow-out-of-range-values] [--dry-run]
 ```
 
 ## Command-line arguments
@@ -29,17 +29,17 @@ python src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py INPUT_GPKG
 | Argument | Required | Description |
 |---|---|---|
 | `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage. Must exist and end in `.gpkg`. |
-| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — where the config file is looked up by default, and names the XML file written by `--emit-xml` (from the folder's own name). |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — where the config file is looked up by default. |
 | `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/config.toml`. Must exist and end in `.toml`. |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
-| `--emit-xml` | no | Also write a combined ForestPropertyData XML next to the CSVs. |
 | `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
 
 The output folder is not selectable: `<project-dir>/allometry/` is the
 only place this tool writes. It must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it, so a repeat run
-needs a different `--project-dir`, or a fresh `allometry/` folder underneath
-the existing one. The folder is created just before the files are written, so
+to run into a previous run's output rather than overwrite it.
+So rename or move the existing `allometry/` first. (If it holds a
+`new_growth/` subfolder from `new_growth_allometry.py`, move that back into
+the fresh `allometry/` afterwards.) The folder is created just before the files are written, so
 a run that fails while reading or filtering leaves nothing behind.
 
 The tool also prints the fully-resolved (absolute) path it read the config
@@ -87,6 +87,23 @@ forward each stand's growth is projected and at what resolution. Every table
 also opens with a row for the snapshot itself, at `Year` 0, so the defaults
 produce 17 rows per file. `Year` counts from the snapshot; the `Age` column
 adds the stand's measured age to it.
+
+#### `[dense_young_stand_scaling]`
+
+An optional table that scales down the stem count and basal area of dense
+young stands before the growth model runs. It is off by default, and explained
+in full on its own page: [Dense young stand scaling](dense_young_stand_scaling.md).
+A TOML table has to come after every top-level key, so keep it at the end of
+the file.
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Turns the scaling on. |
+| `max_mean_diameter` | `8.0` | Only stands with a mean diameter below this are scaled, cm. |
+| `stem_count_threshold_spruce` | `2200` | A spruce-dominated stand is scaled when its stem count is above this, stems/ha. |
+| `stem_count_threshold_other` | `2500` | The same, for a pine- or deciduous-dominated stand. |
+| `target_stem_count_spruce` | `1800` | The stem count a scaled spruce-dominated stand starts from, stems/ha. |
+| `target_stem_count_other` | `2000` | The same, for a pine- or deciduous-dominated stand. |
 
 ## Input data
 
@@ -178,10 +195,20 @@ area but no usable diameter or height drops the whole stand (see
 **5. Viability check.** Drops stands whose basal area is zero across all three
 species: there is no growth to model.
 
+**Dense young stand scaling.** Not a filter: it removes no stand. After the
+last check, the tool reports
+[dense young stand scaling](dense_young_stand_scaling.md#with-metsakeskus-data):
+with the option on, one line per stand it scales down; and in any case a
+warning naming the dense young stands that are about to be grown with more
+stems than the default limits allow. A scaled stand has every species' stem
+count and basal area multiplied by its scaling factor before the growth model
+runs, and before the stand is split into its two layers.
+
 **Writing.** For each surviving stand, the polygon centroid is transformed from
 EPSG:3067 (ETRS-TM35FIN) to EPSG:2393 (YKJ) for the growth model, the species
 are ranked by basal area into a dominant and a subdominant, and one growth
-trajectory is computed per layer.
+trajectory is computed per layer. `stand_data.json` records the stand as the
+inventory reports it, and says whether it was scaled and by what factor.
 
 ## Dry runs
 
@@ -190,15 +217,12 @@ it still happens: the GeoPackage is read, every filter runs, the year table and
 every skipped stand are reported exactly as in a real run. The tool then prints
 the files it would have written, and exits.
 
-Nothing at all is created — no CSVs, no `extra_gpkg_info.json`, no XML, and not
+Nothing at all is created — no CSVs, no `stand_data.json`, and not
 even the output folder, so a dry run does not claim a `--project-dir` that the
 real run then has to work around. The one thing it does still enforce is the
 refusal to run into an existing output folder: whether the real run could start
 is part of what a dry run is for.
-
-Two things carry over from a real run. `--emit-xml` is reported (the dry run
-describes the run you are about to make), and the file names printed are the
-ones a real run would produce, decided by the same code.
+The file names printed are the ones a real run would produce, decided by the same code.
 
 The counts are an **upper bound**. Computing the growth trajectories is the
 slow part of a run and the part `--dry-run` skips, so a stand that would fail
@@ -212,13 +236,10 @@ ran.
 |---|---|
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
-| `extra_gpkg_info.json` | Always. Every converted stand's site attributes, species strata, stand-level means, YKJ coordinates and geometry. Informational: nothing in SUSI reads it. |
-| `<project folder name>.xml` | With `--emit-xml`. All stands in one ForestPropertyData document (named after the `--project-dir` folder), replayable through [`xml_to_allometry.py`](xml_to_allometry.md) without the `.gpkg`. |
+| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means, stem count, and whether [dense young stand scaling](dense_young_stand_scaling.md) was applied. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
-Each CSV follows the canonical allometry schema — the columns declared in
-`susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by
-`read_allometry_info_from_csv` — with a leading `Species_ID` column that is
-constant within the file (1 pine, 2 spruce, 3 deciduous).
+Each CSV follows the canonical allometry schema.
+The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.
 
 ??? info "Why two single-species files per stand?"
 
@@ -257,5 +278,5 @@ continues. One bad stand never aborts the others.
 
     The tool would rather lose the stand and say so. The same rule applies to
     `soiltype`: when the export doesn't record it, it stays absent all the way
-    through — `null` in the JSON, and the tag simply omitted from the XML —
+    through — `null` in the JSON—
     rather than being filled in with a number.

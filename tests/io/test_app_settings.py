@@ -1,26 +1,42 @@
-from pathlib import Path
+import pytest
 
-from pydantic import DirectoryPath, TypeAdapter
+import susi.io.utils as io_utils
+from susi.io.app_settings import PROJECTS_ROOT_ENV_VAR, AppSettings
 
-from susi.io.app_settings import AppSettings
 
+class TestProjectsRoot:
+    def test_defaults_to_projects_folder_under_the_repo_root(self, monkeypatch):
+        # projects/.gitkeep is tracked, so this folder exists on a fresh
+        # clone -- which is what makes validate_default=True safe to turn on.
+        monkeypatch.delenv(PROJECTS_ROOT_ENV_VAR, raising=False)
 
-class TestUserInputFolder:
-    def test_resolves_to_repo_root_inputs_folder(self):
-        app_settings = AppSettings()
+        assert AppSettings().projects_root == io_utils.repo_root() / "projects"
 
-        assert app_settings.user_input_folder == (
-            app_settings.project_root_path / Path("inputs/")
-        )
+    def test_env_var_overrides_the_default(self, monkeypatch, tmp_path):
+        # The override that makes running on a cluster possible: the data
+        # lives on a different filesystem from the code.
+        elsewhere = tmp_path / "somewhere_else"
+        elsewhere.mkdir()
+        monkeypatch.setenv(PROJECTS_ROOT_ENV_VAR, str(elsewhere))
 
-    def test_validates_as_directory_path(self):
-        app_settings = AppSettings()
+        assert AppSettings().projects_root == elsewhere
 
-        # Round-tripping through DirectoryPath validation confirms the
-        # folder actually exists on disk, not just that the field is typed
-        # as one.
-        validated = TypeAdapter(DirectoryPath).validate_python(
-            app_settings.user_input_folder
-        )
+    def test_nonexistent_env_var_path_fails_loudly_and_by_name(
+        self, monkeypatch, tmp_path
+    ):
+        # A typo'd env var must not degrade into "no projects found later";
+        # the error has to name the variable that caused it.
+        monkeypatch.setenv(PROJECTS_ROOT_ENV_VAR, str(tmp_path / "does_not_exist"))
 
-        assert validated == app_settings.user_input_folder
+        with pytest.raises(ValueError, match=PROJECTS_ROOT_ENV_VAR):
+            AppSettings()
+
+    def test_outside_a_checkout_the_env_var_is_required(self, monkeypatch, tmp_path):
+        # An installed (non-editable) SUSI has no checkout, so
+        # `<repo root>/projects` would be `.../lib/python3.11/projects`. The
+        # error must say which variable to set, not complain about that path.
+        monkeypatch.delenv(PROJECTS_ROOT_ENV_VAR, raising=False)
+        monkeypatch.setattr(io_utils, "repo_root", lambda: tmp_path)
+
+        with pytest.raises(ValueError, match=PROJECTS_ROOT_ENV_VAR):
+            AppSettings()

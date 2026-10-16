@@ -1,14 +1,15 @@
-import streamlit as st
-from typing import Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
-from susi.io.load_output_data import (
-    read_netcdf_files_for_selected_variables,
-    StandID,
-    ScenarioID,
-    OutputDataStore,
-)
+import streamlit as st
+
 from analysis.shared_reporting_utils.project_summary import AggregatedNetcdfVar
+from susi.io.load_output_data import (
+    OutputDataStore,
+    ScenarioID,
+    StandID,
+    read_netcdf_files_for_selected_variables,
+)
 
 
 # Cacheing to not re-read the same variables twice
@@ -22,7 +23,7 @@ from analysis.shared_reporting_utils.project_summary import AggregatedNetcdfVar
 def cached_read_netcdf_files(
     selected_variables: tuple[AggregatedNetcdfVar, ...],
     scenarios_by_stand: dict[StandID, Sequence[ScenarioID]],
-    netcdf_filepaths_by_stand: dict[StandID, tuple[Path, ...]],
+    netcdf_filepaths_by_stand: dict[StandID, Sequence[Path]],
 ) -> OutputDataStore:
     return read_netcdf_files_for_selected_variables(
         selected_variables=[var.netcdf_path for var in selected_variables],

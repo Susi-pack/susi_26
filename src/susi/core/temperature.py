@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Wed Sep 30 14:39:09 2020
 
@@ -101,7 +100,7 @@ class PeatTemperature:
             Ta = Ta + T_cool
 
         u = np.zeros(self.nLyrs + 1)
-        for n in range(0, self.spara.peat_temperature.n_subtimesteps):
+        for n in range(self.spara.peat_temperature.n_subtimesteps):
             b = self.Tsoil.copy()
             b[0] = Ta  # temp[n] #0.0  # boundary conditions
             b[-1] = self.lower_boundary

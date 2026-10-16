@@ -3,10 +3,9 @@ Source: https://github.com/lukefi/metsi/blob/main/lukefi/metsi/forestry/preproce
 Module contains forestry domain spesific model functions
 """
 
-from typing import Optional
 
 
-def naslund_height(diameter: float | None, species: float | None) -> Optional[float]:
+def naslund_height(diameter: float | None, species: float | None) -> float | None:
     """
     Näslund height model, with parameters from one Siipilehto. As extracted from LueVMI12.py.
     :param diameter: diameter of the tree at 1.3m height

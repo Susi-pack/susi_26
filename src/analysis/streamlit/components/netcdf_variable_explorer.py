@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_tree_select import tree_select
 
-from susi.io.load_output_data import NetcdfVariablePath, NetcdfVariableInfo
+from susi.io.load_output_data import NetcdfVariableInfo, NetcdfVariablePath
 
 
 def build_tree_nodes(variables: dict[NetcdfVariablePath, NetcdfVariableInfo]):
@@ -66,7 +66,16 @@ def build(
 ) -> dict[NetcdfVariablePath, NetcdfVariableInfo]:
     """
     Displays the netcdf variable tree and returns selected variables
+
+    Preselected paths that are not among netcdf_variables are dropped, so a
+    default selection that the chosen netcdf file lacks is not ticked rather
+    than handed to the tree as a node that does not exist.
     """
+    if preselected is not None:
+        preselected = [
+            var_path for var_path in preselected if var_path in netcdf_variables
+        ]
+
     col_left, col_right = st.columns(2)
 
     # Build tree and render

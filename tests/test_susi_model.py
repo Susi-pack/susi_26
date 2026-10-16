@@ -1,13 +1,15 @@
 import datetime
-import pytest
 from pathlib import Path
 
+import pytest
+
 from susi.io.susi_parameter_model import (
+    AllometryFileAndSpecies,
     CanopyLayerAllometry,
     CanopyLayerName,
     CanopyParams,
     CuttingManagementParams,
-    StandardNPKFertilizationParameters,
+    LocationsForPhotoParams,
     NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
@@ -15,13 +17,13 @@ from susi.io.susi_parameter_model import (
     PeatTypes,
     SimulationConfig,
     SiteParams,
+    StandardNPKFertilizationParameters,
+    StandParams,
     SusiParams,
-    TreeSpecies,
+    Thinning,
     WeatherParams,
     get_photo_parameters_by_location,
-    LocationsForPhotoParams,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
-    Thinning,
 )
 
 
@@ -40,13 +42,24 @@ def valid_susi_params(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.csv"},
-            pointers={
-                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
-                CanopyLayerName.subdominant: None,
-                CanopyLayerName.under: None,
+        stand_params=StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=CanopyLayerAllometry(
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
+                    )
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
+            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
             },
         ),
         canopy_parameters=CanopyParams(),
@@ -58,14 +71,7 @@ def valid_susi_params(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
-            site_fertility_class=4,
             sitename="test",
-            species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
             vol=None,
@@ -97,7 +103,10 @@ def valid_susi_params(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                application_yr=2004,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             ),
             depoN=4.0,
             depoP=0.1,
@@ -128,13 +137,24 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
-            allometry_file_registry={1: "test_allometry.csv"},
-            pointers={
-                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
-                CanopyLayerName.subdominant: None,
-                CanopyLayerName.under: None,
+        stand_params=StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=CanopyLayerAllometry(
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
+                    )
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.subdominant: None,
+                    CanopyLayerName.under: None,
+                },
+            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
             },
         ),
         canopy_parameters=CanopyParams(),
@@ -146,14 +166,7 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
-            site_fertility_class=4,
             sitename="test",
-            species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
             vol=None,
@@ -185,7 +198,10 @@ def test_valid_canopy_layer_pointers_length(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                application_yr=2004,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             ),
             depoN=4.0,
             depoP=0.1,
@@ -220,13 +236,25 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: [1, 1, 1],
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: None,
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1, 1, 1],
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -238,14 +266,7 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 70.0,
-                    CanopyLayerName.subdominant: 70.0,
-                    CanopyLayerName.under: 70.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -277,7 +298,10 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
@@ -301,10 +325,33 @@ def test_invalid_canopy_layer_pointers_length(test_data_path):
 def test_valid_stand_age_all_layers(valid_susi_params):
     """Test that valid stand ages within allometry range pass validation."""
     params = valid_susi_params
-    ages = params.site_parameters.initial_canopylayer_age_years
+    ages = params.stand_params.initial_canopylayer_age_years
     assert ages[CanopyLayerName.dominant] == 70.0
     assert ages[CanopyLayerName.subdominant] == 70.0
     assert ages[CanopyLayerName.under] == 70.0
+
+
+def test_age_is_the_initial_age_on_every_column(valid_susi_params):
+    age = valid_susi_params.age
+
+    assert set(age) == set(CanopyLayerName)
+    for layer_ages in age.values():
+        assert layer_ages.tolist() == [70.0] * valid_susi_params.site_parameters.n
+
+
+def test_stand_params_requires_an_initial_age_for_every_layer(valid_susi_params):
+    # The engine builds a Canopylayer for every layer, with or without
+    # allometry, so a missing age must fail here rather than as a KeyError
+    # deep in the run.
+    with pytest.raises(ValueError, match="under"):
+        StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=valid_susi_params.stand_params.canopy_layer_allometry,
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 0.0,
+            },
+        )
 
 
 def test_initial_dominant_age_below_minimum(test_data_path):
@@ -318,13 +365,25 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: None,
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 1.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -336,14 +395,7 @@ def test_initial_dominant_age_below_minimum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 1.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 10.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -375,7 +427,10 @@ def test_initial_dominant_age_below_minimum(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
@@ -407,13 +462,25 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2100, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: None,
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 80.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 10.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -425,14 +492,7 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 80.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 10.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -464,7 +524,10 @@ def test_initial_age_plus_duration_above_maximum(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
@@ -496,13 +559,25 @@ def test_subdominant_layer_validation(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: None,
-                    CanopyLayerName.subdominant: [1, 1, 1, 1, 1],
-                    CanopyLayerName.under: None,
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: None,
+                        CanopyLayerName.subdominant: [1, 1, 1, 1, 1],
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 1.0,
+                    CanopyLayerName.under: 10.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -514,14 +589,7 @@ def test_subdominant_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 40.0,
-                    CanopyLayerName.subdominant: 1.0,
-                    CanopyLayerName.under: 10.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -553,7 +621,10 @@ def test_subdominant_layer_validation(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
@@ -585,13 +656,25 @@ def test_under_layer_validation(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: None,
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: [1, 1, 1, 1, 1],
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: None,
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: [1, 1, 1, 1, 1],
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 40.0,
+                    CanopyLayerName.subdominant: 20.0,
+                    CanopyLayerName.under: 1.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -603,14 +686,7 @@ def test_under_layer_validation(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 40.0,
-                    CanopyLayerName.subdominant: 20.0,
-                    CanopyLayerName.under: 1.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -642,7 +718,10 @@ def test_under_layer_validation(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
@@ -673,17 +752,30 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             start_date=datetime.datetime(2004, 1, 1),
             end_date=datetime.datetime(2007, 12, 31),
         ),
-        allometry_parameters=CanopyLayerAllometry(
-            allometry_dir_path=test_data_path,
-            allometry_file_registry={
-                1: "test_allometry.csv",
-                2: "test_allometry.csv",
-                3: "test_allometry.csv",
-            },
-            pointers={
-                CanopyLayerName.dominant: [1, 1, 1, 1, 1],
-                CanopyLayerName.subdominant: [2, 2, 2, 2, 2],
-                CanopyLayerName.under: [3, 3, 3, 3, 3],
+        stand_params=StandParams(
+            site_fertility_class=4,
+            canopy_layer_allometry=CanopyLayerAllometry(
+                allometry_file_registry={
+                    1: AllometryFileAndSpecies(
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
+                    ),
+                    2: AllometryFileAndSpecies(
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
+                    ),
+                    3: AllometryFileAndSpecies(
+                        file_path=test_data_path / "test_allometry.csv", species_id=1
+                    ),
+                },
+                pointers={
+                    CanopyLayerName.dominant: [1, 1, 1, 1, 1],
+                    CanopyLayerName.subdominant: [2, 2, 2, 2, 2],
+                    CanopyLayerName.under: [3, 3, 3, 3, 3],
+                },
+            ),
+            initial_canopylayer_age_years={
+                CanopyLayerName.dominant: 70.0,
+                CanopyLayerName.subdominant: 70.0,
+                CanopyLayerName.under: 70.0,
             },
         ),
         canopy_parameters=CanopyParams(),
@@ -695,14 +787,7 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
         site_parameters=SiteParams(
             L=10.0,
             n=5,
-            initial_canopylayer_age_years={
-                CanopyLayerName.dominant: 70.0,
-                CanopyLayerName.subdominant: 70.0,
-                CanopyLayerName.under: 70.0,
-            },
-            site_fertility_class=4,
             sitename="test",
-            species=TreeSpecies("Pine"),
             sfc_specification=1,
             hdom=None,
             vol=None,
@@ -734,7 +819,10 @@ def test_valid_allometry_pointers_correspondence(test_data_path):
             rho_mor=90.0,
             h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
             cutting_management=CuttingManagementParams(
-                application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                application_yr=2004,
+                management_type=Thinning(
+                    target_basal_area={CanopyLayerName.dominant: 12}
+                ),
             ),
             depoN=4.0,
             depoP=0.1,
@@ -769,13 +857,25 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 start_date=datetime.datetime(2004, 1, 1),
                 end_date=datetime.datetime(2007, 12, 31),
             ),
-            allometry_parameters=CanopyLayerAllometry(
-                allometry_dir_path=test_data_path,
-                allometry_file_registry={1: "test_allometry.csv"},
-                pointers={
-                    CanopyLayerName.dominant: [99, 99, 99, 99, 99],
-                    CanopyLayerName.subdominant: None,
-                    CanopyLayerName.under: None,
+            stand_params=StandParams(
+                site_fertility_class=4,
+                canopy_layer_allometry=CanopyLayerAllometry(
+                    allometry_file_registry={
+                        1: AllometryFileAndSpecies(
+                            file_path=test_data_path / "test_allometry.csv",
+                            species_id=1,
+                        )
+                    },
+                    pointers={
+                        CanopyLayerName.dominant: [99, 99, 99, 99, 99],
+                        CanopyLayerName.subdominant: None,
+                        CanopyLayerName.under: None,
+                    },
+                ),
+                initial_canopylayer_age_years={
+                    CanopyLayerName.dominant: 70.0,
+                    CanopyLayerName.subdominant: 70.0,
+                    CanopyLayerName.under: 70.0,
                 },
             ),
             canopy_parameters=CanopyParams(),
@@ -787,14 +887,7 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
             site_parameters=SiteParams(
                 L=10.0,
                 n=5,
-                initial_canopylayer_age_years={
-                    CanopyLayerName.dominant: 70.0,
-                    CanopyLayerName.subdominant: 70.0,
-                    CanopyLayerName.under: 70.0,
-                },
-                site_fertility_class=4,
                 sitename="test",
-                species=TreeSpecies("Pine"),
                 sfc_specification=1,
                 hdom=None,
                 vol=None,
@@ -826,7 +919,10 @@ def test_invalid_allometry_pointers_missing_key(test_data_path):
                 rho_mor=90.0,
                 h_mor=h_mor_from_drainage_and_mass_mor_Pitkanen,
                 cutting_management=CuttingManagementParams(
-                    application_yr=2004, management_type=Thinning(target_basal_area={'dominant': 12})
+                    application_yr=2004,
+                    management_type=Thinning(
+                        target_basal_area={CanopyLayerName.dominant: 12}
+                    ),
                 ),
                 depoN=4.0,
                 depoP=0.1,
