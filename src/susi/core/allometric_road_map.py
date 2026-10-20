@@ -547,11 +547,11 @@ class Growth_and_Yield_Table:
         ReferenceTrees["Nd"] = survival_rate * ReferenceTrees["Nd"]
 
         # calculate mean attributes, timber assortments and biomass components
-        if ReferenceTrees["D"].sum() == 0:
-            mean_height = np.average(
-                ReferenceTrees["H"],
-                weights=ReferenceTrees["Nd"],
-            )
+        mean_height = np.average(
+            ReferenceTrees["H"],
+            weights=ReferenceTrees["Nd"],
+        )
+        if mean_height < 1.3:
             mean_diameter = 0
         else:
             mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
@@ -579,7 +579,7 @@ class Growth_and_Yield_Table:
                 )
             ],
             "Hg": [round(mean_height, 1)],
-            "Dg": [round(mean_diameter, 1)] if mean_height >= 1.3 else 0.0,
+            "Dg": [round(mean_diameter, 1)] if mean_height >= 1.3 else [0.0],
             "Hdom": [round(self.dominant_height(ReferenceTrees), 1)],
             "Volume": [assortments["total"]],
             "Logs": [assortments["log"]],
