@@ -294,7 +294,7 @@ def prepare_susi_params(
     return SimulationParams(
         metadata=SimulationMetaData(
             project_dir=PROJECT_DIR,
-            run_id="paper_runs",
+            run_id="paper_run",
             stand_id=stand_id,
             scenario_id=scenario,
         ),
@@ -477,12 +477,8 @@ G_2_per_parameter_set = []
 
 for stand_id in stand_data_document.stands:
     ### SET BASE SCENARIOS
-    ditch_depth_data = ditch_depths[stand_id]
-    ditch_depth = ditch_depth_data
-    if ditch_depth_data > -0.40:
-        base_scenarios = ["default", "partialblocking", "DNM_60", "DNM_85"]
-    else:
-        base_scenarios = ["default", "partialblocking"]
+    ditch_depth = ditch_depths[stand_id]
+    base_scenarios = ["default", "partialblocking", "DNM_60", "DNM_85"]
 
     for scen in base_scenarios:
         if scen == "DNM_60":
