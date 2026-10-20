@@ -32,12 +32,14 @@ from susi.io.susi_parameter_model import (
     CanopyParams,
     CuttingManagementParams,
     LocationsForPhotoParams,
+    NutrientFertilizationParameters,
     OrganicLayerParams,
     OutputParams,
     PeatTemperatureParams,
     PeatTypes,
     SimulationConfig,
     SiteParams,
+    StandardNPKFertilizationParameters,
     StandParams,
     SusiParams,
     Thinning,
@@ -276,6 +278,23 @@ def prepare_susi_params(
 ) -> SimulationParams:
 
     start_date = datetime.datetime(2005, 1, 1)
+    # Fertilized at the start year if scen == fertilization.
+    # Else, not fertilized (out of the simulation period)
+    if scenario == "fertilized":
+        fertilization_management = StandardNPKFertilizationParameters(
+            application_year=start_date.year,
+            N=NutrientFertilizationParameters(
+                dose=0.0,
+                decay_k=0.5,
+                eff=1.0,
+            ),  # fertilization dose in kg ha-1, decay_k in yr-1
+            P=NutrientFertilizationParameters(dose=45.0, decay_k=0.2, eff=1.0),
+            K=NutrientFertilizationParameters(dose=100.0, decay_k=0.3, eff=1.0),
+            pH_increment=1.0,
+        )
+    else:
+        fertilization_management = None
+
     # Partial blocking
     if scenario == "partialblocking":
         ditch_depth_east = -0.10
@@ -294,7 +313,7 @@ def prepare_susi_params(
     return SimulationParams(
         metadata=SimulationMetaData(
             project_dir=PROJECT_DIR,
-            run_id="paper_runs",
+            run_id="first_test",
             stand_id=stand_id,
             scenario_id=scenario,
         ),
@@ -351,7 +370,7 @@ def prepare_susi_params(
                 depoN=3.5,  # Lestijärvi
                 depoP=1.0,  # Lestijärvi
                 depoK=0.6,  # Lestijärvi
-                fertilization=None,
+                fertilization=fertilization_management,
                 peat_temperature=PeatTemperatureParams(),
             ),
         ),
@@ -477,19 +496,17 @@ G_2_per_parameter_set = []
 
 for stand_id in stand_data_document.stands:
     ### SET BASE SCENARIOS
-    ditch_depth_data = ditch_depths[stand_id]
-    ditch_depth = ditch_depth_data
-    if ditch_depth_data > -0.40:
-        base_scenarios = ["default", "partialblocking", "DNM_60", "DNM_85"]
+    ditch_depth = ditch_depths[stand_id]
+    if ditch_depth > -0.40:
+        # base_scenarios = ["default", "fertilized", "partialblocking", "DNM"]
+        base_scenarios = ["default", "partialblocking", "DNM"]
     else:
+        # base_scenarios = ["default", "fertilized", "partialblocking"]
         base_scenarios = ["default", "partialblocking"]
 
     for scen in base_scenarios:
-        if scen == "DNM_60":
+        if scen == "DNM":
             ditch_depth = -0.60
-
-        if scen == "DNM_85":
-            ditch_depth = -0.85
 
         susi_params = prepare_susi_params(
             stand_id=stand_id,
