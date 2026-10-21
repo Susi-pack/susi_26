@@ -6,7 +6,7 @@ Created on Wed Sep 30 14:39:09 2020
 
 import numpy as np
 from scipy.sparse import diags
-from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import splu
 
 from susi.io.susi_parameter_model import SiteParams
 
@@ -59,6 +59,11 @@ class PeatTemperature:
             shape=(self.nLyrs + 1, self.nLyrs + 1),
             format="csr",
         )
+        # Efficiency improvement: factorize the matrix only once instead of per-substep.
+        # Then, solve the factorized LU system.
+        # Note: this is of course only valid while A is constant for the whole run.
+        # Right now A only depends on peat diffusivity, dt and dz (see construction above), so this is safe.
+        self.LU = splu(self.A.tocsc())
 
         print("Peat temperature profile initialized")
 
@@ -104,7 +109,7 @@ class PeatTemperature:
             b = self.Tsoil.copy()
             b[0] = Ta  # temp[n] #0.0  # boundary conditions
             b[-1] = self.lower_boundary
-            u[:] = spsolve(self.A, b)
+            u[:] = self.LU.solve(b)
             # u_1[:] = u
             self.Tsoil = u
         return self.z[: self.nLyrs_hydro], self.Tsoil[: self.nLyrs_hydro]
