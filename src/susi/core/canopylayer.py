@@ -384,7 +384,6 @@ class Canopylayer:
             zone.allometry.functions.age_to_leaves(age) * nut_stat[target_cols]
         )
         self.species[target_cols] = zone.allometry.sp
-        # self.volume[target_cols] = zone.allometry.functions.age_to_vol(age)         # stem volume m3/tree
         self.volume[target_cols] = zone.allometry.functions.bm_to_vol(
             self.biomass[target_cols]
         )  # stem volume m3/tree
@@ -444,14 +443,6 @@ class Canopylayer:
         for zone in self.zones:
             cols = zone.cols
             f = zone.allometry.functions
-            # print ('**********************')
-            # print (np.round(np.mean(f.bm_to_vol(bm[cols])*self.stems),2))
-            # print (np.round(np.mean(f.age_to_vol(self.agearr[cols])*self.stems), 2))
-            # print ('vol')
-            # print (self.volume)
-            # print ('n stems')
-            # print (self.stems)
-            # print ('**********************')
 
             self.stems[cols] = f.bm_to_stems(bm[cols]) * self.remaining_share[cols]
 
@@ -462,7 +453,6 @@ class Canopylayer:
 
             self.leafarea[cols] = f.bm_to_lai(bm[cols])
             self.leafmass[cols] = f.bm_to_leaf_mass(bm[cols])
-            # self.volume[cols] = f.bm_to_yi(bm[cols])
             self.volume[cols] = f.bm_to_vol(bm[cols])
             for target, curve in (
                 (self.n_demand, f.demand.N),
@@ -539,10 +529,6 @@ class Canopylayer:
                 (self.basKdemand, f.leaf_demand.K),
             ):
                 target[cols] = curve(bm[cols])
-            # print ('vol')
-            # print (self.volume)
-            # print ('n stems')
-            # print (self.stems)
 
     def assimilate(
         self, photopara, forc, wt, afp, previous_nut_stat, nut_stat, lai_above
@@ -578,16 +564,6 @@ class Canopylayer:
         self.NPP, self.NPP_pot = assimilation_yr(
             photopara, forc, wt, afp, self.leafarea * 2 * self.stems, lai_above
         )  # double sided LAI required
-
-        """
-        self.NPP = (
-            self.NPP * nut_stat / self.stems #* 1.1                            #This removed 05022026
-        )  # returned back to tree basis unit
-        
-        self.NPP_pot = (
-            self.NPP_pot * nut_stat / self.stems #* 1.1
-        )  # returned back to tree basis units
-        """
 
         # 1. Define the mask once
         condition = self.stems > 0
@@ -724,7 +700,6 @@ class Canopylayer:
         }  # specific leaf area Härkönen et al. 2015 BER 20, 181-195
         species_codes = {1: "Pine", 2: "Spruce", 3: "Birch"}
         spe = species_codes[species[0]]  # Take the first item, all are same here
-        # longevityLeaves = {'Pine':[3.5, 2.5], 'Spruce':[6.0, 4.0], 'Birch':[1.0, 1.0]}                     # yrs, life span of leaves and fine roots
         longevityLeaves = {
             "Pine": [5.0, 3.5],
             "Spruce": [8.0, 5.0],
@@ -1004,7 +979,6 @@ class Canopylayer:
 
             print("remaining share")
             print(np.mean(self.remaining_share))
-            # agearr = self.agearr
 
             print("nonwoody logging residues")
             print(

@@ -16,7 +16,6 @@ last edit: Oct 2018 / Samuli
 
 """
 
-import configparser
 import copy
 
 import numpy as np
@@ -50,9 +49,6 @@ class CanopyGrid:
         # canopy parameters and state
         self.hc = state.hc + epsi
         self.cf = state.cf + epsi
-        # self.cf = 0.1939 * ba / (0.1939 * ba + 1.69) + epsi
-        # canopy closure [-] as function of basal area ba m2ha-1;
-        # fitted to Korhonen et al. 2007 Silva Fennica Fig.2
 
         self._LAIconif = state.lai_conif + epsi  # m2m-2
         self._LAIdecid = state.lai_decid_max
@@ -135,7 +131,6 @@ class CanopyGrid:
         self.LAI = self._LAIconif + self._LAIdecid
         self.hc = hc
 
-        # Rn = 0.7 * Rg #net radiation
         Rn = (
             np.maximum(2.57 * self.LAI / (2.57 * self.LAI + 0.57) - 0.2, 0.55) * Rg
         )  # Launiainen et al. 2016 GCB, fit to Fig 2a
@@ -207,19 +202,6 @@ class CanopyGrid:
             self.SWE,
         )  # fQ,fD,fRew
 
-    def _degreeDays(self, T, doy):
-        """
-        Calculates and updates degree-day sum from the current mean Tair.
-        INPUT:
-            T - daily mean temperature (degC)
-            doy - day of year 1...366 (integer)
-        """
-        To = 5.0  # threshold temperature
-        if doy == 1:  # reset in the beginning of the year
-            self.DDsum = 0.0
-        else:
-            self.DDsum += np.maximum(0.0, T - To)
-
     def _photoacclim(self, T, phenopara):
         """
         computes new stage of temperature acclimation and phenology modifier.
@@ -233,44 +215,6 @@ class CanopyGrid:
         S = np.maximum(self.X - phenopara.xo, 0.0)
         fPheno = np.maximum(phenopara.fmin, np.minimum(S / phenopara.smax, 1.0))
         return fPheno
-
-    def _lai_dynamics(self, doy, phenopara):
-        """
-        Seasonal cycle of deciduous leaf area
-
-        Args:
-            self - object
-            doy - day of year
-
-        Returns:
-            none, updates state variables self.LAIdecid, self._growth_stage,
-            self._senec_stage
-        """
-        lai_min = phenopara.lai_decid_min
-        ddo = phenopara.ddo
-        ddur = phenopara.ddur
-        sso = phenopara.sso
-        sdur = phenopara.sdur
-
-        # growth phase
-        if self.DDsum <= ddo:
-            f = lai_min
-            self._growth_stage = 0.0
-            self._senesc_stage = 0.0
-        elif self.DDsum > ddo:
-            self._growth_stage += 1.0 / ddur
-            f = np.minimum(1.0, lai_min + (1.0 - lai_min) * self._growth_stage)
-
-        # senescence phase
-        if doy > sso:
-            self._growth_stage = 0.0
-            self._senesc_stage += 1.0 / sdur
-            f = 1.0 - (1.0 - lai_min) * np.minimum(1.0, self._senesc_stage)
-
-        # update self.LAIdecid and total LAI
-        self._LAIdecid = self._LAIdecid_max * f
-        self.LAI = self._LAIconif + self._LAIdecid
-        return f
 
     def dry_canopy_et(
         self,
@@ -339,8 +283,6 @@ class CanopyGrid:
 
         kp = cpara.physpara.kp  # (-) attenuation coefficient for PAR
         q50 = cpara.physpara.q50  # Wm-2, half-sat. of leaf light response
-        # rw = self.physpara.rw  # rew parameter
-        # rwmin = self.physpara.rwmin  # rew parameter
 
         tau = np.exp(-kp * self.LAI)  # fraction of Qp at ground relative to canopy top
 
@@ -352,13 +294,11 @@ class CanopyGrid:
             / kp
             * np.log((kp * Qp + q50) / (kp * Qp * np.exp(-kp * self.LAI) + q50 + eps))
         )
+        # Leuning et al., 2008 WRR use a different fQ for daily Gc; they refer to
+        # Kelliher et al. 1995 AFM but their equation is not the exact integral of K95.
 
-        # the next formulation is from Leuning et al., 2008 WRR for daily Gc; they refer to
-        # Kelliher et al. 1995 AFM but the resulting equation is not exact integral of K95.
-        # fQ = 1./ kp * np.log((Qp + q50) / (Qp*np.exp(-kp*self.LAI) + q50))
-
-        # soil moisture response: Lagergren & Lindroth, xxxx"""
-        #        fRew = np.minimum(1.0, np.maximum(Rew / rw, rwmin))
+        # Soil moisture response (Lagergren & Lindroth, xxxx): the REW limitation of transpiration
+        # (Physpara.rw, rwmin) is switched off, so fRew = Rew. See #307 A2.
         fRew = Rew
 
         # CO2 -response of canopy conductance, derived from APES-simulations
@@ -377,8 +317,6 @@ class CanopyGrid:
         Tr[Tr < 0] = 0.0
 
         """--- forest floor evaporation rate--- """
-        # soil conductance is function of relative water availability
-        # gcs = 1. / self.soilrp * beta**2.0
         # beta = Wliq / FC; Best et al., 2011 Geosci. Model. Dev. JULES
         Gcs = cpara.physpara.gsoil
 
@@ -457,9 +395,6 @@ class CanopyGrid:
         Ce = 0.01 * ((self.W + eps) / Wmaxsnow) ** (-0.4)  # exposure coeff (-)
         Sh = 1.79 + 3.0 * U**0.5  # Sherwood numbner (-)
         gi = Sh * self.W * Ce / 7.68 + eps  # m s-1
-        # print ixs
-        # print('ixs', np.shape(ixs), 'gi', np.shape(gi[ixs]), 'ga', np.shape(Ga[ixs]),
-        #      'T', np.shape(T[ixs]), 'AE', np.shape(AE[ixs]), 'tau', np.shape(tau[ixs]))
         erate[ixs] = (
             dt
             / Ls[ixs]
@@ -472,7 +407,6 @@ class CanopyGrid:
                 units="W",
             )
         )
-        #        print('gi', gi, 'Ce', Ce, 'Sh', Sh)
 
         # evaporation of intercepted water, mm
         gs = 1e6
@@ -483,8 +417,6 @@ class CanopyGrid:
                 (1.0 - tau[ixr]) * AE[ixr], 1e3 * D[ixr], T[ixr], gs, Ga[ixr], units="W"
             )
         )
-
-        # print('erate', erate)
 
         # ---state of precipitation [as water (fW) or as snow(fS)]
         fW = np.zeros(gridshape)
@@ -516,7 +448,6 @@ class CanopyGrid:
         Unload[ix] = np.maximum(self.W[ix] - Wmax[ix], 0.0)
         self.W = self.W - Unload
         del ix
-        # dW = self.W - Wo
 
         # Interception of rain or snow: asymptotic approach of saturation.
         # Hedstrom & Pomeroy 1998. Hydrol. Proc 12, 1611-1625;
@@ -564,25 +495,6 @@ class CanopyGrid:
         # mass-balance error mm
         MBE = (self.W + self.SWE) - (Wo + SWEo) - (Prec - Evap - PotInf)
 
-        # MBEsnow = self.SWE - SWEo - (Trfall - PotInf)
-        #        if np.nanmax(MBEsnow) > 0.1:
-        #            print('MBEsnow', MBEsnow)
-        #            print('Freeze', Freeze)
-        #            print('melt', Melt)
-        #            print('Potinf', PotInf)
-        #            print('Trfall', Trfall)
-        #            print('SWE', self.SWE)
-        #            print('SWo', SWEo)
-        #            print('dSWE', self.SWE-SWEo)
-        #            print('T', T)
-        #            print('fS', fS)
-        #            print('fW', fW)
-        #        MBEcan = (self.W - Wo) - (Interc - Evap - Unload)
-        #        if np.nanmax(MBEcan) > 0.1:
-        #            print('Mbecan', MBEcan)
-        #            print('Unload', Unload)
-        #            print('dW', dW)
-
         return PotInf, Trfall, Evap, Interc, MBE, erate, Unload, fS + fW
 
     def create_outarrays(self, nrounds, ndays, ncols):
@@ -621,54 +533,6 @@ class CanopyGrid:
 
 
 """ *********** utility functions ******** """
-
-
-# @staticmethod
-def degreeDays(dd0, T, Tbase, doy):
-    """
-    Calculates degree-day sum from the current mean Tair.
-    INPUT:
-        dd0 - previous degree-day sum (degC)
-        T - daily mean temperature (degC)
-        Tbase - base temperature at which accumulation starts (degC)
-        doy - day of year 1...366 (integer)
-    OUTPUT:
-        x - degree-day sum (degC)
-    """
-    if doy == 1:  # reset in the beginning of the year
-        dd0 = 0.0
-    return dd0 + max(0, T - Tbase)
-
-
-# @staticmethod
-def eq_evap(AE, T, P=101300.0, units="W"):
-    """
-    Calculates the equilibrium evaporation according to McNaughton & Spriggs,\
-    1986.
-    INPUT:
-        AE - Available energy (Wm-2)
-        T - air temperature (degC)
-        P - pressure (Pa)
-        units - W (Wm-2), mm (mms-1=kg m-2 s-1), mol (mol m-2 s-1)
-    OUTPUT:
-        equilibrium evaporation rate (Wm-2)
-    """
-    Mw = 18e-3  # kg mol-1
-    # latent heat of vaporization of water [J/kg]
-    L = 1e3 * (2500.8 - 2.36 * T + 1.6e-3 * T**2 - 6e-5 * T**3)
-    # latent heat of sublimation [J/kg]
-    if T < 0:
-        L = 1e3 * (2834.1 - 0.29 * T - 0.004 * T**2)
-
-    _, s, g = e_sat(T, P)
-
-    x = np.divide((AE * s), (s + g))  # Wm-2 = Js-1m-2
-    if units == "mm":
-        x = x / L  # kg m-2 s-1 = mm s-1
-    elif units == "mol":
-        x = x / L / Mw  # mol m-2 s-1
-    x = np.maximum(x, 0.0)
-    return x
 
 
 # @staticmethod
@@ -729,25 +593,6 @@ def penman_monteith(AE, D, T, Gs, Ga, P=101300.0, units="W"):
     return x
 
 
-# @staticmethod
-# def aerodynamic_conductance_from_ust(Ust, U, Stanton):
-#    """
-#    computes canopy aerodynamic conductance (ms-1) from frict. velocity
-#    IN:
-#       Ustar - friction velocity (ms-1)
-#       U - mean wind speed at flux measurement heigth (ms-1)
-#       Stanton - Stanton number (kB-1) for quasi-laminar boundary layer
-#           resistance. Typically kB=1...12, use 2 for vegetation ecosystems
-#           (Verma, 1989, Garratt and Hicks, 1973)
-#    OUT:
-#       Ga - aerodynamic conductance [ms-1]
-#    """
-#    kv = 0.4  # von Karman constant
-#    ra = U / (Ust ** 2.0 + eps) + Stanton / (kv * (Ust + eps))  # sm-1
-#    Ga = 1.0 / ra  # ms-1
-#    return Ga
-
-
 def aerodynamics(LAI, hc, Uo, w=0.01, zm=2.0, zg=0.5, zos=0.01):
     """
     computes wind speed at ground and canopy + boundary layer conductances
@@ -791,140 +636,11 @@ def aerodynamics(LAI, hc, Uo, w=0.01, zm=2.0, zg=0.5, zos=0.01):
     Ug = Uh * np.exp(alpha * (zn - 1.0))
 
     # canopy aerodynamic & boundary-layer resistances (sm-1). Magnani et al. 1998 PCE eq. B1 & B5
-    # ra = 1. / (kv*ustar) * np.log((zm - d) / zom)
     ra = 1.0 / (kv**2.0 * Uo) * np.log((zm - d) / zom) * np.log((zm - d) / zov)
     rb = 1.0 / LAI * beta * ((w / Uh) * (alpha / (1.0 - np.exp(-alpha / 2.0)))) ** 0.5
 
     # soil aerodynamic resistance (sm-1)
     ras = 1.0 / (kv**2.0 * Ug) * (np.log(zg / zos)) * np.log(zg / (zosv))
 
-    # print('ra', ra, 'rb', rb)
     ra = ra + rb
     return ra, rb, ras, ustar, Uh, Ug
-
-
-# def aerodynamic_conductance(hc, U, zm=2.0):
-#    """
-#    Aerodynamic conductance from log-law neglecting stability effects.
-#    Args:
-#        hc - canopy height (m)
-#        U - mean wind speed at zm
-#        zm - measurement height above canopy (m)
-#    Returns:
-#        ga - aerodynamic conductance for water vapor (ms-1)
-#
-#    Source:
-#        Leuning et al. 2008 WRR
-#        Eq: ga = U*k**2 / [ln((zm - d) / zom) * ln((zm - d) / dov) ]
-#    """
-#
-#    zm = zm + hc
-#    d = 0.66*hc  # displacement heigth (m)
-#    zom = 0.123*hc  # roughness lenght for momentum (m)
-#    zov = 0.1*zom  # roughness length for H2O (m)
-#    # k**2 = 0.16
-#    ga = 0.16*U / (np.log((zm - d) / zom) * np.log((zm - d) / zov))
-#
-#    return ga
-
-
-def wind_profile(LAI, hc, Uo, z, zm=2.0, zg=0.2):
-    """
-    Computes wind speed at ground height assuming logarithmic profile above and
-    hyperbolic cosine profile within canopy
-    INPUT:
-        LAI - one-sided leaf-area /plant area index (m2m-2)
-        hc - canopy height (m)
-        Uo - mean wind speed at height zm (ms-1)
-        zm - wind speed measurement height above canopy (m)
-        zg - height above ground where U is computed
-    OUTPUT:
-        Uh - wind speed at hc (ms-1)
-        Ug - wind speed at zg (ms-1)
-    SOURCE:
-       Cammalleri et al. 2010 Hydrol. Earth Syst. Sci
-       Massman 1987, BLM 40, 179 - 197.
-    """
-
-    k = 0.4  # von Karman const
-    Cd = 0.2  # drag coeff
-    alpha = 1.5  # (-)
-
-    zm = zm + hc
-    d = 0.66 * hc
-    zom = 0.123 * hc
-    beta = 4.0 * Cd * LAI / (k**2.0 * alpha**2.0)
-    # solve ustar and U(hc) from log-profile above canopy
-    ustar = Uo * k / np.log((zm - d) / zom)  # m/s
-
-    U = np.ones(len(z)) * np.NaN
-
-    # above canopy top wind profile is logarithmic
-    U[z >= hc] = ustar / k * np.log((z[z >= hc] - d) / zom)
-
-    # at canopy top, match log and exponential profiles
-    Uh = ustar / k * np.log((hc - d) / zom)  # m/s
-
-    # within canopy hyperbolic cosine profile
-    U[z <= hc] = Uh * (np.cosh(beta * z[z <= hc] / hc) / np.cosh(beta)) ** 0.5
-
-    return U, ustar, Uh
-
-
-def daylength(LAT, LON, DOY):
-    """
-    Computes daylength from location and day of year.
-
-    Args:
-        LAT, LON - in deg, float or arrays of floats
-        doy - day of year, float or arrays of floats
-
-    Returns:
-        dl - daylength (hours), float or arrays of floats
-    """
-    CF = np.pi / 180.0  # conversion deg -->rad
-
-    LAT = LAT * CF
-    LON = LON * CF
-
-    # ---> compute declination angle
-    xx = 278.97 + 0.9856 * DOY + 1.9165 * np.sin((356.6 + 0.9856 * DOY) * CF)
-    DECL = np.arcsin(0.39785 * np.sin(xx * CF))
-    del xx
-
-    # --- compute day length, the period when sun is above horizon
-    # i.e. neglects civil twilight conditions
-    cosZEN = 0.0
-    dl = (
-        2.0
-        * np.arccos(cosZEN - np.sin(LAT) * np.sin(DECL) / (np.cos(LAT) * np.cos(DECL)))
-        / CF
-        / 15.0
-    )  # hours
-
-    return dl
-
-
-def read_ini(inifile):
-    """read_ini(inifile): reads canopygrid.ini parameter file into pp dict"""
-
-    cfg = configparser.ConfigParser()
-    cfg.read(inifile)
-
-    pp = {}
-    for s in cfg.sections():
-        section = s.encode("ascii", "ignore")
-        pp[section] = {}
-        for k, v in cfg.items(section):
-            key = k.encode("ascii", "ignore")
-            val = v.encode("ascii", "ignore")
-            if section == "General":  # 'general' section
-                pp[section][key] = val
-            else:
-                pp[section][key] = float(val)
-
-    pp["General"]["dt"] = float(pp["General"]["dt"])
-
-    pgen = pp["General"]
-    cpara = pp["CanopyGrid"]
-    return pgen, cpara

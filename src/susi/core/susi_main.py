@@ -26,7 +26,6 @@ from susi.core.susi_utils import (
     rew_drylimit,
 )
 from susi.core.temperature import PeatTemperature
-from susi.io import susi_io
 from susi.io.execution_config import SimulationParams
 from susi.io.metadata_model import SimulationMetaData
 from susi.io.outputs import Outputs
@@ -121,7 +120,7 @@ class Susi:
         out.write_sfc(sfc=self.parameters.sfc)
 
         # describe site parameters for user
-        susi_io.print_site_description(
+        print_site_description(
             self.parameters.site_parameters, self.parameters.sfc, self.parameters.age
         )
 
@@ -180,7 +179,6 @@ class Susi:
         if switches["Ojanen2010_2019"]:
             out.initialize_ojanen()
         # ********* Above ground hydrology initialization ***************
-        # cmask = np.ones(self.parameters.site_parameters.n)
         canopy_state_parameters_array = CanopyStateParamsArray(
             canopy_state_parameters=self.parameters.canopy_parameters.state,
             array_length=self.parameters.site_parameters.n,
@@ -606,10 +604,6 @@ class Susi:
                     + fertilization_effect.K_release,
                 )
 
-                # move stand.assimilate here, if first year, take foliage litter from 'table growth (interpolation functions)'
-                # stand.assimilate(self.weather_forcing.loc[str(yr)], dfwt.loc[str(yr)], dfafp.loc[str(yr)])
-                # stand.update()
-
                 CH4, _CH4mean, _CH4asCO2eq = ch4s.run_ch4_yr(
                     yr, dfwt
                 )  # annual ch4 nodewise (kg ha-1 yr-1), mean ch4, and mean ch4 as co2 equivalent
@@ -662,10 +656,6 @@ class Susi:
                 year += 1  # update the next year for the biogeochemistry loop
 
         out.close()
-        # del stand.dominant
-        # del stand.subdominant
-        # del stand.under
-        # del stand, groundvegetation, esmass, esN, esP, esK, ferti, cpy, moss, stp, pt
 
     def create_output_folder(self) -> None:
         assert self.metadata.simulation_folder_path is not None
@@ -679,3 +669,37 @@ class Susi:
         self.parameters.dump_json_to_file(
             filepath=self.metadata.parameter_output_filepath
         )
+
+
+def print_site_description(spara, sfc, age):
+    print("  + Site:")
+    print("   + Number of columns:", spara.n)
+    print("    - Site fertility class:")
+    print("    ", sfc)
+    print("  + Stand:")
+    print("    - age:")
+    print("        dominant:", age["dominant"], "yrs")
+    print("        subdominat:", age["subdominant"], "yrs")
+    print("        under:", age["under"], "yrs")
+
+    print("  + Soil: ")
+    if spara.vonP:
+        print("    - peat top:", spara.peat_type[0], ", von P:", spara.vonP_top[0])
+    else:
+        print(
+            "    - peat top:",
+            spara.peat_type[0],
+            ", bulk density:",
+            spara.bd_top[0],
+        )
+    print(
+        "    - peat bottom:",
+        spara.peat_type_bottom[0],
+        ", von P:",
+        spara.vonP_bottom,
+    )
+    print("  + Drainage:")
+    print("    - Strip widht:", spara.L, "m")
+    print("    - Ditch depth west:", spara.ditch_depth_west)
+    print("    - Ditch depth east:", spara.ditch_depth_east)
+    print("    - Scenarios:", spara.scenario_name)

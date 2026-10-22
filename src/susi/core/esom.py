@@ -47,10 +47,7 @@ class Esom:
                 "k2": 1.05,
                 "k6": 1.05,
             },  # modifiers for nutrient release in comparison to mass release
-            #'N':{'k1':0.1, 'k2': 0.5, 'k6':0.5},                               #old version from ROMUL
-            # "N": {"k1": 0.1, "k2": 0.1, "k6": 0.125},
             "N": {"k1": 0.1, "k2": 0.5, "k6": 0.175},
-            #'P':{'k1':1.1, 'k2': 1.1, 'k6':1.0},
             "P": {"k1": 1.1, "k2": 0.45, "k6": 0.3},
             "K": {"k1": 1.5, "k2": 1.5, "k6": 1.5},
         }
@@ -239,19 +236,10 @@ class Esom:
         self.t6 = interp1d(
             [-60.0, -5.0, 1.0, 27.5, 35.0, 60.0], [0.0, 0.0, 0.2, 1.95, 1.95, 0.0]
         )
-        # self.t6 = interp1d([-40., -30., -20. ,-10.,   0.,  10.,  20.,  30.,  40.,  50.],             #Q10 = 2
-        #               [ 0.03125,0.0625, 0.125, 0.25, 0.5, 1., 2., 4., 4., 4.])
-
-        # self.t7 = interp1d([-40., -5., 1., 27.5, 35., 60.],
-        #               [0., 0., 0.2, 1.95, 1.95, 0.])
         self.t7 = interp1d(
             [-40.0, -30.0, -20.0, -10.0, 0.0, 10.0, 20.0, 30.0, 40.0, 50.0],  # Q10 = 2
             [0.03125, 0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 8.0],
         )
-        # self.t7 = interp1d([-40., -30., -20. ,-10.,   0.,  10.,  20.,  30.,  40.,  50.],         #Q10 = 3.6
-        #                  [1.56492339e-03, 5.69632114e-03, 2.07346089e-02, 7.54739766e-02,
-        #                   2.74725275e-01, 1.00000000e+00, 3.64000000e+00, 1.32496000e+01,
-        #                   1.32496000e+01, 1.32496000e+01])
 
         # moisture_functions:
         # Description of Romul model Table 2
@@ -315,7 +303,6 @@ class Esom:
         self.mu_k1 = 0.092 * (lignin / nitrogen) ** -0.7396 * adjust
         self.mu_k2 = 0.0027 * (lignin / nitrogen) ** -0.3917 * adjust
         self.mu_k3 = 0.062 * (lignin / nitrogen) ** -0.3972 * adjust
-        # return  mu_k1, mu_k2, mu_k3
         self.out_root_lyr = np.zeros(self.y)
         self.out_below_root_lyr = np.zeros(self.y)
 
@@ -421,16 +408,6 @@ class Esom:
                 * cont_array[self.idbottom]
             )  # Peat material storage, bottom, kg m-2
 
-        # if self.substance=='K':
-        #     print ('kkkkkkkkkkkkkkkkkkkkkkkkkkkk')
-        #     print (self.bd[self.idtop]*1000.)
-        #     print (self.dz[self.idtop])
-        #     print (self.bd[self.idtop]*1000.*self.dz[self.idtop]*cont_array[self.idtop])
-        #     print (sum(self.bd[self.idtop]*1000.*self.dz[self.idtop]*cont_array[self.idtop])*10000.)
-        #     print (sum(self.bd[self.idmiddle]*1000.*self.dz[self.idmiddle]*cont_array[self.idmiddle])*10000)
-
-        #     import sys; sys.exit()
-
     def update_soil_pH(self, increment):
         for scode in np.unique(np.ravel(self.sfc)):
             ix = np.where(self.sfc == scode)
@@ -468,11 +445,8 @@ class Esom:
         k4 = 0.005 * self.litterN * self.t4(tair) * self.phi4(wn)
         k5 = 0.007 * self.t5(tair) * self.phi5(wn)
 
-        # k6= 0.006 * self.t6(tp_top) * self.phi1236(wn)     # Chertov 1998 SOMM
-        # k6= 0.0006 * self.t6(tp_top) * self.phi1236(wn) #* 0.5
+        # k6 form from Chertov 1998 SOMM (which uses the coefficient 0.006)
         k6 = 0.001 * self.t6(tp_top) * self.phi1236(wn) * nu  # * 0.5
-
-        # k6= 0.0006*self.t6(tp_top)*H_w
 
         # THESE can be modified by you
         k7 = (
@@ -582,10 +556,6 @@ class Esom:
             format="csr",
         )
 
-        # with np.printoptions(edgeitems=30, linewidth=100000,formatter=dict(float=lambda x: "%.3g" % x)):
-        #    kdense = kmat.todense()
-        #    print (kdense)
-
         M_tmp = np.ravel(self.M)
         M_tmp = kmat @ M_tmp
         self.M = np.reshape(M_tmp, (self.x, self.y, 11))
@@ -631,8 +601,6 @@ class Esom:
         tp_bottom_ts = df_peat_temperatures.iloc[
             :, 9
         ].values  # Peat temperature -0.75 m depth
-
-        # tp_bottom_ts = df_peat_temperatures.iloc[:,15].values                      # Peat temperature -0.75 m depth
 
         for n, (tair, tp_top, tp_middle, tp_bottom, wts) in enumerate(
             zip(air_ts, tp_top_ts, tp_middle_ts, tp_bottom_ts, water_tables.values)
@@ -686,30 +654,8 @@ class Esom:
         self.out_root_lyr = self.out - self.P2_out - self.P3_out
         self.out_below_root_lyr = self.P2_out  # + self.P3_out
 
-        # return self.out
-
     def compose_export(self, stp, df_peat_temperatures):
         # To get total export, sum the left and right ditches
-        # UPDATE THESE
-        """
-        docshare = 0.009 #0.05
-        lmwtohmwshare = 0.04
-        mass_to_c = 0.5
-
-        hmw = (1-lmwtohmwshare)*self.out * 1/(1+docshare)  * docshare * mass_to_c
-        lmw = self.out * 1/(1+docshare) * docshare * mass_to_c * lmwtohmwshare
-
-        #Until here
-        self.hmw = hmw
-        self.lmw = lmw
-        self.hmwtoditch = hmw*np.exp(-0.0004*stp.residence_time)                    # biodegradation parameters from Kalbiz et al 2003
-        self.lmwtoditch= lmw*np.exp(-0.15*stp.residence_time)
-        #print (hmw)
-        self.hmw_to_west = len(np.ravel(stp.ixwest))/stp.n * np.mean(self.hmwtoditch[0, np.ravel(stp.ixwest)])
-        self.hmw_to_east = len(np.ravel(stp.ixeast))/stp.n * np.mean(self.hmwtoditch[0, np.ravel(stp.ixeast)])
-        self.lmw_to_west = len(np.ravel(stp.ixwest))/stp.n * np.mean(self.lmwtoditch[0, np.ravel(stp.ixwest)])
-        self.lmw_to_east = len(np.ravel(stp.ixeast))/stp.n * np.mean(self.lmwtoditch[0, np.ravel(stp.ixeast)])
-        """
         mass_to_c = 0.5
         peat_T = df_peat_temperatures.iloc[:, 2].values
 
@@ -737,7 +683,6 @@ class Esom:
             -0.0004 * stp.residence_time
         )  # biodegradation parameters from Kalbiz et al 2003
         self.lmwtoditch = self.lmw * np.exp(-0.15 * stp.residence_time)
-        # print (hmw)
         self.hmw_to_west = (
             len(np.ravel(stp.ixwest))
             / stp.n

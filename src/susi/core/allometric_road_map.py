@@ -3,6 +3,65 @@ This module applies diameter increment and survival rate models of Pukkala et al
 to produce similar input array to Motti-simulator (see Laurén et al. (2021), chapter 2.3.8).
 
 @authors: Mikko Niemi & Annamari Laurén
+
+Example usage:
+
+    import numpy as np
+    import pandas as pd
+
+    from susi.core.allometric_road_map import Growth_and_Yield_Table
+
+    age_1 = 54                  # age (years), pine
+    G_1 = 23.4                  # basal area (m2 ha-1), pine
+    N_1 = 1276                  # stem number (ha-1), pine
+    Dg_1 = 17.6                 # mean diameter (cm), pine
+    Hg_1 = 15.2                 # mean height (m), pine
+    age_2 = 44                  # age (years), spruce
+    G_2 = 1.1                   # basal area (m2 ha-1), spruce
+    N_2 = 60                    # stem number (ha-1), spruce
+    Dg_2 = 16                   # mean diameter (cm), spruce
+    Hg_2 = 14.3                 # mean height (m), spruce
+    age_3 = 28                  # age (years), deciduous trees
+    G_3 = 0.3                   # basal area (m2 ha-1), deciduous trees
+    N_3 = 49                    # stem number (ha-1), deciduous trees
+    Dg_3 = 9.2                  # mean diameter (cm), deciduous trees
+    Hg_3 = 11.7                 # mean height (m), deciduous trees
+
+    n_trees = 20                # number of reference trees per tree species
+
+    DDY = 1100                  # temperature sum, degree days
+    fertility_class = 4         # soil fertility class (integer 1-6)
+    peat = 1                    # peatland = 1, mineral soil = 0
+
+    # Lestijärvi
+    y = 7070 # (YKJ)            # y-coordinate (see https://metsatieteenaikakauskirja.fi/article/6196)
+    x = 326  # (YKJ)            # x-coordinate (see https://metsatieteenaikakauskirja.fi/article/6196)
+    altitude = 140              # altitude above sea level
+
+    gy = Growth_and_Yield_Table(
+        age_1, G_1, N_1, Dg_1, Hg_1,
+        age_2, G_2, N_2, Dg_2, Hg_2,
+        age_3, G_3, N_3, Dg_3, Hg_3,
+        DDY, fertility_class, peat, y, x, altitude, n_trees
+    )
+
+    susi_input = gy.get_table(start_year=5, end_year=80, step_years=5)
+    susi_input.to_clipboard()
+
+
+    # Write to Excel with two sheets
+
+    page2 = pd.DataFrame({
+        'StandID': [1],
+        'Schedule': [1],
+        'Year': [0],
+        'HarvestType': ['no_loggings'],
+        'Species_id': [1]
+        })
+
+    with pd.ExcelWriter('C:/Users/mikkoni/AEMES/Coding/susi_inputs/susi_input.xlsx', engine='xlsxwriter') as writer:
+        susi_input.to_excel(writer, sheet_name='StandData', index=False)
+        page2.to_excel(writer, sheet_name='Loggings', index=False)
 """
 
 import numpy as np
@@ -759,63 +818,3 @@ class Growth_and_Yield_Table:
             )
 
         return susi_input
-
-
-"""
-import numpy as np
-import pandas as pd
-
-from susi.allometric_road_map import Growth_and_Yield_Table
-
-age_1 = 54                  # age (years), pine
-G_1 = 23.4                  # basal area (m2 ha-1), pine
-N_1 = 1276                  # stem number (ha-1), pine
-Dg_1 = 17.6                 # mean diameter (cm), pine
-Hg_1 = 15.2                 # mean height (m), pine
-age_2 = 44                  # age (years), spruce
-G_2 = 1.1                   # basal area (m2 ha-1), spruce
-N_2 = 60                    # stem number (ha-1), spruce
-Dg_2 = 16                   # mean diameter (cm), spruce
-Hg_2 = 14.3                 # mean height (m), spruce
-age_3 = 28                  # age (years), deciduous trees
-G_3 = 0.3                   # basal area (m2 ha-1), deciduous trees
-N_3 = 49                    # stem number (ha-1), deciduous trees
-Dg_3 = 9.2                  # mean diameter (cm), deciduous trees
-Hg_3 = 11.7                 # mean height (m), deciduous trees
-
-n_trees = 20                # number of reference trees per tree species
-
-DDY = 1100                  # temperature sum, degree days
-fertility_class = 4         # soil fertility class (integer 1-6)
-peat = 1                    # peatland = 1, mineral soil = 0
-
-# Lestijärvi
-y = 7070 # (YKJ)            # y-coordinate (see https://metsatieteenaikakauskirja.fi/article/6196)
-x = 326  # (YKJ)            # x-coordinate (see https://metsatieteenaikakauskirja.fi/article/6196)
-altitude = 140              # altitude above sea level
-
-gy = Growth_and_Yield_Table(
-    age_1, G_1, N_1, Dg_1, Hg_1,
-    age_2, G_2, N_2, Dg_2, Hg_2,
-    age_3, G_3, N_3, Dg_3, Hg_3,
-    DDY, fertility_class, peat, y, x, altitude, n_trees
-)
-
-susi_input = gy.get_table(start_year=5, end_year=80, step_years=5)
-susi_input.to_clipboard()
-
-
-# Write to Excel with two sheets
-
-page2 = pd.DataFrame({
-    'StandID': [1],
-    'Schedule': [1],
-    'Year': [0],
-    'HarvestType': ['no_loggings'],
-    'Species_id': [1]
-    })
-
-with pd.ExcelWriter('C:/Users/mikkoni/AEMES/Coding/susi_inputs/susi_input.xlsx', engine='xlsxwriter') as writer:
-    susi_input.to_excel(writer, sheet_name='StandData', index=False)
-    page2.to_excel(writer, sheet_name='Loggings', index=False)
-"""
