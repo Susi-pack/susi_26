@@ -316,45 +316,45 @@ class Growth_and_Yield_Table:
             sp - tree species as integer value
             D  - tree diameter at breast height
         """
+        sp = ReferenceTrees["sp"].to_numpy()
+        D = ReferenceTrees["D"].to_numpy()
+        Nd = ReferenceTrees["Nd"].to_numpy()
         Peat = np.repeat(peat, len(ReferenceTrees))
         Aspen = np.zeros(len(ReferenceTrees))
         Birch = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
-            if ReferenceTrees["sp"][i] == 5:
+            if sp[i] == 5:
                 Aspen[i] = 1
-            if (ReferenceTrees["sp"][i] == 3) | (ReferenceTrees["sp"][i] == 4):
+            if (sp[i] == 3) | (sp[i] == 4):
                 Birch[i] = 1
 
-        G_class = ReferenceTrees["Nd"] * np.pi * (ReferenceTrees["D"] / 2) ** 2 / 10000
+        G_class = Nd * np.pi * (D / 2) ** 2 / 10000
 
         BAL_Total = np.zeros(len(ReferenceTrees))
         BAL_Pine = np.zeros(len(ReferenceTrees))
         BAL_Spruce = np.zeros(len(ReferenceTrees))
         BAL_S_B = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
-            BAL_Total[i] = np.sum(G_class[ReferenceTrees["D"] > ReferenceTrees["D"][i]])
+            BAL_Total[i] = np.sum(G_class[D > D[i]])
             BAL_Pine[i] = np.sum(
                 G_class[
-                    (ReferenceTrees["D"] > ReferenceTrees["D"][i])
-                    & (ReferenceTrees["sp"] == 1)
+                    (D > D[i]) & (sp == 1)
                 ]
             )
             BAL_Spruce[i] = np.sum(
                 G_class[
-                    (ReferenceTrees["D"] > ReferenceTrees["D"][i])
-                    & (ReferenceTrees["sp"] == 2)
+                    (D > D[i]) & (sp == 2)
                 ]
             )
             BAL_S_B[i] = np.sum(
                 G_class[
-                    (ReferenceTrees["D"] > ReferenceTrees["D"][i])
-                    & (ReferenceTrees["sp"] != 1)
+                    (D > D[i]) & (sp != 1)
                 ]
             )
 
         return self.get_survival(
-            ReferenceTrees["sp"],
-            ReferenceTrees["D"],
+            sp,
+            D,
             BAL_Total,
             BAL_Pine,
             BAL_Spruce,
@@ -442,6 +442,9 @@ class Growth_and_Yield_Table:
             peat - 1: peatland, 0: mineral soil
         """
 
+        sp = ReferenceTrees["sp"].to_numpy()
+        D = ReferenceTrees["D"].to_numpy()
+        Nd = ReferenceTrees["Nd"].to_numpy()
         siteTypeDict = {
             1: "Herb-rich",
             2: "Herb-rich",
@@ -456,33 +459,31 @@ class Growth_and_Yield_Table:
 
         Pendula_or_Aspen = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
-            if (ReferenceTrees["sp"][i] == 3) | (ReferenceTrees["sp"][i] == 5):
+            if (sp[i] == 3) | (sp[i] == 5):
                 Pendula_or_Aspen[i] = 1
 
-        G_class = ReferenceTrees["Nd"] * np.pi * (ReferenceTrees["D"] / 2) ** 2 / 10000
+        G_class = Nd * np.pi * (D / 2) ** 2 / 10000
         G_plot = np.repeat(np.sum(G_class), len(ReferenceTrees))
 
         BAL_Total = np.zeros(len(ReferenceTrees))
         BAL_Spruce = np.zeros(len(ReferenceTrees))
         BAL_S_B = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
-            BAL_Total[i] = np.sum(G_class[ReferenceTrees["D"] > ReferenceTrees["D"][i]])
+            BAL_Total[i] = np.sum(G_class[D > D[i]])
             BAL_Spruce[i] = np.sum(
                 G_class[
-                    (ReferenceTrees["D"] > ReferenceTrees["D"][i])
-                    & (ReferenceTrees["sp"] == 2)
+                    (D > D[i]) & (sp == 2)
                 ]
             )
             BAL_S_B[i] = np.sum(
                 G_class[
-                    (ReferenceTrees["D"] > ReferenceTrees["D"][i])
-                    & (ReferenceTrees["sp"] != 1)
+                    (D > D[i]) & (sp != 1)
                 ]
             )
 
         return self.get_diameter_increment(
-            ReferenceTrees["D"],
-            ReferenceTrees["sp"],
+            D,
+            sp,
             G_plot,
             BAL_Total,
             BAL_Spruce,
