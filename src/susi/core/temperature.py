@@ -19,7 +19,6 @@ class PeatTemperature:
             mean_Ta is mean air temperature over the whole time, set as lower boundary condition
         """
         self.spara = spara
-        # print (spara['nLyrs'], spara['dzLyr'] )
         self.nLyrs_hydro = spara.nLyrs
         self.nLyrs = self.nLyrs_hydro + 30
         self.dz = self.spara.dzLyr
@@ -41,7 +40,6 @@ class PeatTemperature:
         main = np.zeros(self.nLyrs + 1)
         lower = np.zeros(self.nLyrs)
         upper = np.zeros(self.nLyrs)
-        # self.b     = np.zeros(self.nLyrs+1)
 
         # Precompute sparse matrix
         main[:] = 1 + 2 * F
@@ -110,7 +108,6 @@ class PeatTemperature:
             b[0] = Ta  # temp[n] #0.0  # boundary conditions
             b[-1] = self.lower_boundary
             u[:] = self.LU.solve(b)
-            # u_1[:] = u
             self.Tsoil = u
         return self.z[: self.nLyrs_hydro], self.Tsoil[: self.nLyrs_hydro]
 

@@ -118,9 +118,6 @@ class MossLayer:
         to_pond = np.minimum(rflow - to_top_layer, self.h_pond_max - self.h_pond)
         self.h_pond += to_pond
 
-        # if max(to_pond) > 0.0:
-        #    print('pond', max(self.h_pond), max(to_pond))
-
         # and route remaining to surface runoff
         surface_runoff = rflow - to_top_layer - to_pond
 

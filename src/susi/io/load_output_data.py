@@ -449,27 +449,6 @@ def read_value_several_variables_from_single_file(
     return data
 
 
-# def choose_netcdf_vars_by_path(
-#     paths: Sequence[NetcdfVariablePath],
-#     all_variables: list[NetcdfVariableInfo],
-# ) -> list[NetcdfVariableInfo]:
-#     """
-#     Filters variables by path.
-#     I tried to filtering by name, but the variable names are not unique: they depend on the path
-#     E.g., the name "volume" has several different variables
-#     """
-#     variables = []
-#     for var_info in all_variables:
-#         if var_info.path in paths:
-#             variables.append(var_info)
-#
-#     # if len(variables) != len(names):
-#     #     raise ValueError("Could not locate all variables by name")
-#
-#     return variables
-#
-
-
 def get_scenarios_for_stand(metadata_df: pd.DataFrame) -> list[ScenarioID]:
     return [ScenarioID(scen) for scen in metadata_df["scenario_id"]]
 

@@ -62,8 +62,6 @@ class Outputs:
         ditch_depths_west.units = "west ditch depth in meters, negative downwards"
 
     def initialize_paras(self):
-        # sitename = self.ncf.createVariable(self, 'scen/sitename', 'str', ('scalar',))
-        # sitename.units ='site name is string'
         sfc = self.ncf.createVariable("/scen/sfc", "f4", ("ncols",))
         sfc.units = (
             "site fertility class, integer 2 ruohoturvekangas .... 6 jäkäläturvekangas"
@@ -1911,38 +1909,6 @@ class Outputs:
         )
         T.units = "peat temperature at different depth of the profile [deg C]"
 
-    def initialize_doc(self):
-        DOC = self.ncf.createVariable(
-            "/doc/DOC",
-            "f4",
-            (
-                "nscens",
-                "nyrs",
-                "ncols",
-            ),
-        )
-        DOC.units = "total DOC release [kg/ha/yr]"
-        LMW = self.ncf.createVariable(
-            "/doc/LMW",
-            "f4",
-            (
-                "nscens",
-                "nyrs",
-                "ncols",
-            ),
-        )
-        LMW.units = "light molecular weight DOC release [kg/ha/yr]"
-        HMW = self.ncf.createVariable(
-            "/doc/HMW",
-            "f4",
-            (
-                "nscens",
-                "nyrs",
-                "ncols",
-            ),
-        )
-        HMW.units = "high molecular weight DOC release [kg/ha/yr]"
-
     def initialize_methane(self):
         ch4 = self.ncf.createVariable(
             "/methane/ch4",
@@ -2622,11 +2588,6 @@ class Outputs:
         neast = np.ravel(stp.ixeast)
         self.ncf["strip"]["ixeast"][scen, year, : len(neast)] = stp.ixeast
 
-    def write_doc(self, scen, year, DOC, HMW):
-        self.ncf["doc"]["DOC"][scen, year, :] = DOC
-        self.ncf["doc"]["HMW"][scen, year, :] = HMW
-        self.ncf["doc"]["LMW"][scen, year, :] = DOC - HMW
-
     def write_methane(self, scen, year, ch4):
         self.ncf["methane"]["ch4"][scen, year, :] = ch4
         self.ncf["methane"]["ch4_in_co2"][scen, year, :] = ch4 * 27.0
@@ -2688,10 +2649,6 @@ class Outputs:
             )
             + es.out_below_root_lyr
         )
-        # if substance == 'P':
-        # print (substance, np.mean(es.out),   np.mean(stand_up), np.mean(groundvegetation_up))
-        # + \
-        # ferti + depo * np.ones(self.ncols)- stand_up  - groundvegetation_up))
 
     def write_carbon_balance(self, scen, year, stand, groundvegetation, esmass, ch4):
         bm_to_c = 0.5

@@ -27,7 +27,6 @@ class Methane:
         wt = (
             dfwt[str(yr) + "-05-01" : str(yr) + "-10-31"].mean().values * -100.0
         )  # convert to cm positive down
-        # wt = wt[1:-1] # exclude ditch nodes
 
         CH4 = (
             -0.378 + 12.3 * np.exp(-0.121 * wt)

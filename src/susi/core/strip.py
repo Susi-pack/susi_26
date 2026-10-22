@@ -80,7 +80,6 @@ class StripHydrology:
         self.A = np.zeros((self.n, self.n))  # computation matrix
         self.dwt = np.ones(self.n) * initial_h  # right hand side vector
         self.H = self.ele + self.dwt  # head with respect to absolute reference level, m
-        # self.sruno = 0.
         self.roff = 0.0
         print("Resetting strip scenario")
 
@@ -96,13 +95,11 @@ class StripHydrology:
         Htmp = self.H.copy()
         Htmp1 = self.H.copy()
         self.dwt = Htmp - self.ele
-        # S = p/1000.*np.ones(n)                                                # source/sink, in m
         S = p.copy()  # *np.ones(n)                                              # source/sink, in m
         self.dwt[0] = h0ts_west
         self.dwt[n - 1] = h0ts_east  # symmetrical boundaries, set water level
 
         # TESTING here
-        # airv = self.hToSto(self.ele)-self.hToSto(Htmp-self.ele)                # air volume, in m
         airv = np.maximum(
             self.dwtToSto(np.zeros(n)) - self.dwtToSto(self.dwt), np.zeros(n)
         )
@@ -112,8 +109,6 @@ class StripHydrology:
 
         self.surface_runoff = moss.returnflow(exfil)
 
-        # self.sruno += self.surface_runoff
-        # self.sruno += np.where(np.ones(len(airv))*(p)/1000. > airv, np.ones(len(airv))*(p)/1000.-airv, 0.0)  #cut the surface water above to runoff
         Tr0 = self.dwtToTra(self.dwt)  # Transmissivity from the previous time step
 
         Trminus0, Trplus0 = self.gmeanTr(
@@ -152,7 +147,6 @@ class StripHydrology:
                 h0ts_east,
             )  # right hand side of the equation
             Htmp1 = np.linalg.multi_dot([np.linalg.inv(self.A), hs])  # solve equation
-            # Htmp1 = np.matmul(np.linalg.inv(self.A),hs)            # solve equation
 
             Htmp1 = np.where(Htmp1 > self.ele, self.ele, Htmp1)  # cut the surface water
             conv = max(np.abs(Htmp1 - Htmp))  # define convergence
@@ -211,18 +205,6 @@ class StripHydrology:
         A[n - 1, n - 2] = 0.0  # Dirichlet, east boundary
         return A
 
-    def boundNoFlow(A, n, implic, Trwest, Treast, alfa):
-        """
-        Diriclet (constant head boundary conditions)
-        """
-
-        A[0, 0] = 2.0 * implic * (Treast[0]) + alfa[0]  # Diagonal element
-        A[0, 1] = -2 * implic * Trwest[0]  # East element
-        A[n - 1, n - 1] = 2.0 * implic * (Trwest[n - 1]) + alfa[0]
-        A[n - 1, n - 2] = -2 * implic * Treast[n - 1]  # West element
-
-        return A
-
     def rightSide(
         self,
         S,
@@ -271,11 +253,9 @@ class StripHydrology:
         """
         n = len(Tr)
         trwest = np.maximum(Tr[: n - 1] * Tr[1:], 0.0)
-        # Trwest = np.sqrt(Tr[:n-1]*Tr[1:])
         Trwest = np.sqrt(trwest)
         Trwest = np.append(Trwest, 0.0)
         treast = np.maximum(Tr[1:] * Tr[: n - 1], 0.0)
-        # Treast = np.sqrt(Tr[1:]*Tr[:n-1])
         Treast = np.sqrt(treast)
         Treast = np.insert(Treast, 0, 0.0)
         return Trwest, Treast
