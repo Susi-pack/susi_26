@@ -45,7 +45,7 @@ Users never need this page.
     - `git status` shows nothing to commit.
     - Optional sanity checks on that commit:
       - `uv lock --locked`
-      - `uv run pytest`
+      - `uv run pytest --all` (every test group, see [Running the tests](running_tests.md))
 2. Tag the commit: `git tag X.Y.Z`
 3. Push the tag: `git push origin X.Y.Z`
     - Optional: create a GitHub Release from the tag, with notes generated from the merged PRs:

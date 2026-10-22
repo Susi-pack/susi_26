@@ -638,6 +638,7 @@ def test_plan_stand_output_names_the_csv_by_stand_id(tmp_path):
     )
 
 
+@pytest.mark.slow
 def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_path):
     parsed_stand = _parsed_stand_data("1")
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
@@ -658,6 +659,7 @@ def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_p
     assert CanopyLayerName.subdominant not in stand_data.allometry_file_per_layer
 
 
+@pytest.mark.slow
 def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
     parsed_stand = _parsed_stand_data("1")
     config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
@@ -679,6 +681,7 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 40.0}
 
 
+@pytest.mark.slow
 def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_path):
     # The two-species fixture stand: pine age 40 (G 20.0) and spruce age 35
     # (G 8.0), with tss:MeanAge 40. The growth model pools the strata's ages
@@ -695,6 +698,7 @@ def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_
     assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 39.0}
 
 
+@pytest.mark.slow
 def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_path):
     # The two-species fixture stand: a pine stratum (species 1, G 20.0 /
     # N 500) and a spruce one (species 2, G 8.0 / N 300). Nothing with a
@@ -723,6 +727,7 @@ def _year_0_row(csv_path) -> pd.Series:
     return table.loc[table["Year"] == 0].iloc[0]
 
 
+@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_grows_the_stand_from_fewer_stems(
     tmp_path,
 ):
@@ -755,6 +760,7 @@ def test_process_stand_with_a_scaling_factor_grows_the_stand_from_fewer_stems(
     assert scaled_year_0["Age"] == recorded_year_0["Age"]
 
 
+@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
     tmp_path,
 ):
@@ -787,6 +793,7 @@ def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures
     assert stand_data.mean_diameter == 20.0
 
 
+@pytest.mark.slow
 def test_process_stand_without_a_scaling_factor_records_that_nothing_was_scaled(
     tmp_path,
 ):
@@ -1053,6 +1060,7 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
 # %% main
 
 
+@pytest.mark.slow
 def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1085,6 +1093,7 @@ def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     assert len(polygon.interiors) == 1
 
 
+@pytest.mark.slow
 def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1152,6 +1161,7 @@ def _warning_lines(printed: str) -> list[str]:
     return [line for line in printed.splitlines() if line.startswith("Warning")]
 
 
+@pytest.mark.slow
 def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1173,6 +1183,7 @@ def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     assert year_0["N"] == pytest.approx(2809, rel=0.02)
 
 
+@pytest.mark.slow
 def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
     monkeypatch, tmp_path, project_dir, capsys
 ):

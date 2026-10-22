@@ -126,9 +126,11 @@ ignore = ["DTZ001", "DTZ005", "SIM113"]
 # Name of the folders in which to look for tests.
 testpaths = ["tests"]
 
-# Ignore the golden file test by default.
-# Run with pytest tests/golden_file_test/test_golden_file.py
-addopts = [
-    "--doctest-modules",
-    "--ignore=tests/golden_file_test/test_golden_file.py",
+# Test groups: plain `pytest` runs only the fast one, i.e., neither "slow" nor "golden" tests.
+# See docs/internal/running_tests.md.
+markers = [
+    "slow: runs the growth model or a full SUSI simulation, or takes over 0.5 s",
+    "golden: compares a run's output against a stored reference output",
 ]
+
+addopts = ["--doctest-modules", "-m", "not slow and not golden"]

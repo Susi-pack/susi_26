@@ -970,6 +970,7 @@ def test_build_stand_ignores_preserved_zero_basal_area_species_in_stand_level_av
     assert stand.stand_meanheight == pytest.approx(18.0)
 
 
+@pytest.mark.slow
 def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_path):
     # Same setup, but check the actual allometry-creation step: spruce's
     # real recorded data must not turn into a subdominant CSV, because it
@@ -1015,6 +1016,7 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
 # %% write_allometry_csv round-trips through the real SUSI reader
 
 
+@pytest.mark.slow
 def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
@@ -1045,6 +1047,7 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
 # %% process_stand
 
 
+@pytest.mark.slow
 def test_process_stand_writes_two_csvs(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
@@ -1060,6 +1063,7 @@ def test_process_stand_writes_two_csvs(tmp_path):
     assert outcome.subdominant_csv.exists()
 
 
+@pytest.mark.slow
 def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
     # A pure pine stand: spruce and deciduous both carry zero basal area, so
     # whichever ranks second as "subdominant" has no live trees to model.
@@ -1094,6 +1098,7 @@ def test_process_stand_skips_on_failure(tmp_path, monkeypatch):
     assert "boom" in outcome.reason
 
 
+@pytest.mark.slow
 def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     tmp_path, monkeypatch
 ):
@@ -1123,6 +1128,7 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     assert list(tmp_path.glob("*.csv")) == []
 
 
+@pytest.mark.slow
 def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
     tmp_path,
 ):
@@ -1159,6 +1165,7 @@ def test_build_stand_takes_area_from_the_area_column_not_the_geometry():
 # %% process_stand's StandData / dump_stand_data_document
 
 
+@pytest.mark.slow
 def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
@@ -1186,6 +1193,7 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.mean_diameter == pytest.approx(stand.stand_meandiameter)
 
 
+@pytest.mark.slow
 def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
     """The per-species basal_area_*/stem_count_* fields are populated only by
     xml_to_allometry.py, whose consumer needs them -- the same single-source
@@ -1209,6 +1217,7 @@ def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
     assert stand_data.stem_count_deciduous is None
 
 
+@pytest.mark.slow
 def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
     candidate = _candidate("1", pine_ba=10, soiltype=None)
     stand = m.build_stand(candidate)
@@ -1222,6 +1231,7 @@ def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
     assert outcome.stand_data.soil_type is None
 
 
+@pytest.mark.slow
 def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
@@ -1241,6 +1251,7 @@ def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_pa
     assert subdominant.species_id == stand.subdominant_species
 
 
+@pytest.mark.slow
 def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     # Pine (age 50) dominates spruce (age 20). Pooling both species by basal
     # area would give (50*10 + 20*5) / 15 = 40, which neither layer should
@@ -1272,6 +1283,7 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     }
 
 
+@pytest.mark.slow
 def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
@@ -1285,6 +1297,7 @@ def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
     assert outcome.stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 30.0}
 
 
+@pytest.mark.slow
 def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
@@ -1314,6 +1327,7 @@ def _year_0_row(csv_path) -> pd.Series:
     return table.loc[table["Year"] == 0].iloc[0]
 
 
+@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
     tmp_path,
 ):
@@ -1342,6 +1356,7 @@ def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
     assert subdominant_year_0["Age"] == 7
 
 
+@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
     tmp_path,
 ):
@@ -1369,6 +1384,7 @@ def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures
     assert stand_data.mean_diameter == pytest.approx(4.06, abs=0.005)
 
 
+@pytest.mark.slow
 def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     tmp_path,
 ):
@@ -1394,6 +1410,7 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     assert stand_data.stem_count == 2809
 
 
+@pytest.mark.slow
 def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_path):
     # A dense young spruce monoculture: 3000 stems/ha, scaled to 1800. Pine
     # and deciduous carry no basal area, and scaling zero by a positive factor
@@ -1553,6 +1570,7 @@ def _write_synthetic_gpkg(
     gpd.GeoDataFrame(treestratum).to_file(path, layer="treestratum", driver="GPKG")
 
 
+@pytest.mark.slow
 def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path)
@@ -1711,6 +1729,7 @@ def _run_main(monkeypatch, gpkg_path, project_dir):
     m.main()
 
 
+@pytest.mark.slow
 def test_main_writes_crs_and_polygons_into_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1726,6 +1745,7 @@ def test_main_writes_crs_and_polygons_into_stand_data_json(
     assert all(stand.polygon is not None for stand in document.stands.values())
 
 
+@pytest.mark.slow
 def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1753,6 +1773,7 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
             assert entry.file_path.exists()
 
 
+@pytest.mark.slow
 def test_main_reprojects_a_stand_layer_in_another_crs(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1821,6 +1842,7 @@ def _warning_lines(printed: str) -> list[str]:
     return [line for line in printed.splitlines() if line.startswith("Warning")]
 
 
+@pytest.mark.slow
 def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1847,6 +1869,7 @@ def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     )
 
 
+@pytest.mark.slow
 def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1948,6 +1971,7 @@ def test_plan_stand_outputs_touches_nothing_on_disk(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+@pytest.mark.slow
 def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     # The point of routing both paths through plan_stand_outputs: what a dry
     # run reports is what a real run then puts on disk, name for name.

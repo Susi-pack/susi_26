@@ -268,6 +268,7 @@ def test_plan_output_names_the_csv_after_the_species(species, tmp_path):
 # %% build_growth_and_yield_table
 
 
+@pytest.mark.slow
 def test_build_growth_and_yield_table_writes_a_csv_round_tripping_through_the_real_reader(
     tmp_path,
 ):
@@ -523,6 +524,7 @@ def test_main_dry_run_writes_nothing(monkeypatch, project_dir, capsys):
     assert "Would write" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_main_real_run_writes_the_expected_csv(monkeypatch, project_dir):
     _write_valid_config(project_dir, species="birch", stems_count=3000)
     monkeypatch.setattr(
@@ -538,6 +540,7 @@ def test_main_real_run_writes_the_expected_csv(monkeypatch, project_dir):
     assert df["Age"].min() == 1
 
 
+@pytest.mark.slow
 def test_main_two_species_in_a_row_both_succeed(monkeypatch, project_dir):
     # One file per species into the same new_growth/ folder: the second run
     # must not be refused because the first one created the folder.
@@ -693,6 +696,7 @@ def test_resolve_sourced_site_inputs_raises_on_an_unknown_stand():
         )
 
 
+@pytest.mark.slow
 def test_sourced_mode_produces_the_same_table_as_standalone_mode():
     # The whole point of sourced mode: same site facts in, same allometry
     # out -- only the route they travelled differs.
@@ -935,6 +939,7 @@ def test_a_malformed_stand_data_document_is_a_clean_cli_error(
 # %% main -- a sourced run end to end
 
 
+@pytest.mark.slow
 def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     monkeypatch, project_dir, stand_data_file, capsys
 ):
@@ -966,6 +971,7 @@ def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     assert "from document root" in printed
 
 
+@pytest.mark.slow
 def test_main_sourced_run_in_a_project_whose_stand_allometry_already_exists(
     monkeypatch, project_dir
 ):

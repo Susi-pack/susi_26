@@ -13,6 +13,7 @@ import shutil
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 import susi.io.utils as io_utils
 from susi.core.susi_main import Susi
@@ -76,6 +77,8 @@ def match_netcdf_files(new_netcdf_filepath: Path, golden_netcdf_filepath: Path):
 # %% Run SUSI
 
 
+# Run with `pytest -m golden`: the default run deselects it.
+@pytest.mark.golden
 def test_golden_susi():
     repo_root_path = io_utils.repo_root()
     GOLDEN_NETCDF_FILE_PATH = repo_root_path / Path(

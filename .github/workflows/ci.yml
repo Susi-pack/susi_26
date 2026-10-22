@@ -7,8 +7,8 @@
 #                   whether main advances -- the "not rocket science rule".
 #                   Without this trigger the queue waits forever for checks.
 #
-# The job names (lint, test, golden) are what the main-branch ruleset lists
-# as required status checks. Renaming a job means updating the ruleset too.
+# The job names (lint, test, slow, golden) are what the main-branch ruleset
+# lists as required status checks. Renaming a job means updating the ruleset too.
 #
 # astral-sh/setup-uv publishes only full version tags (v10.2.0), no moving
 # major tag like actions/checkout's v7, so it is pinned to the exact release.
@@ -46,7 +46,9 @@ jobs:
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
       - run: uv run --locked pre-commit run --all-files --show-diff-on-failure
 
-  # The default test suite (pyproject's [tool.pytest] skips the golden file).
+  # The three test groups (docs/internal/running_tests.md), one job each so they run in parallel.
+  #
+  # The fast group: plain pytest, as pyproject's addopts deselects the other two.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -57,9 +59,18 @@ jobs:
       - run: uv sync --locked
       - run: uv run --locked pytest
 
-  # The golden-file test runs the full model (~1 min) and compares against
-  # tests/golden_file_test/golden_susi.nc. Its own job so it runs in parallel
-  # with the rest instead of adding to their time.
+  # The slow group.
+  slow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked pytest -m slow
+
+  # The golden group.
   golden:
     runs-on: ubuntu-latest
     steps:
@@ -68,7 +79,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
-      - run: uv run --locked pytest tests/golden_file_test/test_golden_file.py
+      - run: uv run --locked pytest -m golden
 
   # Checks that docs compile correctly
   docs:

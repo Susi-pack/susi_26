@@ -65,6 +65,7 @@ nav = [
     { "Maintainers" = [
         "internal/how_to_release_a_new_version.md",
         "internal/how_to_set_up_susi_on_roihu.md",
+        "internal/running_tests.md",
     ] },
 ]
 
