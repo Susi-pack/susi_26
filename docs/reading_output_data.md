@@ -112,9 +112,9 @@ data = load_output.read_value_several_variables_from_single_file(
 arr = data[NetcdfVariablePath("/stand/volume")]
 
 # 5. (Optional) choose aggregation method
-print(arr.spatial_mean_at_last_timestep())   # float
-print(arr.mean_over_space())                 # time-series (1-D array)
-print(arr.last_timestep())                   # raw slice
+print(arr.spatial_mean_at_last_timestep())  # float
+print(arr.mean_over_space())  # time-series (1-D array)
+print(arr.last_timestep())  # raw slice
 ```
 ??? question "Why return `NetcdfVariableArray` instead of a plain numpy array?"
 
@@ -132,8 +132,8 @@ print(arr.last_timestep())                   # raw slice
 
     ```python
     # Without the wrapper — you need to know the internals:
-    raw = nc.variables["/stand/volume"][:]       # shape (1, 120, 52)
-    clean = raw[0, :, 1:-1]                      # drop scenario + ditches
+    raw = nc.variables["/stand/volume"][:]  # shape (1, 120, 52)
+    clean = raw[0, :, 1:-1]  # drop scenario + ditches
 
     # With the wrapper — it just works:
     arr = NetcdfVariableArray(raw)
@@ -156,7 +156,9 @@ This is used in the following places in the codebase:
 ```python
 import susi.io.load_output_data as load_output
 from susi.io.load_output_data import (
-    StandID, ScenarioID, NetcdfVariablePath,
+    StandID,
+    ScenarioID,
+    NetcdfVariablePath,
 )
 
 # 1. Discover the stand folders of a run (every folder of a run is a stand)
@@ -165,9 +167,7 @@ stand_folders = load_output.list_stand_folders(
 )
 
 # 2. Load all metadata (fast — only JSONs)
-metadata_by_stand = load_output.load_all_metadatas_from_stands(
-    folders=stand_folders
-)
+metadata_by_stand = load_output.load_all_metadatas_from_stands(folders=stand_folders)
 
 # 3. Define variables and batch-read
 selected = [

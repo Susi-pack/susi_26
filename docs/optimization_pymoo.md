@@ -48,8 +48,8 @@ store = OutputDataStore(
             ("stand_01", "fertilized"): NetcdfVariableArray(...),
             ("stand_02", "default"): NetcdfVariableArray(...),
         },
-        "/balance/C/soil_c_balance_co2eq": {...}
-    }
+        "/balance/C/soil_c_balance_co2eq": {...},
+    },
 )
 
 # Access a specific value

@@ -98,6 +98,10 @@ Or, if your `venv` is activated:
 pytest
 ```
 
+That runs the fast tests only. The slow and golden tests run with `uv run pytest -m slow` and
+`uv run pytest -m golden`, or everything at once with `uv run pytest --all`. See
+[Running the tests](docs/internal/running_tests.md).
+
 All tests must pass before submitting a Pull Request.
 (This will be enforced automatically by the CI through GitHub Actions when ready).
 

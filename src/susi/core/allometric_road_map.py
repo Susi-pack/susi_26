@@ -60,17 +60,25 @@ class Growth_and_Yield_Table:
         self.Dg_2 = Dg_2  # mean diameter of spruce, cm
         self.Hg_2 = Hg_2  # mean height of spruce, m
         self.age_3 = age_3  # age of deciduous trees, years (assuming Betula pubescens)
-        self.G_3 = G_3  # basal area of deciduous trees, m2/ha (assuming Betula pubescens)
-        self.N_3 = N_3  # stem number of deciduous trees, /ha (assuming Betula pubescens)
-        self.Dg_3 = Dg_3  # mean diameter of deciduous trees, cm (assuming Betula pubescens)
-        self.Hg_3 = Hg_3  # mean height of deciduous trees, m (assuming Betula pubescens)
+        self.G_3 = (
+            G_3  # basal area of deciduous trees, m2/ha (assuming Betula pubescens)
+        )
+        self.N_3 = (
+            N_3  # stem number of deciduous trees, /ha (assuming Betula pubescens)
+        )
+        self.Dg_3 = (
+            Dg_3  # mean diameter of deciduous trees, cm (assuming Betula pubescens)
+        )
+        self.Hg_3 = (
+            Hg_3  # mean height of deciduous trees, m (assuming Betula pubescens)
+        )
         self.DDY = DDY  # temperature sum, Degree Days per Year
         self.fertility_class = fertility_class  # as integer 1...6
         self.peat = peat  # peat soil = 1
         self.y = y  # y-coordinate
         self.x = x  # x-coordinate
         self.altitude = altitude  # altitude above the sea level
-        
+
         # If basal missing in the data, calculated from stem count and mean diameter
         if self.G_1 == 0:
             self.G_1 = self.N_1 * np.pi * (self.Dg_1 / 2) ** 2 / 10000
@@ -94,28 +102,19 @@ class Growth_and_Yield_Table:
             sum(
                 a * w
                 for a, w in zip(
-                    [self.age_1, self.age_2, self.age_3], weights,
+                    [self.age_1, self.age_2, self.age_3],
+                    weights,
                 )
             )
             / weight_sum
         )
         self.Dg = round(
-            sum(
-                d * w
-                for d, w in zip(
-                    [self.Dg_1, self.Dg_2, self.Dg_3], weights
-                )
-            )
+            sum(d * w for d, w in zip([self.Dg_1, self.Dg_2, self.Dg_3], weights))
             / weight_sum,
             1,
         )
         self.Hg = round(
-            sum(
-                h * w
-                for h, w in zip(
-                    [self.Hg_1, self.Hg_2, self.Hg_3], weights
-                )
-            )
+            sum(h * w for h, w in zip([self.Hg_1, self.Hg_2, self.Hg_3], weights))
             / weight_sum,
             1,
         )
@@ -132,11 +131,7 @@ class Growth_and_Yield_Table:
                 ),
             )
         ) / sum(
-            
-                ReferenceTrees["Nd"]
-                * np.pi
-                * np.power((ReferenceTrees["D"] / 2) / 100, 2)
-            
+            ReferenceTrees["Nd"] * np.pi * np.power((ReferenceTrees["D"] / 2) / 100, 2)
         )
         Dg = sum(
             d * g
@@ -149,11 +144,7 @@ class Growth_and_Yield_Table:
                 ),
             )
         ) / sum(
-            
-                ReferenceTrees["Nd"]
-                * np.pi
-                * np.power((ReferenceTrees["D"] / 2) / 100, 2)
-            
+            ReferenceTrees["Nd"] * np.pi * np.power((ReferenceTrees["D"] / 2) / 100, 2)
         )
         return Hg, Dg
 
@@ -293,7 +284,7 @@ class Growth_and_Yield_Table:
         fx = np.zeros(len(D))
         for i in range(len(D)):
             if D[i] == 0:
-                fx[i] = 3           # If D == 0, survival set to approximately 95%
+                fx[i] = 3  # If D == 0, survival set to approximately 95%
             else:
                 # Reclassify species code to represent species-index 'spi': 0=pine, 1=spruce, 2=other
                 if sp[i] <= 2:
@@ -519,7 +510,9 @@ class Growth_and_Yield_Table:
         survival_rate = self.predict_survival_5_years(ReferenceTrees, peat)
 
         # predict 5-year diameter increment
-        ReferenceTrees["D"] = ReferenceTrees["D"] + self.predict_diameter_increment_5_years(
+        ReferenceTrees["D"] = ReferenceTrees[
+            "D"
+        ] + self.predict_diameter_increment_5_years(
             ReferenceTrees, fertility_class, DDY, peat
         )
 
@@ -529,8 +522,9 @@ class Growth_and_Yield_Table:
             if row["H"] <= 1.3:
                 # Function approximated from Huuskonen & Miina's (2007) height growth models. ForEcoManag 241, 1-3, p. 49-61
                 height.append(
-                    row["H"] + 
-                    np.interp(fertility_class, [2, 5], [1.3, 1.0]) * np.interp(DDY, [700, 1300], [0.6, 1.4])
+                    row["H"]
+                    + np.interp(fertility_class, [2, 5], [1.3, 1.0])
+                    * np.interp(DDY, [700, 1300], [0.6, 1.4])
                 )
             else:
                 height_estimate = naslund_height(row["D"], row["sp"])
@@ -557,7 +551,7 @@ class Growth_and_Yield_Table:
             mean_height, mean_diameter = self.calculate_basal_area_weighted_attributes(
                 ReferenceTrees
             )
-        
+
         assortments = self.get_assortment_volumes(
             ReferenceTrees, age, y, x, altitude, DDY, fertility_class, peat
         )
@@ -605,10 +599,7 @@ class Growth_and_Yield_Table:
         # Pine
         if self.N_1 != 0:
             if self.Dg_1 == 0:
-                ref_1 = pd.DataFrame({
-                    "Nd": [self.N_1],
-                    "D": [self.Dg_1]
-                })
+                ref_1 = pd.DataFrame({"Nd": [self.N_1], "D": [self.Dg_1]})
             else:
                 ref_1 = pd.DataFrame(
                     np.array(
@@ -624,11 +615,8 @@ class Growth_and_Yield_Table:
         # Spruce
         if self.N_2 != 0:
             if self.Dg_2 == 0:
-                ref_2 = pd.DataFrame({
-                    "Nd": [self.N_2],
-                    "D": [self.Dg_2]
-                })
-            else:            
+                ref_2 = pd.DataFrame({"Nd": [self.N_2], "D": [self.Dg_2]})
+            else:
                 ref_2 = pd.DataFrame(
                     np.array(
                         generate_weibull_tree_list(
@@ -643,11 +631,8 @@ class Growth_and_Yield_Table:
         # Deciduous trees (assuming Betula pubescens)
         if self.N_3 != 0:
             if self.Dg_3 == 0:
-                ref_3 = pd.DataFrame({
-                    "Nd": [self.N_3],
-                    "D": [self.Dg_3]
-                })
-            else:    
+                ref_3 = pd.DataFrame({"Nd": [self.N_3], "D": [self.Dg_3]})
+            else:
                 ref_3 = pd.DataFrame(
                     np.array(
                         generate_weibull_tree_list(

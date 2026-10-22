@@ -4,7 +4,6 @@ Module contains forestry domain spesific model functions
 """
 
 
-
 def naslund_height(diameter: float | None, species: float | None) -> float | None:
     """
     Näslund height model, with parameters from one Siipilehto. As extracted from LueVMI12.py.

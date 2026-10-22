@@ -851,6 +851,59 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
     )
 
 
+def build_stand_data(
+    stand: ParsedStand,
+    plan: StandPlanned,
+    initial_age_per_layer: dict[CanopyLayerName, float],
+    scaling_factor: float | None,
+) -> StandData:
+    """The stand's StandData record. Pure: it runs no growth model and writes
+    nothing.
+    """
+
+    allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
+        CanopyLayerName.dominant: AllometryFileAndSpecies(
+            file_path=plan.dominant_csv, species_id=stand.dominant_species
+        ),
+    }
+    if plan.subdominant_csv is not None:
+        allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
+            file_path=plan.subdominant_csv, species_id=stand.subdominant_species
+        )
+
+    return StandData(
+        site_fertility_class=stand.fertilityclass,
+        allometry_file_per_layer=allometry_file_per_layer,
+        initial_age_per_layer=initial_age_per_layer,
+        x_ykj=stand.x_ykj,
+        y_ykj=stand.y_ykj,
+        polygon=stand.geometry,
+        stand_area=stand.area,
+        main_group=MAINGROUP_FOREST_LAND,
+        sub_group=stand.subgroup,
+        # The stand-level figures are raw, exactly as the inventory
+        # recorded them, for a scaled stand too: the record keeps what
+        # the inventory reported, and notes dense young stand scaling
+        # separately, in the two fields at the end.
+        basal_area=stand.stand_basalarea,
+        mean_height=stand.stand_meanheight,
+        mean_diameter=stand.stand_meandiameter,
+        # The sum of the three species' stem counts, from the very
+        # function the rule judges a stand's density with. Without it,
+        # the scaling factor (target stem count over THIS number) would
+        # have nothing in the record to refer to. A species' stem count
+        # is an estimate when the inventory recorded none
+        # (aggregate_species_group, estimate_stemcount); the sum takes
+        # whatever the strata carry, estimated or not, as the rule does.
+        stem_count=total_stem_count(stand.strata),
+        developmentclass=stand.developmentclass,
+        drainagestate=stand.drainagestate,
+        soil_type=stand.soiltype,
+        dense_young_stand_scaling_applied=scaling_factor is not None,
+        dense_young_stand_scaling_factor=scaling_factor,
+    )
+
+
 def process_stand(
     stand: ParsedStand,
     config: ExtractionConfig,
@@ -932,52 +985,19 @@ def process_stand(
         # (aggregate_species_group rounds it; the growth model rounds again).
         # It's read off the table either way, the same way
         # xml_to_allometry.py does, so it's always the curve's real start.
-        allometry_file_per_layer: dict[CanopyLayerName, AllometryFileAndSpecies] = {
-            CanopyLayerName.dominant: AllometryFileAndSpecies(
-                file_path=plan.dominant_csv, species_id=stand.dominant_species
-            ),
-        }
         initial_age_per_layer: dict[CanopyLayerName, float] = {
             CanopyLayerName.dominant: initial_age(dominant_table),
         }
-        if plan.subdominant_csv is not None and subdominant_table is not None:
-            allometry_file_per_layer[CanopyLayerName.subdominant] = AllometryFileAndSpecies(
-                    file_path=plan.subdominant_csv, species_id=stand.subdominant_species
-                )
+        if subdominant_table is not None:
             initial_age_per_layer[CanopyLayerName.subdominant] = initial_age(
                 subdominant_table
             )
 
-        stand_data = StandData(
-            site_fertility_class=stand.fertilityclass,
-            allometry_file_per_layer=allometry_file_per_layer,
+        stand_data = build_stand_data(
+            stand=stand,
+            plan=plan,
             initial_age_per_layer=initial_age_per_layer,
-            x_ykj=stand.x_ykj,
-            y_ykj=stand.y_ykj,
-            polygon=stand.geometry,
-            stand_area=stand.area,
-            main_group=MAINGROUP_FOREST_LAND,
-            sub_group=stand.subgroup,
-            # The stand-level figures are raw, exactly as the inventory
-            # recorded them, for a scaled stand too: the record keeps what
-            # the inventory reported, and notes dense young stand scaling
-            # separately, in the two fields at the end.
-            basal_area=stand.stand_basalarea,
-            mean_height=stand.stand_meanheight,
-            mean_diameter=stand.stand_meandiameter,
-            # The sum of the three species' stem counts, from the very
-            # function the rule judges a stand's density with. Without it,
-            # the scaling factor (target stem count over THIS number) would
-            # have nothing in the record to refer to. A species' stem count
-            # is an estimate when the inventory recorded none
-            # (aggregate_species_group, estimate_stemcount); the sum takes
-            # whatever the strata carry, estimated or not, as the rule does.
-            stem_count=total_stem_count(stand.strata),
-            developmentclass=stand.developmentclass,
-            drainagestate=stand.drainagestate,
-            soil_type=stand.soiltype,
-            dense_young_stand_scaling_applied=scaling_factor is not None,
-            dense_young_stand_scaling_factor=scaling_factor,
+            scaling_factor=scaling_factor,
         )
 
         # Both tables computed successfully (or there is no subdominant

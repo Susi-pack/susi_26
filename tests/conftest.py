@@ -4,6 +4,23 @@ import pytest
 
 from susi.io.project_layout import inputs_dir_for_project, outputs_dir_for_project
 
+# %% Test groups (docs/internal/running_tests.md)
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--all",
+        action="store_true",
+        help="Run every test group: fast, slow and golden.",
+    )
+
+
+def pytest_configure(config):
+    # pyproject's addopts deselects the slow and golden groups with
+    # `-m "not slow and not golden"`. --all undoes that.
+    if config.getoption("--all"):
+        config.option.markexpr = ""
+
 
 @pytest.fixture
 def tmp_project(tmp_path) -> Path:

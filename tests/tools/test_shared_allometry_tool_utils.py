@@ -732,9 +732,9 @@ def test_build_growth_and_yield_table_uses_whichever_species_slot_is_populated(
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     assert len(table) > 0
@@ -758,9 +758,9 @@ def test_build_growth_and_yield_table_combines_all_three_populated_species():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     assert len(table) > 0
@@ -780,9 +780,9 @@ def test_build_growth_and_yield_table_peat_defaults_to_1():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     explicit_peat = growth_and_yield_table.build_growth_and_yield_table(
@@ -792,9 +792,9 @@ def test_build_growth_and_yield_table_peat_defaults_to_1():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
         peat=1,
     )

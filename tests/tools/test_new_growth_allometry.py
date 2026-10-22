@@ -272,7 +272,7 @@ def test_build_growth_and_yield_table_writes_a_csv_round_tripping_through_the_re
     tmp_path,
 ):
     config = nga.NewGrowthConfig.model_validate(
-        _valid_raw(species="pine", stems_count=2000)
+        _valid_raw(species="pine", stems_count=2000, n_trees=2, end_year=5)
     )
     site_inputs = nga.resolve_standalone_site_inputs(config)
 
@@ -506,6 +506,10 @@ def _write_valid_config(project_dir: Path, **overrides) -> None:
         f"y = {raw['y']}",
         f'species = "{raw["species"]}"',
         f"stems_count = {raw['stems_count']}",
+        # The smallest growth model that still gives a curve: these tests
+        # check the files main() writes, not the curve's shape.
+        "n_trees = 2",
+        "end_year = 5",
     ]
     (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         "\n".join(lines) + "\n"
@@ -697,7 +701,9 @@ def test_sourced_mode_produces_the_same_table_as_standalone_mode():
     # The whole point of sourced mode: same site facts in, same allometry
     # out -- only the route they travelled differs.
     standalone_config = nga.NewGrowthConfig.model_validate(
-        _valid_raw(species="pine", stems_count=2000, fertility_class=3)
+        _valid_raw(
+            species="pine", stems_count=2000, fertility_class=3, n_trees=2, end_year=5
+        )
     )
     standalone_inputs = nga.resolve_standalone_site_inputs(standalone_config)
 
@@ -707,7 +713,7 @@ def test_sourced_mode_produces_the_same_table_as_standalone_mode():
         y_ykj=standalone_inputs.y_ykj,
     )
     sourced_config = nga.NewGrowthSourcedConfig.model_validate(
-        _valid_sourced_raw(species="pine", stems_count=2000)
+        _valid_sourced_raw(species="pine", stems_count=2000, n_trees=2, end_year=5)
     )
     sourced_inputs = nga.resolve_sourced_site_inputs(
         stand_data_document=document, stand_id=SOURCED_STAND_ID
@@ -939,7 +945,7 @@ def test_main_sourced_run_writes_the_expected_csv_and_names_its_source(
     monkeypatch, project_dir, stand_data_file, capsys
 ):
     (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
-        'species = "spruce"\nstems_count = 1800\n'
+        'species = "spruce"\nstems_count = 1800\nn_trees = 2\nend_year = 5\n'
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -983,7 +989,7 @@ def test_main_sourced_run_in_a_project_whose_stand_allometry_already_exists(
         document=_stand_data_document(allometry_dir=allometry_dir),
     )
     (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
-        'species = "pine"\nstems_count = 2000\n'
+        'species = "pine"\nstems_count = 2000\nn_trees = 2\nend_year = 5\n'
     )
     monkeypatch.setattr(
         "sys.argv",

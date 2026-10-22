@@ -426,6 +426,7 @@ stand_data_document_strategy = st.builds(
 )
 
 
+@pytest.mark.slow
 @given(document=stand_data_document_strategy)
 def test_stand_data_document_roundtrips_through_json_in_memory(document):
     # Pure property, no file involved, so no document folder either: the
