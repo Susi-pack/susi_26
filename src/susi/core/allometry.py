@@ -357,7 +357,13 @@ class Allometry:
         df["N_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["N"] / 1000.0
         df["Nbm_noleaves"] = (
             df[
-                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
+                [
+                    "stem_mass",
+                    "Living_branches",
+                    "Dead_branches",
+                    "Stump",
+                    "Coarse_roots",
+                ]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["N"]
             / 1000.0
@@ -366,7 +372,13 @@ class Allometry:
         df["P_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["P"] / 1000.0
         df["Pbm_noleaves"] = (
             df[
-                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
+                [
+                    "stem_mass",
+                    "Living_branches",
+                    "Dead_branches",
+                    "Stump",
+                    "Coarse_roots",
+                ]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["P"]
             / 1000.0
@@ -375,7 +387,13 @@ class Allometry:
         df["K_leaves"] = df["Foliage"] * nuts[spe]["Foliage"]["K"] / 1000.0
         df["Kbm_noleaves"] = (
             df[
-                ["stem_mass", "Living_branches", "Dead_branches", "Stump", "Coarse_roots"]
+                [
+                    "stem_mass",
+                    "Living_branches",
+                    "Dead_branches",
+                    "Stump",
+                    "Coarse_roots",
+                ]
             ].sum(axis=1)
             * nuts[spe]["Stem"]["K"]
             / 1000.0
@@ -473,7 +491,10 @@ class Allometry:
         ageToBranchLiving = interp1d(
             df["Age"].values,
             df["Living_branches"].values,
-            fill_value=(df["Living_branches"].values[0], df["Living_branches"].values[-1]),
+            fill_value=(
+                df["Living_branches"].values[0],
+                df["Living_branches"].values[-1],
+            ),
             bounds_error=True,
         )
         ageToBranchDead = interp1d(

@@ -709,7 +709,6 @@ def _one_species_stratum(stem_count: float) -> tree_stratum.TreeStratum:
     )
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("active_field", ["pine", "spruce", "deciduous"])
 def test_build_growth_and_yield_table_uses_whichever_species_slot_is_populated(
     active_field,
@@ -733,9 +732,9 @@ def test_build_growth_and_yield_table_uses_whichever_species_slot_is_populated(
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     assert len(table) > 0
@@ -743,7 +742,6 @@ def test_build_growth_and_yield_table_uses_whichever_species_slot_is_populated(
     assert table["Age"].iloc[0] == 25
 
 
-@pytest.mark.slow
 def test_build_growth_and_yield_table_combines_all_three_populated_species():
     # A normal, never-isolated 3-species mix -- the shape xml_to_allometry.py
     # and new_growth_allometry.py always pass.
@@ -760,16 +758,15 @@ def test_build_growth_and_yield_table_combines_all_three_populated_species():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     assert len(table) > 0
     assert table["N"].iloc[0] == pytest.approx(300 + 250 + 200, rel=0.1)
 
 
-@pytest.mark.slow
 def test_build_growth_and_yield_table_peat_defaults_to_1():
     strata = tree_stratum.PerSpecies(
         pine=_one_species_stratum(300),
@@ -783,9 +780,9 @@ def test_build_growth_and_yield_table_peat_defaults_to_1():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
     )
     explicit_peat = growth_and_yield_table.build_growth_and_yield_table(
@@ -795,9 +792,9 @@ def test_build_growth_and_yield_table_peat_defaults_to_1():
         y_ykj=6675,
         altitude=100.0,
         ddy=1200.0,
-        n_trees=5,
+        n_trees=2,
         start_year=5,
-        end_year=10,
+        end_year=5,
         step_years=5,
         peat=1,
     )

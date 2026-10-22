@@ -103,12 +103,18 @@ instead of `input_folder` to point at your own data:
 
 ```python
 from susi.io.app_settings import AppSettings
-from susi.io.susi_parameter_model import WeatherParams, CanopyLayerAllometry, CanopyLayerName
+from susi.io.susi_parameter_model import (
+    WeatherParams,
+    CanopyLayerAllometry,
+    CanopyLayerName,
+)
 
 app_settings = AppSettings()
 
 weather_parameters = WeatherParams(
-    FMI_weather_filepath=app_settings.user_input_folder.joinpath("my_project/weather/weather.csv"),
+    FMI_weather_filepath=app_settings.user_input_folder.joinpath(
+        "my_project/weather/weather.csv"
+    ),
 )
 
 allometry_parameters = CanopyLayerAllometry(
@@ -136,7 +142,7 @@ from susi.io.app_settings import AppSettings
 
 app_settings = AppSettings()
 
-app_settings.input_folder       # <repo_root>/src/inputs
+app_settings.input_folder  # <repo_root>/src/inputs
 app_settings.user_input_folder  # <repo_root>/inputs
 ```
 

@@ -14,6 +14,7 @@ from shapely.geometry import MultiPolygon, Point, Polygon
 from susi.io.load_output_data import StandID
 from susi.io.stand_data import (
     SOURCE_CRS,
+    StandData,
     StandDataDocument,
     centroid_to_ykj,
     load_stand_data_document_from_json,
@@ -970,7 +971,6 @@ def test_build_stand_ignores_preserved_zero_basal_area_species_in_stand_level_av
     assert stand.stand_meanheight == pytest.approx(18.0)
 
 
-@pytest.mark.slow
 def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_path):
     # Same setup, but check the actual allometry-creation step: spruce's
     # real recorded data must not turn into a subdominant CSV, because it
@@ -1002,7 +1002,7 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
     # Spruce's real data is still there, for reporting/future use ...
     assert stand.strata.spruce.stem_count == 80
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1016,12 +1016,11 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
 # %% write_allometry_csv round-trips through the real SUSI reader
 
 
-@pytest.mark.slow
 def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     table = m.build_growth_and_yield_table(
@@ -1047,12 +1046,11 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
 # %% process_stand
 
 
-@pytest.mark.slow
 def test_process_stand_writes_two_csvs(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1063,14 +1061,13 @@ def test_process_stand_writes_two_csvs(tmp_path):
     assert outcome.subdominant_csv.exists()
 
 
-@pytest.mark.slow
 def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
     # A pure pine stand: spruce and deciduous both carry zero basal area, so
     # whichever ranks second as "subdominant" has no live trees to model.
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1098,7 +1095,6 @@ def test_process_stand_skips_on_failure(tmp_path, monkeypatch):
     assert "boom" in outcome.reason
 
 
-@pytest.mark.slow
 def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     tmp_path, monkeypatch
 ):
@@ -1109,7 +1105,7 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     real_build = m.build_growth_and_yield_table
@@ -1128,7 +1124,6 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     assert list(tmp_path.glob("*.csv")) == []
 
 
-@pytest.mark.slow
 def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
     tmp_path,
 ):
@@ -1140,7 +1135,7 @@ def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = dataclasses.replace(m.build_stand(candidate), area=0.0)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1162,21 +1157,37 @@ def test_build_stand_takes_area_from_the_area_column_not_the_geometry():
     assert stand.area == 1.234
 
 
-# %% process_stand's StandData / dump_stand_data_document
+# %% build_stand_data
+#
+# The StandData record, built without the growth model. The initial ages are
+# literals here: what process_stand reads off the grown tables is checked
+# further down, in "process_stand: initial ages".
 
 
-@pytest.mark.slow
-def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
-    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+def _build_stand_data(
+    candidate: m.StandCandidate, output_dir: Path, scaling_factor: float | None = None
+) -> tuple[m.ParsedStand, m.StandPlanned, StandData]:
+    """build_stand_data for the stand built from candidate, given an age for
+    each layer its plan has a file for (30 dominant, 20 subdominant)."""
     stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    plan = m.plan_stand_outputs(stand, output_dir)
+    initial_age_per_layer = {CanopyLayerName.dominant: 30.0}
+    if plan.subdominant_csv is not None:
+        initial_age_per_layer[CanopyLayerName.subdominant] = 20.0
+    stand_data = m.build_stand_data(
+        stand=stand,
+        plan=plan,
+        initial_age_per_layer=initial_age_per_layer,
+        scaling_factor=scaling_factor,
+    )
+    return stand, plan, stand_data
+
+
+def test_build_stand_data_records_the_shared_metadata_fields(tmp_path):
+    stand, _, stand_data = _build_stand_data(
+        _candidate("1", pine_ba=10, spruce_ba=5), tmp_path
     )
 
-    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
-
-    assert isinstance(outcome, m.StandWritten)
-    stand_data = outcome.stand_data
     assert stand_data.site_fertility_class == stand.fertilityclass
     assert stand_data.x_ykj == stand.x_ykj
     assert stand_data.y_ykj == stand.y_ykj
@@ -1193,22 +1204,26 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.mean_diameter == pytest.approx(stand.stand_meandiameter)
 
 
-@pytest.mark.slow
-def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
+def test_build_stand_data_records_the_initial_ages_it_is_given(tmp_path):
+    _, _, stand_data = _build_stand_data(
+        _candidate("1", pine_ba=10, spruce_ba=5), tmp_path
+    )
+
+    assert stand_data.initial_age_per_layer == {
+        CanopyLayerName.dominant: 30.0,
+        CanopyLayerName.subdominant: 20.0,
+    }
+
+
+def test_build_stand_data_leaves_per_species_stand_data_fields_unset(tmp_path):
     """The per-species basal_area_*/stem_count_* fields are populated only by
     xml_to_allometry.py, whose consumer needs them -- the same single-source
     pattern drainagestate and developmentclass follow in the other direction.
     None here means "this source tool records nothing", not zero."""
-    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    _, _, stand_data = _build_stand_data(
+        _candidate("1", pine_ba=10, spruce_ba=5), tmp_path
     )
 
-    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
-
-    assert isinstance(outcome, m.StandWritten)
-    stand_data = outcome.stand_data
     assert stand_data.basal_area_pine is None
     assert stand_data.basal_area_spruce is None
     assert stand_data.basal_area_deciduous is None
@@ -1217,41 +1232,43 @@ def test_process_stand_leaves_per_species_stand_data_fields_unset(tmp_path):
     assert stand_data.stem_count_deciduous is None
 
 
-@pytest.mark.slow
-def test_process_stand_missing_soiltype_stays_none_in_stand_data(tmp_path):
-    candidate = _candidate("1", pine_ba=10, soiltype=None)
-    stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+def test_build_stand_data_missing_soiltype_stays_none(tmp_path):
+    _, _, stand_data = _build_stand_data(
+        _candidate("1", pine_ba=10, soiltype=None), tmp_path
     )
 
-    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
-
-    assert isinstance(outcome, m.StandWritten)
-    assert outcome.stand_data.soil_type is None
+    assert stand_data.soil_type is None
 
 
-@pytest.mark.slow
-def test_process_stand_populates_allometry_file_per_layer_for_both_layers(tmp_path):
-    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
-    stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+def test_build_stand_data_populates_allometry_file_per_layer_for_both_layers(tmp_path):
+    stand, plan, stand_data = _build_stand_data(
+        _candidate("1", pine_ba=10, spruce_ba=5), tmp_path
     )
 
-    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
-
-    assert isinstance(outcome, m.StandWritten)
-    allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
+    allometry_file_per_layer = stand_data.allometry_file_per_layer
     dominant = allometry_file_per_layer[CanopyLayerName.dominant]
-    assert dominant.file_path == outcome.dominant_csv
+    assert dominant.file_path == plan.dominant_csv
     assert dominant.species_id == stand.dominant_species
     subdominant = allometry_file_per_layer[CanopyLayerName.subdominant]
-    assert subdominant.file_path == outcome.subdominant_csv
+    assert subdominant.file_path == plan.subdominant_csv
     assert subdominant.species_id == stand.subdominant_species
 
 
-@pytest.mark.slow
+def test_build_stand_data_monoculture_allometry_file_per_layer_has_only_dominant(
+    tmp_path,
+):
+    _, _, stand_data = _build_stand_data(_candidate("1", pine_ba=10), tmp_path)
+
+    allometry_file_per_layer = stand_data.allometry_file_per_layer
+    assert CanopyLayerName.dominant in allometry_file_per_layer
+    assert CanopyLayerName.subdominant not in allometry_file_per_layer
+
+
+# %% process_stand: initial ages
+#
+# Read off the grown tables, so these run the growth model.
+
+
 def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     # Pine (age 50) dominates spruce (age 20). Pooling both species by basal
     # area would give (50*10 + 20*5) / 15 = 40, which neither layer should
@@ -1271,7 +1288,7 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     )
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1283,34 +1300,17 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     }
 
 
-@pytest.mark.slow
 def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
 
     assert isinstance(outcome, m.StandWritten)
     assert outcome.stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 30.0}
-
-
-@pytest.mark.slow
-def test_process_stand_monoculture_allometry_file_per_layer_has_only_dominant(tmp_path):
-    candidate = _candidate("1", pine_ba=10)
-    stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
-    )
-
-    outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
-
-    assert isinstance(outcome, m.StandWritten)
-    allometry_file_per_layer = outcome.stand_data.allometry_file_per_layer
-    assert CanopyLayerName.dominant in allometry_file_per_layer
-    assert CanopyLayerName.subdominant not in allometry_file_per_layer
 
 
 # %% process_stand: dense young stand scaling
@@ -1327,13 +1327,12 @@ def _year_0_row(csv_path) -> pd.Series:
     return table.loc[table["Year"] == 0].iloc[0]
 
 
-@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
     tmp_path,
 ):
     stand = m.build_stand(_dense_young_candidate())
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(
@@ -1356,21 +1355,13 @@ def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
     assert subdominant_year_0["Age"] == 7
 
 
-@pytest.mark.slow
-def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
+def test_build_stand_data_with_a_scaling_factor_still_records_the_inventory_figures(
     tmp_path,
 ):
-    stand = m.build_stand(_dense_young_candidate())
-    config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+    _, _, stand_data = _build_stand_data(
+        _dense_young_candidate(), tmp_path, scaling_factor=_DENSE_YOUNG_SCALING_FACTOR
     )
 
-    outcome = m.process_stand(
-        stand, config, tmp_path, scaling_factor=_DENSE_YOUNG_SCALING_FACTOR
-    )
-
-    assert isinstance(outcome, m.StandWritten)
-    stand_data = outcome.stand_data
     # The record says the stand was scaled, and by how much...
     assert stand_data.dense_young_stand_scaling_applied is True
     assert stand_data.dense_young_stand_scaling_factor == pytest.approx(
@@ -1384,7 +1375,6 @@ def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures
     assert stand_data.mean_diameter == pytest.approx(4.06, abs=0.005)
 
 
-@pytest.mark.slow
 def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     tmp_path,
 ):
@@ -1392,7 +1382,7 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     # off): process_stand never decides on its own.
     stand = m.build_stand(_dense_young_candidate())
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1410,7 +1400,6 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     assert stand_data.stem_count == 2809
 
 
-@pytest.mark.slow
 def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_path):
     # A dense young spruce monoculture: 3000 stems/ha, scaled to 1800. Pine
     # and deciduous carry no basal area, and scaling zero by a positive factor
@@ -1432,7 +1421,7 @@ def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_p
     )
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=1800 / 3000)
@@ -1570,12 +1559,11 @@ def _write_synthetic_gpkg(
     gpd.GeoDataFrame(treestratum).to_file(path, layer="treestratum", driver="GPKG")
 
 
-@pytest.mark.slow
 def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     layers = m.load_gpkg_layers(gpkg_path)
@@ -1720,7 +1708,7 @@ def test_stand_layer_in_source_crs_fails_without_a_crs():
 
 def _run_main(monkeypatch, gpkg_path, project_dir):
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -1729,7 +1717,6 @@ def _run_main(monkeypatch, gpkg_path, project_dir):
     m.main()
 
 
-@pytest.mark.slow
 def test_main_writes_crs_and_polygons_into_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1745,7 +1732,6 @@ def test_main_writes_crs_and_polygons_into_stand_data_json(
     assert all(stand.polygon is not None for stand in document.stands.values())
 
 
-@pytest.mark.slow
 def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1773,7 +1759,6 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
             assert entry.file_path.exists()
 
 
-@pytest.mark.slow
 def test_main_reprojects_a_stand_layer_in_another_crs(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1823,7 +1808,7 @@ def _run_main_with_a_dense_young_stand(
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path, dense_young=True)
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
         + scaling_table
     )
     argv = [
@@ -1842,7 +1827,6 @@ def _warning_lines(printed: str) -> list[str]:
     return [line for line in printed.splitlines() if line.startswith("Warning")]
 
 
-@pytest.mark.slow
 def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1869,7 +1853,6 @@ def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     )
 
 
-@pytest.mark.slow
 def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1971,13 +1954,12 @@ def test_plan_stand_outputs_touches_nothing_on_disk(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.slow
 def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     # The point of routing both paths through plan_stand_outputs: what a dry
     # run reports is what a real run then puts on disk, name for name.
     stand = m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5))
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, end_year=10
+        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
     )
 
     plan = m.plan_stand_outputs(stand, tmp_path)

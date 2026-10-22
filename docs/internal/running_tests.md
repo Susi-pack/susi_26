@@ -18,7 +18,7 @@ Plain `pytest` deselects the slow and golden groups, and its summary line says h
 ## Which group a new test goes in
 
 - **golden**: the test compares a run's output against a stored reference output. Today that is `tests/golden_file_test/test_golden_file.py`, which compares a full SUSI run with `golden_susi.nc`.
-- **slow**: the test runs the growth model (the allometry tools' `Growth_and_Yield_Table`) or a full SUSI simulation, or it takes more than 0.5 s when run on its own.
+- **slow**: the test takes more than 0.5 s when run on its own, or it runs a full SUSI simulation.
 - **fast**: everything else. Leave it unmarked.
 
 A test belongs to one group only.
@@ -32,8 +32,7 @@ import pytest
 
 
 @pytest.mark.slow
-def test_process_stand_writes_two_csvs(tmp_path):
-    ...
+def test_process_stand_writes_two_csvs(tmp_path): ...
 ```
 
 ### Measuring "more than 0.5 s"

@@ -369,62 +369,24 @@ def plan_stand_output(parsed_stand: ParsedStand, output_dir: Path) -> Path:
     return output_dir / f"{parsed_stand.id}.csv"
 
 
-def process_stand(
-    config: XmlConfig,
+def build_stand_data(
     parsed_stand: ParsedStand,
-    PEAT: int,
-    output_dir: Path,
+    output_path: Path,
+    dominant_initial_age: float,
     scaling_factor: float | None,
 ) -> StandData:
+    """The stand's StandData record. Pure: it runs no growth model and writes
+    nothing.
     """
-    Builds the single allometry CSV for this stand
-
-    scaling_factor is the stand's dense young stand scaling factor, decided
-    once in main(): None for a stand that isn't scaled. With a factor, the
-    growth table is built from the scaled-down strata. The StandData record
-    is filled from the unscaled parsed_stand either way, and says whether the
-    stand was scaled and by what factor.
-    """
-    # Two sets of strata on purpose. `strata` is what the inventory recorded,
-    # and is all that goes into the StandData record below. The growth model
-    # gets the scaled strata when there is a factor.
     strata = parsed_stand.tree_strata
-
-    page_1 = build_growth_and_yield_table(
-        strata=strata_to_grow_from(strata, scaling_factor),
-        fertility_class=parsed_stand.fertility_class,
-        x_ykj=parsed_stand.x_ykj,
-        y_ykj=parsed_stand.y_ykj,
-        altitude=config.altitude,
-        ddy=config.ddy,
-        n_trees=config.n_trees,
-        start_year=config.start_year,
-        end_year=config.end_year,
-        step_years=config.step_years,
-        peat=PEAT,
-    )
-
-    output_path = plan_stand_output(parsed_stand, output_dir)
-
-    # The StandData record is built (and pydantic-validated), and the initial
-    # age read off page_1, BEFORE the CSV is written: if either fails, no
-    # stray CSV that nothing references is left behind (same ordering as
-    # metsakeskus_to_allometry.py's process_stand).
-    stand_data = StandData(
+    return StandData(
         site_fertility_class=parsed_stand.fertility_class,
         allometry_file_per_layer={
             CanopyLayerName.dominant: AllometryFileAndSpecies(
                 file_path=output_path, species_id=parsed_stand.main_species
             ),
         },
-        # Every species is pooled into the one dominant-layer curve (#276), so
-        # the dominant layer starts at the growth model's basal-area-weighted
-        # pooled age of every species -- the curve's own Year-0 Age -- not at
-        # the inventory's tss:MeanAge, which is computed differently and can
-        # disagree with it. Dense young stand scaling doesn't move it: every
-        # species' basal area is multiplied by the same factor, so the
-        # weights keep their proportions.
-        initial_age_per_layer={CanopyLayerName.dominant: initial_age(page_1)},
+        initial_age_per_layer={CanopyLayerName.dominant: dominant_initial_age},
         x_ykj=parsed_stand.x_ykj,
         y_ykj=parsed_stand.y_ykj,
         polygon=parsed_stand.polygon,
@@ -452,6 +414,61 @@ def process_stand(
         stem_count_deciduous=strata.deciduous.stem_count,
         dense_young_stand_scaling_applied=scaling_factor is not None,
         dense_young_stand_scaling_factor=scaling_factor,
+    )
+
+
+def process_stand(
+    config: XmlConfig,
+    parsed_stand: ParsedStand,
+    PEAT: int,
+    output_dir: Path,
+    scaling_factor: float | None,
+) -> StandData:
+    """
+    Builds the single allometry CSV for this stand
+
+    scaling_factor is the stand's dense young stand scaling factor, decided
+    once in main(): None for a stand that isn't scaled. With a factor, the
+    growth table is built from the scaled-down strata. The StandData record
+    is filled from the unscaled parsed_stand either way, and says whether the
+    stand was scaled and by what factor.
+    """
+    # Two sets of strata on purpose. parsed_stand.tree_strata is what the
+    # inventory recorded, and is all that goes into the StandData record
+    # below (build_stand_data). The growth model gets the scaled strata when
+    # there is a factor.
+    page_1 = build_growth_and_yield_table(
+        strata=strata_to_grow_from(parsed_stand.tree_strata, scaling_factor),
+        fertility_class=parsed_stand.fertility_class,
+        x_ykj=parsed_stand.x_ykj,
+        y_ykj=parsed_stand.y_ykj,
+        altitude=config.altitude,
+        ddy=config.ddy,
+        n_trees=config.n_trees,
+        start_year=config.start_year,
+        end_year=config.end_year,
+        step_years=config.step_years,
+        peat=PEAT,
+    )
+
+    output_path = plan_stand_output(parsed_stand, output_dir)
+
+    # The StandData record is built (and pydantic-validated), and the initial
+    # age read off page_1, BEFORE the CSV is written: if either fails, no
+    # stray CSV that nothing references is left behind (same ordering as
+    # metsakeskus_to_allometry.py's process_stand).
+    stand_data = build_stand_data(
+        parsed_stand=parsed_stand,
+        output_path=output_path,
+        # Every species is pooled into the one dominant-layer curve (#276), so
+        # the dominant layer starts at the growth model's basal-area-weighted
+        # pooled age of every species -- the curve's own Year-0 Age -- not at
+        # the inventory's tss:MeanAge, which is computed differently and can
+        # disagree with it. Dense young stand scaling doesn't move it: every
+        # species' basal area is multiplied by the same factor, so the
+        # weights keep their proportions.
+        dominant_initial_age=initial_age(page_1),
+        scaling_factor=scaling_factor,
     )
 
     page_1.to_csv(output_path, index=False)

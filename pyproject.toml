@@ -129,7 +129,7 @@ testpaths = ["tests"]
 # Test groups: plain `pytest` runs only the fast one, i.e., neither "slow" nor "golden" tests.
 # See docs/internal/running_tests.md.
 markers = [
-    "slow: runs the growth model or a full SUSI simulation, or takes over 0.5 s",
+    "slow: takes over 0.5 s on its own, or runs a full SUSI simulation",
     "golden: compares a run's output against a stored reference output",
 ]
 

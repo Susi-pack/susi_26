@@ -1,5 +1,6 @@
 import json
 import tomllib
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -12,6 +13,7 @@ from shapely.geometry import Polygon
 from susi.io.load_output_data import StandID
 from susi.io.stand_data import (
     SOURCE_CRS,
+    StandData,
     centroid_to_ykj,
     load_stand_data_document_from_json,
     point_to_ykj,
@@ -615,7 +617,7 @@ def test_parse_coordinates_roundtrip(coords):
         assert ry == pytest.approx(oy)
 
 
-# %% plan_stand_output / process_stand / dump_stand_data_document
+# %% plan_stand_output / build_stand_data / process_stand / dump_stand_data_document
 
 
 def _parsed_stand_data(
@@ -638,10 +640,11 @@ def test_plan_stand_output_names_the_csv_by_stand_id(tmp_path):
     )
 
 
-@pytest.mark.slow
 def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_path):
     parsed_stand = _parsed_stand_data("1")
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+    config = xml_to_allometry.XmlConfig(
+        altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+    )
 
     stand_data = xml_to_allometry.process_stand(
         config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
@@ -659,14 +662,27 @@ def test_process_stand_writes_a_csv_round_tripping_through_the_real_reader(tmp_p
     assert CanopyLayerName.subdominant not in stand_data.allometry_file_per_layer
 
 
-@pytest.mark.slow
-def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_path):
-    parsed_stand = _parsed_stand_data("1")
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
-
-    stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
+def _build_stand_data(
+    parsed_stand: xml_to_allometry.ParsedStand,
+    output_dir: Path,
+    scaling_factor: float | None = None,
+) -> StandData:
+    """build_stand_data without the growth model: the dominant layer's initial
+    age is a literal 40. What process_stand reads off the grown table is
+    checked in test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age.
+    """
+    return xml_to_allometry.build_stand_data(
+        parsed_stand=parsed_stand,
+        output_path=xml_to_allometry.plan_stand_output(parsed_stand, output_dir),
+        dominant_initial_age=40.0,
+        scaling_factor=scaling_factor,
     )
+
+
+def test_build_stand_data_records_the_shared_metadata_fields(tmp_path):
+    parsed_stand = _parsed_stand_data("1")
+
+    stand_data = _build_stand_data(parsed_stand, tmp_path)
 
     assert stand_data.site_fertility_class == parsed_stand.fertility_class
     assert stand_data.x_ykj == parsed_stand.x_ykj
@@ -676,12 +692,9 @@ def test_process_stand_returns_stand_data_with_the_shared_metadata_fields(tmp_pa
     assert stand_data.stand_area == parsed_stand.area
     assert stand_data.soil_type == parsed_stand.soil_type
     # The one pooled curve sits on the dominant layer, so that's the only age.
-    # This fixture has a single stratum (pine, age 40), so the pooled age is
-    # just that stratum's age.
     assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 40.0}
 
 
-@pytest.mark.slow
 def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_path):
     # The two-species fixture stand: pine age 40 (G 20.0) and spruce age 35
     # (G 8.0), with tss:MeanAge 40. The growth model pools the strata's ages
@@ -689,7 +702,9 @@ def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_
     # the curve starts at 39. The recorded initial age must be the curve's
     # start age, not the inventory's tss:MeanAge.
     parsed_stand = _parsed_stand_data("1", include_second_species=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+    config = xml_to_allometry.XmlConfig(
+        altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+    )
 
     stand_data = xml_to_allometry.process_stand(
         config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
@@ -698,17 +713,15 @@ def test_process_stand_records_the_curves_pooled_start_age_not_tss_mean_age(tmp_
     assert stand_data.initial_age_per_layer == {CanopyLayerName.dominant: 39.0}
 
 
-@pytest.mark.slow
-def test_process_stand_returns_raw_per_species_basal_areas_and_stem_counts(tmp_path):
+def test_build_stand_data_records_raw_per_species_basal_areas_and_stem_counts(
+    tmp_path,
+):
     # The two-species fixture stand: a pine stratum (species 1, G 20.0 /
     # N 500) and a spruce one (species 2, G 8.0 / N 300). Nothing with a
     # species code >= 3, so the "deciduous" slot stays at ZERO_STRATUM.
     parsed_stand = _parsed_stand_data("1", include_second_species=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
-    stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
-    )
+    stand_data = _build_stand_data(parsed_stand, tmp_path)
 
     # Raw XML figures, exactly as the inventory recorded them.
     assert stand_data.basal_area_pine == 20.0
@@ -727,12 +740,13 @@ def _year_0_row(csv_path) -> pd.Series:
     return table.loc[table["Year"] == 0].iloc[0]
 
 
-@pytest.mark.slow
 def test_process_stand_with_a_scaling_factor_grows_the_stand_from_fewer_stems(
     tmp_path,
 ):
     parsed_stand = _parsed_stand_data("20", dense_young=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
+    config = xml_to_allometry.XmlConfig(
+        altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+    )
     recorded_dir = tmp_path / "recorded"
     scaled_dir = tmp_path / "scaled"
     recorded_dir.mkdir()
@@ -760,19 +774,13 @@ def test_process_stand_with_a_scaling_factor_grows_the_stand_from_fewer_stems(
     assert scaled_year_0["Age"] == recorded_year_0["Age"]
 
 
-@pytest.mark.slow
-def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures(
+def test_build_stand_data_with_a_scaling_factor_still_records_the_inventory_figures(
     tmp_path,
 ):
     parsed_stand = _parsed_stand_data("20", dense_young=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
-    stand_data = xml_to_allometry.process_stand(
-        config,
-        parsed_stand,
-        PEAT=1,
-        output_dir=tmp_path,
-        scaling_factor=_DENSE_YOUNG_SCALING_FACTOR,
+    stand_data = _build_stand_data(
+        parsed_stand, tmp_path, scaling_factor=_DENSE_YOUNG_SCALING_FACTOR
     )
 
     # The record says the stand was scaled, and by how much...
@@ -793,18 +801,14 @@ def test_process_stand_with_a_scaling_factor_still_records_the_inventory_figures
     assert stand_data.mean_diameter == 20.0
 
 
-@pytest.mark.slow
-def test_process_stand_without_a_scaling_factor_records_that_nothing_was_scaled(
+def test_build_stand_data_without_a_scaling_factor_records_that_nothing_was_scaled(
     tmp_path,
 ):
     # A dense young stand, but no factor was decided for it (the option is
-    # off): process_stand never decides on its own.
+    # off): neither process_stand nor build_stand_data decides on its own.
     parsed_stand = _parsed_stand_data("20", dense_young=True)
-    config = xml_to_allometry.XmlConfig(altitude=150.0, ddy=1200.0, end_year=10)
 
-    stand_data = xml_to_allometry.process_stand(
-        config, parsed_stand, PEAT=1, output_dir=tmp_path, scaling_factor=None
-    )
+    stand_data = _build_stand_data(parsed_stand, tmp_path)
 
     assert stand_data.dense_young_stand_scaling_applied is False
     assert stand_data.dense_young_stand_scaling_factor is None
@@ -1060,7 +1064,6 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
 # %% main
 
 
-@pytest.mark.slow
 def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1075,7 +1078,7 @@ def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
         )
     )
     (project_dir / "inputs" / "config.toml").write_text(
-        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+        "altitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -1093,7 +1096,6 @@ def test_main_writes_crs_and_wkt_polygons_into_stand_data_json(
     assert len(polygon.interiors) == 1
 
 
-@pytest.mark.slow
 def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
@@ -1104,7 +1106,7 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
         _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
     )
     (project_dir / "inputs" / "config.toml").write_text(
-        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n"
+        "altitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
     )
     monkeypatch.chdir(project_dir.parent)
     monkeypatch.setattr(
@@ -1147,7 +1149,7 @@ def _run_main_with_a_dense_young_stand(
         )
     )
     (project_dir / "inputs" / "config.toml").write_text(
-        "altitude = 150.0\nddy = 1200.0\nend_year = 10\n" + scaling_table
+        "altitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n" + scaling_table
     )
     argv = ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir}"]
     if dry_run:
@@ -1161,7 +1163,6 @@ def _warning_lines(printed: str) -> list[str]:
     return [line for line in printed.splitlines() if line.startswith("Warning")]
 
 
-@pytest.mark.slow
 def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     monkeypatch, tmp_path, project_dir, capsys
 ):
@@ -1183,7 +1184,6 @@ def test_main_with_the_option_off_warns_about_the_dense_young_stand_by_id(
     assert year_0["N"] == pytest.approx(2809, rel=0.02)
 
 
-@pytest.mark.slow
 def test_main_with_the_option_on_scales_the_dense_young_stand_and_does_not_warn(
     monkeypatch, tmp_path, project_dir, capsys
 ):

@@ -11,7 +11,6 @@ def load_default_settings_into_session_state() -> None:
         }
 
 
-
 load_default_settings_into_session_state()
 
 st.set_page_config(
