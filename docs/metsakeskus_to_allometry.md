@@ -152,7 +152,9 @@ class, which is every remote-sensed one.
     [Dense young stand scaling](dense_young_stand_scaling.md) only acts on
     stands with a mean diameter below its `max_mean_diameter` (8 cm by default).
     With a range starting at 8 cm, those stands are already gone by the time it
-    runs, so it never scales anything.
+    runs, so it could never scale anything: the tool refuses a config file that
+    turns the scaling on with such a range. Lower the minimum, or leave the
+    scaling off.
 
 ??? info "Why a diameter range, not the development class?"
 
@@ -324,8 +326,9 @@ present in your data, with how many stands it covers per source.
     other years are lost. That is usually the largest single drop in the run,
     which is why the year table is printed just before it.
 
-**3. Structural and species-data checks.** Drops a stand with no usable
-geometry or no `treestandid`, then collapses its `treestratum` rows into SUSI's
+**3. Structural and species-data checks.** Drops a stand with more than one
+row in `growthplacedata` or `stand` (the data model has one per stand), then
+one with no usable geometry or no `treestandid`, then collapses its `treestratum` rows into SUSI's
 three species slots:
 
 | SUSI slot | `treespecies` codes |
@@ -414,6 +417,7 @@ continues. One bad stand never aborts the others.
 
 | Reason | Meaning |
 |---|---|
+| `standid appears N times in the <layer> layer` | The stand has more than one row in `growthplacedata` or `stand`, so its site, area or polygon is ambiguous. |
 | `no usable geometry` | The stand polygon is missing or empty. |
 | `no treestandid` | The snapshot has no id to join `treestratum` on, so there are no trees to read. |
 | `<species>: basal area X m2/ha but no usable mean diameter` (or `mean height`) | A species with real, recorded basal area has no diameter or height to go with it. |

@@ -297,6 +297,90 @@ def test_load_toml_config_reads_the_file_and_hands_the_raw_dict_to_parse(tmp_pat
     assert config == _DummyConfig(required_field=3)
 
 
+class _StrictDummyConfig(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+    required_field: int
+    pair: tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = (0, 1)
+
+    @pydantic.model_validator(mode="after")
+    def pair_is_ordered(self):
+        if self.pair[0] > self.pair[1]:
+            raise ValueError("pair's first item is above its second")
+        return self
+
+
+def _validation_error(raw: dict) -> pydantic.ValidationError:
+    with pytest.raises(pydantic.ValidationError) as error_info:
+        _StrictDummyConfig.model_validate(raw)
+    return error_info.value
+
+
+def test_config_error_message_lists_each_problem_by_field():
+    error = _validation_error({"pair": [-1, 1], "typo_field": 1})
+
+    message = input_validation.config_error_message(Path("config.toml"), error)
+
+    assert message.splitlines() == [
+        "Invalid config file config.toml:",
+        "  - required_field: Field required",
+        "  - pair.0: Input should be greater than or equal to 0",
+        "  - typo_field: Extra inputs are not permitted",
+    ]
+
+
+def test_config_error_message_gives_a_whole_config_check_its_own_words():
+    error = _validation_error({"required_field": 1, "pair": [2, 1]})
+
+    message = input_validation.config_error_message(Path("config.toml"), error)
+
+    # No field to name, and no "Value error, " prefix.
+    assert message.splitlines()[1] == "  - pair's first item is above its second"
+
+
+def test_load_config_or_exit_returns_a_valid_config(tmp_path):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("required_field = 3\n")
+
+    config = input_validation.load_config_or_exit(
+        argparse.ArgumentParser(),
+        config_path,
+        lambda path: input_validation.load_toml_config(
+            path, _StrictDummyConfig.model_validate
+        ),
+    )
+
+    assert config.required_field == 3
+
+
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        ("typo_field = 3\n", "typo_field: Extra inputs are not permitted"),
+        ("required_field = \n", "is not a valid TOML file"),
+    ],
+)
+def test_load_config_or_exit_reports_an_invalid_file_through_the_parser(
+    tmp_path, capsys, content, expected
+):
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(content)
+
+    with pytest.raises(SystemExit) as exit_info:
+        input_validation.load_config_or_exit(
+            argparse.ArgumentParser(prog="some-tool"),
+            config_path,
+            lambda path: input_validation.load_toml_config(
+                path, _StrictDummyConfig.model_validate
+            ),
+        )
+
+    assert exit_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "some-tool: error:" in stderr
+    assert expected in stderr
+    assert "Traceback" not in stderr
+
+
 # %% allometry_generation_defaults.AllometryGenerationDefaults
 #
 # ExtractionConfig (metsakeskus_to_allometry.py), XmlConfig

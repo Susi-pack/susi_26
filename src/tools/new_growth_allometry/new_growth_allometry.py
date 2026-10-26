@@ -31,6 +31,7 @@ from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     build_growth_and_yield_table as build_shared_growth_and_yield_table,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
+    load_config_or_exit,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -410,12 +411,16 @@ def parse_CLI_arguments() -> CLIArguments:
     config: NewGrowthSourcedConfig
     origin: SiteInputsOrigin
     if args.stand_data is None:
-        standalone_config = load_new_growth_config(config_path)
+        standalone_config = load_config_or_exit(
+            parser, config_path, load_new_growth_config
+        )
         config = standalone_config
         site_inputs = resolve_standalone_site_inputs(standalone_config)
         origin = StandaloneOrigin(x=standalone_config.x, y=standalone_config.y)
     else:
-        config = load_new_growth_sourced_config(config_path)
+        config = load_config_or_exit(
+            parser, config_path, load_new_growth_sourced_config
+        )
         origin = SourcedOrigin(
             stand_data_path=args.stand_data, stand_id=StandID(args.stand_id)
         )

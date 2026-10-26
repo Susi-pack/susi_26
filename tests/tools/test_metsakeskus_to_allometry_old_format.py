@@ -569,8 +569,8 @@ def test_determine_dominant_and_subdominant_species_ranks_by_basal_area():
 
 def test_determine_dominant_and_subdominant_species_monoculture_keeps_zero_ba_subdominant():
     # Pure pine stand: spruce and deciduous both carry zero basal area.
-    # Per docs/adr/0002, the runner-up (whichever it is) is still reported
-    # as the subdominant -- never duplicated from the dominant.
+    # The runner-up (whichever it is) is still reported as the subdominant
+    # -- never duplicated from the dominant.
     dominant, subdominant = m.determine_dominant_and_subdominant_species(
         _strata(30, 0, 0)
     )
@@ -1276,7 +1276,7 @@ def test_build_stand_data_monoculture_allometry_file_per_layer_has_only_dominant
 def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     # Pine (age 50) dominates spruce (age 20). Pooling both species by basal
     # area would give (50*10 + 20*5) / 15 = 40, which neither layer should
-    # get: each layer is one species grown alone (docs/adr/0002), so its
+    # get: each layer is one species grown alone, so its
     # curve starts at that species' own stratum age.
     candidate = dataclasses.replace(
         _candidate("1", pine_ba=10, spruce_ba=5),
@@ -1407,7 +1407,7 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
 def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_path):
     # A dense young spruce monoculture: 3000 stems/ha, scaled to 1800. Pine
     # and deciduous carry no basal area, and scaling zero by a positive factor
-    # leaves zero, so there is still no second layer to write (docs/adr/0002).
+    # leaves zero, so there is still no second layer to write.
     # (As in _dense_young_candidate, _candidate's own strata are replaced.)
     candidate = dataclasses.replace(
         _candidate("1", pine_ba=0),
@@ -1607,7 +1607,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     parsed_stands = [m.build_stand(c) for c in viable]
     stands_by_id = {str(s.id): s for s in parsed_stands}
 
-    # Stand 1: pine-only monoculture. Per docs/adr/0002, the subdominant is
+    # Stand 1: pine-only monoculture. The subdominant is
     # the genuine zero-BA runner-up (spruce or deciduous), never a duplicate
     # of the dominant (pine).
     stand_1 = stands_by_id["1"]
@@ -1623,7 +1623,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
 
     # tmp_path plays the project root here: the CSVs go where a real run
     # puts them, inside the inputs/ folder stand_data.json is written to --
-    # the document refuses to record a file outside it (docs/adr/0005).
+    # the document refuses to record a file outside it.
     allometry_dir = tmp_path / "inputs" / "allometry"
     allometry_dir.mkdir(parents=True)
     outcomes = {
@@ -1740,7 +1740,7 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
     # Run from project_dir's parent with a relative --project-dir: the
-    # recorded paths must not depend on either (docs/adr/0005).
+    # recorded paths must not depend on either.
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path)
     monkeypatch.chdir(project_dir.parent)
@@ -1938,7 +1938,7 @@ def test_plan_stand_outputs_names_both_layers(tmp_path):
 
 def test_plan_stand_outputs_monoculture_has_no_subdominant(tmp_path):
     # The same rule process_stand applies: a second-ranked species with zero
-    # basal area gets no file at all (docs/adr/0002).
+    # basal area gets no file at all.
     stand = m.build_stand(_candidate("1", pine_ba=10))
 
     plan = m.plan_stand_outputs(stand, tmp_path)

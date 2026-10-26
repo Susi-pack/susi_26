@@ -46,6 +46,7 @@ from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
+    load_config_or_exit,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -535,7 +536,7 @@ def parse_CLI_arguments() -> CLIArguments:
     config_path = resolve_config_path(
         args.config, args.project_dir, parser, CONFIG_FILENAME
     )
-    config = load_xml_config(config_path)
+    config = load_config_or_exit(parser, config_path, load_xml_config)
 
     # Validates config.altitude/ddy and refuses to reuse an existing output
     # folder -- this check runs in dry-run mode too.

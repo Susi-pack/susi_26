@@ -174,7 +174,7 @@ Five points follow from how that tool works.
 **Its mean-diameter range runs first.**
 The tool only keeps stands whose mean diameter is within
 its required `mean_diameter_range_filter`, and that filter runs before this rule.
-With a minimum at or above `max_mean_diameter` (8 cm by default), no stand young enough to be scaled is left, so the option never does anything.
+With a minimum at or above `max_mean_diameter` (8 cm by default), no stand young enough to be scaled is left, so the option could never do anything: the tool refuses a config file that turns it on with such a range.
 See
 [Mean-diameter range](metsakeskus_to_allometry.md#mean-diameter-range).
 

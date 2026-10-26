@@ -317,14 +317,17 @@ def test_stand_data_keeps_a_development_class_code_as_given(code):
     assert _stand_with_developmentclass(code).developmentclass == code
 
 
-@pytest.mark.parametrize(("legacy", "code"), [(2, "02"), (3, "03")])
+@pytest.mark.parametrize(
+    ("legacy", "code"), [(2, "02"), (3, "03"), (4, "04"), (5, "05")]
+)
 def test_stand_data_reads_a_legacy_integer_as_the_code_it_stands_for(legacy, code):
-    # The old-format Metsäkeskus tool wrote "02"/"03" as the numbers 2/3.
+    # The old-format Metsäkeskus tool wrote "02"-"05" as the numbers 2-5.
     assert _stand_with_developmentclass(legacy).developmentclass == code
 
 
-@pytest.mark.parametrize("bad", [1, 4, 0, True])
-def test_stand_data_rejects_any_other_integer_development_class(bad):
+@pytest.mark.parametrize("bad", [True, False])
+def test_stand_data_rejects_a_boolean_development_class(bad):
+    # bool is an int subclass: without a check, true would load as "01".
     with pytest.raises(pydantic.ValidationError, match="developmentclass"):
         _stand_with_developmentclass(bad)
 

@@ -67,6 +67,7 @@ from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
+    load_config_or_exit,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -671,9 +672,9 @@ def determine_dominant_and_subdominant_species(
 ) -> tuple[int, int]:
     """Species codes (1=pine, 2=spruce, 3=deciduous) ranked by basal area.
     The subdominant is always the second-ranked species' own stratum, even
-    when its basal area is zero -- see docs/adr/0002 for why this
-    deliberately does not duplicate the dominant species for a monoculture
-    stand."""
+    when its basal area is zero: never a copy of the dominant species, whose
+    basal area would then count twice in a monoculture stand.
+    """
     basal_areas = {
         species_code: species_stratum(strata, species_code).basal_area
         for species_code in _SPECIES_SLOT
@@ -776,7 +777,7 @@ def isolate_species_layer(
 ) -> PerSpecies[TreeStratum]:
     """Zeroes every species slot except active_species -- this is how a
     single canopy layer (dominant or subdominant) is modeled as that one
-    species growing alone (see docs/adr/0002)."""
+    species growing alone."""
     all_zero = PerSpecies(
         pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM
     )
@@ -852,9 +853,8 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
     from it.
 
     The subdominant file exists exactly when the second-ranked species carries
-    basal area of its own; see docs/adr/0002 for why a monoculture's
-    subdominant layer is not written at all rather than duplicating the
-    dominant one."""
+    basal area of its own: a monoculture stand gets no subdominant file at
+    all, rather than one duplicating the dominant."""
     subdominant_stratum = species_stratum(stand.strata, stand.subdominant_species)
     return StandPlanned(
         stand_id=stand.id,
@@ -960,7 +960,7 @@ def process_stand(
         # growth model gets strata_to_grow: the scaled strata when there is a
         # factor, the recorded ones otherwise. The scaling is applied here,
         # to the whole stand, BEFORE build_growth_and_yield_table isolates a
-        # layer (docs/adr/0002): the rule judged the stand on all three
+        # layer: the rule judged the stand on all three
         # species, so all three are multiplied by the one factor, including a
         # third species that neither layer keeps.
         strata_to_grow = strata_to_grow_from(stand.strata, scaling_factor)
@@ -997,7 +997,7 @@ def process_stand(
 
         # Each layer starts at the age its own curve starts at: the growth
         # model's basal-area-weighted pooled age of the strata it was grown
-        # from. Each layer is one species grown alone (docs/adr/0002), so
+        # from. Each layer is one species grown alone, so
         # that's the species' own stratum age -- never a pooled stand-level
         # age -- as long as the stratum age is already a whole number
         # (aggregate_species_group rounds it; the growth model rounds again).
@@ -1108,7 +1108,7 @@ def parse_CLI_arguments() -> CLIArguments:
     config_path = resolve_config_path(
         args.config, args.project_dir, parser, CONFIG_FILENAME
     )
-    config = load_extraction_config(config_path)
+    config = load_config_or_exit(parser, config_path, load_extraction_config)
 
     # Validates config.altitude/ddy and refuses to reuse an existing output
     # folder -- both checked here (dry-run mode included: "would this run
@@ -1290,7 +1290,7 @@ def main() -> None:
     #
     # The rule sees each stand's full strata -- all three species, before
     # process_stand splits the stand into its dominant and subdominant
-    # layers (docs/adr/0002) -- so a stand is judged, and scaled, as a whole.
+    # layers -- so a stand is judged, and scaled, as a whole.
     strata_per_stand = {stand.id: stand.strata for stand in parsed_stands}
     scaling_factors = decide_scaling_factors(
         strata_per_stand, cli_args.config.dense_young_stand_scaling

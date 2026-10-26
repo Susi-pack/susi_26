@@ -26,6 +26,7 @@ from typing import Self
 
 import geopandas as gpd
 import pandas as pd
+import pyogrio
 from pydantic import model_validator
 from shapely.geometry import Polygon
 
@@ -70,6 +71,7 @@ from tools.shared_allometry_tool_utils.growth_and_yield_table import (
     initial_age,
 )
 from tools.shared_allometry_tool_utils.input_validation import (
+    load_config_or_exit,
     load_toml_config,
     make_existing_file_validator,
     valid_existing_directory,
@@ -288,6 +290,25 @@ class ExtractionConfig(AllometryGenerationDefaults):
             )
         return self
 
+    @model_validator(mode="after")
+    def dense_young_stand_scaling_can_apply(self) -> Self:
+        # Scaling only acts on stands thinner than max_mean_diameter, and the
+        # range filter runs first: with its minimum at or above that, no stand
+        # is left to scale, and turning the option on would silently do
+        # nothing.
+        scaling = self.dense_young_stand_scaling
+        minimum = self.mean_diameter_range_filter[0]
+        if scaling.enabled and minimum >= scaling.max_mean_diameter:
+            raise ValueError(
+                f"[dense_young_stand_scaling] is enabled, but it only scales "
+                f"stands with a mean diameter below max_mean_diameter "
+                f"({scaling.max_mean_diameter:g} cm), and "
+                f"mean_diameter_range_filter's minimum ({minimum:g} cm) already "
+                "leaves all of those out. Lower the minimum, or turn the "
+                "scaling off."
+            )
+        return self
+
 
 @dataclass(frozen=True)
 class CLIArguments:
@@ -341,24 +362,19 @@ def load_extraction_config(config_path: Path) -> ExtractionConfig:
 
 
 # The warning pyogrio gives every time it reads the stand layer's "Measured 3D
-# Polygon" geometry (or lists the layers): it drops the measure (M) value.
-# This tool only uses x/y, so the warning is silenced where the file is read.
+# Polygon" geometry (or lists the layers, or reads a layer's metadata): it
+# drops the measure (M) value. This tool only uses x/y, so main() silences the
+# warning once, for the whole run.
 MEASURED_GEOMETRY_WARNING = r"Measured \(M\) geometry types are not supported"
 
 
-def _read_layer(
-    gpkg_path: Path, layer: str, columns: list[str] | None, rows: int | None
-) -> pd.DataFrame:
+def _read_layer(gpkg_path: Path, layer: str, columns: list[str]) -> pd.DataFrame:
     """
-    One gpkg layer, as gpd.read_file reads it: a GeoDataFrame for the stand
-    layer, a plain DataFrame for the attribute-only ones. columns=None reads
-    every column, rows=None every row.
-
-    MEASURED_GEOMETRY_WARNING is silenced.
+    One gpkg layer's given columns, every row, as gpd.read_file reads it: a
+    GeoDataFrame for the stand layer, a plain DataFrame for the
+    attribute-only ones.
     """
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
-        return gpd.read_file(gpkg_path, layer=layer, columns=columns, rows=rows)
+    return gpd.read_file(gpkg_path, layer=layer, columns=columns)
 
 
 def gpkg_format_problem(gpkg_path: Path) -> str | None:
@@ -372,13 +388,11 @@ def gpkg_format_problem(gpkg_path: Path) -> str | None:
     reads it. Only the layer list and each layer's column names are read
     here, not the data.
     """
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
-        layers = set(gpd.list_layers(gpkg_path)["name"])
+    layers = set(gpd.list_layers(gpkg_path)["name"])
 
     def layer_columns(layer: str) -> set[str]:
-        # One row, for its column names: rows=0 would scan the whole layer.
-        return set(_read_layer(gpkg_path, layer, columns=None, rows=1).columns)
+        # The layer's column names, from its metadata: no row is read.
+        return set(pyogrio.read_info(gpkg_path, layer=layer)["fields"])
 
     if (
         "growthplacedata" not in layers
@@ -408,7 +422,7 @@ def load_gpkg_layers(gpkg_path: Path) -> GpkgLayers:
     """Loads the four gpkg layers this tool needs, each with only its
     LAYER_COLUMNS. See GpkgLayers for what each one holds."""
     layers = {
-        layer: _read_layer(gpkg_path, layer, columns=list(columns), rows=None)
+        layer: _read_layer(gpkg_path, layer, columns=list(columns))
         for layer, columns in LAYER_COLUMNS.items()
     }
     stand = layers["stand"]
@@ -536,6 +550,43 @@ def select_target_year_snapshot(
         .drop_duplicates(subset="standid", keep="first")
         .reset_index(drop=True)
     )
+
+
+def drop_duplicated_stands(
+    treestand_snapshot: pd.DataFrame,
+    growthplacedata: pd.DataFrame,
+    stand: gpd.GeoDataFrame,
+) -> tuple[pd.DataFrame, list[StandSkipped]]:
+    """
+    attach_stand_attributes joins each snapshot to growthplacedata and to the
+    stand layer by standid, and expects one row per stand in each. A stand
+    with more than one would come out of that join twice: built twice, its
+    files written twice. Such a stand is dropped from treestand_snapshot here
+    instead, as a StandSkipped naming the layer and the count.
+
+    Only the snapshot's stands are checked: a duplicate elsewhere in the
+    region doesn't stop the rest. growthplacedata is the whole layer, not the
+    site-filtered one, so a duplicate the site filter happened to halve is
+    still caught.
+    """
+    snapshot_ids = set(pd.to_numeric(treestand_snapshot["standid"], errors="coerce"))
+    reasons_per_stand: dict[int, list[str]] = {}
+    for layer_name, layer in (("growthplacedata", growthplacedata), ("stand", stand)):
+        layer_ids = pd.to_numeric(layer["standid"], errors="coerce")
+        counts = layer_ids[layer_ids.isin(snapshot_ids)].value_counts()
+        for stand_id, count in counts[counts > 1].items():
+            reasons_per_stand.setdefault(int(stand_id), []).append(
+                f"standid appears {count} times in the {layer_name} layer"
+            )
+
+    skipped = [
+        StandSkipped(stand_id=StandID(str(stand_id)), reason="; ".join(reasons))
+        for stand_id, reasons in sorted(reasons_per_stand.items())
+    ]
+    is_duplicated = pd.to_numeric(treestand_snapshot["standid"], errors="coerce").isin(
+        set(reasons_per_stand)
+    )
+    return treestand_snapshot[~is_duplicated].reset_index(drop=True), skipped
 
 
 def attach_stand_attributes(
@@ -913,7 +964,8 @@ def determine_dominant_and_subdominant_species(
 ) -> tuple[int, int]:
     """Species codes (1=pine, 2=spruce, 3=deciduous) ranked by basal area.
     The subdominant is always the second-ranked species' own stratum, even
-    when its basal area is zero
+    when its basal area is zero: never a copy of the dominant species, whose
+    basal area would then count twice in a monoculture stand.
     """
     basal_areas = {
         species_code: species_stratum(strata, species_code).basal_area
@@ -1093,7 +1145,8 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
     from it.
 
     The subdominant file exists exactly when the second-ranked species carries
-    basal area of its own."""
+    basal area of its own: a monoculture stand gets no subdominant file at
+    all, rather than one duplicating the dominant."""
     subdominant_stratum = species_stratum(stand.strata, stand.subdominant_species)
     return StandPlanned(
         stand_id=stand.id,
@@ -1197,9 +1250,9 @@ def process_stand(
         # growth model gets strata_to_grow: the scaled strata when there is a
         # factor, the recorded ones otherwise. The scaling is applied here,
         # to the whole stand, BEFORE build_growth_and_yield_table isolates a
-        # layer: the rule judged the stand on all three
-        # species, so all three are multiplied by the one factor, including a
-        # third species that neither layer keeps.
+        # layer: the rule judged the stand on all three species, so all three
+        # are multiplied by the one factor, including a third species that
+        # neither layer keeps.
         strata_to_grow = strata_to_grow_from(stand.strata, scaling_factor)
 
         dominant_table = build_growth_and_yield_table(
@@ -1234,9 +1287,9 @@ def process_stand(
 
         # Each layer starts at the age its own curve starts at: the growth
         # model's basal-area-weighted pooled age of the strata it was grown
-        # from. Each layer is one species grown alone, so
-        # that's the species' own stratum age -- never a pooled stand-level
-        # age -- as long as the stratum age is already a whole number
+        # from. Each layer is one species grown alone, so that's the species'
+        # own stratum age -- never a pooled stand-level age -- as long as the
+        # stratum age is already a whole number
         # (aggregate_species_group rounds it; the growth model rounds again).
         # It's read off the table either way, the same way
         # xml_to_allometry.py does, so it's always the curve's real start.
@@ -1354,7 +1407,7 @@ def parse_CLI_arguments() -> CLIArguments:
     config_path = resolve_config_path(
         args.config, args.project_dir, parser, CONFIG_FILENAME
     )
-    config = load_extraction_config(config_path)
+    config = load_config_or_exit(parser, config_path, load_extraction_config)
 
     # Validates config.altitude/ddy and refuses to reuse an existing output
     # folder -- both checked here (dry-run mode included: "would this run
@@ -1468,6 +1521,9 @@ def print_dry_run_plan(
 
 
 def main() -> None:
+    # Set before parse_CLI_arguments, whose format check already reads the
+    # file. Process-wide, which is what a CLI's entry point wants.
+    warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
     cli_args = parse_CLI_arguments()
     output_dir = allometry_dir_for_project(cli_args.project_dir)
 
@@ -1535,16 +1591,27 @@ def main() -> None:
         )
     print()
 
-    merged = attach_stand_attributes(snapshot, filtered_growthplacedata, layers.stand)
+    # A stand with more than one row in growthplacedata or the stand layer
+    # would come out of the join below twice: dropped first, and reported
+    # with step 3's skips.
+    unique_snapshot, duplicate_skips = drop_duplicated_stands(
+        snapshot, layers.growthplacedata, layers.stand
+    )
+    merged = attach_stand_attributes(
+        unique_snapshot, filtered_growthplacedata, layers.stand
+    )
 
     print(
-        "3. Structural + species-data checks -- geometry, treestandid, diameter/height:"
+        "3. Structural + species-data checks -- duplicated rows, geometry, "
+        "treestandid, diameter/height:"
     )
-    candidates, structural_skips = build_stand_candidates(merged, layers.treestratum)
-    print(f"   -> {len(candidates):,} / {len(merged):,} stands kept")
-    # structural_skips covers both missing structural fields (no usable
+    candidates, candidate_skips = build_stand_candidates(merged, layers.treestratum)
+    print(f"   -> {len(candidates):,} / {len(snapshot):,} stands kept")
+    # structural_skips covers a stand with duplicated rows
+    # (drop_duplicated_stands), missing structural fields (no usable
     # geometry, no treestandid) and a species with real basal area but no
     # usable diameter/height (DegenerateSpeciesDataError) -- build_stand_candidates.
+    structural_skips = duplicate_skips + candidate_skips
     print_skips(structural_skips, "   Skipped (invalid or missing data)")
     print()
 
@@ -1584,7 +1651,7 @@ def main() -> None:
     #
     # The rule sees each stand's full strata -- all three species, before
     # process_stand splits the stand into its dominant and subdominant
-    # layers  -- so a stand is judged, and scaled, as a whole.
+    # layers -- so a stand is judged, and scaled, as a whole.
     strata_per_stand = {stand.id: stand.strata for stand in parsed_stands}
     scaling_factors = decide_scaling_factors(
         strata_per_stand, cli_args.config.dense_young_stand_scaling
