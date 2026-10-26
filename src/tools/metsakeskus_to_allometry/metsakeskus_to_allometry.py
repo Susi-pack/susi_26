@@ -52,6 +52,7 @@ from tools.shared_allometry_tool_utils.allometry_generation_defaults import (
     AllometryGenerationDefaults,
 )
 from tools.shared_allometry_tool_utils.cli_paths import (
+    create_allometry_set_dir,
     finalize_cli_config,
     resolve_config_path,
 )
@@ -74,6 +75,7 @@ from tools.shared_allometry_tool_utils.input_validation import (
     load_config_or_exit,
     load_toml_config,
     make_existing_file_validator,
+    valid_allometry_set_name,
     valid_existing_directory,
 )
 from tools.shared_allometry_tool_utils.print_formatting import (
@@ -316,6 +318,8 @@ class CLIArguments:
     config: ExtractionConfig
     config_path: Path
     project_dir: Path
+    # None: the project's default allometry set.
+    allometry_set_name: str | None
     allow_out_of_range_values: bool
     dry_run: bool
 
@@ -1369,9 +1373,22 @@ def parse_CLI_arguments() -> CLIArguments:
         help=(
             "Path to the project's folder -- the project root, the folder "
             "holding its inputs/ and outputs/. Decides the output directory, "
-            "<project-dir>/inputs/allometry/, and -- unless --config is "
+            "<project-dir>/inputs/allometry/ (see --allometry-set-name for "
+            "another one), and -- unless --config is "
             "given -- where the config file is looked up: "
             f"<project-dir>/inputs/{CONFIG_FILENAME}."
+        ),
+    )
+    parser.add_argument(
+        "--allometry-set-name",
+        type=valid_allometry_set_name,
+        default=None,
+        help=(
+            "Write a named allometry set instead of the project's default "
+            "one: the CSVs go in <project-dir>/inputs/allometry_<name>/ and "
+            "the JSON is <project-dir>/inputs/stand_data_<name>.json. For a "
+            "project whose stands come from several exports, e.g. one per "
+            "region. Letters, digits, underscores and dashes only."
         ),
     )
     parser.add_argument(
@@ -1409,16 +1426,18 @@ def parse_CLI_arguments() -> CLIArguments:
     )
     config = load_config_or_exit(parser, config_path, load_extraction_config)
 
-    # Validates config.altitude/ddy and refuses to reuse an existing output
-    # folder -- both checked here (dry-run mode included: "would this run
-    # even start?" is exactly what a dry run is for) so a run that fails
-    # while reading or filtering leaves no empty folder behind. Creating the
-    # folder is main()'s job, and only on a real run.
+    # Validates config.altitude/ddy and refuses to write over an existing
+    # allometry set (its folder or its JSON) -- both checked here (dry-run
+    # mode included: "would this run even start?" is exactly what a dry run
+    # is for) so a run that fails while reading or filtering leaves no empty
+    # folder behind. Creating the folder is main()'s job, and only on a real
+    # run.
     finalize_cli_config(
         parser,
         config.altitude,
         config.ddy,
         args.project_dir,
+        args.allometry_set_name,
         args.allow_out_of_range_values,
     )
 
@@ -1427,6 +1446,7 @@ def parse_CLI_arguments() -> CLIArguments:
         config=config,
         config_path=config_path,
         project_dir=args.project_dir,
+        allometry_set_name=args.allometry_set_name,
         allow_out_of_range_values=args.allow_out_of_range_values,
         dry_run=args.dry_run,
     )
@@ -1487,16 +1507,16 @@ def csv_counts(outputs: list[StandPlanned] | list[StandWritten]) -> tuple[int, i
 def print_dry_run_plan(
     plans: list[StandPlanned],
     output_dir: Path,
-    project_dir: Path,
+    json_path: Path,
 ) -> None:
     """The dry run's stand-in for the real run's writing report: the same
     counts and the same file names, with nothing on disk. The folder is named
     as the one that WOULD be created -- parse_CLI_arguments has already
     refused the run if it exists, so this path is known to be free. The CSVs
-    go in output_dir (<project-dir>/inputs/allometry/), the JSON next to that
-    folder in <project-dir>/inputs/ -- same split as the real run's."""
+    go in output_dir (<project-dir>/inputs/allometry/ or allometry_<name>/),
+    the JSON next to that folder in <project-dir>/inputs/ -- same split as the
+    real run's."""
     dominant, subdominant = csv_counts(plans)
-    json_path = stand_data_path_for_project(project_dir)
 
     print(f"Destination folder: {output_dir.resolve()} (not created)")
     print()
@@ -1525,7 +1545,14 @@ def main() -> None:
     # file. Process-wide, which is what a CLI's entry point wants.
     warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
     cli_args = parse_CLI_arguments()
-    output_dir = allometry_dir_for_project(cli_args.project_dir)
+    # The allometry set this run writes. parse_CLI_arguments already
+    # refused to start if either half exists (finalize_cli_config).
+    output_dir = allometry_dir_for_project(
+        cli_args.project_dir, cli_args.allometry_set_name
+    )
+    json_path = stand_data_path_for_project(
+        cli_args.project_dir, cli_args.allometry_set_name
+    )
 
     print_section("Reading")
     print("Tool initialized with:")
@@ -1533,6 +1560,7 @@ def main() -> None:
     print(f"    - project_dir = {cli_args.project_dir.resolve()}")
     print(f"    - config      = {cli_args.config_path.resolve()}")
     print(f"    - output_dir  = {output_dir.resolve()}")
+    print(f"    - stand_data  = {json_path.resolve()}")
     print(f"    - target_year = {cli_args.config.target_year}")
     print(f"    - altitude    = {cli_args.config.altitude}")
     print(f"    - ddy         = {cli_args.config.ddy}")
@@ -1672,15 +1700,12 @@ def main() -> None:
     if cli_args.dry_run:
         print_section("Writing (dry run -- nothing is written)")
         plans = [plan_stand_outputs(stand, output_dir) for stand in parsed_stands]
-        print_dry_run_plan(plans, output_dir, cli_args.project_dir)
+        print_dry_run_plan(plans, output_dir, json_path)
         return
 
     print_section("Writing")
     print(f"Destination folder: {output_dir.resolve()}")
-    # Created here rather than at argument-parsing time, so a run that fails
-    # while reading or filtering leaves no empty folder behind to block the
-    # next attempt.
-    output_dir.mkdir(parents=True)
+    create_allometry_set_dir(output_dir)
     print()
 
     outcomes = [
@@ -1710,7 +1735,6 @@ def main() -> None:
     final_stands: dict[StandID, StandData] = {
         outcome.stand_id: outcome.stand_data for outcome in written
     }
-    json_path = stand_data_path_for_project(cli_args.project_dir)
     dump_stand_data_document(
         output_path=json_path,
         document=StandDataDocument(

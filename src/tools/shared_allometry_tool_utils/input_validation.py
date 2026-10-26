@@ -12,6 +12,7 @@ something this shared module does on the tools' behalf any more.
 
 import argparse
 import math
+import re
 import tomllib
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -75,6 +76,25 @@ def valid_existing_directory(value: str) -> Path:
     if not path.is_dir():
         raise argparse.ArgumentTypeError(f"Not a directory: {value}")
     return path.resolve()
+
+
+# Letters, digits, underscores and dashes, ASCII only: the name becomes part
+# of a folder name and a file name in a project's inputs/ (see
+# project_layout.allometry_dir_for_project), so nothing in it may leave
+# inputs/, and it should read the same on every OS.
+ALLOMETRY_SET_NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def valid_allometry_set_name(value: str) -> str:
+    """An argparse `type=` callable for --allometry-set-name: the name of a
+    named allometry set, written as inputs/allometry_<name>/ plus
+    inputs/stand_data_<name>.json."""
+    if ALLOMETRY_SET_NAME_PATTERN.fullmatch(value) is None:
+        raise argparse.ArgumentTypeError(
+            f"Invalid allometry set name {value!r}: use only letters, digits, "
+            "underscores and dashes (A-Z, a-z, 0-9, _, -)."
+        )
+    return value
 
 
 def out_of_range_message(

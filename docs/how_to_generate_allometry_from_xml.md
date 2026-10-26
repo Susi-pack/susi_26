@@ -80,9 +80,9 @@ Since `config.toml` lives directly inside `--project-dir`, the tool finds it the
 
 The output files are saved to `<project-dir>/allometry/`.
 In the example above, that's `inputs/my_project/allometry/`.
-There is no way to send them anywhere else: `--project-dir` is what decides the folder.
-That `allometry/` folder must not already exist: the tool refuses to run into a previous run's output rather than overwrite it.
-So rename or move the existing `allometry/` first (and move any `new_growth/` subfolder back into the fresh one afterwards).
+`--project-dir` is what decides the folder; `--allometry-set-name` writes a named set beside it instead, for a project with several exports (e.g. one per region).
+Neither that `allometry/` folder nor `stand_data.json` may already exist: the tool refuses to run into a previous run's output rather than overwrite it.
+So rename or move the existing `allometry/` and `stand_data.json` first (and move any `new_growth/` subfolder back into the fresh one afterwards).
 
 !!! tip "Try it with `--dry-run` first"
 

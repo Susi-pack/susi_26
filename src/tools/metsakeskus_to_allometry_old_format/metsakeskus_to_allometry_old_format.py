@@ -1120,6 +1120,9 @@ def parse_CLI_arguments() -> CLIArguments:
         config.altitude,
         config.ddy,
         args.project_dir,
+        # The old-format tool only ever writes the project's default
+        # allometry set: it has no --allometry-set-name.
+        None,
         args.allow_out_of_range_values,
     )
 

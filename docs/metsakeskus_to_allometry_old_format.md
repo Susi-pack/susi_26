@@ -53,8 +53,9 @@ susi-metsakeskus-to-allometry-old-format INPUT_GPKG \
 
 The output folder is not selectable: `<project-dir>/allometry/` is the
 only place this tool writes. It must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it.
-So rename or move the existing `allometry/` first. (If it holds a
+to run into a previous run's output rather than overwrite it, and neither may
+`stand_data.json`. So rename or move the existing `allometry/` and
+`stand_data.json` first. (If it holds a
 `new_growth/` subfolder from `new_growth_allometry.py`, move that back into
 the fresh `allometry/` afterwards.) The folder is created just before the files are written, so
 a run that fails while reading or filtering leaves nothing behind.

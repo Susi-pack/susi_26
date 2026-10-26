@@ -19,7 +19,7 @@ To generate the same kind of file from a Metsäkeskus GeoPackage instead, see
 ```bash
 susi-xml-to-allometry INPUT_XML \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
-    [--allow-out-of-range-values] [--dry-run]
+    [--allometry-set-name NAME] [--allow-out-of-range-values] [--dry-run]
 ```
 
 ## Command-line arguments
@@ -27,15 +27,17 @@ susi-xml-to-allometry INPUT_XML \
 | Argument | Required | Description |
 |---|---|---|
 | `INPUT_XML` | yes | The XML stand export. Must exist and end in `.xml`. |
-| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/allometry/` — and where the config file is looked up by default. |
-| `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/config.toml`. Must exist and end in `.toml`. |
+| `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/inputs/allometry/` — and where the config file is looked up by default. |
+| `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/inputs/config.toml`. Must exist and end in `.toml`. |
+| `--allometry-set-name` | no | Write a named allometry set: `inputs/allometry_NAME/` and `inputs/stand_data_NAME.json`. See [Several allometry sets in one project](#several-allometry-sets-in-one-project). |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
 | `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
 
-The output folder is not selectable: `<project-dir>/allometry/` is the
-only place this tool writes. It must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it, so to
-regenerate it, rename or move the existing `allometry/` first. (If it holds a
+The tool writes into `<project-dir>/inputs/allometry/` and
+`<project-dir>/inputs/stand_data.json`, or the named set's pair with
+`--allometry-set-name`. Neither may already exist — the tool refuses to write
+over a previous run's output rather than overwrite it, so to regenerate it,
+rename or move the existing `allometry/` and `stand_data.json` first. (If it holds a
 `new_growth/` subfolder from `new_growth_allometry.py`, move that back into
 the fresh `allometry/` afterwards.) The folder is created just before the files are written, so
 a run that fails while reading or filtering leaves nothing behind.
@@ -236,12 +238,22 @@ slow part of a run and the part `--dry-run` skips, so a stand that would fail
 inside the growth model or the coordinate transform is still counted here.
 The TreeStrata skip is reported in full, because that stage did run.
 
+## Several allometry sets in one project
+
+`--allometry-set-name NAME` writes a named **allometry set** beside the
+default one: the CSVs in `inputs/allometry_NAME/`, the document as
+`inputs/stand_data_NAME.json`. It's for a project whose stands come from
+several exports, e.g. one per region. The name may contain only letters,
+digits, underscores and dashes, and the same refusal applies to each set.
+See [Several allometry sets in one project](metsakeskus_to_allometry.md#several-allometry-sets-in-one-project)
+for how a run script uses several sets, and the limitations.
+
 ## Output files
 
 | File | Written |
 |---|---|
-| `allometry/{stand_id}.csv` | Always, one per stand that survives filtering. |
-| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry file, YKJ coordinates, polygon, stand-level and per-species metadata. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
+| `allometry/{stand_id}.csv` | Always, one per stand that survives filtering (`allometry_NAME/` for a named set). |
+| `stand_data.json` | Always, in the project's `inputs/` (`stand_data_NAME.json` for a named set). One `StandData` entry per converted stand — fertility class, allometry file, YKJ coordinates, polygon, stand-level and per-species metadata. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
 Each CSV is the allometric road map follows the canonical allometry schema, i.e., the columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS`.
 

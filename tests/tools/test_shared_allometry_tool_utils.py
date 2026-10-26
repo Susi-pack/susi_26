@@ -414,24 +414,77 @@ def test_allometry_generation_defaults_is_frozen():
         setattr(defaults, "n_trees", 5)  # noqa: B010 -- setattr, not `.` access, to keep this a runtime-only check
 
 
-# %% cli_paths.check_output_dir_available
+# %% input_validation.valid_allometry_set_name
 
 
-def test_check_output_dir_available_allows_a_free_folder(tmp_path):
-    cli_paths.check_output_dir_available(tmp_path / "allometry", _parser())
+@pytest.mark.parametrize("name", ["pirkanmaa", "pirkanmaa_2014", "north-1", "A"])
+def test_valid_allometry_set_name_accepts_a_plain_name(name):
+    assert input_validation.valid_allometry_set_name(name) == name
 
 
-def test_check_output_dir_available_refuses_an_existing_folder(tmp_path, capsys):
+@pytest.mark.parametrize(
+    "name", ["", "a/b", "..", "../outside", "two words", "pöhjois", "a\\b"]
+)
+def test_valid_allometry_set_name_rejects_anything_that_is_not_a_plain_name(name):
+    # The name becomes part of a folder and a file name inside inputs/, so
+    # anything that could leave inputs/ or need quoting is refused.
+    with pytest.raises(argparse.ArgumentTypeError, match="letters, digits"):
+        input_validation.valid_allometry_set_name(name)
+
+
+# %% cli_paths.check_allometry_set_available
+
+
+def test_check_allometry_set_available_allows_a_free_set(tmp_path):
+    cli_paths.check_allometry_set_available(
+        tmp_path / "allometry", tmp_path / "stand_data.json", _parser()
+    )
+
+
+def test_check_allometry_set_available_refuses_an_existing_folder(tmp_path, capsys):
     output_dir = tmp_path / "allometry"
     output_dir.mkdir()
     with pytest.raises(SystemExit):
-        cli_paths.check_output_dir_available(output_dir, _parser())
+        cli_paths.check_allometry_set_available(
+            output_dir, tmp_path / "stand_data.json", _parser()
+        )
     error = capsys.readouterr().err
     assert "already exists" in error
-    # A project is one folder (ADR 0003): the way out is moving the old
-    # allometry/ aside, not a second --project-dir.
+    assert str(output_dir) in error
+    # A project is one folder: the way out is moving the old
+    # set aside, not a second --project-dir.
     assert "--project-dir" not in error
     assert "rename or move" in error
+
+
+def test_check_allometry_set_available_refuses_an_existing_stand_data_document(
+    tmp_path, capsys
+):
+    # The folder is free but the document isn't: writing the set would
+    # overwrite a document whose allometry folder was moved aside alone.
+    json_path = tmp_path / "stand_data.json"
+    json_path.write_text("{}")
+    with pytest.raises(SystemExit):
+        cli_paths.check_allometry_set_available(
+            tmp_path / "allometry", json_path, _parser()
+        )
+    error = capsys.readouterr().err
+    assert "already exists" in error
+    assert str(json_path) in error
+
+
+def test_check_allometry_set_available_names_both_halves_when_both_exist(
+    tmp_path, capsys
+):
+    output_dir = tmp_path / "allometry"
+    output_dir.mkdir()
+    json_path = tmp_path / "stand_data.json"
+    json_path.write_text("{}")
+    with pytest.raises(SystemExit):
+        cli_paths.check_allometry_set_available(output_dir, json_path, _parser())
+    error = capsys.readouterr().err
+    assert str(output_dir) in error
+    assert str(json_path) in error
 
 
 def test_check_output_file_available_allows_a_free_file_in_an_existing_folder(
@@ -549,28 +602,71 @@ def test_finalize_cli_config_returns_the_allometry_dir_when_everything_is_fine(
     tmp_path,
 ):
     output_dir = cli_paths.finalize_cli_config(
-        _parser(), 150.0, 1200.0, tmp_path, False
+        _parser(), 150.0, 1200.0, tmp_path, None, False
     )
     assert output_dir == tmp_path / "inputs" / "allometry"
     assert not output_dir.exists()  # creating it is main()'s job, not this one's
 
 
+def test_finalize_cli_config_returns_a_named_sets_own_folder(tmp_path):
+    output_dir = cli_paths.finalize_cli_config(
+        _parser(), 150.0, 1200.0, tmp_path, "pirkanmaa", False
+    )
+    assert output_dir == tmp_path / "inputs" / "allometry_pirkanmaa"
+    assert not output_dir.exists()
+
+
 def test_finalize_cli_config_blocks_out_of_range_altitude_by_default(tmp_path, capsys):
     with pytest.raises(SystemExit):
-        cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, False)
+        cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, None, False)
     assert "altitude" in capsys.readouterr().err
 
 
 def test_finalize_cli_config_allows_out_of_range_with_override(tmp_path, capsys):
-    cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, True)
+    cli_paths.finalize_cli_config(_parser(), 1500.0, 1200.0, tmp_path, None, True)
     assert "Warning" in capsys.readouterr().out
 
 
 def test_finalize_cli_config_refuses_an_existing_output_dir(tmp_path, capsys):
     (tmp_path / "inputs" / "allometry").mkdir(parents=True)
     with pytest.raises(SystemExit):
-        cli_paths.finalize_cli_config(_parser(), 150.0, 1200.0, tmp_path, False)
+        cli_paths.finalize_cli_config(_parser(), 150.0, 1200.0, tmp_path, None, False)
     assert "already exists" in capsys.readouterr().err
+
+
+def test_finalize_cli_config_refuses_the_default_sets_existing_stand_data_json(
+    tmp_path, capsys
+):
+    # The default set gets the same both-halves rule as a named one: an
+    # existing stand_data.json is no longer silently overwritten.
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / "stand_data.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        cli_paths.finalize_cli_config(_parser(), 150.0, 1200.0, tmp_path, None, False)
+    assert "stand_data.json" in capsys.readouterr().err
+
+
+def test_finalize_cli_config_lets_a_named_set_sit_beside_an_existing_default_set(
+    tmp_path,
+):
+    (tmp_path / "inputs" / "allometry").mkdir(parents=True)
+    (tmp_path / "inputs" / "stand_data.json").write_text("{}")
+    output_dir = cli_paths.finalize_cli_config(
+        _parser(), 150.0, 1200.0, tmp_path, "pirkanmaa", False
+    )
+    assert output_dir == tmp_path / "inputs" / "allometry_pirkanmaa"
+
+
+def test_finalize_cli_config_refuses_a_named_sets_existing_stand_data_json(
+    tmp_path, capsys
+):
+    (tmp_path / "inputs").mkdir()
+    (tmp_path / "inputs" / "stand_data_pirkanmaa.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        cli_paths.finalize_cli_config(
+            _parser(), 150.0, 1200.0, tmp_path, "pirkanmaa", False
+        )
+    assert "stand_data_pirkanmaa.json" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -587,7 +683,7 @@ def test_finalize_cli_config_accepts_anything_in_range(tmp_path, altitude, ddy):
     # since finalize_cli_config's output_dir check depends on the
     # filesystem, not just its own arguments.
     output_dir = cli_paths.finalize_cli_config(
-        _parser(), altitude, ddy, tmp_path, False
+        _parser(), altitude, ddy, tmp_path, None, False
     )
     assert output_dir == tmp_path / "inputs" / "allometry"
 

@@ -28,7 +28,7 @@ instead, see [XML data --> allometry files](xml_to_allometry.md).
 ```bash
 susi-metsakeskus-to-allometry INPUT_GPKG \
     --project-dir PROJECT_DIR [--config CONFIG.toml] \
-    [--allow-out-of-range-values] [--dry-run]
+    [--allometry-set-name NAME] [--allow-out-of-range-values] [--dry-run]
 ```
 
 ## Command-line arguments
@@ -38,13 +38,15 @@ susi-metsakeskus-to-allometry INPUT_GPKG \
 | `INPUT_GPKG` | yes | The Metsäkeskus GeoPackage, in the 2026 data model. Must exist and end in `.gpkg`. |
 | `--project-dir` | yes | Path to the project's folder. Decides where the output goes — `<project-dir>/inputs/allometry/` — and where the config file is looked up by default. |
 | `--config` | no | Path to the TOML config file (see below). Defaults to `<project-dir>/inputs/config.toml`. Must exist and end in `.toml`. |
+| `--allometry-set-name` | no | Write a named allometry set: `inputs/allometry_NAME/` and `inputs/stand_data_NAME.json`. See [Several allometry sets in one project](#several-allometry-sets-in-one-project). |
 | `--allow-out-of-range-values` | no | Downgrade an out-of-range `altitude`/`ddy` from an error to a warning. `NaN` is rejected either way. |
 | `--dry-run` | no | Report what the run would produce and exit, writing nothing at all. See [Dry runs](#dry-runs). |
 
-The output folder is not selectable: `<project-dir>/inputs/allometry/` is the
-only place this tool writes. It must **not** already exist — the tool refuses
-to run into a previous run's output rather than overwrite it.
-So rename or move the existing `allometry/` first. (If it holds a
+The tool writes into `<project-dir>/inputs/allometry/` and
+`<project-dir>/inputs/stand_data.json`, or the named set's pair with
+`--allometry-set-name`. Neither may already exist — the tool refuses to write
+over a previous run's output rather than overwrite it.
+So rename or move the existing `allometry/` and `stand_data.json` first. (If it holds a
 `new_growth/` subfolder from `new_growth_allometry.py`, move that back into
 the fresh `allometry/` afterwards.) The folder is created just before the files are written, so
 a run that fails while reading or filtering leaves nothing behind.
@@ -385,13 +387,57 @@ inside the growth model is still counted here. Every other skip — geometry,
 missing data, zero basal area, mean diameter — is reported in full, because
 those stages all ran.
 
+## Several allometry sets in one project
+
+A project whose stands come from several inventory exports — one per region,
+say — keeps one **allometry set** per export: a stand-data document plus the
+folder of allometry files it references. `--allometry-set-name NAME` writes a
+named set beside the default one:
+
+| | Default set | `--allometry-set-name pirkanmaa` |
+|---|---|---|
+| Allometry files | `inputs/allometry/` | `inputs/allometry_pirkanmaa/` |
+| Stand-data document | `inputs/stand_data.json` | `inputs/stand_data_pirkanmaa.json` |
+
+The name may contain only letters, digits, underscores and dashes. Each set
+gets its own run of the tool, usually with its own `--config` (each export has
+its own `target_year`, `altitude` and `ddy`). The same refusal applies to each
+set: if either its folder or its document already exists, the run stops.
+Renaming a set by hand afterwards breaks it, because the document records its
+files' paths, folder name included. Regenerate the set under the new name
+instead.
+
+A run script loads each set's document and builds the stands from all of them:
+
+```python
+from susi.io.project_layout import stand_data_path_for_project
+from susi.io.stand_data import build_stand_params, load_stand_data_document_from_json
+
+for region in ("pirkanmaa", "pohjois_pohjanmaa"):
+    document = load_stand_data_document_from_json(
+        stand_data_path_for_project(PROJECT_DIR, set_name=region)
+    )
+    for stand_id in document.stands:
+        stand_params = build_stand_params(document, stand_id, n=N_SOIL_COLS)
+        ...  # plus this region's weather, photosynthesis parameters, ...
+```
+
+Two limitations:
+
+- **Stand IDs must be unique across the sets used in one run.** A stand's
+  output folder is named by its stand ID alone, so two stands with the same ID
+  would collide. SUSI refuses such a run before it starts ("Duplicate
+  simulation folder paths detected").
+- **The optimization reads only the default set's `stand_data.json`** for
+  stand areas. Runs built from named sets can't be optimized yet.
+
 ## Output files
 
 | File | Written |
 |---|---|
 | `<standid>_dominant.csv` | Always, one per surviving stand. |
 | `<standid>_subdominant.csv` | Only when the second-ranked species carries basal area above zero. |
-| `stand_data.json` | Always, in the project's `inputs/`. One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means, stem count, the snapshot's development class (`null` when it records none), and whether [dense young stand scaling](dense_young_stand_scaling.md) was applied. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
+| `stand_data.json` | Always, in the project's `inputs/` (`stand_data_NAME.json` for a named set). One `StandData` entry per converted stand — fertility class, allometry files, YKJ coordinates, polygon, stand-level means, stem count, the snapshot's development class (`null` when it records none), and whether [dense young stand scaling](dense_young_stand_scaling.md) was applied. Read by `build_stand_params` and by `new_growth_allometry.py`'s sourced mode. |
 
 Each CSV follows the canonical allometry schema.
 The columns declared in `susi.core.allometry_columns.ALLOMETRY_COLUMNS` and validated on read by `read_allometry_info_from_csv`.

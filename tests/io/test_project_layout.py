@@ -54,6 +54,28 @@ def test_stand_data_path_sits_beside_the_other_inputs():
     )
 
 
+def test_a_named_allometry_set_sits_beside_the_default_one_in_inputs():
+    # Both halves of a named set carry the name, so a listing of inputs/
+    # pairs each stand-data document with its own allometry folder.
+    project = Path("/p/phase4")
+    assert project_layout.allometry_dir_for_project(
+        project, set_name="pirkanmaa"
+    ) == Path("/p/phase4/inputs/allometry_pirkanmaa")
+    assert project_layout.stand_data_path_for_project(
+        project, set_name="pirkanmaa"
+    ) == Path("/p/phase4/inputs/stand_data_pirkanmaa.json")
+
+
+def test_no_set_name_is_the_default_allometry_set():
+    project = Path("/p/phase4")
+    assert project_layout.allometry_dir_for_project(project, set_name=None) == Path(
+        "/p/phase4/inputs/allometry"
+    )
+    assert project_layout.stand_data_path_for_project(project, set_name=None) == Path(
+        "/p/phase4/inputs/stand_data.json"
+    )
+
+
 def test_run_dir_nests_under_outputs():
     assert project_layout.run_dir(Path("/p/paroninkorpi"), run_id="2026-09") == Path(
         "/p/paroninkorpi/outputs/2026-09"

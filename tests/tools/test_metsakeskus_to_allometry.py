@@ -2204,13 +2204,14 @@ def test_stand_layer_in_source_crs_fails_without_a_crs():
 # %% main
 
 
-def _run_main(monkeypatch, gpkg_path, project_dir):
+def _run_main(monkeypatch, gpkg_path, project_dir, *extra_args):
     (project_dir / "inputs" / "config.toml").write_text(
         "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\nn_trees = 2\nend_year = 5\n"
     )
     monkeypatch.setattr(
         "sys.argv",
-        ["metsakeskus_to_allometry.py", str(gpkg_path), f"--project-dir={project_dir}"],
+        ["metsakeskus_to_allometry.py", str(gpkg_path), f"--project-dir={project_dir}"]
+        + list(extra_args),
     )
     m.main()
 
@@ -2255,6 +2256,55 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
         for entry in stand.allometry_file_per_layer.values():
             assert entry.file_path.parent == project_dir / "inputs" / "allometry"
             assert entry.file_path.exists()
+
+
+def test_main_writes_a_named_allometry_set_beside_the_default_one(
+    monkeypatch, tmp_path, project_dir
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+
+    _run_main(monkeypatch, gpkg_path, project_dir, "--allometry-set-name=pirkanmaa")
+
+    inputs = project_dir / "inputs"
+    json_path = inputs / "stand_data_pirkanmaa.json"
+    raw = json.loads(json_path.read_text())
+    recorded = {
+        layer["file_path"]
+        for stand in raw["stands"].values()
+        for layer in stand["allometry_file_per_layer"].values()
+    }
+    assert recorded
+    assert all(path.startswith("allometry_pirkanmaa/") for path in recorded)
+    document = load_stand_data_document_from_json(json_path)
+    for stand in document.stands.values():
+        for entry in stand.allometry_file_per_layer.values():
+            assert entry.file_path.parent == inputs / "allometry_pirkanmaa"
+            assert entry.file_path.exists()
+    # The default set is left alone.
+    assert not (inputs / "allometry").exists()
+    assert not (inputs / "stand_data.json").exists()
+
+
+def test_main_dry_run_names_the_named_sets_files_and_writes_nothing(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+
+    _run_main(
+        monkeypatch,
+        gpkg_path,
+        project_dir,
+        "--allometry-set-name=pirkanmaa",
+        "--dry-run",
+    )
+
+    printed = capsys.readouterr().out
+    inputs = project_dir / "inputs"
+    assert str(inputs / "allometry_pirkanmaa") in printed
+    assert str(inputs / "stand_data_pirkanmaa.json") in printed
+    assert sorted(path.name for path in inputs.iterdir()) == ["config.toml"]
 
 
 def test_main_reprojects_a_stand_layer_in_another_crs(
@@ -2761,7 +2811,7 @@ def test_parse_CLI_arguments_rejects_a_second_positional_argument(
     monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, tmp_path, capsys
 ):
     # The output folder used to be an optional second positional. It is gone:
-    # <project-dir>/inputs/allometry/ is now the only place output can land,
+    # output only ever lands in an allometry set inside <project-dir>/inputs/,
     # so a leftover invocation must fail loudly rather than be ignored.
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
@@ -2865,6 +2915,52 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
             ],
         )
     assert "already exists" in capsys.readouterr().err
+
+
+def test_parse_CLI_arguments_defaults_to_the_default_allometry_set(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_gpkg_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+        ],
+    )
+    assert cli_args.allometry_set_name is None
+
+
+def test_parse_CLI_arguments_takes_an_allometry_set_name(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_gpkg_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+            "--allometry-set-name=pirkanmaa",
+        ],
+    )
+    assert cli_args.allometry_set_name == "pirkanmaa"
+
+
+def test_parse_CLI_arguments_refuses_a_named_sets_existing_stand_data_json(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, capsys
+):
+    (project_dir / "inputs" / "stand_data_pirkanmaa.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_gpkg_file),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+                "--allometry-set-name=pirkanmaa",
+            ],
+        )
+    assert "stand_data_pirkanmaa.json" in capsys.readouterr().err
 
 
 def test_parse_CLI_arguments_blocks_out_of_range_altitude(

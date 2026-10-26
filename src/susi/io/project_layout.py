@@ -74,11 +74,19 @@ def data_dir_for_project(project_dir: Path) -> Path:
     return project_dir / "data"
 
 
-def allometry_dir_for_project(project_dir: Path) -> Path:
+def allometry_dir_for_project(project_dir: Path, set_name: str | None = None) -> Path:
     """
     Where the allometry tools write a project's allometry CSVs.
+
+    `set_name` picks the allometry set: None is the project's default set,
+    `inputs/allometry/`; a name gives `inputs/allometry_<name>/`, beside it.
+    A project uses named sets when its stands come from several inventory
+    exports, e.g. one per region. This and stand_data_path_for_project are
+    the one place a set's two names are spelled.
     """
-    return inputs_dir_for_project(project_dir) / "allometry"
+    if set_name is None:
+        return inputs_dir_for_project(project_dir) / "allometry"
+    return inputs_dir_for_project(project_dir) / f"allometry_{set_name}"
 
 
 def new_growth_allometry_dir_for_project(project_dir: Path) -> Path:
@@ -93,9 +101,16 @@ def new_growth_allometry_dir_for_project(project_dir: Path) -> Path:
     return allometry_dir_for_project(project_dir) / "new_growth"
 
 
-def stand_data_path_for_project(project_dir: Path) -> Path:
-    """The project's `stand_data.json`, alongside its other inputs."""
-    return inputs_dir_for_project(project_dir) / STAND_DATA_FILENAME
+def stand_data_path_for_project(project_dir: Path, set_name: str | None = None) -> Path:
+    """
+    The stand-data document of one of the project's allometry sets,
+    alongside its other inputs: `stand_data.json` for the default set
+    (`set_name` None), `stand_data_<name>.json` for a named one. See
+    allometry_dir_for_project for the set's other half.
+    """
+    if set_name is None:
+        return inputs_dir_for_project(project_dir) / STAND_DATA_FILENAME
+    return inputs_dir_for_project(project_dir) / f"stand_data_{set_name}.json"
 
 
 def run_dir(project_dir: Path, run_id: str) -> Path:
