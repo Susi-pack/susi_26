@@ -152,6 +152,35 @@ def _validate_document_crs(crs: str) -> str:
 DocumentCrs = Annotated[str, AfterValidator(_validate_document_crs)]
 
 
+# The only integers an old stand_data.json can hold for developmentclass, and
+# the code each one stands for. The old-format Metsäkeskus tool turned the
+# code strings "02"/"03" into numbers before recording them, and its filter
+# let only those two through
+_LEGACY_DEVELOPMENTCLASS_CODES = {2: "02", 3: "03"}
+
+
+def _developmentclass_from_legacy_int(value: Any) -> Any:
+    """
+    DevelopmentClass's before-validator: an integer from an old
+    stand_data.json becomes the code string it stands for; anything else
+    passes through untouched, for the str type to accept or reject.
+    """
+    # bool is an int subclass, but no tool ever wrote one here.
+    if isinstance(value, bool) or not isinstance(value, int):
+        return value
+    if value not in _LEGACY_DEVELOPMENTCLASS_CODES:
+        raise ValueError(
+            f"developmentclass {value} is not a development-class code; "
+            "the codes are text (e.g. '02', 'T1')"
+        )
+    return _LEGACY_DEVELOPMENTCLASS_CODES[value]
+
+
+# A Metsäkeskus development-class code ("kehitysluokka"): text such as "02",
+# "03", "T1", "A0" -- never a number, see _developmentclass_from_legacy_int.
+DevelopmentClass = Annotated[str, BeforeValidator(_developmentclass_from_legacy_int)]
+
+
 class StandData(StrictFrozenModel):
     """
     A single stand as described by different output data sources (Metsäkeskus and XML standard)
@@ -222,13 +251,16 @@ class StandData(StrictFrozenModel):
         default=None,
         description="Total stem volume, m3/ha. Plain metadata, no current reader.",
     )
-    developmentclass: PositiveInt | None = Field(
+    developmentclass: DevelopmentClass | None = Field(
         default=None,
         description=(
-            "Stand development-class code (e.g. 1 = open/seedling, "
-            "2 = young growing, 3 = grown-up). Plain metadata here: the "
-            "source tools use it to filter stands before StandData is built, "
-            "not after."
+            "Metsäkeskus development-class code, as text (e.g. '02' = young "
+            "thinning stand, 'T1' = seedling stand below 1.3 m). Plain "
+            "metadata, no current reader. The old-format Metsäkeskus tool "
+            "filtered stands on it; the current one only records it, and "
+            "leaves it empty when the inventory snapshot has none. An integer "
+            "from an older stand_data.json is read as the code it stands for "
+            "(2 -> '02', 3 -> '03')."
         ),
     )
     drainagestate: PositiveInt | None = Field(

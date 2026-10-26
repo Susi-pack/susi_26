@@ -78,6 +78,7 @@ fallback_version = "0.0.0"
 susi-init-project = "tools.init_project.init_project:main"
 susi-xml-to-allometry = "tools.xml_to_allometry.xml_to_allometry:main"
 susi-metsakeskus-to-allometry = "tools.metsakeskus_to_allometry.metsakeskus_to_allometry:main"
+susi-metsakeskus-to-allometry-old-format = "tools.metsakeskus_to_allometry_old_format.metsakeskus_to_allometry_old_format:main"
 susi-new-growth-allometry = "tools.new_growth_allometry.new_growth_allometry:main"
 
 [tool.ty.environment]

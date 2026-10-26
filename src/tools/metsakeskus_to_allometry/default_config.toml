@@ -1,6 +1,9 @@
 # Default/template config for src/tools/metsakeskus_to_allometry/metsakeskus_to_allometry.py.
 #
-# Copy this file, fill in the three REQUIRED fields for your project, and
+# Reads Metsäkeskus's 2026 .gpkg format. For an old-format file, use
+# metsakeskus_to_allometry_old_format.py instead.
+#
+# Copy this file, fill in the four REQUIRED fields for your project, and
 # pass it via --config.
 #
 # Every other field is optional.
@@ -20,15 +23,17 @@ altitude = -1 # REQUIRED
 # Enforced range: [500, 2000]
 ddy = 0 # REQUIRED
 
+# Keep stands whose mean diameter, cm, is in [minimum, maximum]; this leaves out stands too young or too old.
+# No default: the right range depends on the region. Example for Pirkanmaa only: [8, 21].
+# Explained at https://susi-pack.github.io/susi_26/metsakeskus_to_allometry/#mean-diameter-range
+mean_diameter_range_filter = [] # REQUIRED
+
 # --- Optional -- shown here with the same values parse_extraction_config()
 # --- would apply anyway if the key were simply absent from this file.
 
-# Which Metsäkeskus development classes to keep.
-# 1 = open/seedling, 2 = young growing, 3 = grown-up.
-developmentclass_filter = [1, 2, 3]
-
 # Which peatland fertility classes to keep. Restricting to 2-5 excludes the
 # very richest and very poorest extremes.
+# Codes: the .gpkg's codeschema_mapping table, field fertilityclass.
 fertilityclass_filter = [2, 3, 4, 5]
 
 # n_trees, start_year, end_year, step_years all feed

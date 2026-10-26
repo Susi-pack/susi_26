@@ -1,7 +1,14 @@
 """
-Reads Metsäkeskus forest inventory data (.gpkg)
+Reads Metsäkeskus forest inventory data (.gpkg) in Metsäkeskus's 2026 data
+model (v2.1.x: site data in its own growthplacedata layer, tree-stand records
+dated by treestand.treedatadate and classified by treestand.treestandclass)
 --> Filters the data (more details below)
 --> Generates SUSI allometry files
+
+A file in the old, pre-2026 format is refused, with a pointer to
+metsakeskus_to_allometry_old_format.py, which still reads it. The two tools are
+deliberately independent copies, so the old one can be deleted cleanly once
+Metsäkeskus stops distributing the old format.
 
 Generalizes Sandeep's script into a tool, following the conventions
 Unlike in that script, there is no representative sampling here, so
@@ -12,13 +19,17 @@ every stand that survives filtering is turned into an allometry CSV file.
 import argparse
 import dataclasses
 import math
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import geopandas as gpd
 import pandas as pd
+from pydantic import model_validator
 from shapely.geometry import Polygon
 
+from susi.io.extra_pydantic_types import NonNegativeFloat
 from susi.io.load_output_data import StandID
 from susi.io.project_layout import (
     CONFIG_FILENAME,
@@ -100,11 +111,56 @@ DECIDUOUS_SPECIES_CODES = frozenset({3, 4, 5, 6, 7, 8, 9, 15, 20, 29})
 # construction (SUBGROUP_PEATLAND above already restricts to Korpi/Räme).
 PEAT = 1
 
-# treestand.type: whether the data is measured or projected date.
-# Types 2 and 3 are Metsäkeskus's own grown-forward projections
-# (2: to a common "current" date, 3: +10y future extrapolation)
-# Type 1 is the only measured data.
-TREESTAND_MEASURED_TYPE = 1
+# treestand.treestandclass: what kind of tree-stand record a row is.
+# 1 ("inventointipuusto") is an inventory snapshot: the trees as an inventory
+# found them on treedatadate, whatever the inventory's source
+# (treestanddatasource: field-measured, remote-sensed, mixed, or reported by
+# the owner or an authority). 2 and 3 are Metsäkeskus's own projections, grown
+# forward to the current date and ten years ahead; 4 is dead trees.
+# Only class 1 is an inventory.
+TREESTANDCLASS_INVENTORY = 1
+
+# Each layer this tool reads -> the columns it reads from it (the stand
+# layer's geometry comes along on top). Reading only these keeps the
+# multi-GB read fast, and skips the stand layer's timestamp columns, whose
+# occasional leap-second value ("...T20:02:60Z") pandas warns about.
+# Also what gpkg_format_problem checks a file for.
+LAYER_COLUMNS = {
+    "stand": ("standid", "area"),
+    "growthplacedata": (
+        "standid",
+        "maingroup",
+        "subgroup",
+        "fertilityclass",
+        "soiltype",
+        "drainagestate",
+    ),
+    "treestand": (
+        "standid",
+        "treestandid",
+        "treestandclass",
+        "treestanddatasource",
+        "treedatadate",
+        "developmentclass",
+    ),
+    "treestratum": (
+        "treestandid",
+        "treespecies",
+        "age",
+        "basalarea",
+        "stemcount",
+        "meandiameter",
+        "meanheight",
+    ),
+}
+
+# What the CLI stops with on an old-format file: one with the site columns on
+# the stand layer and no growthplacedata layer.
+OLD_FORMAT_MESSAGE = (
+    "This .gpkg is in Metsäkeskus's old (pre-2026) format, which this tool "
+    "does not read. Use susi-metsakeskus-to-allometry-old-format for it, or "
+    "download the data again in the current format."
+)
 
 
 # %% dataclasses
@@ -125,7 +181,9 @@ class StandCandidate:
     id: StandID
     subgroup: int
     fertilityclass: int
-    developmentclass: int
+    # The inventory snapshot's own development-class code ("02", "T1", ...),
+    # None when the snapshot records none (remote-sensed ones never do).
+    developmentclass: str | None
     drainagestate: int
     soiltype: int | None
     strata: PerSpecies[TreeStratum]
@@ -144,7 +202,9 @@ class ParsedStand:
     id: StandID
     subgroup: int
     fertilityclass: int
-    developmentclass: int
+    # The inventory snapshot's own development-class code ("02", "T1", ...),
+    # None when the snapshot records none (remote-sensed ones never do).
+    developmentclass: str | None
     drainagestate: int
     soiltype: int | None
     strata: PerSpecies[TreeStratum]
@@ -162,12 +222,19 @@ class ParsedStand:
 @dataclass(frozen=True)
 class GpkgLayers:
     """
-    The three gpkg layers this tool reads.
-    treestandsummary is deliberately absent:
-    it only has any values for Metsäkeskus future projections, not for measurements
+    The four gpkg layers this tool reads, each with only its LAYER_COLUMNS.
+    stand: one row per stand, its geometry and area.
+    growthplacedata: one row per stand, its site (main group, subgroup,
+    fertility class, soil type, drainage state).
+    treestand: one row per tree-stand record (inventory snapshots and
+    Metsäkeskus's projections) of a stand.
+    treestratum: one row per stratum of a tree-stand record.
+    treestandsummary is deliberately absent: the tool aggregates the strata
+    itself, the same way for every stand.
     """
 
     stand: gpd.GeoDataFrame
+    growthplacedata: pd.DataFrame
     treestand: pd.DataFrame
     treestratum: pd.DataFrame
 
@@ -191,10 +258,12 @@ class ExtractionConfig(AllometryGenerationDefaults):
     altitude: float
     ddy: float
 
-    # Defaulted
+    # (minimum, maximum) stand mean diameter, cm, both ends included -- see
+    # filter_by_mean_diameter_range. No default: what counts as too young or
+    # too old a stand depends on the region
+    mean_diameter_range_filter: tuple[NonNegativeFloat, NonNegativeFloat]
 
-    # 1 = open/seedling, 2 = young growing, 3 = grown-up
-    developmentclass_filter: tuple[int, ...] = (1, 2, 3)
+    # Defaulted
 
     # peatland fertility classes of interest
     # restricting to 2-5 excludes the very richest and very poorest extremes.
@@ -208,6 +277,16 @@ class ExtractionConfig(AllometryGenerationDefaults):
     dense_young_stand_scaling: DenseYoungStandScalingConfig = (
         DenseYoungStandScalingConfig()
     )
+
+    @model_validator(mode="after")
+    def mean_diameter_range_is_a_range(self) -> Self:
+        minimum, maximum = self.mean_diameter_range_filter
+        if minimum >= maximum:
+            raise ValueError(
+                f"mean_diameter_range_filter's minimum ({minimum:g}) is not "
+                f"below its maximum ({maximum:g}). Give it as [minimum, maximum]."
+            )
+        return self
 
 
 @dataclass(frozen=True)
@@ -261,13 +340,85 @@ def load_extraction_config(config_path: Path) -> ExtractionConfig:
 # %% gpkg loading (I/O)
 
 
+# The warning pyogrio gives every time it reads the stand layer's "Measured 3D
+# Polygon" geometry (or lists the layers): it drops the measure (M) value.
+# This tool only uses x/y, so the warning is silenced where the file is read.
+MEASURED_GEOMETRY_WARNING = r"Measured \(M\) geometry types are not supported"
+
+
+def _read_layer(
+    gpkg_path: Path, layer: str, columns: list[str] | None, rows: int | None
+) -> pd.DataFrame:
+    """
+    One gpkg layer, as gpd.read_file reads it: a GeoDataFrame for the stand
+    layer, a plain DataFrame for the attribute-only ones. columns=None reads
+    every column, rows=None every row.
+
+    MEASURED_GEOMETRY_WARNING is silenced.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
+        return gpd.read_file(gpkg_path, layer=layer, columns=columns, rows=rows)
+
+
+def gpkg_format_problem(gpkg_path: Path) -> str | None:
+    """
+    None when the file has every layer and column in LAYER_COLUMNS: the
+    2026 data model this tool reads. Otherwise, what is wrong with it, as the
+    message the CLI stops with.
+
+    An old-format file (no growthplacedata layer, and the site columns still
+    on the stand layer) gets OLD_FORMAT_MESSAGE, which points to the tool that
+    reads it. Only the layer list and each layer's column names are read
+    here, not the data.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=MEASURED_GEOMETRY_WARNING)
+        layers = set(gpd.list_layers(gpkg_path)["name"])
+
+    def layer_columns(layer: str) -> set[str]:
+        # One row, for its column names: rows=0 would scan the whole layer.
+        return set(_read_layer(gpkg_path, layer, columns=None, rows=1).columns)
+
+    if (
+        "growthplacedata" not in layers
+        and "stand" in layers
+        and "maingroup" in layer_columns("stand")
+    ):
+        return OLD_FORMAT_MESSAGE
+
+    missing: list[str] = []
+    for layer, columns in LAYER_COLUMNS.items():
+        if layer not in layers:
+            missing.append(f"layer '{layer}'")
+            continue
+        present = layer_columns(layer)
+        missing.extend(
+            f"{layer}.{column}" for column in columns if column not in present
+        )
+    if missing:
+        return (
+            "This .gpkg is not in the Metsäkeskus data model this tool reads "
+            f"(2026, v2.1.x). Missing: {', '.join(missing)}."
+        )
+    return None
+
+
 def load_gpkg_layers(gpkg_path: Path) -> GpkgLayers:
-    """Loads the three gpkg layers this tool needs. See the module docstring
-    on GpkgLayers for why treestandsummary is not among them."""
+    """Loads the four gpkg layers this tool needs, each with only its
+    LAYER_COLUMNS. See GpkgLayers for what each one holds."""
+    layers = {
+        layer: _read_layer(gpkg_path, layer, columns=list(columns), rows=None)
+        for layer, columns in LAYER_COLUMNS.items()
+    }
+    stand = layers["stand"]
+    if not isinstance(stand, gpd.GeoDataFrame):
+        raise TypeError("The gpkg stand layer has no geometry")
     return GpkgLayers(
-        stand=gpd.read_file(gpkg_path, layer="stand"),
-        treestand=gpd.read_file(gpkg_path, layer="treestand"),
-        treestratum=gpd.read_file(gpkg_path, layer="treestratum"),
+        stand=stand,
+        growthplacedata=layers["growthplacedata"],
+        treestand=layers["treestand"],
+        treestratum=layers["treestratum"],
     )
 
 
@@ -295,15 +446,18 @@ def stand_layer_in_source_crs(stand: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 
 def filter_stands_by_site_attributes(
-    stand: gpd.GeoDataFrame,
+    growthplacedata: pd.DataFrame,
     fertilityclass_filter: tuple[int, ...],
-) -> gpd.GeoDataFrame:
+) -> pd.DataFrame:
     """
     Restrict to forest land, on peatland, already drained.
     This is hard-coded per the global variables above.
     Also filters the configured fertility-class range.
+
+    growthplacedata holds one row per stand; the codes are text in the gpkg,
+    so they are made numbers here, and stay numbers in the returned rows.
     """
-    numeric = stand.copy()
+    numeric = growthplacedata.copy()
     for column in ("maingroup", "subgroup", "drainagestate", "fertilityclass"):
         numeric[column] = pd.to_numeric(numeric[column], errors="coerce")
 
@@ -316,34 +470,52 @@ def filter_stands_by_site_attributes(
     return numeric[mask].copy()
 
 
-def _with_parsed_measurement_columns(
-    treestand: pd.DataFrame, stand_ids: set[int]
-) -> pd.DataFrame:
+def _inventory_snapshots(treestand: pd.DataFrame, stand_ids: set[int]) -> pd.DataFrame:
     """
     Shared for select_target_year_snapshot() and compute_year_distribution().
-    Restrict to the given stands' rows and parse date/type/year.
+    The given stands' inventory snapshots (TREESTANDCLASS_INVENTORY), with
+    their date and year parsed.
     """
     candidates = treestand[treestand["standid"].isin(stand_ids)].copy()
-    candidates["date_dt"] = pd.to_datetime(candidates["date"], errors="coerce")
-    candidates["type_num"] = pd.to_numeric(candidates["type"], errors="coerce")
+    candidates["date_dt"] = pd.to_datetime(candidates["treedatadate"], errors="coerce")
+    candidates["class_num"] = pd.to_numeric(
+        candidates["treestandclass"], errors="coerce"
+    )
     candidates["year"] = candidates["date_dt"].dt.year
-    return candidates
+    return candidates[candidates["class_num"] == TREESTANDCLASS_INVENTORY]
+
+
+def _source_code_order(source: str) -> tuple[bool, int, str]:
+    """Sort key for treestanddatasource codes: numeric codes in numeric order
+    (2 before 21), anything else after them."""
+    return (not source.isdigit(), int(source) if source.isdigit() else 0, source)
 
 
 def compute_year_distribution(
     treestand: pd.DataFrame, stand_ids: set[int]
 ) -> pd.DataFrame:
     """
-    Per-year count of distinct stands with a measured (type=1 in Metsakeskus types) snapshot
+    Per year: how many distinct stands have an inventory snapshot dated that
+    year (n_stands), and how many of them from each inventory source (one
+    "source <code>" column per treestanddatasource code; "source none" when
+    the snapshot records no source). A stand with two snapshots from
+    different sources in one year counts once in n_stands.
     """
-    candidates = _with_parsed_measurement_columns(treestand, stand_ids)
-    measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
+    snapshots = _inventory_snapshots(treestand, stand_ids).dropna(subset=["year"])
+    snapshots = snapshots.astype({"year": int})
+    snapshots["source"] = snapshots["treestanddatasource"].fillna("none").astype(str)
+
+    n_stands = snapshots.groupby("year").agg(n_stands=("standid", "nunique"))
+    per_source = (
+        snapshots.groupby(["year", "source"])["standid"].nunique().unstack(fill_value=0)
+    )
+    per_source = per_source[sorted(per_source.columns, key=_source_code_order)]
+    per_source.columns = [f"source {source}" for source in per_source.columns]
     return (
-        measured.groupby("year")["standid"]
-        .nunique()
+        pd.concat([n_stands, per_source], axis=1)
         .reset_index()
-        .rename(columns={"standid": "n_stands"})
         .sort_values("year")
+        .reset_index(drop=True)
     )
 
 
@@ -353,12 +525,11 @@ def select_target_year_snapshot(
     target_year: int,
 ) -> pd.DataFrame:
     """
-    One treestand row per stand: the measured record whose date
-    falls exactly in target_year.
+    One treestand row per stand: the inventory snapshot dated in
+    target_year, the earliest one if the stand has several that year.
     """
-    candidates = _with_parsed_measurement_columns(treestand, stand_ids)
-    measured = candidates[candidates["type_num"] == TREESTAND_MEASURED_TYPE]
-    exact_year = measured[measured["year"] == target_year]
+    snapshots = _inventory_snapshots(treestand, stand_ids)
+    exact_year = snapshots[snapshots["year"] == target_year]
 
     return (
         exact_year.sort_values(["standid", "date_dt"])
@@ -369,11 +540,17 @@ def select_target_year_snapshot(
 
 def attach_stand_attributes(
     treestand_snapshot: pd.DataFrame,
-    filtered_stand: gpd.GeoDataFrame,
+    filtered_growthplacedata: pd.DataFrame,
+    stand: gpd.GeoDataFrame,
 ) -> pd.DataFrame:
     """
-    Re-attaches the stand-layer's site columns onto each selected
-    treestand snapshot, since reestand itself carries no site metadata.
+    Attaches each selected treestand snapshot's site columns (from
+    growthplacedata) and its geometry and area (from the stand layer), since
+    treestand itself carries neither. The snapshot keeps its own
+    developmentclass column.
+
+    A stand missing from the stand layer gets a NaN geometry here, which
+    build_stand_candidates reports as a clean skip.
     """
     site_columns = [
         "standid",
@@ -381,25 +558,13 @@ def attach_stand_attributes(
         "fertilityclass",
         "drainagestate",
         "soiltype",
-        "area",
-        "geometry",
-        "developmentclass",
     ]
-    present_columns = [c for c in site_columns if c in filtered_stand.columns]
-    return treestand_snapshot.merge(
-        filtered_stand[present_columns], on="standid", how="left"
+    with_site = treestand_snapshot.merge(
+        filtered_growthplacedata[site_columns], on="standid", how="left"
     )
-
-
-def filter_by_developmentclass(
-    merged: pd.DataFrame,
-    developmentclass_filter: tuple[int, ...],
-) -> pd.DataFrame:
-    result = merged.copy()
-    result["developmentclass"] = pd.to_numeric(
-        result["developmentclass"], errors="coerce"
+    return with_site.merge(
+        pd.DataFrame(stand[["standid", "area", "geometry"]]), on="standid", how="left"
     )
-    return result[result["developmentclass"].isin(developmentclass_filter)].copy()
 
 
 # %% Species aggregation
@@ -421,7 +586,7 @@ def estimate_stemcount(total_basal_area: float, mean_diameter_cm: float) -> int:
 
 class DegenerateSpeciesDataError(ValueError):
     """Raised by aggregate_species_group when a species group carries real,
-    positive measured basal area but no usable mean diameter and/or mean
+    positive recorded basal area but no usable mean diameter and/or mean
     height to go with it. There is no safe placeholder to substitute here
     (unlike a species with zero basal area, which is provably inert
     downstream regardless of what its age/diameter/height say -- see
@@ -482,7 +647,7 @@ def aggregate_species_group(rows: pd.DataFrame, species_name: str) -> TreeStratu
             rows["meanheight"].fillna(0.0) * weights
         ).sum() / total_basal_area
 
-        # This species has real, measured basal area -- it can end up as the
+        # This species has real, recorded basal area -- it can end up as the
         # dominant or subdominant canopy layer and actually be fed into
         # Growth_and_Yield_Table, so a missing diameter/height here is real,
         # artificial data that must not flow forward -- reject the stand
@@ -568,6 +733,11 @@ def build_stand_candidates(
     candidates: list[StandCandidate] = []
     skipped: list[StandSkipped] = []
     treestratum_treestandid = pd.to_numeric(treestratum["treestandid"], errors="coerce")
+    # The species codes are text in the gpkg ("1", "2", ...), and the
+    # *_SPECIES_CODES sets are numbers: converted once here, for every stand.
+    treestratum = treestratum.assign(
+        treespecies=pd.to_numeric(treestratum["treespecies"], errors="coerce")
+    )
 
     for _, row in merged_filtered.iterrows():
         stand_id = StandID(str(int(row["standid"])))
@@ -608,7 +778,11 @@ def build_stand_candidates(
                 id=stand_id,
                 subgroup=int(row["subgroup"]),
                 fertilityclass=int(row["fertilityclass"]),
-                developmentclass=int(row["developmentclass"]),
+                developmentclass=(
+                    str(row["developmentclass"])
+                    if pd.notna(row.get("developmentclass"))
+                    else None
+                ),
                 drainagestate=(
                     int(row["drainagestate"])
                     if pd.notna(row.get("drainagestate"))
@@ -647,6 +821,90 @@ def partition_viable_candidates(
     return viable, skipped
 
 
+def filter_by_mean_diameter_range(
+    candidates: list[StandCandidate],
+    mean_diameter_range: tuple[float, float],
+) -> tuple[list[StandCandidate], list[StandSkipped]]:
+    """
+    Keeps a stand when its basal-area-weighted mean diameter lies in
+    mean_diameter_range (cm, both ends included): this is how the tool leaves
+    out stands too young or too old to grow into a useful allometry curve.
+    It judges the very trees the growth model is given, on the inventory
+    snapshot's own date, whatever the inventory's source.
+
+    The diameter is the one dense young stand scaling judges a stand by and
+    StandData.mean_diameter records. It is undefined for a stand with no
+    basal area, so this takes viable candidates (partition_viable_candidates).
+    """
+    minimum, maximum = mean_diameter_range
+    kept: list[StandCandidate] = []
+    skipped: list[StandSkipped] = []
+    for candidate in candidates:
+        mean_diameter = basal_area_weighted_mean_diameter(candidate.strata)
+        if minimum <= mean_diameter <= maximum:
+            kept.append(candidate)
+        else:
+            skipped.append(
+                StandSkipped(
+                    stand_id=candidate.id,
+                    reason=(
+                        f"mean diameter {mean_diameter:.1f} cm, outside "
+                        f"{minimum:g}-{maximum:g} cm"
+                    ),
+                )
+            )
+    return kept, skipped
+
+
+# The row for stands whose inventory snapshot records no development class.
+NO_DEVELOPMENTCLASS_LABEL = "(none)"
+
+
+def summarize_mean_diameter_by_developmentclass(
+    candidates: list[StandCandidate],
+) -> pd.DataFrame:
+    """
+    Per development class: how many stands, and the 10th percentile, median
+    and 90th percentile of their basal-area-weighted mean diameter (cm) --
+    the figure filter_by_mean_diameter_range judges. Report only: it is what
+    a user reads to choose mean_diameter_range_filter for their own region.
+    Stands whose snapshot records no class share one NO_DEVELOPMENTCLASS_LABEL
+    row. Takes viable candidates, like filter_by_mean_diameter_range.
+    """
+    if not candidates:
+        return pd.DataFrame(
+            {
+                column: []
+                for column in ("developmentclass", "n_stands", "p10", "median", "p90")
+            }
+        )
+    diameters = pd.DataFrame(
+        {
+            "developmentclass": [
+                candidate.developmentclass or NO_DEVELOPMENTCLASS_LABEL
+                for candidate in candidates
+            ],
+            "mean_diameter": [
+                basal_area_weighted_mean_diameter(candidate.strata)
+                for candidate in candidates
+            ],
+        }
+    )
+    per_class = diameters.groupby("developmentclass")["mean_diameter"]
+    return (
+        pd.DataFrame(
+            {
+                "n_stands": per_class.size(),
+                "p10": per_class.quantile(0.1),
+                "median": per_class.quantile(0.5),
+                "p90": per_class.quantile(0.9),
+            }
+        )
+        .round(1)
+        .reset_index()
+    )
+
+
 # %% Building the final stand record
 
 
@@ -655,9 +913,8 @@ def determine_dominant_and_subdominant_species(
 ) -> tuple[int, int]:
     """Species codes (1=pine, 2=spruce, 3=deciduous) ranked by basal area.
     The subdominant is always the second-ranked species' own stratum, even
-    when its basal area is zero -- see docs/adr/0002 for why this
-    deliberately does not duplicate the dominant species for a monoculture
-    stand."""
+    when its basal area is zero
+    """
     basal_areas = {
         species_code: species_stratum(strata, species_code).basal_area
         for species_code in _SPECIES_SLOT
@@ -760,7 +1017,7 @@ def isolate_species_layer(
 ) -> PerSpecies[TreeStratum]:
     """Zeroes every species slot except active_species -- this is how a
     single canopy layer (dominant or subdominant) is modeled as that one
-    species growing alone (see docs/adr/0002)."""
+    species growing alone"""
     all_zero = PerSpecies(
         pine=ZERO_STRATUM, spruce=ZERO_STRATUM, deciduous=ZERO_STRATUM
     )
@@ -836,9 +1093,7 @@ def plan_stand_outputs(stand: ParsedStand, output_dir: Path) -> StandPlanned:
     from it.
 
     The subdominant file exists exactly when the second-ranked species carries
-    basal area of its own; see docs/adr/0002 for why a monoculture's
-    subdominant layer is not written at all rather than duplicating the
-    dominant one."""
+    basal area of its own."""
     subdominant_stratum = species_stratum(stand.strata, stand.subdominant_species)
     return StandPlanned(
         stand_id=stand.id,
@@ -942,7 +1197,7 @@ def process_stand(
         # growth model gets strata_to_grow: the scaled strata when there is a
         # factor, the recorded ones otherwise. The scaling is applied here,
         # to the whole stand, BEFORE build_growth_and_yield_table isolates a
-        # layer (docs/adr/0002): the rule judged the stand on all three
+        # layer: the rule judged the stand on all three
         # species, so all three are multiplied by the one factor, including a
         # third species that neither layer keeps.
         strata_to_grow = strata_to_grow_from(stand.strata, scaling_factor)
@@ -979,7 +1234,7 @@ def process_stand(
 
         # Each layer starts at the age its own curve starts at: the growth
         # model's basal-area-weighted pooled age of the strata it was grown
-        # from. Each layer is one species grown alone (docs/adr/0002), so
+        # from. Each layer is one species grown alone, so
         # that's the species' own stratum age -- never a pooled stand-level
         # age -- as long as the stratum age is already a whole number
         # (aggregate_species_group rounds it; the growth model rounds again).
@@ -1031,12 +1286,19 @@ def process_stand(
 
 def parse_CLI_arguments() -> CLIArguments:
     parser = argparse.ArgumentParser(
-        description="Convert Metsäkeskus .gpkg stand data to SUSI allometry CSV inputs"
+        description=(
+            "Convert Metsäkeskus .gpkg stand data (2026 data model) to SUSI "
+            "allometry CSV inputs"
+        )
     )
     parser.add_argument(
         "input_gpkg",
         type=make_existing_file_validator(".gpkg"),
-        help="Path to the Metsäkeskus .gpkg file",
+        help=(
+            "Path to the Metsäkeskus .gpkg file, in the 2026 data model. An "
+            "old-format file is refused, with a pointer to the tool that "
+            "reads it."
+        ),
     )
     parser.add_argument(
         "--config",
@@ -1081,6 +1343,12 @@ def parse_CLI_arguments() -> CLIArguments:
 
     args = parser.parse_args()
 
+    # Checked first, from the layer list and column names alone: a file in
+    # the wrong format makes everything below moot.
+    format_problem = gpkg_format_problem(args.input_gpkg)
+    if format_problem is not None:
+        parser.error(format_problem)
+
     # --config defaults to CONFIG_FILENAME inside the project's inputs/
     # folder -- the layout the docs have the user set up beforehand.
     config_path = resolve_config_path(
@@ -1119,8 +1387,37 @@ def parse_CLI_arguments() -> CLIArguments:
 
 
 def print_year_distribution(year_distribution: pd.DataFrame) -> None:
-    print("Available measured inventory years (type=1):")
+    print(
+        "Available inventory years (treestandclass = 1): stands per year, "
+        "and per inventory source (treestanddatasource):"
+    )
     print(year_distribution.to_string(index=False))
+    print(
+        "  Sources: 1 = field-measured, 2 = remote-sensed, 9 = combined from "
+        "several sources, 21-23 = reported by the owner, an authority or an "
+        "operator. Every code is listed in the .gpkg's own codeschema_mapping "
+        "table."
+    )
+    print()
+
+
+def print_mean_diameter_by_developmentclass(summary: pd.DataFrame) -> None:
+    print(
+        "   Mean diameter (cm) by development class, to help choose "
+        "mean_diameter_range_filter for your region:"
+    )
+    if summary.empty:
+        print("   (no stands)")
+    else:
+        print(
+            "\n".join(
+                f"   {line}" for line in summary.to_string(index=False).splitlines()
+            )
+        )
+    print(
+        "   (Development-class codes: the .gpkg's codeschema_mapping table, "
+        "field developmentclass.)"
+    )
     print()
 
 
@@ -1183,6 +1480,8 @@ def main() -> None:
     print(f"    - target_year = {cli_args.config.target_year}")
     print(f"    - altitude    = {cli_args.config.altitude}")
     print(f"    - ddy         = {cli_args.config.ddy}")
+    minimum, maximum = cli_args.config.mean_diameter_range_filter
+    print(f"    - mean_diameter_range_filter = {minimum:g}-{maximum:g} cm")
     if cli_args.dry_run:
         print("    - DRY RUN -- nothing will be written")
     print()
@@ -1192,9 +1491,10 @@ def main() -> None:
     if stand_in_source_crs is not layers.stand:
         print(f"stand layer reprojected: {layers.stand.crs} -> {SOURCE_CRS}")
     layers = dataclasses.replace(layers, stand=stand_in_source_crs)
-    print(f"stand      : {len(layers.stand):>7,} rows")
-    print(f"treestand  : {len(layers.treestand):>7,} rows")
-    print(f"treestratum: {len(layers.treestratum):>7,} rows")
+    print(f"stand          : {len(layers.stand):>9,} rows")
+    print(f"growthplacedata: {len(layers.growthplacedata):>9,} rows")
+    print(f"treestand      : {len(layers.treestand):>9,} rows")
+    print(f"treestratum    : {len(layers.treestratum):>9,} rows")
 
     print_section("Filtering")
 
@@ -1202,57 +1502,76 @@ def main() -> None:
         "1. Site filter -- forest land, peatland (Korpi/Räme), already drained, "
         f"fertility class in {cli_args.config.fertilityclass_filter}:"
     )
-    filtered_stand = filter_stands_by_site_attributes(
-        layers.stand, cli_args.config.fertilityclass_filter
+    # growthplacedata holds one row per stand: it is the site filter's input.
+    filtered_growthplacedata = filter_stands_by_site_attributes(
+        layers.growthplacedata, cli_args.config.fertilityclass_filter
     )
-    print(f"   -> {len(filtered_stand):,} / {len(layers.stand):,} stands kept")
+    print(
+        f"   -> {len(filtered_growthplacedata):,} / "
+        f"{len(layers.growthplacedata):,} stands kept"
+    )
     print()
 
     stand_ids = set(
-        pd.to_numeric(filtered_stand["standid"], errors="coerce").dropna().astype(int)
+        pd.to_numeric(filtered_growthplacedata["standid"], errors="coerce")
+        .dropna()
+        .astype(int)
     )
     print_year_distribution(compute_year_distribution(layers.treestand, stand_ids))
 
-    print(f"2. Measured-snapshot filter -- exact {cli_args.config.target_year} match:")
+    print(
+        f"2. Inventory-snapshot filter -- snapshot dated in "
+        f"{cli_args.config.target_year}:"
+    )
     snapshot = select_target_year_snapshot(
         layers.treestand, stand_ids, cli_args.config.target_year
     )
     n_excluded = len(stand_ids) - len(snapshot)
     print(f"   -> {len(snapshot):,} / {len(stand_ids):,} stands kept")
     if n_excluded > 0:
-        print(f"      ({n_excluded} stand(s) had no exact-year match and are excluded)")
+        print(
+            f"      ({n_excluded:,} stand(s) had no inventory snapshot dated in "
+            f"{cli_args.config.target_year} and are excluded)"
+        )
     print()
 
-    merged = attach_stand_attributes(snapshot, filtered_stand)
-    print(
-        "3. Development-class filter -- classes "
-        f"{cli_args.config.developmentclass_filter}:"
-    )
-    merged_filtered = filter_by_developmentclass(
-        merged, cli_args.config.developmentclass_filter
-    )
-    print(f"   -> {len(merged_filtered):,} / {len(merged):,} stands kept")
-    print()
+    merged = attach_stand_attributes(snapshot, filtered_growthplacedata, layers.stand)
 
     print(
-        "4. Structural + species-data checks -- geometry, treestandid, diameter/height:"
+        "3. Structural + species-data checks -- geometry, treestandid, diameter/height:"
     )
-    candidates, structural_skips = build_stand_candidates(
-        merged_filtered, layers.treestratum
-    )
-    print(f"   -> {len(candidates):,} / {len(merged_filtered):,} stands kept")
+    candidates, structural_skips = build_stand_candidates(merged, layers.treestratum)
+    print(f"   -> {len(candidates):,} / {len(merged):,} stands kept")
     # structural_skips covers both missing structural fields (no usable
     # geometry, no treestandid) and a species with real basal area but no
     # usable diameter/height (DegenerateSpeciesDataError) -- build_stand_candidates.
     print_skips(structural_skips, "   Skipped (invalid or missing data)")
     print()
 
-    print("5. Viability check -- nonzero total basal area:")
+    print("4. Viability check -- nonzero total basal area:")
     viable_candidates, ba_skips = partition_viable_candidates(candidates)
     print(f"   -> {len(viable_candidates):,} / {len(candidates):,} stands kept")
     print_skips(ba_skips, "   Skipped (zero basal area)")
+    print()
 
-    parsed_stands, build_skips = build_stands(viable_candidates)
+    print(
+        f"5. Mean-diameter filter -- {minimum:g}-{maximum:g} cm "
+        "(mean_diameter_range_filter):"
+    )
+    # Printed before filtering, over every viable stand: the table shows where
+    # the range cuts, not just what survived it.
+    print_mean_diameter_by_developmentclass(
+        summarize_mean_diameter_by_developmentclass(viable_candidates)
+    )
+    in_range_candidates, diameter_skips = filter_by_mean_diameter_range(
+        viable_candidates, cli_args.config.mean_diameter_range_filter
+    )
+    print(
+        f"   -> {len(in_range_candidates):,} / {len(viable_candidates):,} stands kept"
+    )
+    print_skips(diameter_skips, "   Skipped (mean diameter outside the range)")
+
+    parsed_stands, build_skips = build_stands(in_range_candidates)
     print_skips(build_skips, "   Skipped (could not build stand record)")
     print()
 
@@ -1265,7 +1584,7 @@ def main() -> None:
     #
     # The rule sees each stand's full strata -- all three species, before
     # process_stand splits the stand into its dominant and subdominant
-    # layers (docs/adr/0002) -- so a stand is judged, and scaled, as a whole.
+    # layers  -- so a stand is judged, and scaled, as a whole.
     strata_per_stand = {stand.id: stand.strata for stand in parsed_stands}
     scaling_factors = decide_scaling_factors(
         strata_per_stand, cli_args.config.dense_young_stand_scaling
