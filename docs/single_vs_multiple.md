@@ -23,6 +23,7 @@ The `MultipleSusis` class addresses these problems through built-in validation c
 3. **Unique output paths**: No two runs can write to the same folder
 4. **Unique parameter sets**: Duplicate SUSI parameter configurations are rejected
 5. **Folder-safe names**: `stand_id` and `scenario_id` cannot contain path separators
+6. **Same tag keys**: All simulations must use the same set of [tag](#tags) keys; the values may differ
 
 ---
 
@@ -120,6 +121,33 @@ execution_config = MultipleSusis(
 )
 ```
 
+### Tags
+
+A run's simulations sometimes fall into groups you want to compare in the
+analysis: stands from two regions, say, simulated in one run. Record the group
+as a **tag** on each simulation's metadata, a free-text key-value pair:
+
+```python
+SimulationMetaData(
+    project_dir=project_dir("phase4"),
+    run_id="baseline",
+    stand_id="171161",
+    scenario_id="control",
+    tags={"region": "pirkanmaa"},
+)
+```
+
+Tags group simulations *within* a run. To tell one run from another (before
+and after a parameter change, say), use a different `run_id` instead.
+
+SUSI gives tags no meaning: it never reads them, it only writes them to each
+simulation's `metadata.json`, and you choose the keys. A tag belongs to one
+simulation, not to a stand, so a stand's scenarios may carry different values
+for the same key. In a `MultipleSusis` batch, every simulation must use the same
+keys: a simulation without the `region` key would drop out of any grouping by
+region. See [Reading Simulation Output Data](reading_output_data.md#grouping-a-runs-simulations-by-tag)
+for how to read tags back.
+
 
 ---
 
@@ -131,6 +159,7 @@ execution_config = MultipleSusis(
 | `scenario_id` | Not required | Required |
 | `project_dir` | Required | Required |
 | `run_id` | Required | Required, must be same for all runs |
+| `tags` | Optional | Optional, but every simulation must use the same keys |
 | Folder structure | `<run_id>/` | `<run_id>/stand_id/scenario_id/` |
 | Class used | `SimulationParams` | `MultipleSusis` |
 
@@ -144,3 +173,4 @@ When using `MultipleSusis`, the following rules are enforced:
 2. **Consistent run ID**: All runs must share the same `run_id`
 3. **Unique paths**: No two runs can have the same output folder path
 4. **Folder-safe names**: `stand_id` and `scenario_id` cannot contain path separators (`/` or `\`)
+5. **Same tag keys**: All simulations must use the same set of [tag](#tags) keys; the values may differ
