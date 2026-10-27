@@ -407,6 +407,84 @@ def test_different_run_ids_raise(
         MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
 
 
+def two_simus_with_tags(
+    susi_params_a: SusiParams,
+    susi_params_b: SusiParams,
+    project_dir: Path,
+    tags_a: dict[str, str],
+    tags_b: dict[str, str],
+) -> list[SimulationParams]:
+    """Two simulations of one run that differ only in stand and in tags."""
+    return [
+        SimulationParams(
+            susi_params=susi_params,
+            metadata=SimulationMetaData(
+                project_dir=project_dir,
+                run_id="batch_run",
+                stand_id=stand_id,
+                scenario_id="scenario_1",
+                tags=tags,
+            ),
+        )
+        for susi_params, stand_id, tags in [
+            (susi_params_a, "stand_A", tags_a),
+            (susi_params_b, "stand_B", tags_b),
+        ]
+    ]
+
+
+def test_same_tag_keys_with_different_values_pass(
+    valid_susi_params, another_valid_susi_params, tmp_project
+):
+    # One run whose stands span two regions.
+    simus = two_simus_with_tags(
+        susi_params_a=valid_susi_params,
+        susi_params_b=another_valid_susi_params,
+        project_dir=tmp_project,
+        tags_a={"region": "pirkanmaa"},
+        tags_b={"region": "lapland"},
+    )
+
+    multiple = MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
+
+    assert [s.metadata.tags["region"] for s in multiple.simulation_parameter_list] == [
+        "pirkanmaa",
+        "lapland",
+    ]
+
+
+def test_different_tag_keys_raise(
+    valid_susi_params, another_valid_susi_params, tmp_project
+):
+    # A simulation missing a key would drop out of any grouping by that key.
+    simus = two_simus_with_tags(
+        susi_params_a=valid_susi_params,
+        susi_params_b=another_valid_susi_params,
+        project_dir=tmp_project,
+        tags_a={"region": "pirkanmaa"},
+        tags_b={},
+    )
+
+    with pytest.raises(ValueError, match=r"same tag keys.*'region'.*set\(\)"):
+        MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
+
+
+def test_batch_without_tags_passes(
+    valid_susi_params, another_valid_susi_params, tmp_project
+):
+    simus = two_simus_with_tags(
+        susi_params_a=valid_susi_params,
+        susi_params_b=another_valid_susi_params,
+        project_dir=tmp_project,
+        tags_a={},
+        tags_b={},
+    )
+
+    multiple = MultipleSusis(n_parallel_processes=2, simulation_parameter_list=simus)
+
+    assert all(s.metadata.tags == {} for s in multiple.simulation_parameter_list)
+
+
 def test_missing_stand_id_in_batch_raises(tmp_project):
     """Missing stand_id in batch run should raise error at metadata creation."""
     with pytest.raises(ValidationError, match="stand_id and scenario_id"):
