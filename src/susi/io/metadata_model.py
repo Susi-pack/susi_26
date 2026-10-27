@@ -47,6 +47,11 @@ class SimulationMetaData(BaseModel):
         default=None,
     )
 
+    tags: dict[str, str] = Field(
+        default_factory=dict,
+        description="Free-text key-value pairs that allow the user to group and filter freely. Example `tags: {'region': 'pirkanmaa'}`. SUSI never reads tags; they are only written to `metadata.json`. Every simulation of a `MultipleSusis` batch must use the same keys, though the values may differ. Keys must not be empty.",
+    )
+
     metadata_schema_version: int = 1
 
     metadata_output_filename: str = Field(
@@ -103,6 +108,15 @@ class SimulationMetaData(BaseModel):
     @classmethod
     def check_netcdf_extension(cls, value: str) -> str:
         does_filename_have_extension(filename=value, extension=".nc")
+        return value
+
+    @field_validator("tags")
+    @classmethod
+    def check_tag_keys_not_empty(cls, value: dict[str, str]) -> dict[str, str]:
+        # An empty key can't be named when grouping or filtering in the
+        # analysis. Values are free text; an empty one is allowed.
+        if "" in value:
+            raise ValueError("Tag keys must not be empty.")
         return value
 
     @field_validator("project_dir")

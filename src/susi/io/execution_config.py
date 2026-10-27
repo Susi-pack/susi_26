@@ -101,11 +101,30 @@ class MultipleSusis(BaseModel):
                 f"All MultipleSusi runs must have the same run_id. Found the following instead: {seen}."
             )
 
+    def _check_same_tag_keys(self) -> None:
+        """
+        All runs in MultipleSusi must have the same set of tag keys; values may differ.
+
+        Reason: a simulation missing a key would silently drop out of any grouping by that key in the analysis.
+        """
+        distinct_key_sets: list[set[str]] = []
+        for simulation_run in self.simulation_parameter_list:
+            keys = set(simulation_run.metadata.tags)
+            if keys not in distinct_key_sets:
+                distinct_key_sets.append(keys)
+
+        if len(distinct_key_sets) > 1:
+            found = " vs ".join(str(keys) for keys in distinct_key_sets)
+            raise ValueError(
+                f"All MultipleSusi runs must have the same tag keys. Found the following instead: {found}."
+            )
+
     @model_validator(mode="after")
     def validate_configuration(self) -> "MultipleSusis":
         """Validate the entire model after all fields are set."""
         self._check_stand_and_scenario_ids_are_set()
         self._check_single_run_id()
+        self._check_same_tag_keys()
         self._check_not_more_processes_than_runs()
         self._check_for_duplicated_susi_params()
         self._check_for_duplicated_simulation_folder_paths()

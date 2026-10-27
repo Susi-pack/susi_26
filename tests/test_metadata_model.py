@@ -165,6 +165,46 @@ def test_parent_output_folder_is_gone(tmp_project, tmp_path):
         )
 
 
+# %% Tags group a run's simulations by what the user cares about
+
+
+def test_tags_default_to_empty(tmp_project):
+    metadata = SimulationMetaData(project_dir=tmp_project, run_id="my_run")
+
+    assert metadata.tags == {}
+
+
+def test_tags_are_written_to_metadata_json(tmp_project):
+    # SUSI never reads tags; the analysis side finds them in metadata.json.
+    metadata = SimulationMetaData(
+        project_dir=tmp_project, run_id="my_run", tags={"region": "pirkanmaa"}
+    )
+    metadata.simulation_folder_path.mkdir()
+
+    metadata.dump_json_to_file()
+    written = json.loads(metadata.metadata_output_filepath.read_text())
+
+    assert written["tags"] == {"region": "pirkanmaa"}
+    # Adding `tags` is additive: old readers ignore the key, so no version bump.
+    assert written["metadata_schema_version"] == 1
+
+
+def test_empty_tag_key_raises(tmp_project):
+    with pytest.raises(ValidationError, match="empty"):
+        SimulationMetaData(project_dir=tmp_project, run_id="my_run", tags={"": "x"})
+
+
+def test_tag_passed_as_a_field_raises(tmp_project):
+    # Tags go in `tags`; unknown fields stay forbidden so a typo in a real
+    # field (`stand_Id=`) is not silently accepted.
+    with pytest.raises(ValidationError, match="region"):
+        SimulationMetaData(
+            project_dir=tmp_project,
+            run_id="my_run",
+            region="pirkanmaa",  # ty: ignore[unknown-argument]
+        )
+
+
 # %% A bad SUSI_PROJECTS_ROOT never breaks the import
 
 

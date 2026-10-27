@@ -8,7 +8,7 @@ icon: lucide/database
 
 Each simulation (one scenario of one stand) produces a **folder** containing:
 
-* `metadata.json` — the simulation's metadata (start/end timestamps, project, run, stand and scenario IDs, …)
+* `metadata.json` — the simulation's metadata (start/end timestamps, project, run, stand and scenario IDs, [tags](#grouping-a-runs-simulations-by-tag), …)
 * `params.json` — all SUSI input parameters (flattened into a single JSON)
 * A `.nc` NetCDF4 file with the output variables (path stored in `metadata.json` under `netcdf_output_filepath`)
 
@@ -196,6 +196,44 @@ print(arr.spatial_mean_at_last_timestep())
 
 * `src/analysis/streamlit/pages/project_summary.py` — batch-loads all stands/scenarios and builds an aggregated DataFrame; uses the manual approach for caching
 * `src/analysis/streamlit/pages/compare_scenarios_for_stand.py` — metadata-only: compares JSON parameters across scenarios without loading any NetCDFs
+
+---
+
+## Grouping a run's simulations by tag
+
+A simulation's [tags](single_vs_multiple.md#tags) are stored in its
+`metadata.json` under `"tags"`, e.g. `"tags": {"region": "pirkanmaa"}`. SUSI
+gives them no meaning, so grouping or filtering by them is up to you. This
+example groups every simulation folder of a run by its `region` tag, reading
+only the JSON files:
+
+```python
+from collections import defaultdict
+from pathlib import Path
+import susi.io.load_output_data as load_output
+
+run_dirpath = Path("projects/phase4/outputs/baseline")
+
+# 1. Visit every simulation folder of the run: each stand, each scenario
+simulation_folders_by_region: defaultdict[str | None, list[Path]] = defaultdict(list)
+for stand_folder in load_output.list_stand_folders(run_dirpath=run_dirpath):
+    for simulation_folder in load_output.list_subdirectories(stand_folder):
+        # 2. Read its metadata (fast, only JSONs)
+        params = load_output.read_params_from_jsons(
+            simulation_folderpath=simulation_folder
+        )
+        # 3. Group by the tag; None collects simulations without a region
+        region = params.metadata.get("tags", {}).get("region")
+        simulation_folders_by_region[region].append(simulation_folder)
+```
+
+Read tags with `metadata.get("tags", {})` rather than `metadata["tags"]`: outputs
+written before tags existed have no `tags` key at all. A simulation run without
+tags has `"tags": {}`.
+
+The DataFrames from `load_all_metadatas_from_stands` flatten tags into one
+column per key, e.g. `tags.region`. When no simulation of a stand has tags, as in
+older outputs, there is no such column.
 
 ---
 
