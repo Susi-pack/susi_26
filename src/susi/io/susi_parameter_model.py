@@ -791,6 +791,16 @@ class SiteParams(StrictFrozenModel):
     enable_peattop: bool
     enable_peatmiddle: bool
     enable_peatbottom: bool
+    infinite_peat_stock: bool = Field(
+        description=(
+            "Hold the peat storages P1, P2 and P3 at their initial values, treating "
+            "the peat deposit as an inexhaustible substrate, so decomposition rates "
+            "stop falling as the pools draw down. The default, False, is the default model "
+            "behaviour: peat has no inbound term in the ESOM matrix, so P1 supplies the "
+            "whole peat flux and runs down over a long simulation."
+        ),
+        default=False,
+    )
     rho_mor: float = Field(description="bulk density of mor layer, kg m-3")
     h_mor: NonNegativeFloat | Callable[..., float] = Field(
         description="depth of mor layer, m"

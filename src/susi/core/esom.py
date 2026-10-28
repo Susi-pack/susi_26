@@ -101,6 +101,12 @@ class Esom:
         self.enable_peatmiddle = spara.enable_peatmiddle
         self.enable_peatbottom = spara.enable_peatbottom
 
+        # Peat stocks held at their initial values: the deposit is treated as an
+        # inexhaustible substrate, so the decomposition rates stop declining as the
+        # pools draw down. False reproduces the published model, in which P1 is the
+        # only source of the peat flux and empties over a long run.
+        self.infinite_peat_stock = bool(spara.infinite_peat_stock)
+
         self.contpara_mor = {
             "Mass": 100.0,
             "N": 1.5,
@@ -604,6 +610,7 @@ class Esom:
         P3_ini = (
             self.M[:, :, 9] * 10000.0
         )  # bottom layer peat mass in the in the beginning of yr
+        self.peat_flux_yr = np.zeros((self.x, self.y, 3))   # kg m-2, this year
 
         L0L = np.zeros(
             (self.x, self.y)
@@ -672,16 +679,29 @@ class Esom:
                     L0W  # woody litter branches and coarse roots, kg m-2, locate end of August
                 )
 
+            M_peat_before = (self.M[:, :, 7:10].copy()
+                             if self.infinite_peat_stock else None)
+
             self.M = self.decompose(k1, k2, k3, k4, k5, k6, k7, k8, k9, self.M)
+
+            if self.infinite_peat_stock:
+                self.peat_flux_yr += M_peat_before - self.M[:, :, 7:10]
+                self.M[:, :, 7:10] = M_peat_before      # P1, P2, P3 all held
+
             self.mass[:, :, :, self.i] = self.M  # locate mass to output array
             self.i += 1  # day counter
         self.end_i = self.i
 
         self.out = self.M[:, :, 10] * 10000.0 - self.previous_mass
         self.previous_mass = self.M[:, :, 10] * 10000.0
-        self.P1_out = P1_ini - self.M[:, :, 7] * 10000.0
-        self.P2_out = P2_ini - self.M[:, :, 8] * 10000.0
-        self.P3_out = P3_ini - self.M[:, :, 9] * 10000.0
+        if self.infinite_peat_stock:
+            self.P1_out = self.peat_flux_yr[:, :, 0] * 10000.0
+            self.P2_out = self.peat_flux_yr[:, :, 1] * 10000.0
+            self.P3_out = self.peat_flux_yr[:, :, 2] * 10000.0
+        else:
+            self.P1_out = P1_ini - self.M[:, :, 7] * 10000.0
+            self.P2_out = P2_ini - self.M[:, :, 8] * 10000.0
+            self.P3_out = P3_ini - self.M[:, :, 9] * 10000.0
 
         self.out_root_lyr = self.out - self.P2_out - self.P3_out
         self.out_below_root_lyr = self.P2_out  # + self.P3_out
