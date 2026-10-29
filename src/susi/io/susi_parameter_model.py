@@ -106,8 +106,6 @@ class CanopyLayerName(str, Enum):
     under = "under"
 
 
-
-    
 class AllometryFileAndSpecies(StrictFrozenModel):
     file_path: Path
     species_id: PositiveInt
@@ -709,10 +707,10 @@ class StandParams(StrictFrozenModel):
 
     tau: float = Field(
         default=3.0,
-        gt = 1.0,
-        description="time delay in changing nutrient status expressed in years"
-        )
-    
+        gt=1.0,
+        description="time delay in changing nutrient status expressed in years",
+    )
+
     @field_validator("initial_canopylayer_age_years")
     @classmethod
     def every_layer_has_an_initial_age(

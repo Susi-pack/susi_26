@@ -410,7 +410,7 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above, NPP_share):
         Nconc, Pconc, Kconc nutrient concentration in stand
         hdom dominant height of the stand (used in computation of respiration)
         wt water table [m] negative down, as pandas dataframe shape (days, nodes)
-        NPP_share divides the calculated GPP into NPP and respiration. 
+        NPP_share divides the calculated GPP into NPP and respiration.
         The higher the trees, the smaller NPP share
     OUT:
         Net primary production NPP in kg/ha/yr
@@ -501,7 +501,9 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above, NPP_share):
 
         """Respi"""
         NPP = Pk * NPP_share[column] * 2.0
-        NPP_pot = Pk_pot * NPP_share[column] * 2.0  # Change from gC m-2 to g organic matter
+        NPP_pot = (
+            Pk_pot * NPP_share[column] * 2.0
+        )  # Change from gC m-2 to g organic matter
         npp_arr[column] = sum(NPP)
         npp_arr_pot[column] = sum(NPP_pot)
 

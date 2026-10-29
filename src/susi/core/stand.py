@@ -631,24 +631,17 @@ class Stand:
             + self.under.Dg * self.under.stems
         ) / (self.dominant.stems + self.subdominant.stems + self.under.stems)
         k = 4.35
-        
-        #In sapling stands Reineke restricts too much tree growth. Here nutrient 
-        #supply becomes controlled by leaf area in young stands
+
+        # In sapling stands Reineke restricts too much tree growth. Here nutrient
+        # supply becomes controlled by leaf area in young stands
         relative_density = self.stems / ((diameter / 2.54) ** (-1.605) * 10**k)
-        
-        LAI_factor = np.clip(
-            0.4 + 0.6*(1.0-np.exp(-5.0 * self.leafarea)),
-            0.4,
-            0.1)
+
+        LAI_factor = np.clip(0.4 + 0.6 * (1.0 - np.exp(-5.0 * self.leafarea)), 0.4, 0.1)
 
         # Smooth transition from D = 6 cm to D=12 cm.
-        w = np.clip((diameter -6.0 )/ (12.0-6.0), 0.0, 1.0)
-        
-        area_modifyer = np.clip(
-            (1.0-w)*LAI_factor + w*relative_density,
-            0.1,
-            1.0
-            )
+        w = np.clip((diameter - 6.0) / (12.0 - 6.0), 0.0, 1.0)
+
+        area_modifyer = np.clip((1.0 - w) * LAI_factor + w * relative_density, 0.1, 1.0)
         # denominator ie. demand corrected 050226
         nstat[0, :] = (N_supply * area_modifyer) / (
             self.n_demand + self.n_leaf_demand + groundvegetation.nup
@@ -662,7 +655,9 @@ class Stand:
         minnstat = np.min(nstat, axis=0)
 
         for c in range(self.n_cols):
-            self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / self.tau
+            self.nut_stat[c] = (
+                self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / self.tau
+            )
         self.nut_stat = np.clip(
             self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much
