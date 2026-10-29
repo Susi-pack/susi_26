@@ -58,6 +58,7 @@ class Stand:
         allometry_params,
         photopara,
         growth_mode,
+        tau,
     ):
         """
         ALL VARIABLES IN STAND OBJECT ARE IN ha AND kg -BASIS
@@ -87,6 +88,7 @@ class Stand:
         self.nut_stat = np.ones(
             n_cols
         )  # *0.5                                   # nutrient status, make this an argument
+        self.tau = tau
 
         # Build each layer's allometry zones once: fit an Allometry instance
         # per (layer, zone id) pair present in that layer's pointers, and
@@ -503,7 +505,7 @@ class Stand:
             + self.under.Dg * self.under.stems
         ) / (self.dominant.stems + self.subdominant.stems + self.under.stems)
 
-    def assimilate(self, photopara, forc, wt, afp):
+    def assimilate(self, photopara, forc, wt, afp, sfc, temperature_sum):
         """
         Runs the photosyntheis function for all canopy layers
         Calls canopy layer instances
@@ -517,7 +519,10 @@ class Stand:
             DESCRIPTION. simulated water tables, shape: days, ncols
         afp : TYPE pandas dataframe
             DESCRIPTION. air-filled porosity of rooting zone, shape days, ncols
-
+        sfc : TYPE np.ndarray, integer
+            DESCRIPTION : site ferility class for each calculation column (value 2,3,4 or 5)
+        temperature_sum : TYPE float
+            DESCRIPTION : mean temperature sum of the simulation period in degree days
         Returns
         -------
         None.
@@ -564,6 +569,8 @@ class Stand:
             self.previous_nut_stat,
             self.nut_stat,
             lai_above[0, :],
+            sfc,
+            temperature_sum,
         )  # npp, leaf dynamics and updating the canopylayers
         self.subdominant.assimilate(
             photopara,
@@ -573,6 +580,8 @@ class Stand:
             self.previous_nut_stat,
             self.nut_stat,
             lai_above[1, :],
+            sfc,
+            temperature_sum,
         )  # npp, leaf dynamics and updating the canopylayers
         self.under.assimilate(
             photopara,
@@ -582,6 +591,8 @@ class Stand:
             self.previous_nut_stat,
             self.nut_stat,
             lai_above[2, :],
+            sfc,
+            temperature_sum,
         )  # npp, leaf dynamics and updating the canopylayers
 
         # updating call from the main program
@@ -620,10 +631,24 @@ class Stand:
             + self.under.Dg * self.under.stems
         ) / (self.dominant.stems + self.subdominant.stems + self.under.stems)
         k = 4.35
-        area_modifyer = np.clip(
-            0.01, self.stems / ((diameter / 2.54) ** (-1.605) * 10**k), 1.0
-        )
+        
+        #In sapling stands Reineke restricts too much tree growth. Here nutrient 
+        #supply becomes controlled by leaf area in young stands
+        relative_density = self.stems / ((diameter / 2.54) ** (-1.605) * 10**k)
+        
+        LAI_factor = np.clip(
+            0.4 + 0.6*(1.0-np.exp(-5.0 * self.leafarea)),
+            0.4,
+            0.1)
 
+        # Smooth transition from D = 6 cm to D=12 cm.
+        w = np.clip((diameter -6.0 )/ (12.0-6.0), 0.0, 1.0)
+        
+        area_modifyer = np.clip(
+            (1.0-w)*LAI_factor + w*relative_density,
+            0.1,
+            1.0
+            )
         # denominator ie. demand corrected 050226
         nstat[0, :] = (N_supply * area_modifyer) / (
             self.n_demand + self.n_leaf_demand + groundvegetation.nup
@@ -636,9 +661,8 @@ class Stand:
         )
         minnstat = np.min(nstat, axis=0)
 
-        tau = 3.0
         for c in range(self.n_cols):
-            self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / tau
+            self.nut_stat[c] = self.nut_stat[c] + (minnstat[c] - self.nut_stat[c]) / self.tau
         self.nut_stat = np.clip(
             self.nut_stat, 0.5, 2.0
         )  # Too high nutstat increases transpiration too much

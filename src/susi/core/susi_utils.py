@@ -393,7 +393,7 @@ def rew_drylimit(dwt):
     return frew(dwt)
 
 
-def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
+def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above, NPP_share):
     """
     Computes photosynthesis and respiration of the stand in daily time step
     Mäkelä et al. 2008. Empirical model of stand GPP LUE approach. Global Change Biology 14: 92-108
@@ -410,6 +410,8 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
         Nconc, Pconc, Kconc nutrient concentration in stand
         hdom dominant height of the stand (used in computation of respiration)
         wt water table [m] negative down, as pandas dataframe shape (days, nodes)
+        NPP_share divides the calculated GPP into NPP and respiration. 
+        The higher the trees, the smaller NPP share
     OUT:
         Net primary production NPP in kg/ha/yr
         Xa
@@ -498,8 +500,8 @@ def assimilation_yr(photopara, dfforc, wt, afp, LAI, LAI_above):
         )  # growth that is not restricted by edaphic factors gC m-2 day-1
 
         """Respi"""
-        NPP = Pk * 0.5 * 2.0
-        NPP_pot = Pk_pot * 0.5 * 2.0  # Change from gC m-2 to g organic matter
+        NPP = Pk * NPP_share[column] * 2.0
+        NPP_pot = Pk_pot * NPP_share[column] * 2.0  # Change from gC m-2 to g organic matter
         npp_arr[column] = sum(NPP)
         npp_arr_pot[column] = sum(NPP_pot)
 

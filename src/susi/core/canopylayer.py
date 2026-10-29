@@ -531,7 +531,8 @@ class Canopylayer:
                 target[cols] = curve(bm[cols])
 
     def assimilate(
-        self, photopara, forc, wt, afp, previous_nut_stat, nut_stat, lai_above
+        self, photopara, forc, wt, afp, previous_nut_stat, nut_stat, lai_above, 
+        sfc, temperature_sum
     ):
         """
         Calls photosynthesis model (Mäkelä et al. 2008, standwise model) and leaf dynamics model that
@@ -552,6 +553,8 @@ class Canopylayer:
             DESCRIPTION. nutrient staus along the strip in the current year
         lai_above: TYPE: array
             DESCRIPTION, leaf area above the canopy layer incoming unit: m2 m-2
+        sfc : TYPE ndarray of inegers, 
+            DESCRIPTION : assigns site fertility class for each calmulation column, values 2,3,4,5
         Returns
         -------
         None.
@@ -560,9 +563,23 @@ class Canopylayer:
 
         """ Change unit of all variables to /tree """
         """ assimilation_yr function operates in /ha basis,"""
+        ref_temperature_sum = 1300
+        tc = temperature_sum / ref_temperature_sum
+
+        Hmax = {2: 33.0*tc, 3: 30.0*tc, 4: 27.0*tc, 5: 24.0*tc}     # maximum height of trees in area with temperature sum of 1300
+        
+        get_Hmax = np.vectorize(lambda x: Hmax.get(x, np.nan))
+        Hmax_array = get_Hmax(sfc)
+
+        hdom_ratio = np.minimum(self.hdom / Hmax_array, 1.0)
+        
+        NPP_share = (0.6 - 0.23 * hdom_ratio - 0.17 * hdom_ratio**2)         # sovittaa NPP-sharen välille 0.2-0.6 Mäkelä & Valentine (2001) paperia mukaillen
+        
         lai_above = lai_above * 2  # lai_above is updated in stand object
+        
         self.NPP, self.NPP_pot = assimilation_yr(
-            photopara, forc, wt, afp, self.leafarea * 2 * self.stems, lai_above
+            photopara, forc, wt, afp, self.leafarea * 2 * self.stems, 
+            lai_above, NPP_share
         )  # double sided LAI required
 
         # 1. Define the mask once

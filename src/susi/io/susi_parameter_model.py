@@ -106,6 +106,8 @@ class CanopyLayerName(str, Enum):
     under = "under"
 
 
+
+    
 class AllometryFileAndSpecies(StrictFrozenModel):
     file_path: Path
     species_id: PositiveInt
@@ -705,6 +707,12 @@ class StandParams(StrictFrozenModel):
         description="Age of the different canopy layers at the beginning of the simulation. This is set to all nodes in the strip. Example: {'dominant': 20, 'subdominant': 0, 'under': 20 }."
     )
 
+    tau: float = Field(
+        default=3.0,
+        gt = 1.0,
+        description="time delay in changing nutrient status expressed in years"
+        )
+    
     @field_validator("initial_canopylayer_age_years")
     @classmethod
     def every_layer_has_an_initial_age(
