@@ -576,7 +576,7 @@ def get_temp_sum(forc):
     """
     base = 5.0
     dd = forc["T"] - base
-    dd[dd < base] = 0.0
+    dd[dd < 0.0] = 0.0
     dds = dd.sum(axis=0)  # cumulative temperature sum degree days
     yrs = np.shape(forc)[0] / 365.25
     ts = dds / yrs
