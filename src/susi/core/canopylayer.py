@@ -563,6 +563,8 @@ class Canopylayer:
             DESCRIPTION, leaf area above the canopy layer incoming unit: m2 m-2
         sfc : TYPE ndarray of inegers,
             DESCRIPTION : assigns site fertility class for each calmulation column, values 2,3,4,5
+        temperature_sum : TYPE float
+            DESCRIPTION : mean temperature sum of the simulation period in degree days
         Returns
         -------
         None.

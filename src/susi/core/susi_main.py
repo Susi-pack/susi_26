@@ -109,7 +109,7 @@ class Susi:
             allometry_params=self.parameters.stand_params.canopy_layer_allometry,
             photopara=self.parameters.photo_parameters,
             growth_mode=self.parameters.simulation_config.growth_mode,
-            tau=self.parameters.stand_params.tau,
+            tau=self.parameters.tree.tau,
         )  # create stand class
         stand.update()
 
