@@ -63,6 +63,7 @@ nav = [
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
     { "How to run on Roihu (CSC)" = "how_to_run_susi_on_roihu.md" },
+    { "How to run notebooks on Roihu (CSC)" = "how_to_run_notebooks_on_roihu.md" },
     { "Tutorial: full CSC run" = "tutorial_csc.md" },
     { "Maintainers" = [
         "internal/how_to_release_a_new_version.md",
