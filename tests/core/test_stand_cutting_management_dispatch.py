@@ -67,6 +67,7 @@ def _make_stand() -> Stand:
             location=LocationsForPhotoParams("All_data")
         ),
         growth_mode=GrowthMode.dynamic,
+        tau=3,
     )
     stand.update()
     return stand

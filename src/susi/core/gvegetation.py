@@ -562,21 +562,24 @@ class Gvegetation:
         )
 
         # ------------Change clear-cut areas: reduce to 1/3 of modelled ---------------------------------------------------
-        to_cc = 0.33
-        ix_cc = np.where(age < 5.0)
-        n_gv[ix_cc] = n_gv[ix_cc] * to_cc
-        p_gv[ix_cc] = p_gv[ix_cc] * to_cc
-        k_gv[ix_cc] = k_gv[ix_cc] * to_cc
+        cc_impact_age = 4.0
+        ix_cc = np.where(age < cc_impact_age)
 
-        n_litter_nw[ix_cc] = n_litter_nw[ix_cc] * to_cc
-        p_litter_nw[ix_cc] = p_litter_nw[ix_cc] * to_cc
-        k_litter_nw[ix_cc] = k_litter_nw[ix_cc] * to_cc
+        to_cc = np.clip(age / cc_impact_age, 0.33, 1.0)
 
-        n_litter_w[ix_cc] = n_litter_w[ix_cc] * to_cc
-        p_litter_w[ix_cc] = p_litter_w[ix_cc] * to_cc
-        k_litter_w[ix_cc] = k_litter_w[ix_cc] * to_cc
+        n_gv[ix_cc] = n_gv[ix_cc] * to_cc[ix_cc]
+        p_gv[ix_cc] = p_gv[ix_cc] * to_cc[ix_cc]
+        k_gv[ix_cc] = k_gv[ix_cc] * to_cc[ix_cc]
 
-        gv_tot[ix_cc] = gv_tot[ix_cc] * to_cc
+        n_litter_nw[ix_cc] = n_litter_nw[ix_cc] * to_cc[ix_cc]
+        p_litter_nw[ix_cc] = p_litter_nw[ix_cc] * to_cc[ix_cc]
+        k_litter_nw[ix_cc] = k_litter_nw[ix_cc] * to_cc[ix_cc]
+
+        n_litter_w[ix_cc] = n_litter_w[ix_cc] * to_cc[ix_cc]
+        p_litter_w[ix_cc] = p_litter_w[ix_cc] * to_cc[ix_cc]
+        k_litter_w[ix_cc] = k_litter_w[ix_cc] * to_cc[ix_cc]
+
+        gv_tot[ix_cc] = gv_tot[ix_cc] * to_cc[ix_cc]
 
         litterfall_gv = ds_litterfall + h_litterfall + s_litterfall
 

@@ -69,6 +69,7 @@ def _make_multizone_stand(age: float = 70.0) -> Stand:
             location=LocationsForPhotoParams("All_data")
         ),
         growth_mode=GrowthMode.dynamic,
+        tau=3,
     )
     stand.update()
     return stand

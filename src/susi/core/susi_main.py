@@ -109,6 +109,7 @@ class Susi:
             allometry_params=self.parameters.stand_params.canopy_layer_allometry,
             photopara=self.parameters.photo_parameters,
             growth_mode=self.parameters.simulation_config.growth_mode,
+            tau=self.parameters.tree.tau,
         )  # create stand class
         stand.update()
 
@@ -468,6 +469,8 @@ class Susi:
                     self.weather_forcing.loc[str(yr)],
                     dfwt.loc[str(yr)],
                     dfafp.loc[str(yr)],
+                    self.parameters.sfc,
+                    temperature_sun_days_degree,
                 )
                 stand.update()
 

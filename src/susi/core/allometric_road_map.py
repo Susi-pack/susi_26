@@ -395,21 +395,9 @@ class Growth_and_Yield_Table:
         BAL_S_B = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
             BAL_Total[i] = np.sum(G_class[D > D[i]])
-            BAL_Pine[i] = np.sum(
-                G_class[
-                    (D > D[i]) & (sp == 1)
-                ]
-            )
-            BAL_Spruce[i] = np.sum(
-                G_class[
-                    (D > D[i]) & (sp == 2)
-                ]
-            )
-            BAL_S_B[i] = np.sum(
-                G_class[
-                    (D > D[i]) & (sp != 1)
-                ]
-            )
+            BAL_Pine[i] = np.sum(G_class[(D > D[i]) & (sp == 1)])
+            BAL_Spruce[i] = np.sum(G_class[(D > D[i]) & (sp == 2)])
+            BAL_S_B[i] = np.sum(G_class[(D > D[i]) & (sp != 1)])
 
         return self.get_survival(
             sp,
@@ -529,16 +517,8 @@ class Growth_and_Yield_Table:
         BAL_S_B = np.zeros(len(ReferenceTrees))
         for i in range(len(ReferenceTrees)):
             BAL_Total[i] = np.sum(G_class[D > D[i]])
-            BAL_Spruce[i] = np.sum(
-                G_class[
-                    (D > D[i]) & (sp == 2)
-                ]
-            )
-            BAL_S_B[i] = np.sum(
-                G_class[
-                    (D > D[i]) & (sp != 1)
-                ]
-            )
+            BAL_Spruce[i] = np.sum(G_class[(D > D[i]) & (sp == 2)])
+            BAL_S_B[i] = np.sum(G_class[(D > D[i]) & (sp != 1)])
 
         return self.get_diameter_increment(
             D,
