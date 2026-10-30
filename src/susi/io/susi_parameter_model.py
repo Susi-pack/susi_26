@@ -695,9 +695,23 @@ class PeatTemperatureParams(StrictFrozenModel):
     )
 
 
+class TreeParams(StrictFrozenModel):
+    """
+    Tree growth and nutrition parameters.
+    """
+
+    tau: float = Field(
+        default=3.0,
+        ge=1.0,
+        description="Delay in the change of nutrient status (years). Each year, nutrient status closes 1/tau of its gap to the current nutrient supply/demand ratio, so tau=1 means no delay.",
+    )
+
+
 class StandParams(StrictFrozenModel):
-    site_fertility_class: PositiveInt = Field(
-        description="Site fertility class. This is set to all nodes in the strip."
+    site_fertility_class: int = Field(
+        ge=2,
+        le=5,
+        description="Site fertility class, from 2 to 5. This is set to all nodes in the strip.",
     )
 
     canopy_layer_allometry: CanopyLayerAllometry
@@ -894,6 +908,7 @@ class SusiParams(StrictFrozenModel):
     output_parameters: OutputParams
     photo_parameters: PhotoParameters
     site_parameters: SiteParams
+    tree: TreeParams = TreeParams()
 
     @property
     def sfc(self) -> SkipValidation[np.ndarray]:

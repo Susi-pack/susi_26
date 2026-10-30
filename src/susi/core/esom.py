@@ -19,7 +19,7 @@ class Esom:
         #             shape_area shape of the computation domain, tuple (x, y)
         #             ash litter ash content %
         #             litter N content %
-        #             sfc site fertility class, array of integers between 1 and 6, shape as shape_area
+        #             sfc site fertility class, array of integers between 2 and 5, shape as shape_area
         #             days length of the simuilation in days to be used in the output array
         #             substance defines what is this instance for:
         #                                          can be 'Mass'              - organic matter decomposition

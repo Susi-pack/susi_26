@@ -21,6 +21,7 @@ from susi.io.susi_parameter_model import (
     StandParams,
     SusiParams,
     Thinning,
+    TreeParams,
     WeatherParams,
     get_photo_parameters_by_location,
     h_mor_from_drainage_and_mass_mor_Pitkanen,
@@ -352,6 +353,47 @@ def test_stand_params_requires_an_initial_age_for_every_layer(valid_susi_params)
                 CanopyLayerName.subdominant: 0.0,
             },
         )
+
+
+@pytest.mark.parametrize("site_fertility_class", [2, 3, 4, 5])
+def test_stand_params_accepts_the_supported_fertility_classes(
+    valid_susi_params, site_fertility_class
+):
+    stand_params = StandParams(
+        site_fertility_class=site_fertility_class,
+        canopy_layer_allometry=valid_susi_params.stand_params.canopy_layer_allometry,
+        initial_canopylayer_age_years=valid_susi_params.stand_params.initial_canopylayer_age_years,
+    )
+
+    assert stand_params.site_fertility_class == site_fertility_class
+
+
+@pytest.mark.parametrize("site_fertility_class", [0, 1, 6])
+def test_stand_params_rejects_unsupported_fertility_classes(
+    valid_susi_params, site_fertility_class
+):
+    # Esom's peat tables only cover classes 2 to 5, so anything else must fail
+    # here rather than as a KeyError deep in the run.
+    with pytest.raises(ValueError, match="site_fertility_class"):
+        StandParams(
+            site_fertility_class=site_fertility_class,
+            canopy_layer_allometry=valid_susi_params.stand_params.canopy_layer_allometry,
+            initial_canopylayer_age_years=valid_susi_params.stand_params.initial_canopylayer_age_years,
+        )
+
+
+def test_tree_params_keep_their_defaults_when_not_given(valid_susi_params):
+    assert valid_susi_params.tree.tau == 3.0
+
+
+def test_tau_of_one_means_no_delay_and_is_allowed():
+    assert TreeParams(tau=1.0).tau == 1.0
+
+
+def test_tau_below_one_is_rejected():
+    # Below 1, nutrient status would overshoot its target every year.
+    with pytest.raises(ValueError, match="tau"):
+        TreeParams(tau=0.5)
 
 
 def test_initial_dominant_age_below_minimum(test_data_path):
