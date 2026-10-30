@@ -636,7 +636,7 @@ class Stand:
         # supply becomes controlled by leaf area in young stands
         relative_density = self.stems / ((diameter / 2.54) ** (-1.605) * 10**k)
 
-        LAI_factor = np.clip(0.4 + 0.6 * (1.0 - np.exp(-5.0 * self.leafarea)), 0.4, 0.1)
+        LAI_factor = np.clip(0.4 + 0.6 * (1.0 - np.exp(-5.0 * self.leafarea)), 0.4, 1.0)
 
         # Smooth transition from D = 6 cm to D=12 cm.
         w = np.clip((diameter - 6.0) / (12.0 - 6.0), 0.0, 1.0)
