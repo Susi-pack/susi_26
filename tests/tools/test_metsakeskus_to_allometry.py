@@ -37,43 +37,77 @@ from tools.shared_allometry_tool_utils import (
 # extra="forbid" all come from Pydantic itself, the same as
 # new_growth_allometry.py's NewGrowthConfig.
 
+# Every required field, with a valid value.
+_REQUIRED_FIELDS = {
+    "target_year": 2018,
+    "altitude": 150.0,
+    "ddy": 1200.0,
+    "mean_diameter_range_filter": [8, 21],
+}
+# The same, as TOML lines.
+_REQUIRED_TOML = (
+    "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+    "mean_diameter_range_filter = [8, 21]\n"
+)
 
-def test_extraction_config_requires_target_year():
-    with pytest.raises(ValueError, match="target_year"):
-        m.ExtractionConfig.model_validate({"altitude": 150.0, "ddy": 1200.0})
+
+def _without(field: str) -> dict:
+    return {key: value for key, value in _REQUIRED_FIELDS.items() if key != field}
 
 
-def test_extraction_config_requires_altitude():
-    with pytest.raises(ValueError, match="altitude"):
-        m.ExtractionConfig.model_validate({"target_year": 2018, "ddy": 1200.0})
-
-
-def test_extraction_config_requires_ddy():
-    with pytest.raises(ValueError, match="ddy"):
-        m.ExtractionConfig.model_validate({"target_year": 2018, "altitude": 150.0})
+@pytest.mark.parametrize("field", list(_REQUIRED_FIELDS))
+def test_extraction_config_requires_each_required_field(field):
+    with pytest.raises(ValueError, match=field):
+        m.ExtractionConfig.model_validate(_without(field))
 
 
 def test_extraction_config_reports_all_missing_fields_together():
     with pytest.raises(ValueError) as exc_info:
         m.ExtractionConfig.model_validate({})
     message = str(exc_info.value)
-    assert "target_year" in message
-    assert "altitude" in message
-    assert "ddy" in message
+    for field in _REQUIRED_FIELDS:
+        assert field in message
 
 
 def test_extraction_config_rejects_unknown_field():
     with pytest.raises(ValueError, match="typo_field"):
+        m.ExtractionConfig.model_validate({**_REQUIRED_FIELDS, "typo_field": 1})
+
+
+def test_extraction_config_rejects_the_old_developmentclass_filter():
+    # The old-format tool's key: a config copied from it must not run with
+    # the key silently ignored.
+    with pytest.raises(ValueError, match="developmentclass_filter"):
         m.ExtractionConfig.model_validate(
-            {"target_year": 2018, "altitude": 150.0, "ddy": 1200.0, "typo_field": 1}
+            {**_REQUIRED_FIELDS, "developmentclass_filter": [2, 3]}
+        )
+
+
+def test_extraction_config_reads_the_mean_diameter_range():
+    config = m.ExtractionConfig.model_validate(_REQUIRED_FIELDS)
+    assert config.mean_diameter_range_filter == (8.0, 21.0)
+
+
+@pytest.mark.parametrize(
+    "bad_range",
+    [
+        [21, 8],  # reversed
+        [8, 8],  # empty
+        [-1, 21],  # negative
+        [8],  # one bound only
+        [],  # the template's placeholder
+        [1, 8, 21],  # three bounds
+    ],
+)
+def test_extraction_config_rejects_a_mean_diameter_range_that_is_not_one(bad_range):
+    with pytest.raises(ValueError, match="mean_diameter_range_filter"):
+        m.ExtractionConfig.model_validate(
+            {**_REQUIRED_FIELDS, "mean_diameter_range_filter": bad_range}
         )
 
 
 def test_extraction_config_applies_defaults():
-    config = m.ExtractionConfig.model_validate(
-        {"target_year": 2018, "altitude": 150.0, "ddy": 1200.0}
-    )
-    assert config.developmentclass_filter == (1, 2, 3)
+    config = m.ExtractionConfig.model_validate(_REQUIRED_FIELDS)
     assert config.fertilityclass_filter == (2, 3, 4, 5)
     assert config.n_trees == 20
     assert config.start_year == 5
@@ -83,22 +117,14 @@ def test_extraction_config_applies_defaults():
 
 def test_extraction_config_overrides_defaults():
     config = m.ExtractionConfig.model_validate(
-        {
-            "target_year": 2018,
-            "altitude": 150.0,
-            "ddy": 1200.0,
-            "developmentclass_filter": [2, 3],
-            "n_trees": 5,
-        }
+        {**_REQUIRED_FIELDS, "fertilityclass_filter": [2, 3], "n_trees": 5}
     )
-    assert config.developmentclass_filter == (2, 3)
+    assert config.fertilityclass_filter == (2, 3)
     assert config.n_trees == 5
 
 
 def test_extraction_config_dense_young_stand_scaling_is_off_by_default():
-    config = m.ExtractionConfig.model_validate(
-        {"target_year": 2018, "altitude": 150.0, "ddy": 1200.0}
-    )
+    config = m.ExtractionConfig.model_validate(_REQUIRED_FIELDS)
     assert config.dense_young_stand_scaling == (
         dense_young_stand_scaling.DenseYoungStandScalingConfig()
     )
@@ -107,8 +133,10 @@ def test_extraction_config_dense_young_stand_scaling_is_off_by_default():
 
 def test_load_extraction_config_reads_the_dense_young_stand_scaling_table(tmp_path):
     config_path = tmp_path / "config.toml"
+    # A range starting below max_mean_diameter (8 cm), so the option can apply.
     config_path.write_text(
         "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "mean_diameter_range_filter = [0, 21]\n"
         "[dense_young_stand_scaling]\n"
         "enabled = true\n"
         "target_stem_count_spruce = 1500\n"
@@ -120,29 +148,62 @@ def test_load_extraction_config_reads_the_dense_young_stand_scaling_table(tmp_pa
     assert config.dense_young_stand_scaling.stem_count_threshold_spruce == 2200
 
 
-def test_extraction_config_rejects_an_unknown_dense_young_stand_scaling_key():
-    with pytest.raises(ValueError, match="typo_field"):
+@pytest.mark.parametrize(
+    ("minimum", "max_mean_diameter"), [(8, 8.0), (10, 8.0), (12, 12.0)]
+)
+def test_extraction_config_rejects_scaling_that_the_mean_diameter_range_leaves_nothing_to_scale(
+    minimum, max_mean_diameter
+):
+    # Scaling acts below max_mean_diameter; the range filter, which runs
+    # first, has already dropped every stand below its minimum.
+    with pytest.raises(ValueError, match="Lower the minimum, or turn the scaling off"):
         m.ExtractionConfig.model_validate(
             {
-                "target_year": 2018,
-                "altitude": 150.0,
-                "ddy": 1200.0,
-                "dense_young_stand_scaling": {"typo_field": 1},
+                **_REQUIRED_FIELDS,
+                "mean_diameter_range_filter": [minimum, 21],
+                "dense_young_stand_scaling": {
+                    "enabled": True,
+                    "max_mean_diameter": max_mean_diameter,
+                },
             }
         )
 
 
+def test_extraction_config_accepts_scaling_when_the_range_starts_below_max_mean_diameter():
+    config = m.ExtractionConfig.model_validate(
+        {
+            **_REQUIRED_FIELDS,
+            "mean_diameter_range_filter": [7.9, 21],
+            "dense_young_stand_scaling": {"enabled": True},
+        }
+    )
+    assert config.dense_young_stand_scaling.enabled is True
+
+
+def test_extraction_config_accepts_a_range_above_max_mean_diameter_with_scaling_off():
+    # Off, the option has nothing to contradict: the [8, 21] example is fine.
+    config = m.ExtractionConfig.model_validate(
+        {**_REQUIRED_FIELDS, "dense_young_stand_scaling": {"enabled": False}}
+    )
+    assert config.mean_diameter_range_filter == (8, 21)
+
+
+def test_extraction_config_rejects_an_unknown_dense_young_stand_scaling_key():
+    with pytest.raises(ValueError, match="typo_field"):
+        m.ExtractionConfig.model_validate(
+            {**_REQUIRED_FIELDS, "dense_young_stand_scaling": {"typo_field": 1}}
+        )
+
+
 def test_extraction_config_is_frozen():
-    config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0)
+    config = m.ExtractionConfig.model_validate(_REQUIRED_FIELDS)
     with pytest.raises(Exception):  # noqa: B017 -- pydantic's frozen-model error
         setattr(config, "target_year", 2019)  # noqa: B010 -- setattr, not `.` access, to keep this a runtime-only check
 
 
 def test_load_extraction_config_reads_toml(tmp_path):
     config_path = tmp_path / "config.toml"
-    config_path.write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nn_trees = 15\n"
-    )
+    config_path.write_text(_REQUIRED_TOML + "n_trees = 15\n")
     config = m.load_extraction_config(config_path)
     assert config.target_year == 2018
     assert config.n_trees == 15
@@ -154,10 +215,18 @@ def test_load_extraction_config_reads_toml(tmp_path):
 # ExtractionConfig's own field defaults -- see that file's header comment.
 
 
+def _default_config_with_a_range() -> m.ExtractionConfig:
+    """The shipped template, with its mean_diameter_range_filter placeholder
+    (which on its own fails validation, on purpose) filled in."""
+    raw = tomllib.loads(DEFAULT_CONFIG_PATH.read_text())
+    return m.ExtractionConfig.model_validate(
+        {**raw, "mean_diameter_range_filter": [8, 21]}
+    )
+
+
 def test_default_config_toml_optional_fields_match_model_defaults():
-    config = m.load_extraction_config(DEFAULT_CONFIG_PATH)
-    defaults = m.ExtractionConfig(target_year=0, altitude=0.0, ddy=0.0)
-    assert config.developmentclass_filter == defaults.developmentclass_filter
+    config = _default_config_with_a_range()
+    defaults = m.ExtractionConfig.model_validate(_REQUIRED_FIELDS)
     assert config.fertilityclass_filter == defaults.fertilityclass_filter
     assert config.n_trees == defaults.n_trees
     assert config.start_year == defaults.start_year
@@ -184,13 +253,21 @@ def test_default_config_toml_required_fields_are_deliberately_out_of_range():
     [ALTITUDE_MIN, ALTITUDE_MAX] / [DDY_MIN, DDY_MAX] -- that's what makes an
     untouched copy fail loudly instead of running silently (see the file's
     header comment and parse_CLI_arguments' out-of-range handling)."""
-    config = m.load_extraction_config(DEFAULT_CONFIG_PATH)
+    config = _default_config_with_a_range()
     assert not (
         input_validation.ALTITUDE_MIN
         <= config.altitude
         <= input_validation.ALTITUDE_MAX
     )
     assert not (input_validation.DDY_MIN <= config.ddy <= input_validation.DDY_MAX)
+
+
+def test_default_config_toml_has_no_mean_diameter_range_until_one_is_given():
+    # No default range on purpose: what counts as too young or too old a
+    # stand depends on the region. An untouched copy of the template must
+    # not load.
+    with pytest.raises(ValueError, match="mean_diameter_range_filter"):
+        m.load_extraction_config(DEFAULT_CONFIG_PATH)
 
 
 # %% out_of_range_message reuse (from the shared package)
@@ -206,28 +283,24 @@ def test_out_of_range_message_reused_from_shared_package():
 # %% filter_stands_by_site_attributes
 
 
-def _stand_row(standid, maingroup=1, subgroup=2, drainagestate=7, fertilityclass=3):
+def _growthplacedata_row(
+    standid, maingroup="1", subgroup="2", drainagestate="7", fertilityclass="3"
+):
+    # Codes as text, as the gpkg holds them.
     return {
         "standid": standid,
         "maingroup": maingroup,
         "subgroup": subgroup,
         "drainagestate": drainagestate,
         "fertilityclass": fertilityclass,
-        "developmentclass": 2,
-        "soiltype": 10,
-        "area": 1.5,
-        "geometry": Point(0, 0).buffer(1),
+        "soiltype": "10",
     }
 
 
-def _make_stand_gdf(rows):
-    return gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:3067")
-
-
 def test_filter_stands_by_site_attributes_keeps_matching_stand():
-    stand = _make_stand_gdf([_stand_row(1)])
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1)])
     result = m.filter_stands_by_site_attributes(
-        stand, fertilityclass_filter=(2, 3, 4, 5)
+        growthplacedata, fertilityclass_filter=(2, 3, 4, 5)
     )
     assert list(result["standid"]) == [1]
 
@@ -235,40 +308,65 @@ def test_filter_stands_by_site_attributes_keeps_matching_stand():
 @pytest.mark.parametrize(
     "override",
     [
-        {"maingroup": 2},  # not forest land
-        {"subgroup": 1},  # not peatland (Kangas, mineral soil)
-        {"drainagestate": 6},  # undrained
-        {"fertilityclass": 1},  # outside configured range
+        {"maingroup": "2"},  # not forest land
+        {"subgroup": "1"},  # not peatland (Kangas, mineral soil)
+        {"drainagestate": "6"},  # undrained
+        {"drainagestate": None},  # not recorded
+        {"fertilityclass": "1"},  # outside configured range
     ],
 )
 def test_filter_stands_by_site_attributes_excludes_non_matching_stand(override):
-    stand = _make_stand_gdf([_stand_row(1, **override)])
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1, **override)])
     result = m.filter_stands_by_site_attributes(
-        stand, fertilityclass_filter=(2, 3, 4, 5)
+        growthplacedata, fertilityclass_filter=(2, 3, 4, 5)
     )
     assert len(result) == 0
 
 
 def test_filter_stands_by_site_attributes_respects_configured_fertilityclass_range():
-    stand = _make_stand_gdf([_stand_row(1, fertilityclass=6)])
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1, fertilityclass="6")])
     result = m.filter_stands_by_site_attributes(
-        stand, fertilityclass_filter=(2, 3, 4, 5, 6)
+        growthplacedata, fertilityclass_filter=(2, 3, 4, 5, 6)
     )
     assert list(result["standid"]) == [1]
 
 
-# %% select_target_year_snapshot
+def test_filter_stands_by_site_attributes_returns_the_codes_as_numbers():
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1)])
+    result = m.filter_stands_by_site_attributes(
+        growthplacedata, fertilityclass_filter=(2, 3, 4, 5)
+    )
+    assert result.iloc[0]["subgroup"] == 2
+    assert result.iloc[0]["fertilityclass"] == 3
 
 
-def _treestand_row(standid, treestandid, date, type_, standid_col="standid"):
-    return {"standid": standid, "treestandid": treestandid, "date": date, "type": type_}
+# %% select_target_year_snapshot / compute_year_distribution
+
+
+def _treestand_row(
+    standid,
+    treestandid,
+    treedatadate,
+    treestandclass="1",
+    treestanddatasource="1",
+    developmentclass="03",
+):
+    return {
+        "standid": standid,
+        "treestandid": treestandid,
+        "treestandclass": treestandclass,
+        "treestanddatasource": treestanddatasource,
+        "treedatadate": pd.Timestamp(treedatadate),
+        "developmentclass": developmentclass,
+    }
 
 
 def test_select_target_year_snapshot_keeps_exact_year_match():
     treestand = pd.DataFrame(
         [
-            _treestand_row(1, 101, "2018-05-01", 1),
-            _treestand_row(1, 102, "2026-01-01", 2),  # projected snapshot, not measured
+            _treestand_row(1, 101, "2018-05-01"),
+            # Metsäkeskus's current-state projection, not an inventory.
+            _treestand_row(1, 102, "2026-01-01", treestandclass="2"),
         ]
     )
     result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
@@ -276,43 +374,210 @@ def test_select_target_year_snapshot_keeps_exact_year_match():
 
 
 def test_select_target_year_snapshot_excludes_stand_without_exact_year():
-    treestand = pd.DataFrame([_treestand_row(1, 101, "2015-05-01", 1)])
+    treestand = pd.DataFrame([_treestand_row(1, 101, "2015-05-01")])
     result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
     assert (
         len(result) == 0
     )  # no ">= target_year, else next" fallback -- see module docstring
 
 
-def test_select_target_year_snapshot_ignores_unmeasured_types():
-    treestand = pd.DataFrame([_treestand_row(1, 101, "2018-05-01", 2)])
+@pytest.mark.parametrize("treestandclass", ["2", "3", "4"])
+def test_select_target_year_snapshot_ignores_records_that_are_not_inventories(
+    treestandclass,
+):
+    treestand = pd.DataFrame(
+        [_treestand_row(1, 101, "2018-05-01", treestandclass=treestandclass)]
+    )
     result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
     assert len(result) == 0
+
+
+@pytest.mark.parametrize("source", ["1", "2", "9", "21"])
+def test_select_target_year_snapshot_keeps_an_inventory_from_any_source(source):
+    treestand = pd.DataFrame(
+        [_treestand_row(1, 101, "2018-05-01", treestanddatasource=source)]
+    )
+    result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
+    assert list(result["treestandid"]) == [101]
 
 
 def test_select_target_year_snapshot_ignores_other_stands():
-    treestand = pd.DataFrame([_treestand_row(2, 201, "2018-05-01", 1)])
+    treestand = pd.DataFrame([_treestand_row(2, 201, "2018-05-01")])
     result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
     assert len(result) == 0
 
 
-def test_select_target_year_snapshot_keeps_one_row_per_stand():
+def test_select_target_year_snapshot_keeps_the_earliest_of_one_years_snapshots():
     treestand = pd.DataFrame(
         [
-            _treestand_row(1, 101, "2018-01-01", 1),
-            _treestand_row(1, 102, "2018-06-01", 1),
+            _treestand_row(1, 102, "2018-06-01"),
+            _treestand_row(1, 101, "2018-01-01"),
         ]
     )
     result = m.select_target_year_snapshot(treestand, {1}, target_year=2018)
-    assert len(result) == 1
+    assert list(result["treestandid"]) == [101]
 
 
-# %% filter_by_developmentclass
+def test_compute_year_distribution_counts_stands_per_year_and_source():
+    treestand = pd.DataFrame(
+        [
+            _treestand_row(1, 101, "2005-06-01", treestanddatasource="1"),
+            _treestand_row(2, 201, "2005-07-01", treestanddatasource="9"),
+            _treestand_row(1, 102, "2020-06-01", treestanddatasource="2"),
+            _treestand_row(2, 202, "2020-06-01", treestanddatasource="2"),
+            _treestand_row(3, 301, "2020-06-01", treestanddatasource=None),
+            # Not an inventory: not counted.
+            _treestand_row(1, 103, "2026-01-01", treestandclass="2"),
+        ]
+    )
+    result = m.compute_year_distribution(treestand, {1, 2, 3})
+    assert list(result.columns) == [
+        "year",
+        "n_stands",
+        "source 1",
+        "source 2",
+        "source 9",
+        "source none",
+    ]
+    assert result.to_dict("records") == [
+        {
+            "year": 2005,
+            "n_stands": 2,
+            "source 1": 1,
+            "source 2": 0,
+            "source 9": 1,
+            "source none": 0,
+        },
+        {
+            "year": 2020,
+            "n_stands": 3,
+            "source 1": 0,
+            "source 2": 2,
+            "source 9": 0,
+            "source none": 1,
+        },
+    ]
 
 
-def test_filter_by_developmentclass_keeps_configured_classes():
-    merged = pd.DataFrame({"standid": [1, 2, 3], "developmentclass": [1, 4, 2]})
-    result = m.filter_by_developmentclass(merged, developmentclass_filter=(1, 2, 3))
-    assert sorted(result["standid"]) == [1, 3]
+def test_compute_year_distribution_orders_source_codes_numerically():
+    treestand = pd.DataFrame(
+        [
+            _treestand_row(1, 101, "2005-06-01", treestanddatasource="21"),
+            _treestand_row(2, 201, "2005-06-01", treestanddatasource="2"),
+            _treestand_row(3, 301, "2005-06-01", treestanddatasource="9"),
+        ]
+    )
+    result = m.compute_year_distribution(treestand, {1, 2, 3})
+    assert list(result.columns[2:]) == ["source 2", "source 9", "source 21"]
+
+
+# %% attach_stand_attributes
+
+
+def test_attach_stand_attributes_brings_site_geometry_and_area_and_keeps_the_class():
+    snapshot = pd.DataFrame(
+        [_treestand_row(1, 101, "2018-05-01", developmentclass="T2")]
+    )
+    growthplacedata = m.filter_stands_by_site_attributes(
+        pd.DataFrame([_growthplacedata_row(1)]), fertilityclass_filter=(2, 3, 4, 5)
+    )
+    geometry = Point(385000, 6685000).buffer(50)
+    stand = gpd.GeoDataFrame(
+        [{"standid": 1, "area": 0.8, "geometry": geometry}],
+        geometry="geometry",
+        crs="EPSG:3067",
+    )
+    merged = m.attach_stand_attributes(snapshot, growthplacedata, stand)
+    row = merged.iloc[0]
+    assert row["developmentclass"] == "T2"
+    assert row["subgroup"] == 2
+    assert row["soiltype"] == "10"
+    assert row["area"] == 0.8
+    assert row["geometry"].equals(geometry)
+
+
+# %% drop_duplicated_stands
+
+
+def _stand_layer(standids):
+    return gpd.GeoDataFrame(
+        [
+            {"standid": standid, "area": 0.8, "geometry": Point(385000, 6685000)}
+            for standid in standids
+        ],
+        geometry="geometry",
+        crs="EPSG:3067",
+    )
+
+
+def test_drop_duplicated_stands_keeps_stands_with_one_row_in_each_layer():
+    snapshot = pd.DataFrame([_treestand_row(1, 101, "2018-05-01")])
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1)])
+
+    kept, skipped = m.drop_duplicated_stands(
+        snapshot, growthplacedata, _stand_layer([1])
+    )
+
+    assert list(kept["treestandid"]) == [101]
+    assert skipped == []
+
+
+def test_drop_duplicated_stands_skips_a_stand_with_two_growthplacedata_rows():
+    snapshot = pd.DataFrame(
+        [_treestand_row(1, 101, "2018-05-01"), _treestand_row(2, 201, "2018-05-01")]
+    )
+    growthplacedata = pd.DataFrame(
+        [_growthplacedata_row(1), _growthplacedata_row(1), _growthplacedata_row(2)]
+    )
+
+    kept, skipped = m.drop_duplicated_stands(
+        snapshot, growthplacedata, _stand_layer([1, 2])
+    )
+
+    assert list(kept["standid"]) == [2]
+    assert skipped == [
+        m.StandSkipped(
+            stand_id=StandID("1"),
+            reason="standid appears 2 times in the growthplacedata layer",
+        )
+    ]
+
+
+def test_drop_duplicated_stands_names_every_layer_a_stand_is_duplicated_in():
+    snapshot = pd.DataFrame([_treestand_row(1, 101, "2018-05-01")])
+    growthplacedata = pd.DataFrame([_growthplacedata_row(1), _growthplacedata_row(1)])
+
+    kept, skipped = m.drop_duplicated_stands(
+        snapshot, growthplacedata, _stand_layer([1, 1, 1])
+    )
+
+    # One skip per stand, not one per layer.
+    assert len(kept) == 0
+    assert skipped == [
+        m.StandSkipped(
+            stand_id=StandID("1"),
+            reason=(
+                "standid appears 2 times in the growthplacedata layer; "
+                "standid appears 3 times in the stand layer"
+            ),
+        )
+    ]
+
+
+def test_drop_duplicated_stands_ignores_a_duplicate_outside_the_snapshot():
+    # Stand 2 is duplicated, but has no snapshot: it was never going to be
+    # built, so it is not reported.
+    snapshot = pd.DataFrame([_treestand_row(1, 101, "2018-05-01")])
+    growthplacedata = pd.DataFrame(
+        [_growthplacedata_row(1), _growthplacedata_row(2), _growthplacedata_row(2)]
+    )
+
+    kept, skipped = m.drop_duplicated_stands(
+        snapshot, growthplacedata, _stand_layer([1, 2, 2])
+    )
+
+    assert list(kept["standid"]) == [1]
+    assert skipped == []
 
 
 # %% basal_area_per_tree_m2 / estimate_stemcount
@@ -567,8 +832,8 @@ def test_determine_dominant_and_subdominant_species_ranks_by_basal_area():
 
 def test_determine_dominant_and_subdominant_species_monoculture_keeps_zero_ba_subdominant():
     # Pure pine stand: spruce and deciduous both carry zero basal area.
-    # Per docs/adr/0002, the runner-up (whichever it is) is still reported
-    # as the subdominant -- never duplicated from the dominant.
+    # The runner-up (whichever it is) is still reported as the subdominant
+    # -- never duplicated from the dominant.
     dominant, subdominant = m.determine_dominant_and_subdominant_species(
         _strata(30, 0, 0)
     )
@@ -618,7 +883,14 @@ _DEFAULT_GEOMETRY = Point(385000, 6685000).buffer(50)
 _UNSET = object()
 
 
-def _merged_row(standid=1, treestandid=101, geometry=_UNSET, soiltype=10, area=0.8):
+def _merged_row(
+    standid=1,
+    treestandid=101,
+    geometry=_UNSET,
+    soiltype=10,
+    area=0.8,
+    developmentclass="03",
+):
     return pd.Series(
         {
             "area": area,
@@ -626,7 +898,7 @@ def _merged_row(standid=1, treestandid=101, geometry=_UNSET, soiltype=10, area=0
             "treestandid": treestandid,
             "subgroup": 2,
             "fertilityclass": 3,
-            "developmentclass": 2,
+            "developmentclass": developmentclass,
             "drainagestate": 7,
             "soiltype": soiltype,
             "geometry": _DEFAULT_GEOMETRY if geometry is _UNSET else geometry,
@@ -811,6 +1083,45 @@ def test_build_stand_candidates_keeps_recorded_soiltype():
     assert candidates[0].soiltype == 10
 
 
+def test_build_stand_candidates_reads_text_species_codes():
+    # The gpkg holds treespecies as text ("1", "2"); they must still land in
+    # their species slots, not vanish as an unknown code.
+    merged_filtered = pd.DataFrame([_merged_row()])
+    treestratum = pd.DataFrame(
+        [
+            {
+                "treestandid": 101,
+                "treespecies": code,
+                "age": 40.0,
+                "basalarea": basal_area,
+                "stemcount": 400.0,
+                "meandiameter": 18.0,
+                "meanheight": 16.0,
+            }
+            for code, basal_area in (("1", 12.0), ("2", 8.0), ("29", 1.0))
+        ]
+    )
+    candidates, skipped = m.build_stand_candidates(merged_filtered, treestratum)
+    assert not skipped
+    strata = candidates[0].strata
+    assert strata.pine.basal_area == pytest.approx(12.0)
+    assert strata.spruce.basal_area == pytest.approx(8.0)
+    assert strata.deciduous.basal_area == pytest.approx(1.0)
+
+
+def test_build_stand_candidates_keeps_the_snapshots_development_class():
+    merged_filtered = pd.DataFrame([_merged_row(developmentclass="T2")])
+    candidates, _ = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert candidates[0].developmentclass == "T2"
+
+
+def test_build_stand_candidates_missing_development_class_stays_none():
+    # A remote-sensed snapshot records no class: None, never a stand-in.
+    merged_filtered = pd.DataFrame([_merged_row(developmentclass=None)])
+    candidates, _ = m.build_stand_candidates(merged_filtered, _empty_treestratum())
+    assert candidates[0].developmentclass is None
+
+
 # %% partition_viable_candidates
 
 
@@ -820,7 +1131,7 @@ def _candidate(stand_id, pine_ba, spruce_ba=0, decid_ba=0, soiltype=10, area=0.8
         id=StandID(stand_id),
         subgroup=2,
         fertilityclass=3,
-        developmentclass=2,
+        developmentclass="03",
         drainagestate=7,
         soiltype=soiltype,
         strata=_strata(pine_ba, spruce_ba, decid_ba),
@@ -844,6 +1155,102 @@ def test_partition_viable_candidates_skips_zero_basal_area():
     assert len(skipped) == 1
     assert skipped[0].stand_id == StandID("1")
     assert "basal area" in skipped[0].reason
+
+
+# %% filter_by_mean_diameter_range / summarize_mean_diameter_by_developmentclass
+
+
+def _candidate_with_diameter(stand_id, mean_diameter, developmentclass="03"):
+    """A pine-only candidate whose basal-area-weighted mean diameter is
+    exactly mean_diameter."""
+    pine = m.TreeStratum(
+        age=30,
+        basal_area=10,
+        stem_count=500,
+        mean_diameter=mean_diameter,
+        mean_height=12,
+    )
+    return dataclasses.replace(
+        _candidate(stand_id, pine_ba=10),
+        strata=m.PerSpecies(pine=pine, spruce=m.ZERO_STRATUM, deciduous=m.ZERO_STRATUM),
+        developmentclass=developmentclass,
+    )
+
+
+def test_filter_by_mean_diameter_range_keeps_both_ends_of_the_range():
+    candidates = [
+        _candidate_with_diameter("low", 8.0),
+        _candidate_with_diameter("mid", 15.0),
+        _candidate_with_diameter("high", 21.0),
+    ]
+    kept, skipped = m.filter_by_mean_diameter_range(candidates, (8.0, 21.0))
+    assert [str(c.id) for c in kept] == ["low", "mid", "high"]
+    assert skipped == []
+
+
+def test_filter_by_mean_diameter_range_skips_a_stand_outside_it_naming_its_diameter():
+    candidates = [
+        _candidate_with_diameter("young", 4.06),
+        _candidate_with_diameter("ok", 15.0),
+        _candidate_with_diameter("old", 27.8),
+    ]
+    kept, skipped = m.filter_by_mean_diameter_range(candidates, (8.0, 21.0))
+    assert [str(c.id) for c in kept] == ["ok"]
+    reasons = {str(skip.stand_id): skip.reason for skip in skipped}
+    assert reasons == {
+        "young": "mean diameter 4.1 cm, outside 8-21 cm",
+        "old": "mean diameter 27.8 cm, outside 8-21 cm",
+    }
+
+
+def test_filter_by_mean_diameter_range_ignores_the_development_class():
+    # A "seedling" class with mature trees in its strata is judged by its
+    # trees.
+    candidate = _candidate_with_diameter("1", 18.0, developmentclass="T1")
+    kept, _ = m.filter_by_mean_diameter_range([candidate], (8.0, 21.0))
+    assert kept == [candidate]
+
+
+def test_filter_by_mean_diameter_range_judges_the_shared_mean_diameter():
+    # The figure dense young stand scaling judges and StandData records.
+    candidate = _candidate("1", pine_ba=10, spruce_ba=5)
+    diameter = dense_young_stand_scaling.basal_area_weighted_mean_diameter(
+        candidate.strata
+    )
+    kept, _ = m.filter_by_mean_diameter_range([candidate], (diameter, diameter + 1))
+    assert kept == [candidate]
+    kept, _ = m.filter_by_mean_diameter_range([candidate], (diameter + 0.01, 50))
+    assert kept == []
+
+
+def test_summarize_mean_diameter_by_developmentclass_gives_quantiles_per_class():
+    candidates = [
+        *(_candidate_with_diameter(f"a{d}", d, "03") for d in (10.0, 14.0, 18.0)),
+        _candidate_with_diameter("b", 22.0, "04"),
+        _candidate_with_diameter("c", 16.0, None),
+    ]
+    summary = m.summarize_mean_diameter_by_developmentclass(candidates)
+    assert list(summary.columns) == [
+        "developmentclass",
+        "n_stands",
+        "p10",
+        "median",
+        "p90",
+    ]
+    rows = {row["developmentclass"]: row for row in summary.to_dict("records")}
+    assert set(rows) == {"03", "04", m.NO_DEVELOPMENTCLASS_LABEL}
+    assert rows["03"]["n_stands"] == 3
+    assert rows["03"]["median"] == pytest.approx(14.0)
+    assert rows["03"]["p10"] == pytest.approx(10.8)
+    assert rows["03"]["p90"] == pytest.approx(17.2)
+    assert rows["04"]["n_stands"] == 1
+    assert rows[m.NO_DEVELOPMENTCLASS_LABEL]["median"] == pytest.approx(16.0)
+
+
+def test_summarize_mean_diameter_by_developmentclass_of_no_stands_is_empty():
+    summary = m.summarize_mean_diameter_by_developmentclass([])
+    assert summary.empty
+    assert "developmentclass" in summary.columns
 
 
 # %% build_stand
@@ -1002,7 +1409,12 @@ def test_process_stand_excludes_zero_basal_area_species_even_with_real_data(tmp_
     # Spruce's real data is still there, for reporting/future use ...
     assert stand.strata.spruce.stem_count == 80
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1020,7 +1432,12 @@ def test_write_allometry_csv_round_trips_through_read_allometry_info_from_csv(tm
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     table = m.build_growth_and_yield_table(
@@ -1050,7 +1467,12 @@ def test_process_stand_writes_two_csvs(tmp_path):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1067,7 +1489,12 @@ def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1082,7 +1509,9 @@ def test_process_stand_monoculture_writes_only_a_dominant_csv(tmp_path):
 def test_process_stand_skips_on_failure(tmp_path, monkeypatch):
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
-    config = m.ExtractionConfig(target_year=2018, altitude=150.0, ddy=1200.0)
+    config = m.ExtractionConfig(
+        target_year=2018, altitude=150.0, ddy=1200.0, mean_diameter_range_filter=(0, 50)
+    )
 
     def _boom(*args, **kwargs):
         raise RuntimeError("boom")
@@ -1105,7 +1534,12 @@ def test_process_stand_leaves_no_stray_file_when_subdominant_fails(
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     real_build = m.build_growth_and_yield_table
@@ -1135,7 +1569,12 @@ def test_process_stand_leaves_no_stray_file_when_stand_data_validation_fails(
     candidate = _candidate("1", pine_ba=10, spruce_ba=5)
     stand = dataclasses.replace(m.build_stand(candidate), area=0.0)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1272,7 +1711,7 @@ def test_build_stand_data_monoculture_allometry_file_per_layer_has_only_dominant
 def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     # Pine (age 50) dominates spruce (age 20). Pooling both species by basal
     # area would give (50*10 + 20*5) / 15 = 40, which neither layer should
-    # get: each layer is one species grown alone (docs/adr/0002), so its
+    # get: each layer is one species grown alone, so its
     # curve starts at that species' own stratum age.
     candidate = dataclasses.replace(
         _candidate("1", pine_ba=10, spruce_ba=5),
@@ -1288,7 +1727,12 @@ def test_process_stand_records_each_layers_own_stratum_age(tmp_path):
     )
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1304,7 +1748,12 @@ def test_process_stand_monoculture_records_only_the_dominant_age(tmp_path):
     candidate = _candidate("1", pine_ba=10)
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1332,7 +1781,12 @@ def test_process_stand_with_a_scaling_factor_grows_both_layers_from_fewer_stems(
 ):
     stand = m.build_stand(_dense_young_candidate())
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(
@@ -1382,7 +1836,12 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
     # off): process_stand never decides on its own.
     stand = m.build_stand(_dense_young_candidate())
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=None)
@@ -1403,7 +1862,7 @@ def test_process_stand_without_a_scaling_factor_grows_the_stand_as_recorded(
 def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_path):
     # A dense young spruce monoculture: 3000 stems/ha, scaled to 1800. Pine
     # and deciduous carry no basal area, and scaling zero by a positive factor
-    # leaves zero, so there is still no second layer to write (docs/adr/0002).
+    # leaves zero, so there is still no second layer to write.
     # (As in _dense_young_candidate, _candidate's own strata are replaced.)
     candidate = dataclasses.replace(
         _candidate("1", pine_ba=0),
@@ -1421,7 +1880,12 @@ def test_process_stand_scaled_monoculture_still_writes_no_subdominant_file(tmp_p
     )
     stand = m.build_stand(candidate)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     outcome = m.process_stand(stand, config, tmp_path, scaling_factor=1800 / 3000)
@@ -1450,37 +1914,53 @@ def test_dump_stand_data_document_is_the_shared_function():
 def _write_synthetic_gpkg(
     path: Path, crs: str | None = SOURCE_CRS, *, dense_young: bool = False
 ) -> None:
-    """A minimal 3-layer gpkg exercising load_gpkg_layers + the whole
-    filter/merge/aggregate chain: two stands that survive filtering (one
-    pine-only monoculture, one pine+spruce mix) and three that each fail a
-    different filter/step, so the pipeline's skip-reporting is exercised too.
+    """A minimal gpkg in Metsäkeskus's 2026 data model, exercising
+    load_gpkg_layers + the whole filter/merge/aggregate chain: two stands that
+    survive filtering (one pine-only monoculture, one pine+spruce mix) and
+    three that each fail a different filter/step, so the pipeline's
+    skip-reporting is exercised too. Codes are text, as in the real files.
 
     dense_young adds a third surviving stand, "20": a dense young stand with
     Paroninkorpi stand 20's three strata (_DENSE_YOUNG_STRATA)."""
     helsinki_area = Point(385000, 6685000).buffer(50)
 
-    stand_rows = [
-        _stand_row(1, subgroup=2, drainagestate=7, fertilityclass=3),  # survives
-        _stand_row(2, subgroup=2, drainagestate=8, fertilityclass=4),  # survives
-        _stand_row(3, maingroup=2),  # excluded: not forest land
-        _stand_row(4, subgroup=2, drainagestate=6),  # excluded: undrained
-        _stand_row(
-            5, subgroup=2, drainagestate=7, fertilityclass=3
-        ),  # excluded: no type=1 snapshot in target year
+    stand_ids = [1, 2, 3, 4, 5]
+    growthplacedata_rows = [
+        _growthplacedata_row(1, subgroup="2", drainagestate="7", fertilityclass="3"),
+        _growthplacedata_row(2, subgroup="2", drainagestate="8", fertilityclass="4"),
+        _growthplacedata_row(3, maingroup="2"),  # excluded: not forest land
+        _growthplacedata_row(4, drainagestate="6"),  # excluded: undrained
+        # Survives the site filter, but has no inventory snapshot in 2018.
+        _growthplacedata_row(5, subgroup="2", drainagestate="7", fertilityclass="3"),
     ]
     treestand_rows = [
-        _treestand_row(1, 101, "2018-06-01", 1),
-        _treestand_row(2, 102, "2018-07-01", 1),
-        _treestand_row(3, 103, "2018-06-01", 1),
-        _treestand_row(4, 104, "2018-06-01", 1),
-        _treestand_row(5, 105, "2015-06-01", 1),  # wrong year -- no 2018 match
+        _treestand_row(1, 101, "2018-06-01"),
+        # Field-measured has no class here, remote-sensed never has one.
+        _treestand_row(
+            2, 102, "2018-07-01", treestanddatasource="2", developmentclass=None
+        ),
+        _treestand_row(3, 103, "2018-06-01"),
+        _treestand_row(4, 104, "2018-06-01"),
+        _treestand_row(5, 105, "2015-06-01"),  # wrong year -- no 2018 match
+        # Metsäkeskus's projections of stand 1: never an inventory snapshot.
+        _treestand_row(
+            1, 111, "2026-01-01", treestandclass="2", treestanddatasource="4"
+        ),
+        _treestand_row(
+            1, 121, "2036-01-01", treestandclass="3", treestanddatasource="4"
+        ),
     ]
     dense_young_treestratum_rows = []
     if dense_young:
-        stand_rows.append(
-            _stand_row(20, subgroup=2, drainagestate=7, fertilityclass=3)  # survives
+        stand_ids.append(20)
+        growthplacedata_rows.append(
+            _growthplacedata_row(
+                20, subgroup="2", drainagestate="7", fertilityclass="3"
+            )
         )
-        treestand_rows.append(_treestand_row(20, 120, "2018-06-01", 1))
+        treestand_rows.append(
+            _treestand_row(20, 120, "2018-06-01", developmentclass="T2")
+        )
         # Stand 20 (treestandid 120): one row per species slot, straight off
         # _DENSE_YOUNG_STRATA. treespecies 1 pine, 2 spruce, 3 a deciduous code.
         dense_young_treestratum_rows = [
@@ -1494,32 +1974,33 @@ def _write_synthetic_gpkg(
                 "meanheight": stratum.mean_height,
             }
             for treespecies, stratum in (
-                (1, _DENSE_YOUNG_STRATA.pine),
-                (2, _DENSE_YOUNG_STRATA.spruce),
-                (3, _DENSE_YOUNG_STRATA.deciduous),
+                ("1", _DENSE_YOUNG_STRATA.pine),
+                ("2", _DENSE_YOUNG_STRATA.spruce),
+                ("3", _DENSE_YOUNG_STRATA.deciduous),
             )
         ]
 
     stand = gpd.GeoDataFrame(
-        stand_rows,
+        {
+            "standid": stand_ids,
+            "area": [1.5] * len(stand_ids),
+            "geometry": [helsinki_area] * len(stand_ids),
+        },
         geometry="geometry",
-        # The geometry below is EPSG:3067. Left unlabelled only when the
+        # The geometry above is EPSG:3067. Left unlabelled only when the
         # test asks for a layer with no CRS at all.
         crs=SOURCE_CRS if crs is not None else None,
     )
-    stand["geometry"] = [helsinki_area] * len(stand_rows)
     if crs is not None:
         # The same stands, really in `crs`: reprojected, not just relabelled.
         stand = stand.to_crs(crs)
-
-    treestand = pd.DataFrame(treestand_rows)
 
     treestratum = pd.DataFrame(
         [
             # Stand 1 (treestandid 101): pine only -- a monoculture.
             {
                 "treestandid": 101,
-                "treespecies": 1,
+                "treespecies": "1",
                 "age": 40.0,
                 "basalarea": 20.0,
                 "stemcount": 500.0,
@@ -1529,7 +2010,7 @@ def _write_synthetic_gpkg(
             # Stand 2 (treestandid 102): pine + spruce mix.
             {
                 "treestandid": 102,
-                "treespecies": 1,
+                "treespecies": "1",
                 "age": 35.0,
                 "basalarea": 12.0,
                 "stemcount": 400.0,
@@ -1538,7 +2019,7 @@ def _write_synthetic_gpkg(
             },
             {
                 "treestandid": 102,
-                "treespecies": 2,
+                "treespecies": "2",
                 "age": 30.0,
                 "basalarea": 8.0,
                 "stemcount": 300.0,
@@ -1550,60 +2031,69 @@ def _write_synthetic_gpkg(
     )
 
     stand.to_file(path, layer="stand", driver="GPKG")
-    # treestand/treestratum carry no geometry -- write as plain (non-spatial)
-    # gpkg layers, same as gpd.read_file returns them for metsakeskus.py's
-    # real MV_Uusimaa.gpkg (attribute-only tables read back as GeoDataFrames
-    # with an all-None geometry column, which this tool never touches for
-    # those two layers).
-    gpd.GeoDataFrame(treestand).to_file(path, layer="treestand", driver="GPKG")
-    gpd.GeoDataFrame(treestratum).to_file(path, layer="treestratum", driver="GPKG")
+    # The other three carry no geometry: written as plain (non-spatial) gpkg
+    # layers, the way the real file holds them.
+    for layer, rows in (
+        ("growthplacedata", pd.DataFrame(growthplacedata_rows)),
+        ("treestand", pd.DataFrame(treestand_rows)),
+        ("treestratum", treestratum),
+    ):
+        gpd.GeoDataFrame(rows).to_file(path, layer=layer, driver="GPKG")
 
 
 def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path)
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     layers = m.load_gpkg_layers(gpkg_path)
     assert len(layers.stand) == 5
+    assert len(layers.growthplacedata) == 5
 
-    filtered_stand = m.filter_stands_by_site_attributes(
-        layers.stand, config.fertilityclass_filter
+    filtered_growthplacedata = m.filter_stands_by_site_attributes(
+        layers.growthplacedata, config.fertilityclass_filter
     )
-    assert sorted(filtered_stand["standid"]) == [
+    assert sorted(filtered_growthplacedata["standid"]) == [
         1,
         2,
         5,
     ]  # 3 and 4 excluded at this step
 
-    stand_ids = set(pd.to_numeric(filtered_stand["standid"]).astype(int))
+    stand_ids = set(pd.to_numeric(filtered_growthplacedata["standid"]).astype(int))
     snapshot = m.select_target_year_snapshot(
         layers.treestand, stand_ids, config.target_year
     )
     assert sorted(snapshot["standid"]) == [1, 2]  # 5 excluded: no exact 2018 match
 
-    merged = m.attach_stand_attributes(snapshot, filtered_stand)
-    merged_filtered = m.filter_by_developmentclass(
-        merged, config.developmentclass_filter
-    )
-    assert sorted(merged_filtered["standid"]) == [1, 2]
-
-    candidates, structural_skips = m.build_stand_candidates(
-        merged_filtered, layers.treestratum
-    )
+    merged = m.attach_stand_attributes(snapshot, filtered_growthplacedata, layers.stand)
+    candidates, structural_skips = m.build_stand_candidates(merged, layers.treestratum)
     assert len(structural_skips) == 0
     assert len(candidates) == 2
+    # The snapshot's own class, or None when it records none.
+    classes = {str(c.id): c.developmentclass for c in candidates}
+    assert classes == {"1": "03", "2": None}
 
     viable, ba_skips = m.partition_viable_candidates(candidates)
     assert len(ba_skips) == 0
     assert len(viable) == 2
 
-    parsed_stands = [m.build_stand(c) for c in viable]
+    in_range, diameter_skips = m.filter_by_mean_diameter_range(
+        viable, config.mean_diameter_range_filter
+    )
+    assert len(diameter_skips) == 0
+    assert len(in_range) == 2
+
+    parsed_stands = [m.build_stand(c) for c in in_range]
     stands_by_id = {str(s.id): s for s in parsed_stands}
 
-    # Stand 1: pine-only monoculture. Per docs/adr/0002, the subdominant is
+    # Stand 1: pine-only monoculture. The subdominant is
     # the genuine zero-BA runner-up (spruce or deciduous), never a duplicate
     # of the dominant (pine).
     stand_1 = stands_by_id["1"]
@@ -1619,7 +2109,7 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
 
     # tmp_path plays the project root here: the CSVs go where a real run
     # puts them, inside the inputs/ folder stand_data.json is written to --
-    # the document refuses to record a file outside it (docs/adr/0005).
+    # the document refuses to record a file outside it.
     allometry_dir = tmp_path / "inputs" / "allometry"
     allometry_dir.mkdir(parents=True)
     outcomes = {
@@ -1680,13 +2170,21 @@ def test_full_pipeline_end_to_end_with_synthetic_gpkg(tmp_path):
 # %% stand_layer_in_source_crs
 
 
+def _make_stand_gdf(crs="EPSG:3067"):
+    return gpd.GeoDataFrame(
+        [{"standid": 1, "area": 1.5, "geometry": Point(385000, 6685000).buffer(50)}],
+        geometry="geometry",
+        crs=crs,
+    )
+
+
 def test_stand_layer_in_source_crs_returns_a_source_crs_layer_as_is():
-    stand = _make_stand_gdf([_stand_row(1)])
+    stand = _make_stand_gdf()
     assert m.stand_layer_in_source_crs(stand) is stand
 
 
 def test_stand_layer_in_source_crs_reprojects_another_crs():
-    in_source_crs = _make_stand_gdf([_stand_row(1)])
+    in_source_crs = _make_stand_gdf()
     in_wgs84 = in_source_crs.to_crs("EPSG:4326")
 
     result = m.stand_layer_in_source_crs(in_wgs84)
@@ -1698,7 +2196,7 @@ def test_stand_layer_in_source_crs_reprojects_another_crs():
 
 
 def test_stand_layer_in_source_crs_fails_without_a_crs():
-    stand = gpd.GeoDataFrame([_stand_row(1)], geometry="geometry", crs=None)
+    stand = _make_stand_gdf(crs=None)
     with pytest.raises(ValueError, match="no CRS"):
         m.stand_layer_in_source_crs(stand)
 
@@ -1706,13 +2204,14 @@ def test_stand_layer_in_source_crs_fails_without_a_crs():
 # %% main
 
 
-def _run_main(monkeypatch, gpkg_path, project_dir):
+def _run_main(monkeypatch, gpkg_path, project_dir, *extra_args):
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\nn_trees = 2\nend_year = 5\n"
     )
     monkeypatch.setattr(
         "sys.argv",
-        ["metsakeskus_to_allometry.py", str(gpkg_path), f"--project-dir={project_dir}"],
+        ["metsakeskus_to_allometry.py", str(gpkg_path), f"--project-dir={project_dir}"]
+        + list(extra_args),
     )
     m.main()
 
@@ -1736,7 +2235,7 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
     monkeypatch, tmp_path, project_dir
 ):
     # Run from project_dir's parent with a relative --project-dir: the
-    # recorded paths must not depend on either (docs/adr/0005).
+    # recorded paths must not depend on either.
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path)
     monkeypatch.chdir(project_dir.parent)
@@ -1757,6 +2256,55 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
         for entry in stand.allometry_file_per_layer.values():
             assert entry.file_path.parent == project_dir / "inputs" / "allometry"
             assert entry.file_path.exists()
+
+
+def test_main_writes_a_named_allometry_set_beside_the_default_one(
+    monkeypatch, tmp_path, project_dir
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+
+    _run_main(monkeypatch, gpkg_path, project_dir, "--allometry-set-name=pirkanmaa")
+
+    inputs = project_dir / "inputs"
+    json_path = inputs / "stand_data_pirkanmaa.json"
+    raw = json.loads(json_path.read_text())
+    recorded = {
+        layer["file_path"]
+        for stand in raw["stands"].values()
+        for layer in stand["allometry_file_per_layer"].values()
+    }
+    assert recorded
+    assert all(path.startswith("allometry_pirkanmaa/") for path in recorded)
+    document = load_stand_data_document_from_json(json_path)
+    for stand in document.stands.values():
+        for entry in stand.allometry_file_per_layer.values():
+            assert entry.file_path.parent == inputs / "allometry_pirkanmaa"
+            assert entry.file_path.exists()
+    # The default set is left alone.
+    assert not (inputs / "allometry").exists()
+    assert not (inputs / "stand_data.json").exists()
+
+
+def test_main_dry_run_names_the_named_sets_files_and_writes_nothing(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+
+    _run_main(
+        monkeypatch,
+        gpkg_path,
+        project_dir,
+        "--allometry-set-name=pirkanmaa",
+        "--dry-run",
+    )
+
+    printed = capsys.readouterr().out
+    inputs = project_dir / "inputs"
+    assert str(inputs / "allometry_pirkanmaa") in printed
+    assert str(inputs / "stand_data_pirkanmaa.json") in printed
+    assert sorted(path.name for path in inputs.iterdir()) == ["config.toml"]
 
 
 def test_main_reprojects_a_stand_layer_in_another_crs(
@@ -1808,7 +2356,7 @@ def _run_main_with_a_dense_young_stand(
     gpkg_path = tmp_path / "synthetic.gpkg"
     _write_synthetic_gpkg(gpkg_path, dense_young=True)
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\nn_trees = 2\nend_year = 5\n"
         + scaling_table
     )
     argv = [
@@ -1934,7 +2482,7 @@ def test_plan_stand_outputs_names_both_layers(tmp_path):
 
 def test_plan_stand_outputs_monoculture_has_no_subdominant(tmp_path):
     # The same rule process_stand applies: a second-ranked species with zero
-    # basal area gets no file at all (docs/adr/0002).
+    # basal area gets no file at all.
     stand = m.build_stand(_candidate("1", pine_ba=10))
 
     plan = m.plan_stand_outputs(stand, tmp_path)
@@ -1959,7 +2507,12 @@ def test_plan_stand_outputs_agrees_with_what_process_stand_writes(tmp_path):
     # run reports is what a real run then puts on disk, name for name.
     stand = m.build_stand(_candidate("1", pine_ba=10, spruce_ba=5))
     config = m.ExtractionConfig(
-        target_year=2018, altitude=150.0, ddy=1200.0, n_trees=2, end_year=5
+        target_year=2018,
+        altitude=150.0,
+        ddy=1200.0,
+        mean_diameter_range_filter=(0, 50),
+        n_trees=2,
+        end_year=5,
     )
 
     plan = m.plan_stand_outputs(stand, tmp_path)
@@ -1987,20 +2540,157 @@ def test_csv_counts_counts_dominant_and_subdominant_separately(tmp_path):
     assert m.csv_counts(plans) == (2, 1)
 
 
+# %% gpkg_format_problem
+
+
+def _write_old_format_gpkg(path: Path) -> None:
+    """The shape of the pre-2026 export: site columns and development class
+    on the stand layer, treestand.date/type, no growthplacedata layer."""
+    gpd.GeoDataFrame(
+        {
+            "standid": [1],
+            "maingroup": [1],
+            "subgroup": [2],
+            "fertilityclass": [3],
+            "drainagestate": [7],
+            "developmentclass": ["03"],
+            "area": [1.5],
+            "geometry": [Point(385000, 6685000).buffer(50)],
+        },
+        geometry="geometry",
+        crs=SOURCE_CRS,
+    ).to_file(path, layer="stand", driver="GPKG")
+    gpd.GeoDataFrame(
+        {"treestandid": [101], "standid": [1], "date": ["2018-06-01"], "type": [1]}
+    ).to_file(path, layer="treestand", driver="GPKG")
+
+
+def test_gpkg_format_problem_accepts_the_current_format(tmp_path):
+    gpkg_path = tmp_path / "current.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+    assert m.gpkg_format_problem(gpkg_path) is None
+
+
+def test_gpkg_format_problem_points_an_old_format_file_to_the_old_tool(tmp_path):
+    gpkg_path = tmp_path / "old.gpkg"
+    _write_old_format_gpkg(gpkg_path)
+    problem = m.gpkg_format_problem(gpkg_path)
+    assert problem == m.OLD_FORMAT_MESSAGE
+    assert "susi-metsakeskus-to-allometry-old-format" in problem
+
+
+def test_gpkg_format_problem_names_a_missing_layer_and_column(tmp_path):
+    gpkg_path = tmp_path / "partial.gpkg"
+    gpd.GeoDataFrame(
+        {"standid": [1], "geometry": [Point(385000, 6685000).buffer(50)]},
+        geometry="geometry",
+        crs=SOURCE_CRS,
+    ).to_file(gpkg_path, layer="stand", driver="GPKG")
+    gpd.GeoDataFrame(pd.DataFrame([_growthplacedata_row(1)])).to_file(
+        gpkg_path, layer="growthplacedata", driver="GPKG"
+    )
+    problem = m.gpkg_format_problem(gpkg_path)
+    assert problem is not None
+    assert "stand.area" in problem
+    assert "layer 'treestand'" in problem
+    assert "layer 'treestratum'" in problem
+    assert "growthplacedata." not in problem
+
+
+def test_load_gpkg_layers_reads_only_the_columns_the_tool_uses(tmp_path):
+    gpkg_path = tmp_path / "current.gpkg"
+    _write_synthetic_gpkg(gpkg_path)
+    layers = m.load_gpkg_layers(gpkg_path)
+    for layer, columns in m.LAYER_COLUMNS.items():
+        read = set(getattr(layers, layer).columns) - {"geometry"}
+        assert read == set(columns)
+
+
+# %% main: report and mean-diameter range
+
+
+def test_main_leaves_out_a_stand_outside_the_mean_diameter_range(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    # Stand 20 is the dense young one, 4.06 cm: below a 10 cm minimum.
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path, dense_young=True)
+    (project_dir / "inputs" / "config.toml").write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "mean_diameter_range_filter = [10, 50]\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "metsakeskus_to_allometry.py",
+            str(gpkg_path),
+            f"--project-dir={project_dir}",
+            "--dry-run",
+        ],
+    )
+
+    m.main()
+
+    printed = capsys.readouterr().out
+    assert "20: mean diameter 4.1 cm, outside 10-50 cm" in printed
+    assert "Would write: 2 stand(s)" in printed
+
+
+def test_main_prints_the_mean_diameter_table_and_the_year_sources(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    gpkg_path = tmp_path / "synthetic.gpkg"
+    _write_synthetic_gpkg(gpkg_path, dense_young=True)
+    (project_dir / "inputs" / "config.toml").write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "mean_diameter_range_filter = [0, 50]\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "metsakeskus_to_allometry.py",
+            str(gpkg_path),
+            f"--project-dir={project_dir}",
+            "--dry-run",
+        ],
+    )
+
+    m.main()
+
+    printed = capsys.readouterr().out
+    # Stand 1's snapshot is "03", stand 2's records no class, stand 20's "T2".
+    table_lines = [
+        line.split()
+        for line in printed.splitlines()
+        if line.strip().startswith(("03 ", "T2 ", m.NO_DEVELOPMENTCLASS_LABEL))
+    ]
+    assert sorted(fields[0] for fields in table_lines) == [
+        m.NO_DEVELOPMENTCLASS_LABEL,
+        "03",
+        "T2",
+    ]
+    assert "source 1" in printed
+    assert "source 2" in printed
+    assert "codeschema_mapping" in printed
+
+
 # %% CLI
 
 
 @pytest.fixture
 def dummy_gpkg_file(tmp_path):
+    # A real file in the current format: parse_CLI_arguments checks it.
     gpkg_path = tmp_path / "stands.gpkg"
-    gpkg_path.write_bytes(b"")
+    _write_synthetic_gpkg(gpkg_path)
     return gpkg_path
 
 
 @pytest.fixture
 def dummy_config_file(tmp_path):
     config_path = tmp_path / "config.toml"
-    config_path.write_text("target_year = 2018\naltitude = 150.0\nddy = 1200.0\n")
+    config_path.write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\n"
+    )
     return config_path
 
 
@@ -2054,11 +2744,39 @@ def test_parse_CLI_arguments_reports_a_missing_default_config(
     assert "--config" in stderr
 
 
+def test_parse_CLI_arguments_reports_an_invalid_config_without_a_traceback(
+    monkeypatch, dummy_gpkg_file, project_dir, tmp_path, capsys
+):
+    # A config the model rejects -- here, a range given back to front --
+    # exits through parser.error with the message alone.
+    config_path = tmp_path / "bad_config.toml"
+    config_path.write_text(
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "mean_diameter_range_filter = [21, 8]\n"
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_gpkg_file),
+                f"--config={config_path}",
+                f"--project-dir={project_dir}",
+            ],
+        )
+    assert exit_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert f"Invalid config file {config_path}" in stderr
+    assert (
+        "mean_diameter_range_filter's minimum (21) is not below its maximum" in stderr
+    )
+    assert "errors.pydantic.dev" not in stderr
+
+
 def test_parse_CLI_arguments_finds_config_toml_inside_project_dir_by_default(
     monkeypatch, dummy_gpkg_file, project_dir
 ):
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\n"
+        "target_year = 2018\naltitude = 150.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\n"
     )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch, [str(dummy_gpkg_file), f"--project-dir={project_dir}"]
@@ -2073,7 +2791,7 @@ def test_parse_CLI_arguments_explicit_config_overrides_the_default_lookup(
     # A config.toml also happens to sit inside project_dir; an explicit
     # --config must still win over the default lookup.
     (project_dir / "inputs" / "config.toml").write_text(
-        "target_year = 1999\naltitude = 10.0\nddy = 600.0\n"
+        "target_year = 1999\naltitude = 10.0\nddy = 600.0\nmean_diameter_range_filter = [0, 50]\n"
     )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
@@ -2093,7 +2811,7 @@ def test_parse_CLI_arguments_rejects_a_second_positional_argument(
     monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, tmp_path, capsys
 ):
     # The output folder used to be an optional second positional. It is gone:
-    # <project-dir>/inputs/allometry/ is now the only place output can land,
+    # output only ever lands in an allometry set inside <project-dir>/inputs/,
     # so a leftover invocation must fail loudly rather than be ignored.
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
@@ -2199,11 +2917,59 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
     assert "already exists" in capsys.readouterr().err
 
 
+def test_parse_CLI_arguments_defaults_to_the_default_allometry_set(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_gpkg_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+        ],
+    )
+    assert cli_args.allometry_set_name is None
+
+
+def test_parse_CLI_arguments_takes_an_allometry_set_name(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_gpkg_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+            "--allometry-set-name=pirkanmaa",
+        ],
+    )
+    assert cli_args.allometry_set_name == "pirkanmaa"
+
+
+def test_parse_CLI_arguments_refuses_a_named_sets_existing_stand_data_json(
+    monkeypatch, dummy_gpkg_file, dummy_config_file, project_dir, capsys
+):
+    (project_dir / "inputs" / "stand_data_pirkanmaa.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_gpkg_file),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+                "--allometry-set-name=pirkanmaa",
+            ],
+        )
+    assert "stand_data_pirkanmaa.json" in capsys.readouterr().err
+
+
 def test_parse_CLI_arguments_blocks_out_of_range_altitude(
     monkeypatch, dummy_gpkg_file, project_dir, tmp_path, capsys
 ):
     config_path = tmp_path / "config.toml"
-    config_path.write_text("target_year = 2018\naltitude = 1500.0\nddy = 1200.0\n")
+    config_path.write_text(
+        "target_year = 2018\naltitude = 1500.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\n"
+    )
     with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
@@ -2222,7 +2988,9 @@ def test_parse_CLI_arguments_allows_out_of_range_with_override(
     monkeypatch, dummy_gpkg_file, project_dir, tmp_path, capsys
 ):
     config_path = tmp_path / "config.toml"
-    config_path.write_text("target_year = 2018\naltitude = 1500.0\nddy = 1200.0\n")
+    config_path.write_text(
+        "target_year = 2018\naltitude = 1500.0\nddy = 1200.0\nmean_diameter_range_filter = [0, 50]\n"
+    )
     cli_args = _run_parse_CLI_arguments(
         monkeypatch,
         [
@@ -2254,3 +3022,20 @@ def test_estimate_stemcount_never_negative(coords):
     # estimate_stemcount's numeric edges cheaply.
     for x, _y in coords:
         assert m.estimate_stemcount(abs(x), abs(x) + 1) >= 0
+
+
+def test_parse_CLI_arguments_refuses_an_old_format_file_naming_the_old_tool(
+    monkeypatch, dummy_config_file, project_dir, tmp_path, capsys
+):
+    gpkg_path = tmp_path / "old.gpkg"
+    _write_old_format_gpkg(gpkg_path)
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(gpkg_path),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+            ],
+        )
+    assert "susi-metsakeskus-to-allometry-old-format" in capsys.readouterr().err

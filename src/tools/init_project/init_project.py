@@ -488,9 +488,8 @@ def parse_CLI_arguments() -> CLIArguments:
     # The same refusal the allometry tools make about their output folder,
     # for the same reason: seeding into an existing project would drop a
     # fresh config.toml -- and whatever else was asked for -- on top of
-    # someone's work. Not check_output_dir_available, whose message tells
-    # the user to "pass a different --project-dir", a flag this tool does
-    # not have.
+    # someone's work. Not check_allometry_set_available, whose message is
+    # about an allometry set, not a whole project.
     if new_project_dir.exists():
         parser.error(
             f"Project folder already exists: {new_project_dir}. Pick a different "

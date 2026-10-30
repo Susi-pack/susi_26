@@ -12,10 +12,13 @@ something this shared module does on the tools' behalf any more.
 
 import argparse
 import math
+import re
 import tomllib
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TypeVar
+
+from pydantic import ValidationError
 
 from susi.io.stand_data import (
     X_YKJ_MAX,
@@ -73,6 +76,25 @@ def valid_existing_directory(value: str) -> Path:
     if not path.is_dir():
         raise argparse.ArgumentTypeError(f"Not a directory: {value}")
     return path.resolve()
+
+
+# Letters, digits, underscores and dashes, ASCII only: the name becomes part
+# of a folder name and a file name in a project's inputs/ (see
+# project_layout.allometry_dir_for_project), so nothing in it may leave
+# inputs/, and it should read the same on every OS.
+ALLOMETRY_SET_NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def valid_allometry_set_name(value: str) -> str:
+    """An argparse `type=` callable for --allometry-set-name: the name of a
+    named allometry set, written as inputs/allometry_<name>/ plus
+    inputs/stand_data_<name>.json."""
+    if ALLOMETRY_SET_NAME_PATTERN.fullmatch(value) is None:
+        raise argparse.ArgumentTypeError(
+            f"Invalid allometry set name {value!r}: use only letters, digits, "
+            "underscores and dashes (A-Z, a-z, 0-9, _, -)."
+        )
+    return value
 
 
 def out_of_range_message(
@@ -187,3 +209,42 @@ def load_toml_config(config_path: Path, parse: Callable[[dict], T]) -> T:
     with open(config_path, "rb") as config_file:
         raw = tomllib.load(config_file)
     return parse(raw)
+
+
+def config_error_message(
+    config_path: Path, error: tomllib.TOMLDecodeError | ValidationError
+) -> str:
+    """
+    What is wrong with a config file, worded for the user: one line per
+    problem, naming the field it is about. Pydantic's own str(error) is meant
+    for developers: it adds the raw input values and a link to Pydantic's
+    error docs, which say nothing about SUSI.
+    """
+    if isinstance(error, tomllib.TOMLDecodeError):
+        return f"{config_path} is not a valid TOML file: {error}"
+    problems: list[str] = []
+    for problem in error.errors():
+        # loc is the field's path, e.g. ("mean_diameter_range_filter", 0) for
+        # a list's first item; empty for a check on the whole config, which
+        # names its fields in its own message.
+        field = ".".join([str(part) for part in problem["loc"]])
+        # A ValueError from a validator comes back as "Value error, <text>".
+        message = problem["msg"].removeprefix("Value error, ")
+        problems.append(f"{field}: {message}" if field else message)
+    return f"Invalid config file {config_path}:\n  - " + "\n  - ".join(problems)
+
+
+def load_config_or_exit(
+    parser: argparse.ArgumentParser, config_path: Path, load: Callable[[Path], T]
+) -> T:
+    """
+    load(config_path) -- a tool's own config loader, e.g.
+    metsakeskus_to_allometry.py's load_extraction_config -- with an invalid
+    file reported through parser.error (exit code 2, like every other bad
+    input), not as a traceback. The loaders themselves still raise, so tests
+    can check the error.
+    """
+    try:
+        return load(config_path)
+    except (tomllib.TOMLDecodeError, ValidationError) as invalid_config:
+        parser.error(config_error_message(config_path, invalid_config))

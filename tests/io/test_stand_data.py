@@ -298,6 +298,70 @@ def test_a_document_written_before_the_scaling_record_existed_still_loads(tmp_pa
     assert stand.dense_young_stand_scaling_factor is None
 
 
+# %% StandData.developmentclass
+
+
+def _stand_with_developmentclass(developmentclass):
+    return stand_data.StandData(
+        site_fertility_class=3,
+        allometry_file_per_layer={},
+        initial_age_per_layer={},
+        x_ykj=339,
+        y_ykj=6675,
+        developmentclass=developmentclass,
+    )
+
+
+@pytest.mark.parametrize("code", ["02", "03", "T1", "A0", "ER"])
+def test_stand_data_keeps_a_development_class_code_as_given(code):
+    assert _stand_with_developmentclass(code).developmentclass == code
+
+
+@pytest.mark.parametrize(
+    ("legacy", "code"), [(2, "02"), (3, "03"), (4, "04"), (5, "05")]
+)
+def test_stand_data_reads_a_legacy_integer_as_the_code_it_stands_for(legacy, code):
+    # The old-format Metsäkeskus tool wrote "02"-"05" as the numbers 2-5.
+    assert _stand_with_developmentclass(legacy).developmentclass == code
+
+
+@pytest.mark.parametrize("bad", [True, False])
+def test_stand_data_rejects_a_boolean_development_class(bad):
+    # bool is an int subclass: without a check, true would load as "01".
+    with pytest.raises(pydantic.ValidationError, match="developmentclass"):
+        _stand_with_developmentclass(bad)
+
+
+def test_a_document_with_a_legacy_integer_development_class_still_loads(tmp_path):
+    # A stand exactly as the old-format Metsäkeskus tool wrote it.
+    json_path = tmp_path / STAND_DATA_FILENAME
+    json_path.write_text(
+        json.dumps(
+            {
+                "crs": stand_data.SOURCE_CRS,
+                "altitude": 120.0,
+                "ddy": 1250.0,
+                "stands": {
+                    "20": {
+                        "site_fertility_class": 3,
+                        "allometry_file_per_layer": {},
+                        "initial_age_per_layer": {},
+                        "x_ykj": 338,
+                        "y_ykj": 6769,
+                        "developmentclass": 3,
+                    }
+                },
+            }
+        )
+    )
+
+    stand = stand_data.load_stand_data_document_from_json(json_path).stands[
+        StandID("20")
+    ]
+
+    assert stand.developmentclass == "03"
+
+
 # %% stand_data.StandData / StandDataDocument round-trip
 
 # Fabricated AllometryFileAndSpecies values, mirroring
@@ -403,7 +467,12 @@ def stand_data_strategy(draw):
             mean_diameter=_optional_nonneg_float,
             total_volume=_optional_nonneg_float,
             stem_count=_optional_nonneg_float,
-            developmentclass=_optional_positive_int,
+            developmentclass=st.one_of(
+                st.none(),
+                st.sampled_from(
+                    ["A0", "S0", "T1", "T2", "Y1", "02", "03", "04", "05", "ER"]
+                ),
+            ),
             drainagestate=_optional_positive_int,
             dense_young_stand_scaling_applied=st.just(scaling_factor is not None),
             dense_young_stand_scaling_factor=st.just(scaling_factor),

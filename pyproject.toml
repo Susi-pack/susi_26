@@ -23,6 +23,7 @@ dependencies = [
     "xlrd>=2.0.2",
     "geopandas>=1.1.4",
     "xmltodict>=1.0.4",
+    "pyogrio>=0.13.0",
 ]
 
 [project.urls]
@@ -48,6 +49,7 @@ notebook = [
     "ipykernel>=6.30",
     "ipyfilechooser>=0.6.0",
     "ipywidgets>=8.1.8",
+    "ipython>=9.10.0",
 ]
 ui = ["streamlit>=1.19.0", "streamlit-tree-select>=0.0.5"]
 
@@ -78,6 +80,7 @@ fallback_version = "0.0.0"
 susi-init-project = "tools.init_project.init_project:main"
 susi-xml-to-allometry = "tools.xml_to_allometry.xml_to_allometry:main"
 susi-metsakeskus-to-allometry = "tools.metsakeskus_to_allometry.metsakeskus_to_allometry:main"
+susi-metsakeskus-to-allometry-old-format = "tools.metsakeskus_to_allometry_old_format.metsakeskus_to_allometry_old_format:main"
 susi-new-growth-allometry = "tools.new_growth_allometry.new_growth_allometry:main"
 
 [tool.ty.environment]

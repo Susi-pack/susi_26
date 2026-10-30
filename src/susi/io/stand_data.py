@@ -152,6 +152,31 @@ def _validate_document_crs(crs: str) -> str:
 DocumentCrs = Annotated[str, AfterValidator(_validate_document_crs)]
 
 
+def _developmentclass_from_legacy_int(value: Any) -> Any:
+    """
+    DevelopmentClass's before-validator: an integer from an old
+    stand_data.json becomes the two-digit code string it stands for (3 ->
+    "03"); anything else passes through untouched, for the str type to accept
+    or reject.
+
+    Older stand_data.json files hold the codes that look like numbers as
+    numbers, so only "02"-"05" can turn up as integers there (the other
+    codes, "T1", "A0", ..., aren't numbers). Any integer is
+    converted all the same: the codes aren't checked against Metsäkeskus's
+    list for text either, and the field is for information only.
+    """
+    # bool is an int subclass, but no tool ever wrote one here: without this
+    # check, true would load as "01".
+    if isinstance(value, bool) or not isinstance(value, int):
+        return value
+    return f"{value:02d}"
+
+
+# A Metsäkeskus development-class code ("kehitysluokka"): text such as "02",
+# "03", "T1", "A0" -- never a number, see _developmentclass_from_legacy_int.
+DevelopmentClass = Annotated[str, BeforeValidator(_developmentclass_from_legacy_int)]
+
+
 class StandData(StrictFrozenModel):
     """
     A single stand as described by different output data sources (Metsäkeskus and XML standard)
@@ -222,13 +247,15 @@ class StandData(StrictFrozenModel):
         default=None,
         description="Total stem volume, m3/ha. Plain metadata, no current reader.",
     )
-    developmentclass: PositiveInt | None = Field(
+    developmentclass: DevelopmentClass | None = Field(
         default=None,
         description=(
-            "Stand development-class code (e.g. 1 = open/seedling, "
-            "2 = young growing, 3 = grown-up). Plain metadata here: the "
-            "source tools use it to filter stands before StandData is built, "
-            "not after."
+            "Metsäkeskus development-class code, as text (e.g. '02' = young "
+            "thinning stand, 'T1' = seedling stand below 1.3 m). Plain "
+            "metadata, no current reader; empty when the inventory snapshot "
+            "has none. An integer "
+            "from an older stand_data.json is read as the two-digit code it "
+            "stands for (3 -> '03')."
         ),
     )
     drainagestate: PositiveInt | None = Field(

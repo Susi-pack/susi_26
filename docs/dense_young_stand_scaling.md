@@ -10,13 +10,15 @@ Simulating such a stand as recorded is meaningless: no stand keeps that many ste
 [issue #312](https://github.com/Susi-pack/susi_26/issues/312)).
 
 **Dense young stand scaling** is an option of `susi-xml-to-allometry` and
-`susi-metsakeskus-to-allometry` for those stands. Both tools use the same rule, with the same
+`susi-metsakeskus-to-allometry` for those stands.
+Both tools use the same rule, with the same
 config table and the same defaults.
 When it is on, the tool multiplies the stem count and basal area of a dense young stand by one
 **scaling factor** before the growth model runs, so the stand's allometry file starts from the
 scaled-down stand.
 
-The option is **off by default**. Whether a stand's data should be corrected is your decision,
+The option is **off by default**.
+Whether a stand's data should be corrected is your decision,
 so you turn it on in the config file:
 
 ```toml
@@ -24,7 +26,8 @@ so you turn it on in the config file:
 enabled = true
 ```
 
-It is not a thinning. Nothing is harvested in any SUSI run, and it has nothing to do with the
+It is not a thinning.
+Nothing is harvested in any SUSI run, and it has nothing to do with the
 `Thinning` cutting event: it only changes what the growth model is given when the allometry file
 is made.
 
@@ -50,7 +53,8 @@ The rule has five numbers, all set in the `[dense_young_stand_scaling]` table of
 Both comparisons are strict: a stand with exactly 2200 stems/ha, or a mean diameter of exactly
 8.0 cm, is left alone.
 
-A target can't be above its threshold. The tool refuses such a config file, because it would give
+A target can't be above its threshold.
+The tool refuses such a config file, because it would give
 some stands more stems than the inventory recorded.
 
 ### What the rule reads
@@ -68,7 +72,8 @@ A stand with no stems or no basal area is never scaled: there is nothing to judg
 ## What happens to a scaled stand
 
 The scaling factor is the target stem count over the stand's stem count, so it is always below 1.
-Every species' stem count and basal area are multiplied by that one factor. Age, mean diameter
+Every species' stem count and basal area are multiplied by that one factor.
+Age, mean diameter
 and mean height are left as they are: the scaled stand has fewer trees of the same size, in the
 same species proportions.
 
@@ -90,7 +95,8 @@ Stand 20 of the Paroninkorpi example project is recorded like this:
 - Main species: **spruce**, which has the largest basal area (0.84).
 
 4.06 cm is below 8.0 cm, and 2809 stems/ha is above the spruce threshold of 2200, so the stand is
-scaled. Its scaling factor is 1800 / 2809 = **0.641**:
+scaled.
+Its scaling factor is 1800 / 2809 = **0.641**:
 
 | Species | Stems/ha | Basal area (m²/ha) |
 |---|---|---|
@@ -99,7 +105,8 @@ scaled. Its scaling factor is 1800 / 2809 = **0.641**:
 | Deciduous | 1027 | 0.26 |
 | **Stand** | **1800** | **0.93** |
 
-The first row of the stand's allometry file shows the difference. (The growth model works out
+The first row of the stand's allometry file shows the difference.
+(The growth model works out
 its own starting stem count and basal area from the strata it is given, so the row is close to
 those figures, not equal to them.)
 
@@ -109,7 +116,8 @@ those figures, not equal to them.)
 | Option on | 1782 | 1.6 |
 
 Stand 5 of the same project is denser still, with 3265 stems/ha, but its mean diameter is
-8.98 cm. It is not a young stand by the rule, so it is not scaled.
+8.98 cm.
+It is not a young stand by the rule, so it is not scaled.
 
 ## What the tool prints
 
@@ -130,7 +138,8 @@ Warning: 1 dense young stand(s): 20
 
 The warning never stops the run, and a `--dry-run` shows it too.
 
-It is always judged with the **default** numbers, on the stand as it is about to be grown. So if
+It is always judged with the **default** numbers, on the stand as it is about to be grown.
+So if
 you turn the option on with looser numbers of your own, a stand those numbers leave with more
 stems than the defaults allow is still listed.
 
@@ -153,36 +162,58 @@ For stand 20, with the option on:
 "dense_young_stand_scaling_factor": 0.6407974368102528
 ```
 
-So a scaled stand's allometry file starts from fewer stems than its `stem_count`. The recorded
+So a scaled stand's allometry file starts from fewer stems than its `stem_count`.
+The recorded
 stem count times the scaling factor gives the stem count the growth model was given.
 
 ## With Metsäkeskus data
 
 `susi-metsakeskus-to-allometry` applies the same rule, and prints and records the same things.
-Four points follow from how that tool works.
+Five points follow from how that tool works.
 
-**The stand is scaled before its two layers are split.** The tool writes one allometry file per
+**Its mean-diameter range runs first.**
+The tool only keeps stands whose mean diameter is within
+its required `mean_diameter_range_filter`, and that filter runs before this rule.
+With a minimum at or above `max_mean_diameter` (8 cm by default), no stand young enough to be scaled is left, so the option could never do anything: the tool refuses a config file that turns it on with such a range.
+See
+[Mean-diameter range](metsakeskus_to_allometry.md#mean-diameter-range).
+
+**The stand is scaled before its two layers are split.**
+The tool writes one allometry file per
 canopy layer, each grown from one species alone: the dominant species, and the subdominant one
-when it has basal area. The rule is judged on all three species, all three are multiplied by the
-one scaling factor, and only then are the two layers picked out. A third species is scaled like
+when it has basal area.
+The rule is judged on all three species, all three are multiplied by the
+one scaling factor, and only then are the two layers picked out.
+A third species is scaled like
 the others and then left out, as it always is.
 
 So the two files together start from fewer stems than the target whenever a third species is
-present. With stand 20's strata, the scaled stand has 1800 stems/ha, but the dominant spruce
-layer is grown from 608 of them and the subdominant deciduous layer from 1027. The 165 pine
+present.
+With stand 20's strata, the scaled stand has 1800 stems/ha, but the dominant spruce
+layer is grown from 608 of them and the subdominant deciduous layer from 1027.
+The 165 pine
 stems are in neither file.
 
-**Stem counts can be estimates.** When the inventory records a species' basal area but no stem
-count, the tool estimates the stem count from the basal area and the mean diameter. The rule uses
+**Stem counts can be estimates.**
+When the inventory records a species' basal area but no stem
+count, the tool estimates the stem count from the basal area and the mean diameter.
+The rule uses
 whatever stem counts the strata carry, estimated or not.
 
-**Stems the tool does not grow still count.** A species recorded with a stem count but no basal
-area is never grown: the tool only builds a layer for a species with basal area. Its stems are
-still part of the stand's stem count, so they can take a stand over its threshold. The factor is
-then applied to the species that are grown. Look at the stands the tool lists before turning the
+**Stems the tool does not grow still count.**
+A species recorded with a stem count but no basal
+area is never grown: the tool only builds a layer for a species with basal area.
+Its stems are
+still part of the stand's stem count, so they can take a stand over its threshold.
+The factor is
+then applied to the species that are grown.
+Look at the stands the tool lists before turning the
 option on for such data.
 
-**`stand_data.json` records the stand's stem count.** `stem_count` is the sum of the three
-species' stem counts, as the rule reads it, unscaled. `basal_area` and `mean_diameter` are the
+**`stand_data.json` records the stand's stem count.**
+`stem_count` is the sum of the three
+species' stem counts, as the rule reads it, unscaled.
+`basal_area` and `mean_diameter` are the
 stand's basal area and its basal-area-weighted mean diameter, also unscaled: the same mean
-diameter the rule compares with its limit. This tool records no per-species figures.
+diameter the rule compares with its limit.
+This tool records no per-species figures.

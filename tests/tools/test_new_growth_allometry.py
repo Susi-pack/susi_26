@@ -415,10 +415,12 @@ def test_parse_CLI_arguments_rejects_an_invalid_species(
         "altitude = 150.0\nddy = 1200.0\nfertility_class = 3\n"
         'x = 379930.3\ny = 7039150.8\nspecies = "oak"\nstems_count = 2000\n'
     )
-    with pytest.raises(ValueError, match="species"):
+    # Reported through parser.error, not as a traceback.
+    with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch, [f"--config={config_path}", f"--project-dir={project_dir}"]
         )
+    assert "species:" in capsys.readouterr().err
 
 
 def _existing_output_file(project_dir: Path, species: str) -> Path:
@@ -829,12 +831,12 @@ def test_parse_CLI_arguments_reports_an_unknown_stand_id(
 
 
 def test_parse_CLI_arguments_rejects_a_sourced_config_holding_a_sourced_field(
-    monkeypatch, project_dir, stand_data_file
+    monkeypatch, project_dir, stand_data_file, capsys
 ):
     (project_dir / "inputs" / nga.DEFAULT_CONFIG_FILENAME).write_text(
         'species = "pine"\nstems_count = 2000\naltitude = 100.0\n'
     )
-    with pytest.raises(ValueError, match="altitude"):
+    with pytest.raises(SystemExit):
         _run_parse_CLI_arguments(
             monkeypatch,
             [
@@ -843,6 +845,7 @@ def test_parse_CLI_arguments_rejects_a_sourced_config_holding_a_sourced_field(
                 f"--stand-id={SOURCED_STAND_ID}",
             ],
         )
+    assert "altitude: Extra inputs are not permitted" in capsys.readouterr().err
 
 
 # %% The YKJ sanity range, in both modes

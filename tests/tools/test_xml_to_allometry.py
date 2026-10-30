@@ -1,4 +1,5 @@
 import json
+import os
 import tomllib
 from pathlib import Path
 
@@ -822,18 +823,15 @@ def test_dump_stand_data_document_is_the_shared_function():
 
 
 def test_print_dry_run_plan_reports_counts_and_writes_nothing(tmp_path, capsys):
-    project_dir = tmp_path
-    output_dir = project_dir / "inputs" / "allometry"
+    output_dir = tmp_path / "inputs" / "allometry"
+    json_path = tmp_path / "inputs" / "stand_data.json"
     parsed_stands = [_parsed_stand_data("1"), _parsed_stand_data("2")]
 
-    xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir, project_dir)
+    xml_to_allometry.print_dry_run_plan(parsed_stands, output_dir, json_path)
 
     printed = capsys.readouterr().out
     assert "2 stand(s) -- 2 CSV(s)" in printed
-    # The JSON is reported beside the allometry folder in inputs/, not
-    # inside it.
-    assert str(project_dir / "inputs" / "stand_data.json") in printed
-    assert str(output_dir / "stand_data.json") not in printed
+    assert str(json_path) in printed
     assert not output_dir.exists()
 
 
@@ -1061,6 +1059,68 @@ def test_parse_CLI_arguments_dry_run_still_refuses_existing_output_dir(
     assert "already exists" in capsys.readouterr().err
 
 
+def test_parse_CLI_arguments_defaults_to_the_default_allometry_set(
+    monkeypatch, dummy_xml_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_xml_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+        ],
+    )
+    assert cli_args.allometry_set_name is None
+
+
+def test_parse_CLI_arguments_takes_an_allometry_set_name(
+    monkeypatch, dummy_xml_file, dummy_config_file, project_dir
+):
+    cli_args = _run_parse_CLI_arguments(
+        monkeypatch,
+        [
+            str(dummy_xml_file),
+            f"--config={dummy_config_file}",
+            f"--project-dir={project_dir}",
+            "--allometry-set-name=pirkanmaa",
+        ],
+    )
+    assert cli_args.allometry_set_name == "pirkanmaa"
+
+
+def test_parse_CLI_arguments_refuses_a_named_sets_existing_stand_data_json(
+    monkeypatch, dummy_xml_file, dummy_config_file, project_dir, capsys
+):
+    (project_dir / "inputs" / "stand_data_pirkanmaa.json").write_text("{}")
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_xml_file),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+                "--allometry-set-name=pirkanmaa",
+            ],
+        )
+    assert "stand_data_pirkanmaa.json" in capsys.readouterr().err
+
+
+def test_parse_CLI_arguments_rejects_an_allometry_set_name_that_leaves_inputs(
+    monkeypatch, dummy_xml_file, dummy_config_file, project_dir, capsys
+):
+    with pytest.raises(SystemExit):
+        _run_parse_CLI_arguments(
+            monkeypatch,
+            [
+                str(dummy_xml_file),
+                f"--config={dummy_config_file}",
+                f"--project-dir={project_dir}",
+                "--allometry-set-name=../elsewhere",
+            ],
+        )
+    assert "--allometry-set-name" in capsys.readouterr().err
+
+
 # %% main
 
 
@@ -1128,6 +1188,99 @@ def test_main_records_allometry_paths_relative_to_stand_data_json(
     )
     assert dominant.file_path == project_dir / "inputs" / "allometry" / "1.csv"
     assert dominant.file_path.exists()
+
+
+def _run_main_with_one_stand(monkeypatch, tmp_path, project_dir, *extra_args):
+    xml_path = tmp_path / "stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
+    (project_dir / "inputs" / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir}"]
+        + list(extra_args),
+    )
+    xml_to_allometry.main()
+
+
+def test_main_writes_a_named_allometry_set_beside_the_default_one(
+    monkeypatch, tmp_path, project_dir
+):
+    _run_main_with_one_stand(
+        monkeypatch, tmp_path, project_dir, "--allometry-set-name=pirkanmaa"
+    )
+
+    inputs = project_dir / "inputs"
+    json_path = inputs / "stand_data_pirkanmaa.json"
+    raw = json.loads(json_path.read_text())
+    # Relative to the document, as for the default set: the folder's name
+    # carries the set name too.
+    assert raw["stands"]["1"]["allometry_file_per_layer"]["dominant"]["file_path"] == (
+        "allometry_pirkanmaa/1.csv"
+    )
+    dominant = (
+        load_stand_data_document_from_json(json_path)
+        .stands[StandID("1")]
+        .allometry_file_per_layer[CanopyLayerName.dominant]
+    )
+    assert dominant.file_path == inputs / "allometry_pirkanmaa" / "1.csv"
+    assert dominant.file_path.exists()
+    # The default set is left alone.
+    assert not (inputs / "allometry").exists()
+    assert not (inputs / "stand_data.json").exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write into a read-only folder")
+def test_main_says_why_it_could_not_create_the_allometry_folder(
+    monkeypatch, tmp_path, project_dir
+):
+    # Shared code (cli_paths.create_allometry_set_dir), checked once through
+    # this tool, the faster of the two.
+    xml_path = tmp_path / "stands.xml"
+    xml_path.write_text(
+        _forest_property_xml(_stand_xml_block("1", include_tree_strata=True))
+    )
+    inputs = project_dir / "inputs"
+    (inputs / "config.toml").write_text(
+        "altitude = 150.0\nddy = 1200.0\nn_trees = 2\nend_year = 5\n"
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["xml_to_allometry.py", str(xml_path), f"--project-dir={project_dir}"],
+    )
+    # Read-only after config.toml is in place: everything up to the writing
+    # works, and creating inputs/allometry/ is the first thing refused.
+    inputs.chmod(0o555)
+    try:
+        with pytest.raises(SystemExit) as exit_info:
+            xml_to_allometry.main()
+    finally:
+        inputs.chmod(0o755)
+
+    message = str(exit_info.value)
+    assert str(inputs / "allometry") in message
+    assert "Permission denied" in message
+
+
+def test_main_dry_run_names_the_named_sets_files_and_writes_nothing(
+    monkeypatch, tmp_path, project_dir, capsys
+):
+    _run_main_with_one_stand(
+        monkeypatch,
+        tmp_path,
+        project_dir,
+        "--allometry-set-name=pirkanmaa",
+        "--dry-run",
+    )
+
+    printed = capsys.readouterr().out
+    inputs = project_dir / "inputs"
+    assert str(inputs / "allometry_pirkanmaa") in printed
+    assert str(inputs / "stand_data_pirkanmaa.json") in printed
+    assert sorted(path.name for path in inputs.iterdir()) == ["config.toml"]
 
 
 # %% main: dense young stand scaling

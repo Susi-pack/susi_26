@@ -57,7 +57,8 @@ active, or prefixed with `uv run`):
 |---|---|---|
 | `susi-init-project` | Creates a new, empty project folder | — |
 | `susi-xml-to-allometry` | XML stand export → allometry CSVs + `stand_data.json` | `docs/xml_to_allometry.md` |
-| `susi-metsakeskus-to-allometry` | Metsäkeskus `.gpkg` → allometry CSVs + `stand_data.json` | `docs/metsakeskus_to_allometry.md` |
+| `susi-metsakeskus-to-allometry` | Metsäkeskus `.gpkg` (2026 format) → allometry CSVs + `stand_data.json` | `docs/metsakeskus_to_allometry.md` |
+| `susi-metsakeskus-to-allometry-old-format` | Deprecated: the same, for an old-format (pre-2026) `.gpkg` | `docs/metsakeskus_to_allometry_old_format.md` |
 | `susi-new-growth-allometry` | Post-clearcut allometry for one stand | `docs/new_growth_allometry.md` |
 
 Each takes `--help`.
