@@ -3,7 +3,7 @@ from collections.abc import Callable
 from enum import Enum
 from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import Self, TypeAlias
+from typing import Literal, Self, TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -791,15 +791,20 @@ class SiteParams(StrictFrozenModel):
     enable_peattop: bool
     enable_peatmiddle: bool
     enable_peatbottom: bool
-    infinite_peat_stock: bool = Field(
+    peat_stock_mode: Literal["default", "infinite", "subsidence"] = Field(
         description=(
-            "Hold the peat storages P1, P2 and P3 at their initial values, treating "
-            "the peat deposit as an inexhaustible substrate, so decomposition rates "
-            "stop falling as the pools draw down. The default, False, is the default model "
-            "behaviour: peat has no inbound term in the ESOM matrix, so P1 supplies the "
-            "whole peat flux and runs down over a long simulation."
+            "How the ESOM peat storages behave. 'default' is the published model: "
+            "peat has no inbound term, so P1 supplies the whole peat flux and runs "
+            "down over a long simulation, and the decomposition rate falls with it. "
+            "'infinite' holds P1, P2 and P3 at their initial values, treating the "
+            "deposit as an inexhaustible substrate -- mass is created at the base, so "
+            "the peat stock is constant and stock-differenced diagnostics lose their "
+            "peat term. 'subsidence' holds P1 and P2 and debits the whole column loss "
+            "from P3, which conserves mass and keeps those diagnostics valid. Neither "
+            "held mode moves the layer boundaries or the bulk-density profile, so "
+            "there is no geometric feedback on the water table."
         ),
-        default=False,
+        default="default",
     )
     rho_mor: float = Field(description="bulk density of mor layer, kg m-3")
     h_mor: NonNegativeFloat | Callable[..., float] = Field(

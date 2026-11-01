@@ -101,11 +101,38 @@ class Esom:
         self.enable_peatmiddle = spara.enable_peatmiddle
         self.enable_peatbottom = spara.enable_peatbottom
 
-        # Peat stocks held at their initial values: the deposit is treated as an
-        # inexhaustible substrate, so the decomposition rates stop declining as the
-        # pools draw down. False reproduces the published model, in which P1 is the
-        # only source of the peat flux and empties over a long run.
-        self.infinite_peat_stock = bool(spara.infinite_peat_stock)
+        # How the peat storages P1, P2 and P3 behave over a run.
+        #
+        #   "default"     the published model. Peat has no inbound term in the
+        #                 decomposition matrix, so the whole peat flux is drawn
+        #                 from P1 -- 4-5% of the peat mass -- and the surface
+        #                 pool depletes while P3, nearly 90% of it, barely
+        #                 moves. The rate then falls because the substrate ran
+        #                 out rather than in response to drainage.
+        #
+        #   "infinite"    P1, P2 and P3 all held at their initial values: the
+        #                 deposit is treated as an inexhaustible substrate.
+        #                 Mass is created at the base, so the peat stock is
+        #                 constant and every stock-differenced diagnostic loses
+        #                 its peat term.
+        #
+        #   "subsidence"  P1 and P2 held, P3 debited the WHOLE column loss.
+        #                 P1 is a depth interval, not a mass parcel: material
+        #                 moves up as the profile subsides. Mass is conserved,
+        #                 so the total peat stock still declines by exactly what
+        #                 is respired and the stock-based diagnostics stay valid.
+        #
+        # NOTE: "subsidence" is a mass-budget statement only. The layer
+        # boundaries (bound1, bound2) and the bulk-density profile are fixed, so
+        # nothing geometric moves and the surface does not actually drop --
+        # there is no feedback onto the water table or the ditch depth.
+        self.peat_stock_mode = str(spara.peat_stock_mode)
+        if self.peat_stock_mode not in ("default", "infinite", "subsidence"):
+            raise ValueError(
+                f"peat_stock_mode={self.peat_stock_mode!r}: expected "
+                "'default', 'infinite' or 'subsidence'"
+            )
+        self._hold_peat = self.peat_stock_mode in ("infinite", "subsidence")
 
         self.contpara_mor = {
             "Mass": 100.0,
@@ -680,13 +707,20 @@ class Esom:
                 )
 
             M_peat_before = (self.M[:, :, 7:10].copy()
-                             if self.infinite_peat_stock else None)
+                             if self._hold_peat else None)
 
             self.M = self.decompose(k1, k2, k3, k4, k5, k6, k7, k8, k9, self.M)
 
-            if self.infinite_peat_stock:
-                self.peat_flux_yr += M_peat_before - self.M[:, :, 7:10]
-                self.M[:, :, 7:10] = M_peat_before      # P1, P2, P3 all held
+            if self._hold_peat:
+                loss = M_peat_before - self.M[:, :, 7:10]
+                self.peat_flux_yr += loss
+                self.M[:, :, 7] = M_peat_before[:, :, 0]      # P1 held
+                self.M[:, :, 8] = M_peat_before[:, :, 1]      # P2 held
+                if self.peat_stock_mode == "infinite":
+                    self.M[:, :, 9] = M_peat_before[:, :, 2]  # P3 held too
+                else:
+                    # subsidence: the bottom carries the whole column's loss
+                    self.M[:, :, 9] = M_peat_before[:, :, 2] - loss.sum(axis=2)
 
             self.mass[:, :, :, self.i] = self.M  # locate mass to output array
             self.i += 1  # day counter
@@ -694,7 +728,7 @@ class Esom:
 
         self.out = self.M[:, :, 10] * 10000.0 - self.previous_mass
         self.previous_mass = self.M[:, :, 10] * 10000.0
-        if self.infinite_peat_stock:
+        if self._hold_peat:
             self.P1_out = self.peat_flux_yr[:, :, 0] * 10000.0
             self.P2_out = self.peat_flux_yr[:, :, 1] * 10000.0
             self.P3_out = self.peat_flux_yr[:, :, 2] * 10000.0
