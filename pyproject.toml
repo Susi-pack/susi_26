@@ -45,6 +45,7 @@ dev = [
     "zensical>=0.0.66",
 ]
 notebook = [
+    "jupyter>=1.1.1",
     "jupyterlab>=4.6,<5",
     "ipykernel>=6.30",
     "ipyfilechooser>=0.6.0",
