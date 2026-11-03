@@ -22,11 +22,7 @@ To generate the same kind of file from a Finnish forestry XML stand export inste
 
 Metsäkeskus publishes one GeoPackage per region (*maakunta*), zipped:
 
-```
-https://avoin.metsakeskus.fi/aineistot/Metsavarakuviot/Maakunta/MV_Pirkanmaa.zip
-```
-
-Swap `MV_Pirkanmaa` for the region you need.
+[https://avoin.metsakeskus.fi/aineistot/MV/Maakunta/](https://avoin.metsakeskus.fi/aineistot/MV/Maakunta/)
 
 We recommend you unzip it into the root-level `inputs/` folder.
 That way, it won't be tracked by git, and it will be located in a logical place.
@@ -81,7 +77,8 @@ the [reference](metsakeskus_to_allometry.md#mean-diameter-range) explains how to
 
 There are other parameters that modify, e.g., which fertility classes to keep, how far forward each stand's growth is projected etc., is optional, and documented in the [reference](metsakeskus_to_allometry.md#config-file).
 
-The config file can also turn on [dense young stand scaling](dense_young_stand_scaling.md), which scales down young stands recorded with a very large number of stems before their growth is computed. It is off by default.
+The config file can also turn on [dense young stand scaling](dense_young_stand_scaling.md), which scales down young stands recorded with a very large number of stems before their growth is computed.
+It is off by default.
 
 
 ## 3. Run the tool
@@ -148,8 +145,12 @@ That table is what to look at when choosing `mean_diameter_range_filter`; the
 [reference](metsakeskus_to_allometry.md#mean-diameter-range) explains it.
 
 If the data holds dense young stands, the Filtering section says so after the "Stands ready for allometry" line.
+
 With a minimum mean diameter of 8 cm, as above, there are none left by then: dense young stands are all thinner than that.
-With a lower minimum, and the option off (the default), it is a warning naming the stands. For example, from an Uusimaa run:
+With a lower minimum, and the option off (the default), it is a warning naming the stands.
+For example, from an Uusimaa run:
+With the option off (the default), it is a warning naming the stands.
+In the run above, 12 of the 786:
 
 ```
 Warning: 12 dense young stand(s): 32175706, 32175707, 32175794, 32176520, 32176550, 32177051, 32177293, 32344874, 32484519, 32487471, 32559296, 32559664

@@ -71,6 +71,20 @@ That is why the template uses `--mem-per-cpu` (memory per core) rather than `--m
     Set `--mem-per-cpu` a bit above that `MaxRSS`.
     Note that if a job uses more memory than it reserved, Slurm kills it.
 
+### How to estimate job memory and time
+The following empirical formulas seem to work, leaving a lot of margin:
+
+```
+--time (seconds) = 6 * ceil(n_simulations / n_cpus) * years_per_simulation + 5
+--mem-per-cpu (MB) = 5 * years_per_simulation + 260 / ncpus + 275
+```
+
+Where:
+- `ceil()` is the ceiling function, i.e., the closest integer, rounded upwards.
+- `n_simulations` is the total number of SUSI simulations, i.e., the amount of scenarios x stands, or the number of output `susi.nc` that the simulation will produce.
+- `n_cpus` is the number of cpus, which is provided in the same batch script as `--cpus-per-task`.
+- `years_per_simulation` is the number of years that each SUSI simulation runs for.
+
 ## Run batch job
 [Official CSC docs](https://docs.csc.fi/computing/running/submitting-jobs/).
 
@@ -83,10 +97,8 @@ sbatch parallel_simulations.sh
 ```
 
 ## Analysing results
-THIS PART OF THE DOCUMENTATION IS INCOMPLETE YET.
 
-There will be two ways of running the jupyter notebooks to analyze the results:
+There are two ways of running the Jupyter notebooks to analyse the results:
+
 - On your own machine: copy the run folder from scratch (`rsync`/`scp`) and use [Read data from runs](reading_output_data.md).
-- On Roihu: Jupyter app in the web interface, Python → "Custom path" → the path that
-  `module load susi && which python` prints. Create the notebook in your scratch folder. **(verify)**
-    - That path names one release: to use a newer one, look up the path again.
+- On Roihu: use the Jupyter app in the web interface, see [How to run notebooks on Roihu](how_to_run_notebooks_on_roihu.md).
