@@ -574,13 +574,15 @@ class Canopylayer:
         """ Change unit of all variables to /tree """
         """ assimilation_yr function operates in /ha basis,"""
         ref_temperature_sum = 1300
-        tc = temperature_sum / ref_temperature_sum
+        tc = np.sqrt(temperature_sum / ref_temperature_sum)
 
         Hmax = {
-            2: 33.0 * tc,
-            3: 30.0 * tc,
-            4: 27.0 * tc,
-            5: 24.0 * tc,
+            1: 38.0 * tc,
+            2: 35.0 * tc,
+            3: 32.0 * tc,
+            4: 29.0 * tc,
+            5: 26.0 * tc,
+            6: 23.0 * tc,
         }  # maximum height of trees in area with temperature sum of 1300
 
         get_Hmax = np.vectorize(lambda x: Hmax.get(x, np.nan))
