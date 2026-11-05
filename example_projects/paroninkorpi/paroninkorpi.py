@@ -241,28 +241,37 @@ def should_implement_thinning(
     if susi_params.stand_params.site_fertility_class >= 4:
         species = "pine"
 
+    # the output netcdf array in SUSI is off by one compared to yr:
+    # index 0 is used to record the initial state.
+    # TODO:
+    # This is a quick and dirty way to solve the issue (#371), hopefully better resolved in issue #370
+    susi_yr_index = yr + 1
+
     thinning_guidelines = calculate_thinning_recommendation(
         region="Southern_Finland",
         soil="Organic_soil",
         fertility_class=susi_params.stand_params.site_fertility_class,
         main_sp=species,
-        H_dom=base_scenario_results["hdom"][yr],
+        H_dom=base_scenario_results["hdom"][susi_yr_index],
     )
     match thinning_guidelines:
         case None:
             print(
-                f"No thinning at year {yr}, as dominant height ({base_scenario_results['hdom'][yr]:.1f} m) outside the thinning model range."
+                f"No thinning at year {yr}, as dominant height ({base_scenario_results['hdom'][susi_yr_index]:.1f} m) outside the thinning model range."
             )
             return None
         case ThinningRecommendation():
-            if base_scenario_results["ba"][yr] < thinning_guidelines.BA_recommendation:
+            if (
+                base_scenario_results["ba"][susi_yr_index]
+                < thinning_guidelines.BA_recommendation
+            ):
                 print(
-                    f"No thinning at year {yr}, as basal area ({base_scenario_results['ba'][yr]:.1f} m2/ha) below the thinning limit ({thinning_guidelines.BA_recommendation:.1f} m2/ha)."
+                    f"No thinning at year {yr}, as basal area ({base_scenario_results['ba'][susi_yr_index]:.1f} m2/ha) below the thinning limit ({thinning_guidelines.BA_recommendation:.1f} m2/ha)."
                 )
                 return None
             else:
                 print(
-                    f"Thinning possible at year {yr}, basal area from {base_scenario_results['ba'][yr]:.1f} m2/ha to {thinning_guidelines.BA_limit:.1f} m2/ha."
+                    f"Thinning possible at year {yr}, basal area from {base_scenario_results['ba'][susi_yr_index]:.1f} m2/ha to {thinning_guidelines.BA_limit:.1f} m2/ha."
                 )
                 return thinning_guidelines.BA_limit
 
