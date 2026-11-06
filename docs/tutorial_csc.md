@@ -35,7 +35,7 @@ The tutorial takes about 10 minutes, and by the end you will have logged in to R
         The signature is valid for 24 hours, so you will have to sign again on another day.
     2. Connect, with your CSC username:
         ```bash
-        ssh <username>@roihu-cpu.csc.fi
+        ssh <your_username>@roihu-cpu.csc.fi
         ```
 
     You will type every command of this tutorial in that terminal.
@@ -45,35 +45,47 @@ The tutorial takes about 10 minutes, and by the end you will have logged in to R
 Your SUSI projects will live in a folder of your own, inside the project's scratch disk:
 
 ```bash
-mkdir -p /scratch/project_2020769/$USER/susi_projects
-```
-!!! info "`$USER` is your CSC username: the shell fills it in for you."
-
-## 3. Copy the example project
-TODO: THIS SECTION IS WRONG AND USELESS: USERS SHOULD USE THE AVAILABLE SUSI VERSION.
-THIS STEP SHOULD COPY THE MINIMAL PROJECT FOLDER, EITHER THROUGH THE WEB INTERFACE (NO TERMINAL, BUT FILES APP OR SIMILAR), OR THROUGH SSH.
-
-```bash
-module use /projappl/project_2020769/susi/modulefiles
-module load susi
-SUSI_VERSION=$(python -c "import importlib.metadata as m; print(m.version('susi-26'))")
-echo $SUSI_VERSION
+mkdir -p /scratch/project_2020769/<your_username>/susi_projects
 ```
 
-It prints a version number such as `0.2.4`.
+Replace `<your_username>` with your CSC username, here and in every command below.
 
-Then download the SUSI repository at that same version, and copy `minimal` out of it into your SUSI projects folder:
+!!! tip "The `$USER` shortcut"
+    In commands you run on Roihu, you can write `$USER` instead of your username, e.g. `mkdir -p /scratch/project_2020769/$USER/susi_projects`.
+    `$USER` is a standard variable that every Linux shell sets to the name you logged in with, so there is nothing to set up.
+    It doesn't work in commands you run on your own machine, such as `ssh` or `scp`: there, `$USER` is your local username, which may differ from the CSC one.
+
+## 3. Upload the example project
+
+The example project `minimal` doesn't come with the SUSI installation on Roihu: it lives in the SUSI repository, in `example_projects/minimal/`.
+Upload it from your own copy of SUSI into your SUSI projects folder.
+If you don't have SUSI on your machine, download it from [GitHub](https://github.com/Susi-pack/susi_26) (*Code* → *Download ZIP*) and unpack it.
+
+!!! warning "Leave old outputs behind"
+    If you have already run `minimal` on your machine, delete its `outputs/run_parallel_01/` folder before uploading, but keep `outputs/` itself.
+    SUSI never overwrites a run, so the job would fail if that folder is already there.
+
+=== "Web interface"
+
+    1. Open **Files** in the top bar and go to `/scratch/project_2020769/<your_username>/susi_projects/`.
+    2. Click **Upload** and drag the `minimal` folder from your machine into the upload window.
+    3. Keep the browser tab open until the upload finishes.
+
+    See [CSC docs: Files](https://docs.csc.fi/computing/webinterface/file-browser/) for more on the Files app.
+
+=== "SSH"
+
+    In a terminal on your own machine (not on Roihu), from the folder of your SUSI copy:
+    ```bash
+    scp -r example_projects/minimal <your_username>@roihu-cpu.csc.fi:/scratch/project_2020769/<your_username>/susi_projects/
+    ```
+
+    See [CSC docs: scp](https://docs.csc.fi/data/moving/scp/) for more on `scp`.
+
+Then, in the Roihu shell, go into the uploaded project and look at its contents:
 
 ```bash
-cd /scratch/project_2020769/$USER
-git clone --depth 1 --branch $SUSI_VERSION https://github.com/Susi-pack/susi_26.git susi_26_$SUSI_VERSION
-cp -r susi_26_$SUSI_VERSION/example_projects/minimal susi_projects/
-```
-
-Finally, go into your copy:
-
-```bash
-cd susi_projects/minimal
+cd /scratch/project_2020769/<your_username>/susi_projects/minimal
 ls
 ```
 
@@ -118,29 +130,38 @@ Expect it to start within a few minutes and to runs for less than one minute.
 
 ## 6. Find the results
 
-When the job has finished, list the run's outputs:
+When the job has finished, look at the run's outputs:
 
-```bash
-ls outputs/run_parallel_01/stand_01/*
-```
+=== "Web interface"
 
-You should see one folder per scenario, each with its own results:
+    Open **Files** and go to `/scratch/project_2020769/<your_username>/susi_projects/minimal/outputs/run_parallel_01/stand_01/`.
+    You should see one folder per scenario, `deep_ditch` and `shallow_ditch`, each holding `metadata.json`, `params.json` and `susi.nc`.
 
-```
-outputs/run_parallel_01/stand_01/deep_ditch:
-metadata.json  params.json  susi.nc
+    Everything the job printed is in `slurm-<job ID>.out`, in the `minimal` folder: click it to read it.
 
-outputs/run_parallel_01/stand_01/shallow_ditch:
-metadata.json  params.json  susi.nc
-```
+=== "SSH"
+
+    ```bash
+    ls outputs/run_parallel_01/stand_01/*
+    ```
+
+    You should see one folder per scenario, each with its own results:
+
+    ```
+    outputs/run_parallel_01/stand_01/deep_ditch:
+    metadata.json  params.json  susi.nc
+
+    outputs/run_parallel_01/stand_01/shallow_ditch:
+    metadata.json  params.json  susi.nc
+    ```
+
+    Everything the job printed is in `slurm-<job ID>.out`, next to the batch script:
+
+    ```bash
+    cat slurm-1234567.out
+    ```
 
 `susi.nc` holds the simulation's results, and `params.json` and `metadata.json` record what was simulated.
-
-Everything the job printed is in `slurm-<job ID>.out`, next to the batch script:
-
-```bash
-cat slurm-1234567.out
-```
 
 Congratulations: you have run SUSI on Roihu!
 

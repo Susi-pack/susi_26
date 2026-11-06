@@ -14,7 +14,7 @@ In this document we show you how.
 A Jupyter session is a Slurm job like any batch job: it runs on a compute node, with the cores and memory you ask for, and it is billed to the project for as long as it runs.
 
 !!! note "Before you start"
-    If you haven't, do the once-per-user setup in [How to run your project on Roihu](how_to_run_susi_on_roihu.md#before-your-first-job-once-per-user) first.
+    You need a shell on Roihu and your SUSI projects folder: see [How to run your project on Roihu](how_to_run_susi_on_roihu.md#before-you-start).
 
 ## 1. Find the SUSI Python path
 
@@ -33,7 +33,7 @@ Copy it: you will paste it into the Jupyter form.
 
 !!! warning "Choose a different release"
     The path points to the latest SUSI release.
-    To use a different release,  see [here](how_to_run_susi_on_roihu.md/#optional-pin-a-susi-version)run the commands above again and paste the new path.
+    To use a different release, load it as shown in [Pin a SUSI version](how_to_run_susi_on_roihu.md#optional-pin-a-susi-version), run `which python` again and paste the new path.
 
 ## 2. Launch Jupyter
 
@@ -43,13 +43,13 @@ Then open *Apps* → *Jupyter* and fill in the form:
 - **Project**: `project_2020769`.
 - **Partition**: `interactive`, which usually starts right away and allows up to 32 cores and 64 GiB.
     Use `small` if you need more ([CSC docs: Roihu partitions](https://docs.csc.fi/computing/running/batch-job-partitions/#roihu-partitions)).
-- **Cores and memory**: start small, e.g. 1 cores and 4 GiB.
+- **Cores and memory**: start small, e.g. 1 core and 4 GiB.
     What you need depends on how much of a run you load at once.
     If the kernel dies while loading data, relaunch with more memory.
 - **Time**: how long the session may run, at most 16 hours.
     When it runs out the session stops, and anything unsaved is lost.
 - **Python**: "Custom path", then paste the path from step 1.
-- **Working directory**: your SUSI projects folder, `/scratch/project_2020769/<username>/susi_projects/`.
+- **Working directory**: your SUSI projects folder, `/scratch/project_2020769/<your_username>/susi_projects/`.
     This is only where Jupyter's file browser opens; each notebook still runs in its own folder (see step 3).
 - Leave "Enable advanced settings" off.
 

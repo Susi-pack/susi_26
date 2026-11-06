@@ -12,36 +12,28 @@ If this is your first time on Roihu, do the [tutorial](tutorial_csc.md) first: i
 
 !!! question "Web browser or terminal?"
     There are two ways of working on CSC: the [web interface](https://docs.csc.fi/computing/webinterface/) and the terminal (through SSH).
-    You can follow this tutorial in both ways.
+    You can follow this guide in both ways.
     Every step that differs has tabs for you to choose from.
     Everything else is a command you type in a shell on Roihu, and it is the same in both.
 
-## Before your first job (once per user)
+## Before you start
 
-1. Make sure you are a member of the CSC project `project_2020769`.
-    If you aren't, ask the project manager to [add you](https://docs.csc.fi/accounts/how-to-add-members-to-project/).
+You need:
 
-2. Log in to Roihu:
+- Membership in the CSC project `project_2020769`. If you aren't a member, ask the project manager to [add you](https://docs.csc.fi/accounts/how-to-add-members-to-project/).
+- A shell on Roihu, through the web interface or SSH ([CSC docs: Connecting](https://docs.csc.fi/computing/connecting/)).
+- Your SUSI projects folder, `/scratch/project_2020769/<your_username>/susi_projects/`.
 
-    === "Web interface"
+Steps 1 and 2 of the [tutorial](tutorial_csc.md#1-log-in-to-roihu) show how to log in and create the folder.
 
-        Go to [www.roihu.csc.fi](https://www.roihu.csc.fi), log in with your CSC account, and open **Login node shell** from *Pinned Apps* or from *Tools* in the top bar ([CSC docs: Shell](https://docs.csc.fi/computing/webinterface/shell/)).
-        The shell runs in your browser tab, and closing the tab stops whatever command is running in it.
-
-    === "SSH"
-
-        [Sign your public SSH key in MyCSC](https://docs.csc.fi/computing/connecting/ssh-keys/#signing-public-key), then connect with `ssh <username>@roihu-cpu.csc.fi` ([CSC docs: Connecting](https://docs.csc.fi/computing/connecting/)).
-        The signature is a certificate valid for 24 hours, so you sign again every day you connect.
-
-3. Create your SUSI projects folder, where your projects will live:
-    ```bash
-    mkdir -p /scratch/project_2020769/$USER/susi_projects
-    ```
+!!! tip "The `$USER` shortcut"
+    In commands you run on Roihu, you can write `$USER` instead of `<your_username>`: every Linux shell sets it to the name you logged in with, so there is nothing to set up.
+    It doesn't work in commands you run on your own machine, such as `rsync`: there, `$USER` is your local username.
 
 !!! info "Where things live"
     - **SUSI itself**: `/projappl/project_2020769/susi/`.
         One installation shared by everyone in the project and maintained by the SUSI maintainer. you only load it (through the batch script); you never need to modify it.
-    - **Your SUSI projects folder**: `/scratch/project_2020769/$USER/susi_projects/`, one folder per project, each with its `inputs/`, `data/`, `outputs/` and run scripts.
+    - **Your SUSI projects folder**: `/scratch/project_2020769/<your_username>/susi_projects/`, one folder per project, each with its `inputs/`, `data/`, `outputs/` and run scripts.
 
     Notice that they go in different disk areas: `/projappl` is meant for software, and `/scratch` for the rest of the non-permanent data (see [CSC docs: Supercomputer storage](https://docs.csc.fi/computing/disk/)).
 
@@ -52,13 +44,20 @@ If this is your first time on Roihu, do the [tutorial](tutorial_csc.md) first: i
 ## 1. Put your project on Roihu
 
 Your project goes in its own folder inside the SUSI projects folder.
-The folder name must be the name your run script gives SUSI: a script with `project_dir("my_project")` looks for `/scratch/project_2020769/$USER/susi_projects/my_project/`.
+The folder name must be the name your run script gives SUSI: a script with `project_dir("my_project")` looks for `/scratch/project_2020769/<your_username>/susi_projects/my_project/`.
 
 Bring the project's `inputs/`, `data/`, run scripts and parameters.
 A folder called `outputs/` must exist too.
 
-TODO: GOOD PLACE TO TELL THAT A PROJECT CAN BE A SEPARATE GITHUB REPOSITORY, IN AN ADMONITION TIP, JUST LIKE https://github.com/Susi-pack/wq_rosa IS.
-GIVE THAT EXAMPLE AND SAY THAT IT IS BENEFICIAL BECAUSE YOU GET GIT TRACKING, AND UPDATES ARE A GIT PULL AWAY.
+!!! tip "Keep your project in its own git repository"
+    A project can be a git repository of its own, separate from SUSI's, like [wq_rosa](https://github.com/Susi-pack/wq_rosa).
+    Your inputs, parameters, run scripts and notebooks are then version-controlled, and putting the project on Roihu is one `git clone` into your SUSI projects folder:
+    ```bash
+    cd /scratch/project_2020769/<your_username>/susi_projects
+    git clone https://github.com/Susi-pack/wq_rosa.git
+    ```
+    After that, bringing a change from your machine to Roihu is a `git pull` away.
+    Keep `outputs/` out of the repository (with `.gitignore`), and create it after cloning if the repository doesn't have it.
 
 === "Web interface"
 
@@ -75,7 +74,7 @@ GIVE THAT EXAMPLE AND SAY THAT IT IS BENEFICIAL BECAUSE YOU GET GIT TRACKING, AN
     We here choose `rsync`, because running the same command again later only copies what changed, instead of creating a full copy again.
     From a terminal on your own machine (not on Roihu), with your CSC username:
     ```bash
-    rsync -av my_project/ <username>@roihu-cpu.csc.fi:/scratch/project_2020769/<username>/susi_projects/my_project/
+    rsync -av my_project/ <your_username>@roihu-cpu.csc.fi:/scratch/project_2020769/<your_username>/susi_projects/my_project/
     ```
 
 ## 2. Write the batch job script
@@ -86,7 +85,7 @@ You submit it to Slurm, Roihu's queue system, which runs it on a compute node as
 
 !!! warning "Don't run simulations in the shell"
     The shell you logged into runs on a login node, which all users share and which is only meant for light work such as editing files and submitting jobs ([CSC docs: Login nodes](https://docs.csc.fi/computing/usage-policy/#login-nodes)).
-    Always simulations as batch jobs, never in the shell.
+    Always run simulations as batch jobs, never in the shell.
 
 Start from the example project's script, `example_projects/minimal/parallel_simulations.sh`, and copy it into your project folder, next to your run script.
 Click the (+) signs to see what each line does and whether you need to change it:
@@ -100,17 +99,17 @@ Click the (+) signs to see what each line does and whether you need to change it
 #SBATCH --nodes=1 (5)
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2 (6)
-#SBATCH --mem-per-cpu=100M (7)
+#SBATCH --mem-per-cpu=400M (7)
 #SBATCH --output=slurm-%j.out (8)
 
-set -euo pipefail #(9)
+set -euo pipefail  # (9)!
 
-module use /projappl/project_2020769/susi/modulefiles  # (10)
+module use /projappl/project_2020769/susi/modulefiles  # (10)!
 module load susi
 
-export SUSI_PROJECTS_ROOT=/scratch/project_2020769/$USER/susi_projects  # (11)
+export SUSI_PROJECTS_ROOT=/scratch/project_2020769/<your_username>/susi_projects  # (11)!
 
-srun python parallel_simulations.py "$SLURM_CPUS_PER_TASK"  # (12)
+srun python parallel_simulations.py "$SLURM_CPUS_PER_TASK"  # (12)!
 ```
 
 1. The name shown in the job lists. **Change it** to something that tells your jobs apart.
@@ -126,6 +125,7 @@ srun python parallel_simulations.py "$SLURM_CPUS_PER_TASK"  # (12)
 10. These two lines make `python` the SUSI installation's Python.
     `module load susi` loads the newest installed SUSI version; see [Pin a SUSI version](#optional-pin-a-susi-version) to choose one yourself.
 11. Tells SUSI where your SUSI projects folder is. An installed SUSI has no default, so it fails without it.
+    The example's own file writes `$USER` here, which works as well.
 12. Runs your run script. **Change** `parallel_simulations.py` to your run script's name.
     `srun` starts it inside the job's reservation, and `$SLURM_CPUS_PER_TASK` passes it the number of cores.
 
@@ -221,7 +221,7 @@ To measure instead of estimate, run a single simulation with `--cpus-per-task=1`
 `cd` into your project folder, where the batch script and the run script are, and submit:
 
 ```bash
-cd /scratch/project_2020769/$USER/susi_projects/my_project
+cd /scratch/project_2020769/<your_username>/susi_projects/my_project
 sbatch parallel_simulations.sh
 ```
 
@@ -264,7 +264,7 @@ Or copy them to your own machine and use [Read data from runs](reading_output_da
 
     From a terminal on your own machine (not on Roihu):
     ```bash
-    rsync -av <username>@roihu-cpu.csc.fi:/scratch/project_2020769/<username>/susi_projects/my_project/outputs/my_run ./
+    rsync -av <your_username>@roihu-cpu.csc.fi:/scratch/project_2020769/<your_username>/susi_projects/my_project/outputs/my_run ./
     ```
 
-Remember that scratch is [temporary](#before-your-first-job-once-per-user): copy what you want to keep.
+Remember that scratch is [temporary](#before-you-start): copy what you want to keep.

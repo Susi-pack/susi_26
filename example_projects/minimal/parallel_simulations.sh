@@ -12,7 +12,7 @@
 # It is then passed to the script as $SLURM_CPUS_PER_TASK. 
 #SBATCH --cpus-per-task=2
 # Per core, so the total memory grows linearly with --cpus-per-task
-#SBATCH --mem-per-cpu=1000M
+#SBATCH --mem-per-cpu=400M
 #SBATCH --output=slurm-%j.out       # Standard output of the job script
 
 set -euo pipefail # Extra security for early error raising
