@@ -62,9 +62,11 @@ nav = [
     { "Single vs Multiple SUSIs" = "single_vs_multiple.md" },
     { "A posteriori optimization" = "optimization_pymoo.md" },
     { "A posteriori optimization: Dynamic Programming" = "dynamic_programming_optimization.md" },
-    { "How to run on Roihu (CSC)" = "how_to_run_susi_on_roihu.md" },
-    { "How to run notebooks on Roihu (CSC)" = "how_to_run_notebooks_on_roihu.md" },
-    { "Tutorial: full CSC run" = "tutorial_csc.md" },
+    { "Running on CSC (Roihu)" = [
+        { "Tutorial: your first SUSI run on Roihu" = "tutorial_csc.md" },
+        { "How to run your project on Roihu" = "how_to_run_susi_on_roihu.md" },
+        { "How to run notebooks on Roihu" = "how_to_run_notebooks_on_roihu.md" },
+    ] },
     { "Maintainers" = [
         "internal/how_to_release_a_new_version.md",
         "internal/how_to_set_up_susi_on_roihu.md",
@@ -117,6 +119,11 @@ pygments_lang_class = true
 # Add admonitions (notes or warnings sections)
 [project.markdown_extensions.admonition]
 [project.markdown_extensions.pymdownx.details]
+
+# Content tabs (`=== "Tab name"`), e.g. "Web interface" vs "SSH" in the CSC pages.
+# alternate_style is the only style the theme supports.
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
 
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
